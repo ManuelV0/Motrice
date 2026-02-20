@@ -5,3 +5,8 @@ backend/motrice_dev.db
 backend/.env
 npm-debug.log*
 .DS_Store
+
+# uploads
+backend/uploads/
+# build outputs
+partner-portal/dist/
