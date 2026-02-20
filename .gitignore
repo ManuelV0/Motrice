@@ -1,0 +1,7 @@
+node_modules/
+frontend/dist/
+backend/motrice.db
+backend/motrice_dev.db
+backend/.env
+npm-debug.log*
+.DS_Store

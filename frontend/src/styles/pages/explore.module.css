@@ -1,0 +1,137 @@
+.page {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.topActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.toolbarCard,
+.advancedCard,
+.mapPanel,
+.groupBookingNotice,
+.extraCta,
+.errorCard {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.listSection {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.listHead {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.listHead h2,
+.listHead p {
+  margin: 0;
+}
+
+.eventsGrid {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.eventItem {
+  min-width: 0;
+}
+
+.mapPanel {
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    radial-gradient(110% 90% at 100% 0%, color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%, transparent 60%),
+    var(--surface);
+}
+
+.mapPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.mapPanelHead h2 {
+  margin: 0;
+}
+
+.mapPanelBody {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.groupBookingNotice {
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--gold-bright) 14%, var(--surface)) 0%, transparent 60%),
+    var(--surface);
+}
+
+.groupBookingTitle {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.extraCta {
+  border: 1px solid color-mix(in srgb, var(--success) 24%, var(--border));
+  background:
+    radial-gradient(120% 100% at 100% 0%, color-mix(in srgb, var(--success) 12%, var(--surface)) 0%, transparent 62%),
+    var(--surface);
+}
+
+.extraCta h2,
+.extraCta p {
+  margin: 0;
+}
+
+.extraCtaActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.groupBookingModalBody {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.groupBookingField {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.errorCard p {
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .eventsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1180px) {
+  .eventsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .topActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,139 @@
+.page {
+  min-height: calc(100dvh - 1rem);
+  place-content: center;
+}
+
+.hero {
+  border: 1px solid color-mix(in srgb, var(--primary) 36%, var(--border));
+  border-radius: 22px;
+  background:
+    radial-gradient(100% 90% at 0% 0%, color-mix(in srgb, var(--primary) 18%, transparent) 0%, transparent 58%),
+    radial-gradient(90% 90% at 100% 100%, color-mix(in srgb, var(--gold) 14%, transparent) 0%, transparent 64%),
+    linear-gradient(155deg, #192b46 0%, #121d30 54%, #0f1728 100%);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.heroContent {
+  display: grid;
+  gap: 0.75rem;
+  z-index: 1;
+}
+
+.heroContent h1 {
+  margin: 0;
+  font-size: clamp(1.45rem, 4.2vw, 2.25rem);
+  line-height: 1.12;
+  max-width: 18ch;
+}
+
+.kicker {
+  margin: 0;
+  color: #fdba74;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+}
+
+.featureGrid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.feature {
+  min-height: 2.6rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-2) 84%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.65rem;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.heroVisual {
+  position: relative;
+  min-height: 13.5rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+  background:
+    radial-gradient(circle at 65% 35%, color-mix(in srgb, var(--primary) 36%, transparent) 0%, transparent 48%),
+    radial-gradient(circle at 25% 78%, color-mix(in srgb, var(--gold) 26%, transparent) 0%, transparent 46%),
+    linear-gradient(155deg, #0f1828 0%, #16243c 100%);
+  padding: 0.85rem;
+  display: grid;
+  align-content: end;
+  gap: 0.55rem;
+}
+
+.ring,
+.ringAlt {
+  position: absolute;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+.ring {
+  inset: 1rem auto auto 1rem;
+  width: 8.5rem;
+  height: 8.5rem;
+}
+
+.ringAlt {
+  inset: auto 1.1rem 1rem auto;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-color: color-mix(in srgb, var(--gold) 48%, transparent);
+}
+
+.statsCard,
+.badgeCard {
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border));
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+}
+
+.statsCard p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.statsCard strong {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.badgeCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  color: #fed7aa;
+  font-weight: 700;
+}
+
+@media (min-width: 920px) {
+  .hero {
+    grid-template-columns: 1.15fr 0.85fr;
+    align-items: stretch;
+    padding: 1.2rem;
+    gap: 1.2rem;
+  }
+
+  .heroVisual {
+    min-height: 100%;
+  }
+
+  .featureGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,32 @@
+.page {
+  display: grid;
+  gap: 16px;
+  min-height: calc(100dvh - var(--nav-h));
+  padding: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
+}
+
+.header {
+  min-height: 2.2rem;
+  display: flex;
+  align-items: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 980px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

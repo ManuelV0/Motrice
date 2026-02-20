@@ -1,0 +1,170 @@
+.page {
+  min-height: calc(100dvh - var(--nav-h));
+  display: grid;
+}
+
+.viewport {
+  position: relative;
+  overflow: hidden;
+  border-radius: clamp(var(--r-xl), 2.8vw, 2rem);
+  border: 2px solid var(--border);
+  box-shadow: var(--sh-2);
+  background: var(--surface);
+}
+
+.viewportCartoon::after {
+  content: none;
+}
+
+.mapCanvas {
+  width: 100%;
+  height: calc(100dvh - var(--nav-h));
+}
+
+.mapCanvasCartoon :global(canvas.maplibregl-canvas) {
+  filter: saturate(0.96) contrast(1.02) brightness(0.94);
+}
+
+.mapCanvasTopo :global(canvas.maplibregl-canvas) {
+  filter: grayscale(1) sepia(1) hue-rotate(252deg) saturate(4.6) contrast(1.4) brightness(0.56);
+}
+
+.tendina {
+  position: absolute;
+  top: var(--s-2);
+  right: var(--s-2);
+  z-index: 7;
+  width: min(92vw, 20rem);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: var(--sh-2);
+  backdrop-filter: blur(12px) saturate(118%);
+  -webkit-backdrop-filter: blur(12px) saturate(118%);
+}
+
+.tendinaTrigger {
+  width: 100%;
+  min-height: 2.3rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.tendinaBody {
+  display: grid;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+}
+
+.focusLabel {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.radiusLabel {
+  margin: -0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.radiusSwitch {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.radiusSwitch button {
+  min-height: 2rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.modeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.modeSwitch button,
+.close3d {
+  min-height: 2.2rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.modeSwitch .active {
+  border-color: #d7b9ff;
+  box-shadow:
+    0 0 0 1px rgb(215 185 255 / 28%),
+    0 0 18px rgb(134 76 224 / 44%);
+}
+
+.radiusSwitch .active {
+  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
+  background: color-mix(in srgb, var(--primary) 68%, var(--surface-2));
+  color: var(--primary-contrast);
+  box-shadow: var(--sh-1);
+}
+
+.singleModeInfo {
+  min-height: 2.2rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 86%, transparent);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.close3d {
+  width: 100%;
+}
+
+:global(.maplibregl-ctrl-bottom-left),
+:global(.maplibregl-ctrl-bottom-right),
+:global(.maplibregl-ctrl-top-left),
+:global(.maplibregl-ctrl-top-right) {
+  display: none;
+}
+
+@media (max-width: 959px) {
+  .tendina {
+    top: var(--s-1);
+    right: var(--s-1);
+    width: min(96vw, 19rem);
+  }
+
+  .mapCanvas {
+    height: calc(100dvh - var(--nav-h));
+  }
+}

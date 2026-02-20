@@ -1,0 +1,38 @@
+.section {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.head {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.head h2,
+.head p {
+  margin: 0;
+}
+
+.head p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.grid {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.item {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.item h3,
+.item p {
+  margin: 0;
+}
+
+.item p {
+  color: var(--muted);
+}

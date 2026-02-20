@@ -1,0 +1,519 @@
+.page {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.detailCard {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.metaRow,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.mapCard {
+  overflow: hidden;
+}
+
+.mapFrame {
+  height: var(--map-h-detail);
+  border-radius: var(--r-md);
+}
+
+.list {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.checkInCard {
+  display: grid;
+  gap: var(--s-3);
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  background:
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--primary) 12%, var(--surface)) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+}
+
+.checkInHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.checkInBody {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.checkInMeta {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.checkInMeta p {
+  margin: 0;
+}
+
+.checkInTokenField {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.checkInTokenField input {
+  min-height: var(--s-8);
+}
+
+.checkInActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.checkInCountdown {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+  font-weight: var(--weight-semibold);
+}
+
+.checkInQr {
+  width: min(20rem, 100%);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: var(--s-2);
+}
+
+.postWorkoutCard {
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+  background:
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--success) 12%, var(--surface)) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+}
+
+.groupChatOverlay {
+  position: fixed;
+  inset: var(--nav-h) 0 0 0;
+  z-index: var(--z-modal-max);
+  background: color-mix(in srgb, var(--text) 62%, transparent);
+  backdrop-filter: blur(0.24rem);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 0 var(--s-3) var(--s-3);
+}
+
+.groupChatPanel {
+  position: sticky;
+  top: 0;
+  width: min(52rem, calc(100% - (var(--s-3) * 2)));
+  height: calc(100dvh - var(--nav-h) - var(--s-3));
+  max-height: calc(100dvh - var(--nav-h) - var(--s-3));
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-2);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+
+.groupChatHeader {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-floating);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+}
+
+.groupChatHeader > div {
+  min-width: 0;
+}
+
+.groupChatHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.groupChatParticipants {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+}
+
+.groupChatParticipantsHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.groupChatParticipantsHead h4 {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.groupChatParticipantsHead span {
+  min-height: var(--s-6);
+  min-width: var(--s-6);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.friendGroup {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.friendGroupLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: var(--weight-semibold);
+}
+
+.friendRowWrap {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.friendRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s-2);
+  background: color-mix(in srgb, var(--surface) 84%, var(--surface-2));
+}
+
+.friendRow strong,
+.friendRow small {
+  display: block;
+}
+
+.friendRow small {
+  color: var(--muted);
+}
+
+.friendChip {
+  min-height: var(--s-6);
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--success) 38%, var(--border));
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: color-mix(in srgb, var(--success) 74%, var(--text));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  display: inline-flex;
+  align-items: center;
+}
+
+.groupChatBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  overflow: auto;
+  min-height: 0;
+  padding: var(--s-3);
+  background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.chatWelcomeCard {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.chatWelcomeCard p {
+  margin: 0;
+  color: color-mix(in srgb, var(--text) 90%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.groupChatBubble {
+  max-width: min(85%, 34rem);
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.groupChatBubble p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.groupChatSenderRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.groupChatAvatarWrap {
+  position: relative;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--border) 92%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 75%, var(--surface));
+  flex: 0 0 auto;
+}
+
+.groupChatAvatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 999px;
+}
+
+.groupChatAvatarFallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: color-mix(in srgb, var(--text) 86%, var(--surface));
+  border-radius: 999px;
+}
+
+.groupChatCrown {
+  position: absolute;
+  top: -0.58rem;
+  right: -0.34rem;
+  font-size: 0.78rem;
+  line-height: 1;
+  z-index: 2;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+}
+
+.groupChatSenderName {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupChatBubble small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.groupChatBubbleMine {
+  justify-self: end;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+
+.groupChatBubbleOther {
+  justify-self: start;
+  background: color-mix(in srgb, var(--surface-2) 80%, var(--surface));
+}
+
+.groupChatComposer {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-floating);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.groupChatComposer input {
+  min-width: 0;
+  min-height: var(--s-8);
+}
+
+.jumpToLatest {
+  margin: 0 var(--s-3);
+  min-height: var(--s-7);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.cancelGuardBox {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.cancelGuardBox p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.cancelCountdown {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--s-1);
+  padding: var(--s-3);
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  overflow: hidden;
+}
+
+.cancelCountdown strong {
+  font-size: clamp(1.35rem, 3.8vw, 2rem);
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.cancelCountdown small {
+  color: color-mix(in srgb, var(--text) 84%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.cancelKaboom {
+  animation: cancel-kaboom 900ms cubic-bezier(.2, .85, .25, 1);
+}
+
+.cancelKaboom::before,
+.cancelKaboom::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.cancelKaboom::before {
+  border: 2px solid color-mix(in srgb, var(--warning) 72%, transparent);
+  animation: ring-pop 900ms ease-out;
+}
+
+.cancelKaboom::after {
+  background: radial-gradient(circle, color-mix(in srgb, var(--warning) 42%, transparent) 0%, transparent 64%);
+  animation: flash-pop 900ms ease-out;
+}
+
+@keyframes cancel-kaboom {
+  0% { transform: scale(1); }
+  20% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes ring-pop {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+@keyframes flash-pop {
+  0% { opacity: 0.5; transform: scale(0.7); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@media (min-width: 992px) {
+  .detailGrid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: var(--s-4);
+    align-items: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .groupChatOverlay {
+    padding: 0;
+  }
+
+  .groupChatPanel {
+    width: 100%;
+    height: calc(100dvh - var(--nav-h));
+    max-height: calc(100dvh - var(--nav-h));
+    border-radius: 0;
+    border: 0;
+  }
+
+  .groupChatHeader {
+    padding: var(--s-3);
+  }
+
+  .groupChatHeader h3 {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+
+  .groupChatHeader p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .groupChatHeaderActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .groupChatBody {
+    padding: var(--s-2);
+    gap: var(--s-2);
+  }
+
+  .groupChatBubble {
+    max-width: 92%;
+    padding: var(--s-2);
+  }
+
+  .groupChatComposer {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    padding: var(--s-2);
+    gap: var(--s-2);
+  }
+
+  .groupChatComposer button {
+    width: 100%;
+    min-height: var(--s-8);
+  }
+
+  .jumpToLatest {
+    margin: 0 var(--s-2);
+  }
+}

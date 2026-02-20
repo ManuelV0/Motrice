@@ -1,0 +1,228 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=Sora:wght@600;700;800&display=swap');
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  position: relative;
+  isolation: isolate;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--lh-normal);
+  color: var(--text);
+  background:
+    radial-gradient(110% 85% at 0% 0%, color-mix(in srgb, var(--accent) 10%, var(--surface)) 0%, transparent 58%),
+    var(--site-gradient);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-below);
+  pointer-events: none;
+  background:
+    radial-gradient(85% 85% at 100% 0%, color-mix(in srgb, var(--accent) 13%, var(--surface)) 0%, transparent 62%),
+    radial-gradient(100% 90% at 0% 100%, color-mix(in srgb, var(--primary) 11%, var(--surface)) 0%, transparent 64%),
+    var(--site-pattern),
+    var(--site-gradient);
+  background-size:
+    auto,
+    auto,
+    380px 240px,
+    cover;
+  background-repeat:
+    no-repeat,
+    no-repeat,
+    repeat,
+    no-repeat;
+  background-attachment:
+    fixed,
+    fixed,
+    fixed,
+    fixed;
+  background-position:
+    0 0,
+    0 0,
+    0 0,
+    center top;
+  opacity: 0.92;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1.5px;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+a:hover {
+  color: color-mix(in srgb, var(--primary) 76%, var(--text));
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+  color: var(--title-primary);
+}
+
+h2 {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-semibold);
+  color: color-mix(in srgb, var(--title-primary) 92%, var(--text));
+}
+
+h3 {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-semibold);
+  color: color-mix(in srgb, var(--title-primary) 82%, var(--text));
+}
+
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
+p,
+li,
+label,
+small,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+}
+
+p {
+  color: var(--text);
+  line-height: var(--lh-normal);
+}
+
+ul,
+ol {
+  margin: 0;
+  padding-left: var(--s-5);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 1px solid var(--primary);
+  background: var(--card-grad-cta);
+  color: var(--primary-contrast);
+  border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-4);
+  min-height: max(var(--s-8), 2.75rem);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 24%), var(--sh-1);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+button:hover {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  box-shadow: var(--sh-2);
+  filter: brightness(1.01);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  min-height: max(var(--s-8), 2.75rem);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 4%);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: color-mix(in srgb, var(--primary) 70%, var(--border));
+  box-shadow: var(--focus);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 22%, var(--surface));
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 52%, var(--surface));
+  outline-offset: 2px;
+  box-shadow: var(--focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+
+  button:hover {
+    transform: none;
+  }
+}

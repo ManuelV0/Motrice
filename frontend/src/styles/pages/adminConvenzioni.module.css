@@ -1,0 +1,304 @@
+.page {
+  display: grid;
+  gap: var(--s-5);
+  animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.head {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+}
+
+.kicker {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--muted);
+}
+
+.filterCard {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.metricsGrid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.metricCard {
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, var(--border));
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+  display: grid;
+  gap: var(--s-1);
+}
+
+.metricLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: var(--weight-semibold);
+}
+
+.metricValue {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+}
+
+.filterTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.pendingBadge {
+  min-height: var(--s-6);
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--warning) 44%, var(--border));
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  color: color-mix(in srgb, var(--warning) 68%, var(--text));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-2));
+  color: var(--muted);
+  border-radius: 999px;
+  min-height: var(--s-8);
+  padding: 0 var(--s-3);
+  font-weight: var(--weight-semibold);
+}
+
+.chipActive {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--border));
+  color: var(--text);
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+}
+
+.stack {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.card {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.rowBetween {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.status {
+  text-transform: capitalize;
+  border-radius: 999px;
+  padding: 0 var(--s-3);
+  min-height: var(--s-6);
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  border: 1px solid var(--border);
+}
+
+.statuspending {
+  border-color: color-mix(in srgb, var(--warning) 44%, var(--border));
+  color: color-mix(in srgb, var(--warning) 66%, var(--text));
+  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+}
+
+.statusapproved {
+  border-color: color-mix(in srgb, var(--success) 44%, var(--border));
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+
+.statusrejected {
+  border-color: color-mix(in srgb, var(--danger) 44%, var(--border));
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+}
+
+.statusactive {
+  border-color: color-mix(in srgb, var(--success) 44%, var(--border));
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+
+.statusredeemed {
+  border-color: color-mix(in srgb, var(--brand) 44%, var(--border));
+  color: color-mix(in srgb, var(--brand) 72%, var(--text));
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+}
+
+.statusexpired {
+  border-color: color-mix(in srgb, var(--muted) 44%, var(--border));
+  color: color-mix(in srgb, var(--muted) 72%, var(--text));
+  background: color-mix(in srgb, var(--muted) 14%, var(--surface));
+}
+
+.field {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.redeemGrid {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.inlineLink {
+  color: var(--brand);
+  font-weight: var(--weight-semibold);
+}
+
+.contractBox {
+  border: 1px dashed color-mix(in srgb, var(--brand) 34%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.contractBox h3 {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.contractStack {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.contractPreview {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--s-2);
+}
+
+.contractPreview summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+}
+
+.contractPreview pre {
+  margin: var(--s-2) 0 0;
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.receivedContractBox {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--s-2);
+}
+
+.receivedContractBox summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+}
+
+.receivedContractActions {
+  margin: var(--s-2) 0;
+}
+
+.receivedDocPreview {
+  width: 100%;
+  min-height: 18rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.receivedImagePreview {
+  width: 100%;
+  max-height: 24rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.receivedTextPreview {
+  margin: 0;
+  max-height: 20rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  padding: var(--s-3);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .metricsGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 840px) {
+  .redeemGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

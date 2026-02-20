@@ -1,0 +1,81 @@
+.panel {
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 95%, #070b11);
+  padding: var(--s-2);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.head {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.head h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.tabs {
+  display: inline-flex;
+  gap: var(--s-1);
+  flex-wrap: wrap;
+}
+
+.tab {
+  min-height: 2rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 82%, var(--surface));
+  color: var(--muted);
+  padding: 0 var(--s-2);
+  font-size: var(--text-xs);
+}
+
+.tabActive {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+
+.list {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.row {
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: var(--r-md);
+  padding: var(--s-2);
+  background: color-mix(in srgb, var(--surface-2) 75%, var(--surface));
+  display: grid;
+  gap: var(--s-2);
+}
+
+.profileBtn {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+}
+
+.profileBtn strong,
+.profileBtn small {
+  display: block;
+}
+
+.profileBtn small {
+  color: var(--muted);
+}
+
+.actions {
+  display: inline-flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.status {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}

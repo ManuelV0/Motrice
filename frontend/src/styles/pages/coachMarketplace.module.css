@@ -1,0 +1,2056 @@
+.page {
+  display: grid;
+  gap: var(--s-6);
+  animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.hero,
+.heroCompact {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--accent) 14%, var(--surface)) 0%, transparent 55%),
+    radial-gradient(100% 120% at 100% 100%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 60%),
+    var(--surface);
+  box-shadow: var(--sh-1);
+}
+
+.becomeCoachCta {
+  position: relative;
+  overflow: hidden;
+  min-height: 18rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  background:
+    linear-gradient(120deg, rgb(0 0 0 / 86%) 0%, rgb(0 0 0 / 66%) 48%, rgb(0 0 0 / 48%) 100%),
+    url('/images/running.svg');
+  background-size: cover;
+  background-position: center;
+}
+
+.becomeCoachOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 100% at 0% 0%, color-mix(in srgb, var(--accent) 20%, transparent) 0%, transparent 65%),
+    radial-gradient(80% 90% at 100% 100%, color-mix(in srgb, var(--primary) 16%, transparent) 0%, transparent 70%);
+}
+
+.becomeCoachContent {
+  position: relative;
+  z-index: var(--z-raised);
+  display: grid;
+  gap: var(--s-3);
+  max-width: 34rem;
+}
+
+.becomeCoachContent h2,
+.becomeCoachContent p {
+  margin: 0;
+  color: #ffffff;
+}
+
+.hero {
+  grid-template-columns: 1fr;
+}
+
+.kicker {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--muted);
+}
+
+.grid {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  align-items: stretch;
+}
+
+.stack {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.agendaWrap {
+  --calendar-panel-h: 22rem;
+  display: grid;
+  gap: var(--s-4);
+}
+
+.quickRequestBox {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 58%, var(--surface)) 0%, var(--surface) 100%);
+  box-shadow: var(--sh-1);
+}
+
+.quickRequestBox h2,
+.searchCard h2 {
+  margin: 0;
+}
+
+.accessSplitCard {
+  display: grid;
+  gap: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    radial-gradient(90% 100% at 0% 0%, color-mix(in srgb, var(--accent) 10%, var(--surface)) 0%, transparent 62%),
+    var(--surface);
+}
+
+.accessSplitHead {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.accessSplitHead h2,
+.accessSplitHead p {
+  margin: 0;
+}
+
+.accessSplitGrid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.accessItem {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+}
+
+.accessItem h3,
+.accessItem p {
+  margin: 0;
+}
+
+.coachAreaCard {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  background:
+    radial-gradient(90% 100% at 100% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 62%),
+    var(--surface);
+}
+
+.coachAreaCard h2,
+.coachAreaCard p {
+  margin: 0;
+}
+
+.requestAgendaBox {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.chatBox {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.chatBoxLocked {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--warning) 8%, var(--surface)) 0%,
+      color-mix(in srgb, var(--accent) 6%, var(--surface)) 100%
+    );
+}
+
+.chatLockedCta {
+  display: grid;
+  gap: var(--s-2);
+  justify-items: stretch;
+}
+
+.chatLockedHint {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: color-mix(in srgb, var(--warning) 72%, var(--text));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.chatUpgradeButton {
+  width: 100%;
+}
+
+.chatRatingBox {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+}
+
+.starRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.starButton {
+  width: 2rem;
+  height: 2rem;
+  min-height: 2rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: color-mix(in srgb, var(--muted) 75%, var(--text));
+  padding: 0;
+}
+
+.starButtonActive {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+  background: color-mix(in srgb, var(--warning) 20%, var(--surface));
+  color: color-mix(in srgb, var(--warning) 75%, var(--text));
+}
+
+.requestColumns {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: 1fr;
+}
+
+.listCompact {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: var(--s-1);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.rankRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--s-7);
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--r-sm);
+}
+
+.rankRow:hover {
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+.rankList {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rankIndex {
+  min-width: var(--s-7);
+  min-height: var(--s-7);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+}
+
+.attachmentsWrap {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.attachmentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.inlinePreview {
+  display: grid;
+  gap: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+  padding: var(--s-3);
+}
+
+.previewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.previewFrame {
+  width: 100%;
+  height: 22rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.previewImage {
+  width: 100%;
+  max-height: 22rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.headRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.filterGrid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+}
+
+.groupStack {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.calendarStack {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.calendarControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.calendarNav {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.calendarRangeLabel {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  text-transform: capitalize;
+}
+
+.weekPicker {
+  display: inline-grid;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.weekPicker select {
+  min-height: var(--s-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0 var(--s-2);
+  background: var(--surface);
+}
+
+.weekPlanner {
+  display: grid;
+  gap: var(--s-1);
+  min-width: min(26rem, 100%);
+}
+
+.weekSegments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.weekSegmentButton {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  min-height: var(--s-6);
+  padding: 0 0.45rem;
+  font-size: 0.68rem;
+  font-weight: var(--weight-semibold);
+}
+
+.weekSegmentButtonActive {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+
+.calendarCollapseToggle {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  color: var(--text);
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  font-weight: var(--weight-semibold);
+}
+
+.calendarBoxBody {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.calendarCollapsedHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.calendarLegend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.calendarLegend p {
+  margin: 0;
+}
+
+.calendarShell {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: 4rem minmax(0, 1fr);
+}
+
+.calendarRail {
+  display: grid;
+  gap: var(--s-1);
+  align-content: start;
+  padding-top: 3.1rem;
+}
+
+.calendarHour {
+  min-height: 2.4rem;
+  padding-right: var(--s-1);
+  text-align: right;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.calendarColumns {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.calendarColumn {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 72%, var(--surface)) 0%, color-mix(in srgb, var(--surface-2) 52%, var(--surface)) 100%);
+}
+
+.calendarColumnHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.calendarColumnHead h3,
+.calendarColumnHead small {
+  margin: 0;
+}
+
+.calendarColumnHead small {
+  color: var(--muted);
+}
+
+.calendarEmpty {
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.calendarEventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.calendarEventCard {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-2));
+  box-shadow: var(--sh-1);
+}
+
+.calendarEventMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.calendarEventTitle {
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.calendarEventCard p {
+  margin: 0;
+}
+
+.calendarEventActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.googleCalendarWrap {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+  gap: var(--s-2);
+  min-height: 28rem;
+  overflow: auto;
+}
+
+.googleTimeRail {
+  display: grid;
+  align-content: start;
+  padding-top: 2.2rem;
+}
+
+.googleTimeTick {
+  height: 2.25rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-align: right;
+  padding-right: var(--s-1);
+  border-top: 1px dashed color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.googleColumns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.googleColumnsWeek {
+  min-width: 0;
+}
+
+.googleColumnsDay {
+  width: 100%;
+}
+
+.googleDayColumn {
+  flex: 1 1 14rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.googleDayHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+.googleDayHead small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.googleDayBody {
+  --hour-h: 1.4rem;
+  --minute-h: calc(var(--hour-h) / 60);
+  position: relative;
+  min-height: var(--calendar-panel-h);
+  max-height: var(--calendar-panel-h);
+  overflow-y: auto;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 36%, transparent) 0%, transparent 100%);
+}
+
+.googleDayTimeline {
+  position: relative;
+  min-height: calc(var(--hour-h) * 24);
+}
+
+.googleHourLine {
+  display: block;
+  width: 100%;
+  height: var(--hour-h);
+  border-top: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.googleHourLine:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.timelineEvent {
+  position: absolute;
+  top: calc(var(--start-min, 0) * var(--minute-h));
+  height: calc(var(--duration-min, 60) * var(--minute-h));
+  min-height: calc(40 * var(--minute-h));
+  left: var(--s-1);
+  right: var(--s-1);
+  z-index: var(--z-raised);
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+
+.timelineEvent strong,
+.timelineEvent p {
+  margin: 0;
+}
+
+.timelineEventTime {
+  font-size: 0.68rem;
+  font-weight: var(--weight-semibold);
+}
+
+.timelineEventSub {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--text) 76%, var(--muted));
+  line-height: 1.2;
+}
+
+.timelineEventLink {
+  font-size: 0.68rem;
+  font-weight: var(--weight-semibold);
+  color: inherit;
+  text-decoration: underline;
+}
+
+.timelineEventRequest {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+}
+
+.timelineEventChat {
+  background: color-mix(in srgb, var(--warning) 24%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 48%, var(--border));
+}
+
+.timelineEventDelivery {
+  background: color-mix(in srgb, var(--success) 20%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 44%, var(--border));
+}
+
+.timelineEventManual {
+  background: color-mix(in srgb, var(--primary) 20%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
+}
+
+.googleColumnsWeek .googleDayColumn {
+  flex: 0 0 calc((100% - (var(--s-2) * 6)) / 7);
+  min-width: 0;
+}
+
+.googleColumnsDay .googleDayColumn {
+  flex: 1 1 100%;
+}
+
+.calendarEmptyInline {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.monthGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-content: flex-start;
+}
+
+.monthWrap {
+  display: grid;
+  gap: var(--s-1);
+  min-height: var(--calendar-panel-h);
+  align-content: start;
+}
+
+.weekFocusWrap {
+  min-height: var(--calendar-panel-h);
+  max-height: var(--calendar-panel-h);
+  overflow: auto;
+  display: grid;
+  gap: var(--s-2);
+  padding-right: var(--s-1);
+}
+
+.weekFocusDay {
+  display: grid;
+  gap: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--s-2);
+}
+
+.weekFocusHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.weekFocusActions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.weekFocusActions small {
+  color: var(--muted);
+}
+
+.weekFocusEmpty {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.weekEventList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-1);
+}
+
+.weekEvent {
+  display: grid;
+  gap: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 0.35rem 0.45rem;
+}
+
+.weekEventRequest {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+}
+
+.weekEventChat {
+  background: color-mix(in srgb, var(--warning) 20%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+}
+
+.weekEventDelivery {
+  background: color-mix(in srgb, var(--success) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+
+.weekEventManual {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+}
+
+.manualEventActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.manualActionBtn,
+.manualActionBtnDanger {
+  min-height: 1.35rem;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 0.35rem;
+  font-size: 0.62rem;
+  font-weight: var(--weight-semibold);
+}
+
+.manualActionBtnDanger {
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+}
+
+.monthWeekHeader {
+  display: none;
+}
+
+.monthWeekHeader span {
+  text-align: center;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-weight: var(--weight-semibold);
+}
+
+.monthCell {
+  flex: 0 0 calc((100% - (var(--s-2) * 5)) / 6);
+  text-align: left;
+  min-height: 6.75rem;
+  padding: var(--s-1);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--s-2);
+  cursor: pointer;
+}
+
+.monthCell:hover {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.monthCell:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
+  outline-offset: 2px;
+  box-shadow: var(--focus);
+}
+
+.monthCellMuted {
+  opacity: 0.55;
+}
+
+.monthCellHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-1);
+}
+
+.monthCellHead small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.monthCellEvents {
+  display: grid;
+  gap: var(--s-1);
+  align-content: start;
+}
+
+.monthCellEvents .timelineEvent {
+  position: static;
+  left: auto;
+  right: auto;
+  height: auto !important;
+  min-height: 1.9rem;
+  padding: 0.25rem 0.35rem;
+}
+
+.monthCellEvents .timelineEvent strong {
+  font-size: 0.68rem;
+}
+
+.monthCellEvents .timelineEvent span {
+  font-size: 0.68rem;
+  line-height: 1.2;
+}
+
+.monthMore {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.eventModalBody {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.eventTimeGrid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.coachCard,
+.requestCard,
+.planCard,
+.profileTop {
+  display: grid;
+  gap: var(--s-3);
+  box-shadow: var(--sh-1);
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+
+.coachHeader,
+.requestHead {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.coachTitleBlock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.coachAvatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  flex: 0 0 auto;
+}
+
+.badge,
+.badgeSoft,
+.pending,
+.done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--s-6);
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.badge {
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+}
+
+.badgeSoft {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--text);
+}
+
+.pending {
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  color: color-mix(in srgb, var(--warning) 65%, var(--text));
+}
+
+.done {
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+  color: color-mix(in srgb, var(--success) 65%, var(--text));
+}
+
+.metaList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.metaList li,
+.inlineMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.linkAction {
+  position: relative;
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}
+
+.linkAction::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -0.2rem;
+  width: 100%;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-med) var(--ease);
+}
+
+.linkAction:hover::after,
+.linkAction:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.tag {
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: var(--text-xs);
+}
+
+.requestForm {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.requestGroupBox {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.requestGroupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.requestGroupHead h2 {
+  margin: 0;
+}
+
+.requestRectList {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.requestRect {
+  display: grid;
+  gap: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 66%, var(--surface));
+  padding: var(--s-3);
+}
+
+.requestRect h3,
+.requestRect p {
+  margin: 0;
+}
+
+.planPreview {
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--surface) 84%, var(--surface-2));
+  padding: var(--s-2);
+  font-size: var(--text-sm);
+}
+
+.requestRectActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.clientRectList {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.clientRect {
+  display: grid;
+  gap: var(--s-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+  padding: var(--s-3);
+}
+
+.clientRect h3,
+.clientRect p {
+  margin: 0;
+}
+
+.clientMetaRow {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.clientActions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.clientPlanList {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: 0.2rem;
+}
+
+.attachmentList {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: 0.2rem;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.formSection {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+.formSection h3 {
+  font-size: var(--text-base);
+}
+
+.formFieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.fieldHelp {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.fieldInvalid {
+  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+}
+
+.uploadField {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+.uploadHead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-weight: var(--weight-semibold);
+}
+
+.missionCard {
+  display: grid;
+  gap: var(--s-3);
+  background:
+    radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, var(--gold-bright) 16%, var(--surface)) 0%, transparent 62%),
+    var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+}
+
+.profilePreviewCard {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.goalGrid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.goalItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.discoverCard {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.discoverHeaderWrap {
+  position: relative;
+  border-radius: var(--r-lg);
+}
+
+.discoverToggle {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-lg);
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.discoverToggle:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--surface-2) 80%, var(--surface));
+}
+
+.discoverToggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
+  outline-offset: 2px;
+  box-shadow: var(--focus);
+}
+
+.discoverToggle small {
+  display: block;
+}
+
+.lockedCard .discoverToggle {
+  cursor: not-allowed;
+}
+
+.lockOverlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  background: color-mix(in srgb, var(--success) 18%, var(--surface));
+}
+
+.lockBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-2) var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 22%, var(--surface));
+  color: color-mix(in srgb, var(--success) 72%, var(--text));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.revealForm {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(calc(var(--s-1) * -1));
+  transition: max-height var(--dur-med) var(--ease), opacity var(--dur-med) var(--ease), transform var(--dur-med) var(--ease);
+}
+
+.revealFormOpen {
+  max-height: 120rem;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.searchCard {
+  display: grid;
+  padding: var(--s-4);
+  background:
+    radial-gradient(120% 140% at 100% 0%, color-mix(in srgb, var(--accent) 10%, var(--surface)) 0%, transparent 60%),
+    color-mix(in srgb, var(--surface-2) 66%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  box-shadow: var(--sh-1);
+  gap: var(--s-3);
+}
+
+.searchLabel {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.searchLabel input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.searchCard .field input,
+.searchCard .field select {
+  min-height: var(--s-7);
+}
+
+.advancedFiltersGrid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.searchCard .row {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.searchCard .inlineMeta {
+  margin: 0;
+}
+
+.coachCard {
+  grid-template-rows: auto auto 1fr auto;
+  min-height: 20rem;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.coachCard:hover {
+  transform: translateY(-0.1rem);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+
+.coachCard h2 {
+  margin: 0;
+}
+
+.coachCard .cardFooter {
+  margin-top: auto;
+}
+
+.mapCard {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+  box-shadow: var(--sh-1);
+}
+
+.mapFrameCoach {
+  width: 100%;
+  height: 20rem;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.statusCard {
+  border-left: 4px solid color-mix(in srgb, var(--warning) 70%, var(--border));
+}
+
+.statusApproved {
+  border-left-color: color-mix(in srgb, var(--success) 70%, var(--border));
+}
+
+.statusRejected {
+  border-left-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+}
+
+.lockHintDanger {
+  margin: 0;
+  color: color-mix(in srgb, var(--danger) 76%, var(--text));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.planContent {
+  margin: 0;
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  border-radius: var(--r-md);
+  padding: var(--s-3);
+  font-family: var(--font-sans);
+}
+
+.planAccordionToggle {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 66%, var(--surface));
+  color: var(--text);
+  display: grid;
+  gap: var(--s-1);
+  text-align: left;
+  padding: var(--s-3);
+}
+
+.planAccordionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.planAccordionHead h2 {
+  margin: 0;
+}
+
+.planAccordionMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.planTitleMini {
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+}
+
+.planSportBadge {
+  max-width: 100%;
+}
+
+.planAccordionBody {
+  margin-top: var(--s-3);
+  display: grid;
+  gap: var(--s-3);
+}
+
+.chatBookingItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+}
+
+.chatBookingMain {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.chatBookingMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.chatThreadBox {
+  width: 100%;
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 92%, var(--surface-2));
+}
+
+.chatThreadMessages {
+  display: grid;
+  gap: var(--s-3);
+  max-height: 16rem;
+  overflow: auto;
+  padding-right: var(--s-2);
+}
+
+.chatBubble {
+  max-width: min(80%, 34rem);
+  position: relative;
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--sh-1);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.chatBubble p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chatBubble small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.chatBubbleMine {
+  justify-self: end;
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  border-bottom-right-radius: var(--r-sm);
+}
+
+.chatBubbleOther {
+  justify-self: start;
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  border-bottom-left-radius: var(--r-sm);
+}
+
+.chatBubbleMine::after,
+.chatBubbleOther::after {
+  content: '';
+  position: absolute;
+  bottom: calc(var(--s-1) * -1);
+  width: var(--s-2);
+  height: var(--s-2);
+  border: 1px solid var(--border);
+  background: inherit;
+  transform: rotate(45deg);
+}
+
+.chatBubbleMine::after {
+  right: var(--s-2);
+  border-left: 0;
+  border-top: 0;
+}
+
+.chatBubbleOther::after {
+  left: var(--s-2);
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.chatComposer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-2);
+  align-items: center;
+}
+
+.chatComposer input {
+  min-width: 0;
+}
+
+.chatFullscreenOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-max);
+  background: color-mix(in srgb, var(--text) 62%, transparent);
+  backdrop-filter: blur(0.3rem);
+  display: grid;
+  place-items: stretch;
+  padding: var(--s-2);
+  animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.chatFullscreenPanel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-2);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+  animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.chatFullscreenHeader {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-floating);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  padding-top: max(var(--s-3), env(safe-area-inset-top));
+  border-bottom: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 84%, var(--surface)) 0%, color-mix(in srgb, var(--surface-2) 64%, var(--surface)) 100%);
+}
+
+.chatFullscreenBody {
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-3);
+  overflow: auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background:
+    radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 60%),
+    radial-gradient(120% 80% at 0% 100%, color-mix(in srgb, var(--primary) 8%, transparent) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+}
+
+.chatWelcomeCard {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.chatWelcomeCard p {
+  margin: 0;
+  color: color-mix(in srgb, var(--text) 92%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.chatFullscreenComposer {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-floating);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-3);
+  padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background:
+    linear-gradient(0deg, var(--surface) 0%, color-mix(in srgb, var(--surface-2) 30%, var(--surface)) 100%);
+}
+
+.chatFullscreenComposer input {
+  min-width: 0;
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chatFullscreenComposer input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
+  outline-offset: 2px;
+  box-shadow: var(--focus);
+}
+
+@media (max-width: 640px) {
+  .agendaWrap {
+    --calendar-panel-h: 20rem;
+  }
+
+  .calendarControls {
+    align-items: stretch;
+  }
+
+  .calendarRangeLabel {
+    font-size: var(--text-sm);
+  }
+
+  .weekPicker {
+    width: 100%;
+  }
+
+  .weekPicker select {
+    width: 100%;
+  }
+
+  .weekPlanner {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .weekSegments {
+    max-height: 5.6rem;
+    overflow: auto;
+  }
+
+  .agendaWrap {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    padding-left: var(--s-3);
+    padding-right: var(--s-3);
+  }
+
+  .calendarBoxBody {
+    width: 100%;
+  }
+
+  .calendarShell {
+    grid-template-columns: 1fr;
+  }
+
+  .calendarRail {
+    display: none;
+  }
+
+  .calendarColumns {
+    grid-template-columns: 1fr;
+  }
+
+  .googleCalendarWrap {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .googleTimeRail {
+    display: none;
+  }
+
+  .googleColumns {
+    gap: var(--s-1);
+  }
+
+  .googleDayBody {
+    --hour-h: 1.25rem;
+    min-height: var(--calendar-panel-h);
+  }
+
+  .googleColumnsWeek .googleDayColumn {
+    flex: 0 0 calc((100% - var(--s-1)) / 2);
+  }
+
+  .googleColumnsDay .googleDayColumn {
+    flex-basis: 100%;
+  }
+
+  .googleDayHead {
+    padding: 0.3rem 0.45rem;
+  }
+
+  .googleDayHead strong {
+    font-size: 0.72rem;
+  }
+
+  .googleDayHead small {
+    font-size: 0.62rem;
+  }
+
+  .timelineEvent {
+    padding: 0.2rem 0.26rem;
+  }
+
+  .timelineEventTime,
+  .timelineEventSub,
+  .timelineEventLink {
+    font-size: 0.6rem;
+  }
+
+  .quickRequestBox {
+    gap: var(--s-2);
+  }
+
+  .advancedFiltersGrid {
+    grid-template-columns: 1fr;
+    gap: var(--s-2);
+  }
+
+  .searchCard {
+    padding: var(--s-3);
+  }
+
+  .headRow {
+    gap: var(--s-2);
+  }
+
+  .cardFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cardFooter > strong {
+    font-size: var(--text-base);
+  }
+
+  .rankRow {
+    padding: 0.15rem 0.2rem;
+  }
+
+  .monthGrid {
+    gap: var(--s-1);
+  }
+
+  .monthCell {
+    flex: 0 0 calc((100% - (var(--s-1) * 4)) / 5);
+    min-height: 5.2rem;
+    padding: 0.3rem;
+  }
+
+  .monthCellHead span {
+    font-size: 0.8rem;
+    font-weight: var(--weight-bold);
+  }
+
+  .monthCellHead small {
+    font-size: 0.62rem;
+  }
+
+  .monthCellEvents .timelineEvent {
+    min-height: 1.4rem;
+    padding: 0.15rem 0.22rem;
+  }
+
+  .monthCellEvents .timelineEvent strong,
+  .monthCellEvents .timelineEvent span {
+    font-size: 0.62rem;
+  }
+
+  .weekFocusWrap {
+    gap: var(--s-1);
+    padding-right: 0;
+  }
+
+  .weekFocusDay {
+    padding: 0.35rem;
+  }
+
+  .weekEvent {
+    padding: 0.22rem 0.28rem;
+  }
+
+  .eventTimeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .chatBookingItem {
+    align-items: stretch;
+    gap: var(--s-2);
+  }
+
+  .chatBookingMeta {
+    justify-content: flex-start;
+  }
+
+  .chatFullscreenOverlay {
+    padding: 0;
+  }
+
+  .chatFullscreenPanel {
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .chatFullscreenHeader {
+    padding-left: var(--s-3);
+    padding-right: var(--s-3);
+  }
+
+  .chatFullscreenHeader h3 {
+    font-size: var(--text-base);
+    line-height: 1.25;
+  }
+
+  .chatFullscreenBody {
+    padding: var(--s-2);
+    gap: var(--s-2);
+  }
+
+  .chatBubble {
+    max-width: 90%;
+    padding: var(--s-2);
+  }
+
+  .chatFullscreenComposer {
+    grid-template-columns: 1fr;
+    padding-left: var(--s-2);
+    padding-right: var(--s-2);
+    gap: var(--s-2);
+    align-items: stretch;
+  }
+
+  .chatFullscreenComposer input {
+    min-height: var(--s-8);
+    font-size: var(--text-base);
+  }
+
+  .chatFullscreenComposer button {
+    width: 100%;
+    min-height: var(--s-8);
+  }
+}
+
+.chatStatusBooked {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+
+.chatStatusLive {
+  background: color-mix(in srgb, var(--warning) 18%, var(--surface));
+  color: color-mix(in srgb, var(--warning) 72%, var(--text));
+}
+
+.chatStatusCompleted {
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: color-mix(in srgb, var(--success) 70%, var(--text));
+}
+
+.chatStatusRated {
+  background: color-mix(in srgb, var(--success) 18%, var(--surface));
+  color: color-mix(in srgb, var(--success) 76%, var(--text));
+}
+
+.chatStatusCancelled {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 72%, var(--text));
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: 1.2fr auto;
+    align-items: end;
+  }
+
+  .requestColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chatLockedCta {
+    justify-items: start;
+  }
+
+  .chatUpgradeButton {
+    width: auto;
+  }
+
+  .chatFullscreenOverlay {
+    padding: var(--s-4);
+  }
+
+  .chatFullscreenPanel {
+    width: min(70rem, 100%);
+    height: min(90dvh, 100%);
+    justify-self: center;
+    align-self: center;
+  }
+
+  .monthCell {
+    flex-basis: calc((100% - (var(--s-2) * 5)) / 6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .linkAction::after,
+  .revealForm,
+  .chatFullscreenOverlay,
+  .chatFullscreenPanel,
+  .chatBubble {
+    animation: none;
+    transition: none;
+  }
+}

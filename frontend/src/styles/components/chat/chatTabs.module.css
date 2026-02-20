@@ -1,0 +1,50 @@
+.wrap {
+  position: relative;
+  min-height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.2rem;
+  gap: 0.2rem;
+  overflow: hidden;
+}
+
+.indicator {
+  position: absolute;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  left: 0.2rem;
+  width: calc(50% - 0.2rem);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 76%, #14b8a6);
+  transform: translateX(0%);
+  transition: transform 150ms ease;
+  z-index: 0;
+}
+
+.indicatorDm {
+  transform: translateX(calc(100% + 0.2rem));
+}
+
+.tab {
+  position: relative;
+  z-index: 1;
+  min-height: 2.3rem;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: var(--weight-semibold);
+}
+
+.active {
+  color: #ffffff;
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}

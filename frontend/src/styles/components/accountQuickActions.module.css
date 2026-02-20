@@ -1,0 +1,41 @@
+.wrap {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.action {
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.action svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.action:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+@media (max-width: 480px) {
+  .wrap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .action {
+    min-height: 3.1rem;
+    font-size: 0.82rem;
+    gap: var(--s-1);
+  }
+}

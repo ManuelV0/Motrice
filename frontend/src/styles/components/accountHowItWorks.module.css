@@ -1,0 +1,30 @@
+.section {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.compact {
+  gap: var(--s-2);
+}
+
+.section h2 {
+  margin: 0;
+}
+
+.steps {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.steps li {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.steps li p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}

@@ -1,0 +1,59 @@
+.page {
+  min-height: min(34rem, calc(100vh - var(--nav-h) - var(--s-8)));
+  display: grid;
+  align-items: center;
+  animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.card {
+  max-width: 34rem;
+  margin-inline: auto;
+  width: 100%;
+  display: grid;
+  gap: var(--s-4);
+  border-radius: var(--r-xl);
+}
+
+.kicker {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--muted);
+}
+
+.actions {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.oauthButton {
+  justify-content: flex-start;
+}
+
+.note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page {
+    animation: none;
+  }
+}

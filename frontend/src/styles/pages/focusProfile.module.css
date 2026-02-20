@@ -1,0 +1,38 @@
+.page {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.card {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.card h1,
+.card h2,
+.card p {
+  margin: 0;
+}
+
+.avatar {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+}
+
+.metBox {
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--r-md);
+  padding: var(--s-2);
+  display: grid;
+  gap: var(--s-1);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}

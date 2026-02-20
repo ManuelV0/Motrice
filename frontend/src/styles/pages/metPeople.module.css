@@ -1,0 +1,30 @@
+.page {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.header {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.header h1 {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.searchField {
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.searchField input {
+  min-height: 2.75rem;
+}

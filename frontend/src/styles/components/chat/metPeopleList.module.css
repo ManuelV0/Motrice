@@ -1,0 +1,38 @@
+.list {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.row {
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+  padding: var(--s-2);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.identity {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+}
+
+.identity strong,
+.identity small {
+  display: block;
+}
+
+.identity small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 540px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}

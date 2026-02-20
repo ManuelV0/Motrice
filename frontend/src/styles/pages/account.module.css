@@ -1,0 +1,956 @@
+.page {
+  display: grid;
+  gap: var(--section-gap);
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+  overflow-x: clip;
+}
+
+.page * {
+  min-width: 0;
+}
+
+.accountHeadMeta {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.accountHeadIdentity {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.accountHeadAvatar {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--surface);
+}
+
+.accountHeadCopy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.accountHeadCopy h2,
+.accountHeadCopy p {
+  margin: 0;
+}
+
+.accountHeadCopy p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.accountHeadActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-2);
+}
+
+.toolbarCard {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.dashboardGrid {
+  display: grid;
+  gap: var(--s-4);
+  width: 100%;
+}
+
+.gridSpanTwo {
+  grid-column: span 1;
+}
+
+.emptyCard {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.emptyCard h2,
+.emptyCard p {
+  margin: 0;
+}
+
+.profileCard {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.xpCard {
+  display: grid;
+  gap: var(--s-4);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background:
+    radial-gradient(120% 120% at 100% 0%, color-mix(in srgb, var(--primary) 9%, var(--surface)) 0%, transparent 58%),
+    var(--surface);
+}
+
+.xpHeader {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: var(--s-3);
+}
+
+.xpTitleWrap {
+  min-width: 0;
+  display: grid;
+  gap: var(--s-1);
+}
+
+.xpTitleWrap h2 {
+  margin: 0;
+}
+
+.xpSubtle {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.xpBadgePill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 1.9rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: color-mix(in srgb, var(--primary) 78%, var(--text));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: normal;
+  max-width: 100%;
+}
+
+.xpGlobalWrap {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+}
+
+.xpGlobalValue {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-base);
+}
+
+.xpProgressLabel {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.xpProgressBar {
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 80%, var(--surface));
+  overflow: hidden;
+}
+
+.xpProgressBar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary) 72%, var(--surface)) 0%,
+    color-mix(in srgb, var(--accent) 52%, var(--primary)) 100%
+  );
+}
+
+.xpSection {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.xpSection h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.xpSectionHeader {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: var(--s-2);
+}
+
+.xpToggle {
+  min-height: 1.95rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.xpToggle:hover {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+}
+
+.xpToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.xpList,
+.xpHistoryList {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.xpRow,
+.xpHistoryRow {
+  margin: 0;
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.xpRow span,
+.xpHistoryLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.xpHistoryMeta {
+  display: inline-grid;
+  justify-items: end;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  white-space: normal;
+  text-align: right;
+  min-width: 0;
+}
+
+.xpHistoryMeta strong {
+  color: var(--text);
+}
+
+.xpEmpty {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.tutorialPanel {
+  display: grid;
+  gap: var(--s-3);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  background:
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%, transparent 62%),
+    linear-gradient(
+      150deg,
+      color-mix(in srgb, var(--surface) 93%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--accent) 10%, var(--surface)) 100%
+    );
+}
+
+.loginPanel {
+  display: grid;
+  gap: var(--s-3);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background:
+    radial-gradient(120% 110% at 100% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 62%),
+    linear-gradient(
+      150deg,
+      color-mix(in srgb, var(--surface) 93%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%
+    );
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.panelHeader h2 {
+  margin: 0;
+}
+
+.tutorialBadge {
+  min-height: 1.8rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 76%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.tutorialLead {
+  margin: 0;
+  color: var(--muted);
+}
+
+.rolePicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.roleChip {
+  min-height: 2rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 75%, var(--surface));
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.roleChipActive {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+}
+
+.tutorialActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-2);
+}
+
+.quickLink {
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  font-weight: var(--weight-semibold);
+}
+
+.tutorialMeta {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-2);
+}
+
+.planPanel {
+  display: grid;
+  gap: var(--s-4);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--accent) 8%, var(--surface)) 0%, transparent 58%),
+    var(--surface);
+}
+
+.aiPanel {
+  display: grid;
+  gap: var(--s-3);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background:
+    radial-gradient(120% 110% at 100% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 62%),
+    linear-gradient(
+      150deg,
+      color-mix(in srgb, var(--surface) 93%, var(--surface-2)) 0%,
+      color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%
+    );
+}
+
+.aiPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.aiPanelHeader h2 {
+  margin: 0;
+}
+
+.aiStatusPill {
+  min-height: 1.85rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: color-mix(in srgb, var(--primary) 74%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.aiToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--s-8);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.aiToggle input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.aiGrid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: 1fr;
+}
+
+.aiField {
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--text-sm);
+}
+
+.aiReason {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.aiTestResult {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.planHeader {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: var(--s-2);
+}
+
+.planActiveChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0 var(--s-3);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 76%, var(--text));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.03em;
+  white-space: normal;
+  max-width: 100%;
+}
+
+.planSummary {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+}
+
+.planMeta {
+  margin: 0;
+  padding-bottom: var(--s-2);
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, var(--surface));
+}
+
+.planMeta:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.pricingGrid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: 1fr;
+  width: 100%;
+}
+
+.pricingCard {
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 64%, var(--surface));
+}
+
+.planCardFree {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+
+.planCardFreeOnly {
+  border-color: color-mix(in srgb, var(--muted) 30%, var(--border));
+}
+
+.planCardPremium {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  background:
+    radial-gradient(110% 90% at 100% 0%, color-mix(in srgb, var(--gold-bright) 14%, var(--surface)) 0%, transparent 60%),
+    color-mix(in srgb, var(--surface-2) 58%, var(--surface));
+}
+
+.planPrice {
+  margin: 0;
+  color: var(--primary);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.planList {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: var(--s-1);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.planList li {
+  line-height: var(--lh-normal);
+}
+
+.unlockNotice {
+  margin: 0;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  overflow-wrap: anywhere;
+}
+
+.rewardGrid {
+  display: grid;
+  gap: var(--s-2);
+  grid-template-columns: 1fr;
+}
+
+.rewardItem {
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+  font-size: var(--text-sm);
+}
+
+.profileGrid {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(90% 120% at 0% 0%, color-mix(in srgb, var(--accent) 8%, var(--surface)) 0%, transparent 62%),
+    var(--surface);
+}
+
+.avatarWrap {
+  display: grid;
+  gap: var(--s-2);
+  align-content: start;
+  justify-items: center;
+  text-align: center;
+  padding: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+}
+
+.avatar {
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  object-fit: cover;
+  box-shadow: var(--sh-1);
+  background: var(--surface);
+}
+
+.avatarHint {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.uploadLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: var(--s-7);
+  padding: 0 var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.uploadLabel:hover {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  box-shadow: var(--sh-1);
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+}
+
+.uploadLabel:focus-within {
+  box-shadow: var(--focus);
+}
+
+.uploadLabel input {
+  display: none;
+}
+
+.bioField {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.bioField textarea {
+  width: 100%;
+  min-height: 7.5rem;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  resize: vertical;
+  line-height: var(--lh-relaxed);
+}
+
+.bioField textarea:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
+  outline-offset: 2px;
+  box-shadow: var(--focus);
+}
+
+.bioPreview {
+  margin: 0;
+  min-height: 7.5rem;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+  white-space: pre-wrap;
+  line-height: var(--lh-relaxed);
+}
+
+.bioCount {
+  justify-self: end;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.slotBox {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent) 8%, var(--surface)) 0%, transparent 60%),
+    color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+}
+
+.slotBoxLocked {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--warning) 12%, var(--surface)) 0%, transparent 60%),
+    color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+
+.slotToggle {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface-2) 54%, var(--surface));
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.slotToggle:hover:not(:disabled) {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  box-shadow: var(--sh-1);
+}
+
+.slotToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.slotToggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.88;
+}
+
+.slotToggleCopy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.slotToggleCopy strong {
+  font-size: var(--text-sm);
+}
+
+.slotToggleCopy span {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.slotToggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.15rem;
+  min-height: 2.15rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  transition: transform 180ms ease;
+}
+
+.slotToggleIconOpen {
+  transform: rotate(180deg);
+}
+
+.slotBody {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 220ms ease, opacity 180ms ease;
+}
+
+.slotBodyOpen {
+  max-height: 42rem;
+  opacity: 1;
+}
+
+.slotGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-2);
+}
+
+.slotChip {
+  min-height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 var(--s-3);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.slotChip:hover:not(:disabled) {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+}
+
+.slotChip:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.slotChipActive {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+}
+
+.slotChip:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+@media (max-width: 1023px) {
+  .accountHeadMeta {
+    position: sticky;
+    top: calc(var(--nav-h, 0px) + 0.35rem);
+    z-index: var(--z-sticky);
+    backdrop-filter: blur(8px);
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+    border-radius: var(--r-lg);
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+  }
+
+  .accountHeadActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .accountHeadActions > * {
+    width: 100%;
+  }
+
+  .tutorialActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tutorialActions > * {
+    width: 100%;
+  }
+
+  .quickLink {
+    width: 100%;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .accountHeadIdentity {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboardGrid {
+    gap: var(--s-3);
+  }
+
+  .profileCard,
+  .xpCard,
+  .planPanel,
+  .tutorialPanel,
+  .loginPanel,
+  .toolbarCard {
+    gap: var(--s-3);
+  }
+
+  .accountHeadAvatar {
+    width: 2.85rem;
+    height: 2.85rem;
+  }
+
+  .accountHeadCopy h2 {
+    font-size: var(--text-lg);
+  }
+
+  .accountHeadCopy p {
+    font-size: var(--text-xs);
+  }
+
+  .rolePicker {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--s-1);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .roleChip {
+    flex: 0 0 auto;
+  }
+
+  .planSummary {
+    padding: var(--s-3);
+  }
+
+  .planMeta {
+    font-size: var(--text-sm);
+  }
+}
+
+@media (min-width: 768px) {
+  .aiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .slotBox {
+    padding: var(--s-3);
+  }
+
+  .slotToggle {
+    padding: var(--s-2) var(--s-3);
+  }
+
+  .slotChip {
+    min-height: 2.15rem;
+    font-size: 0.72rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uploadLabel {
+    transition: none;
+  }
+
+  .uploadLabel:hover {
+    transform: none;
+  }
+
+  .slotToggle,
+  .slotChip,
+  .slotToggleIcon,
+  .slotBody {
+    transition: none;
+  }
+}

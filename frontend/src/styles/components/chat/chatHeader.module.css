@@ -1,0 +1,46 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  min-height: 3.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  padding: 0 var(--s-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, #06090f);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.iconButton {
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 86%, var(--surface));
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.iconButton:disabled {
+  opacity: 0.6;
+}

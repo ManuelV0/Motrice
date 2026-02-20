@@ -1,0 +1,18 @@
+.pill {
+  min-height: 2.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0 var(--s-3);
+  font-size: 0.72rem;
+}
+
+.pill:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}

@@ -1,0 +1,33 @@
+{
+  "name": "motrice",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "partner-portal",
+    "mobile"
+  ],
+  "scripts": {
+    "build:web": "npm run build --workspace frontend",
+    "mobile:sync": "npm run cap:sync --workspace mobile",
+    "cap:sync": "npm run build:web && npm run mobile:sync",
+    "cap:android": "npm run cap:android --workspace mobile",
+    "cap:ios": "npm run cap:ios --workspace mobile",
+    "android:apk": "npm run android:apk --workspace mobile",
+    "android:aab": "npm run android:aab --workspace mobile",
+    "dev:prepare-mobile": "npm run cap:sync",
+    "dev": "npm run dev:prepare-mobile && concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "dev:all": "npm run dev:termux",
+    "dev:termux": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend -- --host 0.0.0.0 --port 5173 --strictPort\" \"npm run dev --workspace partner-portal -- --host 0.0.0.0 --port 5174 --strictPort\"",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:frontend:termux": "npm run dev --workspace frontend -- --host 0.0.0.0 --port 5173 --strictPort",
+    "dev:partner": "npm run dev --workspace partner-portal",
+    "dev:partner:termux": "npm run dev --workspace partner-portal -- --host 0.0.0.0 --port 5174 --strictPort",
+    "start": "npm run start --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

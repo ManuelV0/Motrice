@@ -1,0 +1,70 @@
+.card {
+  position: relative;
+  overflow: hidden;
+  background: var(--card-grad-base);
+  border: 1px solid color-mix(in srgb, var(--border) 86%, var(--accent));
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 70%),
+    var(--sh-1);
+  padding: clamp(var(--s-4), 2.4vw, var(--s-5));
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 42%) 0%, rgb(255 255 255 / 0%) 46%);
+  pointer-events: none;
+}
+
+.card::after {
+  display: none;
+}
+
+.card > * {
+  position: relative;
+  z-index: var(--z-raised);
+}
+
+.hover {
+  transition:
+    transform var(--dur-med) var(--ease),
+    box-shadow var(--dur-med) var(--ease),
+    border-color var(--dur-med) var(--ease);
+}
+
+.hover:hover {
+  transform: translateY(calc(var(--micro-gap-2) * -1));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 74%),
+    var(--sh-hover);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+}
+
+.hover:focus-within {
+  box-shadow: var(--focus-strong);
+}
+
+.subtle {
+  background: var(--card-grad-soft);
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover {
+    transition: none;
+  }
+
+  .hover:hover {
+    transform: none;
+  }
+}
