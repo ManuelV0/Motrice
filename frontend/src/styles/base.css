@@ -159,31 +159,33 @@ textarea {
 }
 
 button {
-  border: 1px solid var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 80%, transparent);
   background: var(--card-grad-cta);
   color: var(--primary-contrast);
-  border-radius: var(--r-md);
-  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-lg);
+  padding: var(--s-2) var(--s-5);
   min-height: max(var(--s-8), 2.75rem);
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 24%), var(--sh-1);
+  font-weight: var(--weight-bold);
+  box-shadow: var(--sh-1), var(--sh-inner);
   cursor: pointer;
   transition:
     transform var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease),
     background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    border-color var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease);
 }
 
 button:hover {
   transform: translateY(calc(var(--micro-gap) * -1));
-  box-shadow: var(--sh-2);
-  filter: brightness(1.01);
+  box-shadow: var(--sh-hover), var(--sh-inner);
+  filter: brightness(1.06);
 }
 
 button:active {
   transform: translateY(0);
+  filter: brightness(0.97);
 }
 
 input,
@@ -192,19 +194,23 @@ textarea {
   width: 100%;
   padding: var(--s-3) var(--s-4);
   min-height: max(var(--s-8), 2.75rem);
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
   color: var(--text);
-  box-shadow: 0 1px 0 rgb(0 0 0 / 4%);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  box-shadow: var(--sh-inner);
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
 }
 
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  border-color: color-mix(in srgb, var(--primary) 70%, var(--border));
-  box-shadow: var(--focus);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  box-shadow: var(--focus), var(--sh-inner);
+  background: var(--surface);
 }
 
 ::selection {
@@ -212,7 +218,7 @@ textarea:focus-visible {
 }
 
 :focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 52%, var(--surface));
+  outline: 2px solid color-mix(in srgb, var(--primary) 44%, var(--surface));
   outline-offset: 2px;
   box-shadow: var(--focus);
 }

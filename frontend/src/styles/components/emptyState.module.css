@@ -4,12 +4,16 @@
   text-align: center;
   display: grid;
   justify-items: center;
-  gap: var(--s-3);
-  padding: var(--s-7) var(--s-5);
-  border-radius: var(--r-xl);
+  gap: var(--s-4);
+  padding: var(--s-8) var(--s-4);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-2xl);
   background:
-    radial-gradient(100% 90% at 50% 0%, color-mix(in srgb, var(--accent) 11%, var(--surface)) 0%, transparent 65%),
-    var(--surface);
+    radial-gradient(100% 90% at 50% 0%, color-mix(in srgb, var(--accent) 8%, var(--surface)) 0%, transparent 65%),
+    color-mix(in srgb, var(--surface) 80%, var(--surface-2));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .glow {
@@ -17,25 +21,25 @@
   top: -4rem;
   width: 10rem;
   height: 10rem;
-  border-radius: 999px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--primary) 22%, var(--surface)) 0%, transparent 70%);
+  border-radius: var(--r-pill);
+  background: radial-gradient(circle, color-mix(in srgb, var(--primary) 18%, var(--surface)) 0%, transparent 70%);
   pointer-events: none;
 }
 
 .iconCircle {
   width: var(--s-10);
   height: var(--s-10);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-2xl);
   display: grid;
   place-items: center;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--accent) 14%, var(--surface)) 0%,
-    color-mix(in srgb, var(--primary) 10%, var(--surface)) 100%
+    color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%,
+    color-mix(in srgb, var(--primary) 8%, var(--surface)) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--glass-border));
   color: color-mix(in srgb, var(--accent) 70%, var(--text));
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-card), var(--sh-inner);
 }
 
 .image {
@@ -47,7 +51,13 @@
 
 .actions {
   display: flex;
-  gap: var(--s-2);
+  gap: var(--s-3);
   flex-wrap: wrap;
   justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .wrap {
+    padding: var(--s-9) var(--s-6);
+  }
 }

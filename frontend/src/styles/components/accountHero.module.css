@@ -1,17 +1,23 @@
 .hero {
   display: grid;
   gap: var(--s-3);
-  padding: var(--s-5);
-  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
-  border-radius: var(--r-xl);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--glass-border));
+  border-radius: var(--r-2xl);
   background:
-    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--primary) 12%, var(--surface)) 0%, transparent 60%),
-    linear-gradient(145deg, color-mix(in srgb, var(--surface) 88%, var(--surface-2)) 0%, var(--surface) 100%);
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 60%),
+    var(--card-grad-base);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
+  overflow: hidden;
+  position: relative;
 }
 
 .content {
   display: grid;
   gap: var(--s-2);
+  position: relative;
 }
 
 .kicker {
@@ -20,13 +26,17 @@
   min-height: 1.8rem;
   display: inline-flex;
   align-items: center;
-  padding: 0 var(--s-2);
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--border));
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--glass-border));
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
   color: color-mix(in srgb, var(--primary) 76%, var(--text));
   font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
+}
+
+.content h1 {
+  font-size: var(--text-xl);
 }
 
 .content h1,
@@ -37,35 +47,32 @@
 .description {
   color: var(--muted);
   max-width: 56ch;
+  font-size: var(--text-sm);
+  line-height: var(--lh-relaxed);
 }
 
 .actions {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--s-2);
+  position: relative;
 }
 
-@media (max-width: 640px) {
-  .hero {
-    padding: var(--s-4);
-  }
-
-  .actions > * {
-    width: 100%;
-  }
+.actions > * {
+  width: 100%;
 }
 
-@media (max-width: 480px) {
+@media (min-width: 640px) {
   .hero {
-    gap: var(--s-2);
-    padding: var(--s-3);
+    padding: var(--s-5);
+    gap: var(--s-4);
   }
 
   .content h1 {
-    font-size: var(--text-xl);
+    font-size: var(--text-2xl);
   }
 
   .description {
-    font-size: var(--text-sm);
+    font-size: var(--text-base);
   }
 }

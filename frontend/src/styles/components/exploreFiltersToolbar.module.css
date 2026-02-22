@@ -1,16 +1,16 @@
 .toolbar {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
 }
 
 .grid {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 
 .field {
   display: grid;
-  gap: var(--s-1);
+  gap: var(--s-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
 }
@@ -18,16 +18,19 @@
 .field input,
 .field select {
   min-height: 2.75rem;
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
   color: var(--text);
-  padding: 0 var(--s-2);
+  padding: 0 var(--s-3);
+  box-shadow: var(--sh-inner);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .field input:focus-visible,
 .field select:focus-visible {
   outline: none;
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--border));
   box-shadow: var(--focus);
 }
 
@@ -51,19 +54,26 @@
 .toggle input {
   width: 1.1rem;
   height: 1.1rem;
+  accent-color: var(--primary);
 }
 
 .count {
   margin: 0;
-  color: color-mix(in srgb, var(--primary) 72%, var(--text));
+  color: var(--accent);
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
+}
+
+@media (min-width: 640px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (min-width: 900px) {

@@ -1,6 +1,6 @@
 .section {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
 }
 
 .head {
@@ -21,10 +21,12 @@
 .row {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(min(17rem, 86vw), min(20rem, 92vw));
+  grid-auto-columns: minmax(min(16rem, 85vw), min(19rem, 90vw));
   gap: var(--s-3);
   overflow-x: auto;
-  padding-bottom: var(--s-1);
+  padding-bottom: var(--s-2);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .item {
@@ -33,6 +35,12 @@
 
 .item > * {
   flex: 1 1 auto;
+}
+
+@media (min-width: 640px) {
+  .row {
+    grid-auto-columns: minmax(min(17rem, 86vw), min(20rem, 92vw));
+  }
 }
 
 @media (min-width: 1024px) {

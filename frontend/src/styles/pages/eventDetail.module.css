@@ -1,6 +1,6 @@
 .page {
   display: grid;
-  gap: var(--section-gap);
+  gap: var(--s-5);
 }
 
 .detailCard {
@@ -21,21 +21,23 @@
 
 .mapFrame {
   height: var(--map-h-detail);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
 }
 
 .list {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 
 .checkInCard {
   display: grid;
-  gap: var(--s-3);
-  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+  gap: var(--s-4);
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--glass-border));
   background:
-    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--primary) 12%, var(--surface)) 0%, transparent 62%),
-    color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-2) 50%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .checkInHead {
@@ -87,17 +89,19 @@
 
 .checkInQr {
   width: min(20rem, 100%);
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border);
   background: #fff;
-  padding: var(--s-2);
+  padding: var(--s-3);
 }
 
 .postWorkoutCard {
-  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
+  border-color: color-mix(in srgb, var(--success) 24%, var(--glass-border));
   background:
-    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--success) 12%, var(--surface)) 0%, transparent 62%),
-    color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+    radial-gradient(120% 110% at 0% 0%, color-mix(in srgb, var(--success) 10%, var(--surface)) 0%, transparent 62%),
+    color-mix(in srgb, var(--surface-2) 50%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .groupChatOverlay {
@@ -120,9 +124,9 @@
   max-height: calc(100dvh - var(--nav-h) - var(--s-3));
   min-height: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  box-shadow: var(--sh-2);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--sh-3), var(--sh-glow);
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
@@ -138,8 +142,10 @@
   flex-wrap: wrap;
   gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .groupChatHeader > div {
@@ -155,9 +161,9 @@
 .groupChatParticipants {
   display: grid;
   gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
+  padding: var(--s-3);
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
 }
 
 .groupChatParticipantsHead {
@@ -209,10 +215,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: var(--s-2);
-  background: color-mix(in srgb, var(--surface) 84%, var(--surface-2));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: var(--s-3);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
+  box-shadow: var(--sh-inner);
 }
 
 .friendRow strong,
@@ -268,9 +275,9 @@
   max-width: min(85%, 34rem);
   display: grid;
   gap: var(--s-1);
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
 }
 
 .groupChatBubble p {
@@ -341,12 +348,13 @@
 
 .groupChatBubbleMine {
   justify-self: end;
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 16%, var(--glass-border));
 }
 
 .groupChatBubbleOther {
   justify-self: start;
-  background: color-mix(in srgb, var(--surface-2) 80%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
 }
 
 .groupChatComposer {
@@ -354,12 +362,14 @@
   bottom: 0;
   z-index: var(--z-floating);
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr;
   gap: var(--s-2);
   align-items: center;
   padding: var(--s-3);
-  border-top: 1px solid var(--border);
-  background: var(--surface);
+  border-top: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .groupChatComposer input {
@@ -393,11 +403,12 @@
   display: grid;
   justify-items: center;
   gap: var(--s-1);
-  padding: var(--s-3);
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in srgb, var(--warning) 34%, var(--border));
-  background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  padding: var(--s-4);
+  border-radius: var(--r-xl);
+  border: 1px solid color-mix(in srgb, var(--warning) 24%, var(--glass-border));
+  background: color-mix(in srgb, var(--warning) 10%, var(--surface));
   overflow: hidden;
+  box-shadow: var(--sh-card);
 }
 
 .cancelCountdown strong {
@@ -450,70 +461,35 @@
   100% { opacity: 0; transform: scale(1.35); }
 }
 
+@media (min-width: 640px) {
+  .page {
+    gap: var(--section-gap);
+  }
+
+  .groupChatOverlay {
+    padding: 0 var(--s-3) var(--s-3);
+  }
+
+  .groupChatPanel {
+    width: min(52rem, calc(100% - (var(--s-3) * 2)));
+    border: 1px solid var(--glass-border-strong);
+    border-radius: var(--r-2xl);
+  }
+
+  .groupChatComposer {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .groupChatBubble {
+    max-width: min(85%, 34rem);
+  }
+}
+
 @media (min-width: 992px) {
   .detailGrid {
     display: grid;
     grid-template-columns: 1.6fr 1fr;
-    gap: var(--s-4);
+    gap: var(--s-5);
     align-items: start;
-  }
-}
-
-@media (max-width: 640px) {
-  .groupChatOverlay {
-    padding: 0;
-  }
-
-  .groupChatPanel {
-    width: 100%;
-    height: calc(100dvh - var(--nav-h));
-    max-height: calc(100dvh - var(--nav-h));
-    border-radius: 0;
-    border: 0;
-  }
-
-  .groupChatHeader {
-    padding: var(--s-3);
-  }
-
-  .groupChatHeader h3 {
-    margin: 0;
-    font-size: var(--text-base);
-  }
-
-  .groupChatHeader p {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .groupChatHeaderActions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .groupChatBody {
-    padding: var(--s-2);
-    gap: var(--s-2);
-  }
-
-  .groupChatBubble {
-    max-width: 92%;
-    padding: var(--s-2);
-  }
-
-  .groupChatComposer {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    padding: var(--s-2);
-    gap: var(--s-2);
-  }
-
-  .groupChatComposer button {
-    width: 100%;
-    min-height: var(--s-8);
-  }
-
-  .jumpToLatest {
-    margin: 0 var(--s-2);
   }
 }

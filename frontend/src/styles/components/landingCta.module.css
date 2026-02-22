@@ -1,34 +1,49 @@
 .wrap {
   display: grid;
-  gap: var(--s-3);
-  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  gap: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--glass-border));
   border-radius: var(--r-2xl);
-  padding: clamp(var(--s-5), 4vw, var(--s-7));
+  padding: clamp(var(--s-6), 4vw, var(--s-8));
   background:
-    radial-gradient(100% 120% at 0% 0%, color-mix(in srgb, var(--primary) 16%, var(--surface)) 0%, transparent 58%),
+    radial-gradient(100% 120% at 0% 0%, color-mix(in srgb, var(--primary) 14%, var(--surface)) 0%, transparent 58%),
     var(--card-grad-base);
-  box-shadow: var(--sh-1);
+  box-shadow: var(--sh-2), var(--sh-glow);
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.04) 0%, transparent 50%);
+  pointer-events: none;
+  border-radius: inherit;
 }
 
 .kicker {
   margin: 0;
-  color: var(--muted);
+  color: var(--accent);
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  position: relative;
 }
 
 .description {
   margin: 0;
   color: var(--muted);
+  position: relative;
+  line-height: var(--lh-relaxed);
 }
 
 .actions {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
   justify-content: center;
+  position: relative;
 }
 
 @media (min-width: 640px) {

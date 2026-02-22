@@ -1,13 +1,13 @@
 .button {
-  --_bg: var(--primary);
+  --_bg: var(--card-grad-cta);
   --_fg: var(--primary-contrast);
-  --_border: var(--primary);
+  --_border: color-mix(in srgb, var(--primary) 80%, transparent);
   border: 1px solid var(--_border);
   background: var(--_bg);
   color: var(--_fg);
-  border-radius: 0.68rem;
+  border-radius: var(--r-lg);
   min-height: max(var(--s-8), 2.75rem);
-  padding: 0 var(--s-4);
+  padding: 0 var(--s-5);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -16,19 +16,21 @@
   font-weight: var(--weight-bold);
   letter-spacing: 0.01em;
   cursor: pointer;
+  box-shadow: var(--sh-1), var(--sh-inner);
   transition:
     transform var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease),
     background-color var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+    color var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease);
 }
 
 .button:hover {
   text-decoration: none;
   transform: translateY(calc(var(--micro-gap) * -1));
-  box-shadow: var(--sh-hover);
-  filter: brightness(1.01);
+  box-shadow: var(--sh-hover), var(--sh-inner);
+  filter: brightness(1.06);
 }
 
 .button:focus-visible {
@@ -39,37 +41,60 @@
 
 .button:active {
   transform: translateY(0);
+  filter: brightness(0.97);
 }
 
 .secondary {
   --_bg: color-mix(in srgb, var(--surface) 82%, var(--surface-2));
   --_fg: var(--text);
-  --_border: color-mix(in srgb, var(--border) 88%, var(--primary));
+  --_border: var(--glass-border-strong);
+  box-shadow: var(--sh-card), var(--sh-inner);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .secondary:hover {
-  --_bg: color-mix(in srgb, var(--surface) 74%, var(--surface-2));
+  --_bg: color-mix(in srgb, var(--surface) 70%, var(--surface-2));
+  box-shadow: var(--sh-card-hover), var(--sh-inner);
 }
 
 .ghost {
-  --_bg: color-mix(in srgb, var(--surface-2) 58%, transparent);
+  --_bg: transparent;
   --_fg: var(--text);
-  --_border: color-mix(in srgb, var(--border) 62%, transparent);
+  --_border: transparent;
+  box-shadow: none;
 }
 
 .ghost:hover {
-  --_bg: color-mix(in srgb, var(--surface-2) 65%, transparent);
-  --_border: color-mix(in srgb, var(--border) 72%, var(--surface-2));
+  --_bg: color-mix(in srgb, var(--surface-2) 52%, transparent);
+  --_border: var(--glass-border);
+  box-shadow: var(--sh-card);
+}
+
+.outline {
+  --_bg: transparent;
+  --_fg: var(--primary);
+  --_border: var(--primary);
+  box-shadow: none;
+}
+
+.outline:hover {
+  --_bg: color-mix(in srgb, var(--primary) 8%, transparent);
+  box-shadow: var(--sh-glow);
 }
 
 .sm {
-  min-height: max(var(--s-7), 2.5rem);
+  min-height: max(var(--s-7), 2.25rem);
   padding-inline: var(--s-3);
+  font-size: var(--text-xs);
+  border-radius: var(--r-md);
 }
 
 .lg {
   min-height: var(--s-9);
-  padding-inline: var(--s-5);
+  padding-inline: var(--s-6);
+  font-size: var(--text-base);
+  border-radius: var(--r-xl);
 }
 
 .full {
@@ -78,16 +103,17 @@
 
 .disabled,
 .button:disabled {
-  opacity: 0.58;
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  filter: saturate(0.6);
 }
 
 .iconOnly {
   width: var(--s-8);
   padding: 0;
-  border-radius: var(--r-xl);
+  border-radius: var(--r-pill);
 }
 
 @media (prefers-reduced-motion: reduce) {

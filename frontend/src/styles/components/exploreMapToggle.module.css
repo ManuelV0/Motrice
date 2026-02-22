@@ -1,55 +1,63 @@
 .wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
   padding: var(--s-1);
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--surface-2));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-inner);
 }
 
 .wrapThree {
-  display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   width: min(100%, 34rem);
 }
 
 .item {
-  min-height: 2rem;
+  width: 100%;
+  min-height: 2.5rem;
   padding: 0 var(--s-3);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  color: var(--text);
-  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  color: var(--muted);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .item:hover,
 .item:focus-visible {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--text);
 }
 
 .active {
   background: color-mix(in srgb, var(--accent) 76%, var(--primary));
   color: var(--primary-contrast);
+  box-shadow: var(--sh-card);
 }
 
-@media (max-width: 640px) {
-  .wrap {
-    width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
+.active:hover {
+  background: color-mix(in srgb, var(--accent) 82%, var(--primary));
+  color: var(--primary-contrast);
+}
 
-  .wrapThree {
-    grid-template-columns: 1fr 1fr 1fr;
+@media (min-width: 640px) {
+  .wrap {
+    width: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-1);
   }
 
   .item {
-    width: 100%;
+    width: auto;
   }
 }

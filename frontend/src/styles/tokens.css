@@ -36,12 +36,24 @@
   --r-md: 0.75rem;
   --r-lg: 1rem;
   --r-xl: 1.25rem;
-  --r-2xl: 1.65rem;
+  --r-2xl: 1.5rem;
+  --r-3xl: 1.75rem;
+  --r-pill: 999px;
 
-  --sh-1: 0 10px 24px rgb(3 8 18 / 0.34);
-  --sh-2: 0 20px 42px rgb(3 8 18 / 0.42);
-  --sh-3: 0 30px 64px rgb(3 8 18 / 0.52);
-  --sh-hover: 0 24px 48px rgb(3 8 18 / 0.46);
+  --sh-1: 0 2px 8px rgb(3 8 18 / 0.18), 0 8px 24px rgb(3 8 18 / 0.22);
+  --sh-2: 0 4px 12px rgb(3 8 18 / 0.22), 0 16px 36px rgb(3 8 18 / 0.28);
+  --sh-3: 0 6px 18px rgb(3 8 18 / 0.26), 0 28px 56px rgb(3 8 18 / 0.34);
+  --sh-hover: 0 4px 14px rgb(3 8 18 / 0.24), 0 20px 42px rgb(3 8 18 / 0.30);
+  --sh-glow: 0 0 20px rgb(251 146 60 / 0.12), 0 0 60px rgb(251 146 60 / 0.06);
+  --sh-inner: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  --sh-card: 0 1px 3px rgb(3 8 18 / 0.12), 0 8px 20px rgb(3 8 18 / 0.18);
+  --sh-card-hover: 0 4px 12px rgb(3 8 18 / 0.2), 0 16px 32px rgb(3 8 18 / 0.24);
+
+  --glass-blur: 16px;
+  --glass-blur-heavy: 32px;
+  --glass-border: rgb(255 255 255 / 0.08);
+  --glass-border-strong: rgb(255 255 255 / 0.14);
+  --glass-highlight: inset 0 1px 0 rgb(255 255 255 / 0.06);
 
   --s-1: 0.25rem;
   --s-2: 0.5rem;
@@ -95,7 +107,10 @@
 
   --dur-fast: 150ms;
   --dur-med: 240ms;
+  --dur-slow: 400ms;
   --ease: cubic-bezier(0.2, 0.65, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --nav-h: 4.25rem;
   --bottom-nav-h: 4.5rem;
   --vv-bottom: 0px;

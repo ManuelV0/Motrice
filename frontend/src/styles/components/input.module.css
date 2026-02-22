@@ -6,11 +6,14 @@
 .label {
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+  color: var(--text);
+  letter-spacing: 0.01em;
 }
 
 .help {
   font-size: var(--text-xs);
   color: var(--muted);
+  line-height: var(--lh-normal);
 }
 
 .error {
@@ -22,29 +25,39 @@
   width: 100%;
   min-height: max(var(--s-8), 2.75rem);
   padding: var(--s-3) var(--s-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
+  box-shadow: var(--sh-inner);
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.group :is(input, select, textarea):hover {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--glass-border-strong));
 }
 
 .group :is(input, select, textarea):focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
-  outline-offset: 2px;
-  border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
-  box-shadow: var(--focus-strong);
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  box-shadow: var(--focus), var(--sh-inner);
+  background: var(--surface);
 }
 
 .group :is(input, select, textarea):disabled {
   background: var(--surface-2);
   color: var(--muted);
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .invalid {
-  border-color: var(--danger);
+  border-color: var(--danger) !important;
   background: color-mix(in srgb, var(--danger) 4%, var(--surface));
 }
 
 .invalid:focus-visible {
-  box-shadow: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent);
 }
