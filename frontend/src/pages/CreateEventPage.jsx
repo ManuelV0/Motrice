@@ -9,6 +9,7 @@ import { useBilling } from '../context/BillingContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import PaywallModal from '../components/PaywallModal';
 import Button from '../components/Button';
+import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
@@ -288,6 +289,15 @@ function CreateEventPage() {
 
   return (
     <section className={styles.page}>
+      <ExploreMapToggle
+        activeView="right"
+        leftLabel="Esplora"
+        rightLabel="Crea (evento)"
+        thirdLabel="Agenda"
+        leftTo="/explore"
+        rightTo="/create"
+        thirdTo="/agenda"
+      />
       <h1>Crea sessione</h1>
       {!Number.isFinite(entitlements.maxEventsPerMonth) ? null : (
         <p className={styles.meta}>

@@ -2,11 +2,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
+  flex: 0 0 auto;
 }
 
 .iconBtn {
-  min-width: 2.5rem;
-  min-height: 2.5rem;
+  width: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
   background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
@@ -14,6 +16,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.iconBtn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 92%, var(--surface));
+}
+
+.iconBtn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-2) 98%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
 }
 
 .iconBtn:focus-visible {
@@ -23,4 +39,5 @@
 
 .iconBtn:disabled {
   opacity: 0.6;
+  cursor: not-allowed;
 }

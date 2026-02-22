@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, ChevronDown, MapPin, ShieldCheck } from 'lucide-react';
+import { Building2, ChevronDown, ChevronLeft, ChevronRight, MapPin, ShieldCheck } from 'lucide-react';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Button from '../components/Button';
@@ -10,6 +10,8 @@ import ConvenzioniContractPanel from '../components/ConvenzioniContractPanel';
 import ConvenzioniFilters from '../components/ConvenzioniFilters';
 import FeaturedPartnersRow from '../components/FeaturedPartnersRow';
 import HowItWorksConvenzioni from '../components/HowItWorksConvenzioni';
+import AccountWalletCard from '../components/account/AccountWalletCard';
+import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import PartnerCard from '../components/PartnerCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { useToast } from '../context/ToastContext';
@@ -36,6 +38,7 @@ const PARTNER_PLACEHOLDER_IMAGE =
       "<text x='112' y='266' fill='#3a3a3a' font-size='28' font-family='Arial, sans-serif'>Immagine struttura non disponibile</text>" +
       "</svg>"
   );
+const PARTNERS_PER_PAGE = 6;
 
 function badgeLabel(level) {
   const key = String(level || 'rame').toLowerCase();
@@ -108,6 +111,7 @@ function buildPartnerTags(partner) {
 function ConvenzioniPage() {
   ensureLeafletIcons();
 
+  const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { coords, hasLocation, error: locationError, requestLocation } = useUserLocation();
@@ -128,6 +132,7 @@ function ConvenzioniPage() {
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isContractCardOpen, setIsContractCardOpen] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [applicationContext, setApplicationContext] = useState({
     isAuthenticated: false,
     status: 'inactive',
@@ -258,6 +263,13 @@ function ConvenzioniPage() {
     return deterministicShuffle(ranked.slice(0, 10), weekSeed()).slice(0, 3);
   }, [partnersByFilters, partnerDistanceMap]);
 
+  const totalPartners = partnersByFilters.length;
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(totalPartners / PARTNERS_PER_PAGE)), [totalPartners]);
+  const paginatedPartners = useMemo(() => {
+    const start = (currentPage - 1) * PARTNERS_PER_PAGE;
+    return partnersByFilters.slice(start, start + PARTNERS_PER_PAGE);
+  }, [partnersByFilters, currentPage]);
+
   const mapPartners = useMemo(
     () => partnersByFilters.filter((partner) => partner.lat != null && partner.lng != null),
     [partnersByFilters]
@@ -284,6 +296,13 @@ function ConvenzioniPage() {
 
   const subscriptionExpiresAt = applicationContext.partnerProfile?.subscription_expires_at || '';
   const hasExpiry = Number.isFinite(Date.parse(subscriptionExpiresAt));
+  const currentView = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get('view');
+    if (raw === 'wallet' || raw === 'join') return raw;
+    return 'catalog';
+  }, [location.search]);
+  const isWalletView = currentView === 'wallet';
+  const isJoinView = currentView === 'join';
 
   useEffect(() => {
     let active = true;
@@ -349,6 +368,14 @@ function ConvenzioniPage() {
     if (canAccessSubscription) return;
     setShowPlanPanel(false);
   }, [canAccessSubscription]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [cityFilter, tagFilter, searchQuery, activeOnly, sortByNearest]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   useEffect(() => {
     function refreshWallet() {
@@ -531,149 +558,275 @@ function ConvenzioniPage() {
     joinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  function handleInvestWallet() {
+    try {
+      const next = piggybank.investAvailableBalance();
+      setWallet(next);
+      showToast('Saldo spostato nel budget reinvestito.', 'success');
+    } catch (error) {
+      showToast(error.message || 'Operazione non disponibile.', 'error');
+    }
+  }
+
+  function handleWithdrawWallet() {
+    try {
+      const next = piggybank.withdrawReinvestedBalance();
+      setWallet(next);
+      showToast('Saldo reinvestito riportato su disponibile.', 'success');
+    } catch (error) {
+      showToast(error.message || 'Operazione non disponibile.', 'error');
+    }
+  }
+
   return (
     <section className={styles.page}>
-      <Card className={`${styles.hero} ${styles.heroPrimary}`}>
-        <p className={styles.kicker}>
-          <ShieldCheck size={15} aria-hidden="true" /> Catalogo partner
-        </p>
-        <div className={`${styles.titleCard} ${styles.titleCardHero}`}>
-          <h1>Convenzioni Motrice</h1>
-        </div>
-        <p className="muted">Sblocca promo locali e valida in palestra con QR.</p>
-        <p className="muted">
-          Buono convenzione: 2 EUR dal saldo reinvestito. Disponibile: <strong>{eur(wallet.available_cents)}</strong>
-        </p>
-        <div className={styles.heroActionsPrimary}>
-          <Button type="button" onClick={findNearMe} aria-label="Trova offerte vicino a me">
-            Trova offerte vicino a me
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setShowHowItWorksModal(true)}
-            aria-label="Apri guida come funziona"
-          >
-            Come funziona
-          </Button>
-        </div>
-      </Card>
-
-      <Card className={styles.quickFiltersCard}>
-        <ConvenzioniFilters
-          searchQuery={searchQuery}
-          onSearchChange={(value) => setSearchQuery(String(value || '').slice(0, 120))}
-          cityFilter={cityFilter}
-          onCityChange={setCityFilter}
-          tagFilter={tagFilter}
-          onTagChange={setTagFilter}
-          activeOnly={activeOnly}
-          onActiveOnlyChange={setActiveOnly}
-          cityOptions={allLocations}
-          tagOptions={tagOptions}
-          resultCount={partnersByFilters.length}
-        />
-      </Card>
-
-      <FeaturedPartnersRow
-        partners={featuredPartners}
-        onOpenDetail={openPartnerDetail}
-        onOpenVoucher={requestOpenVoucher}
-        isPromoExpired={isPromoExpired}
+      <ExploreMapToggle
+        activeView={isJoinView ? 'third' : isWalletView ? 'right' : 'left'}
+        leftLabel="Convenzioni"
+        rightLabel="Salvadanaio"
+        thirdLabel="Vuoi unirti?"
+        leftTo="/convenzioni"
+        rightTo="/convenzioni?view=wallet"
+        thirdTo="/convenzioni?view=join"
       />
-
-      <section ref={resultsRef} className={styles.resultsSection} aria-label="Risultati convenzioni">
-        <div className={styles.sectionHeadInline}>
-          <div className={styles.titleCard}>
-            <h2>Partner disponibili</h2>
-          </div>
-          <p className={styles.sectionLead}>{partnersByFilters.length} risultati</p>
-        </div>
-
-        {partnersLoading ? (
-          <LoadingSkeleton rows={6} variant="list" />
-        ) : partnersByFilters.length === 0 ? (
-          <Card className={styles.searchEmpty}>
-            <p className={styles.searchHint}>Nessuna convenzione con i filtri correnti.</p>
-            <div className={styles.searchEmptyActions}>
-              <Button type="button" variant="secondary" onClick={() => setCityFilter('all')}>
-                Reset citta
+      {isWalletView ? (
+        <AccountWalletCard
+          wallet={wallet}
+          onInvest={handleInvestWallet}
+          onWithdraw={handleWithdrawWallet}
+          onPricing={() => navigate('/pricing')}
+        />
+      ) : (
+        <>
+          {!isJoinView ? (
+            <>
+          <Card className={`${styles.hero} ${styles.heroPrimary}`}>
+            <p className={styles.kicker}>
+              <ShieldCheck size={15} aria-hidden="true" /> Catalogo partner
+            </p>
+            <div className={`${styles.titleCard} ${styles.titleCardHero}`}>
+              <h1>Convenzioni Motrice</h1>
+            </div>
+            <p className="muted">Sblocca promo locali e valida in palestra con QR.</p>
+            <p className="muted">
+              Buono convenzione: 2 EUR dal saldo reinvestito. Disponibile: <strong>{eur(wallet.available_cents)}</strong>
+            </p>
+            <div className={styles.heroActionsPrimary}>
+              <Button type="button" onClick={findNearMe} aria-label="Trova offerte vicino a me">
+                Trova offerte vicino a me
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setTagFilter('all')}>
-                Reset sport/tag
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setSearchQuery('')}>
-                Azzera ricerca
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowHowItWorksModal(true)}
+                aria-label="Apri guida come funziona"
+              >
+                Come funziona
               </Button>
             </div>
           </Card>
-        ) : (
-          <div className={styles.partnersGrid}>
-            {partnersByFilters.map((partner) => (
-              <PartnerCard
-                key={`partner-${partner.id}`}
-                partner={partner}
-                placeholderImage={PARTNER_PLACEHOLDER_IMAGE}
-                distanceKm={partnerDistanceMap.get(partner.id) ?? null}
-                promoExpired={isPromoExpired(partner)}
-                onOpenDetail={openPartnerDetail}
-                onOpenVoucher={requestOpenVoucher}
-              />
-            ))}
-          </div>
-        )}
-      </section>
 
-      <Card className={styles.mapCard}>
-        <div className={styles.mapHead}>
-          <div className={styles.titleCard}>
-            <h2>Vedi sulla mappa</h2>
-          </div>
-          <button
-            type="button"
-            className={styles.mapToggle}
-            onClick={() => setIsMapOpen((prev) => !prev)}
-            aria-expanded={isMapOpen}
-            aria-controls="convenzioni-map-content"
-          >
-            {isMapOpen ? 'Chiudi mappa' : 'Apri mappa'}
-          </button>
-        </div>
+          <Card className={styles.quickFiltersCard}>
+            <ConvenzioniFilters
+              searchQuery={searchQuery}
+              onSearchChange={(value) => setSearchQuery(String(value || '').slice(0, 120))}
+              cityFilter={cityFilter}
+              onCityChange={setCityFilter}
+              tagFilter={tagFilter}
+              onTagChange={setTagFilter}
+              activeOnly={activeOnly}
+              onActiveOnlyChange={setActiveOnly}
+              cityOptions={allLocations}
+              tagOptions={tagOptions}
+              resultCount={partnersByFilters.length}
+            />
+          </Card>
 
-        {isMapOpen ? (
-          <div id="convenzioni-map-content">
-            {mapPartners.length === 0 ? (
-              <p className={styles.mapHint}>Nessuna struttura con coordinate disponibili per i filtri selezionati.</p>
+          <FeaturedPartnersRow
+            partners={featuredPartners}
+            onOpenDetail={openPartnerDetail}
+            onOpenVoucher={requestOpenVoucher}
+            isPromoExpired={isPromoExpired}
+          />
+
+          <section ref={resultsRef} className={styles.resultsSection} aria-label="Risultati convenzioni">
+            <div className={styles.sectionHeadInline}>
+              <div className={styles.titleCard}>
+                <h2>Partner disponibili</h2>
+              </div>
+              <p className={styles.sectionLead}>{partnersByFilters.length} risultati</p>
+            </div>
+
+            {partnersLoading ? (
+              <LoadingSkeleton rows={6} variant="list" />
+            ) : partnersByFilters.length === 0 ? (
+              <Card className={styles.searchEmpty}>
+                <p className={styles.searchHint}>Nessuna convenzione con i filtri correnti.</p>
+                <div className={styles.searchEmptyActions}>
+                  <Button type="button" variant="secondary" onClick={() => setCityFilter('all')}>
+                    Reset citta
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={() => setTagFilter('all')}>
+                    Reset sport/tag
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setSearchQuery('')}>
+                    Azzera ricerca
+                  </Button>
+                </div>
+              </Card>
             ) : (
-              <MapContainer center={mapCenter} zoom={cityFilter === 'all' ? 5.8 : 11} className={styles.mapFrame}>
-                <TileLayer
-                  attribution="&copy; OpenStreetMap contributors"
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                {mapPartners.map((partner) => (
-                  <Marker key={`map-${partner.id}`} position={[partner.lat, partner.lng]}>
-                    <Popup>
-                      <strong>{partner.name}</strong>
-                      <br />
-                      {partner.city} · {partner.kind}
-                      <br />
-                      <button type="button" onClick={() => openPartnerDetail(partner)}>
-                        Apri offerte
-                      </button>
-                    </Popup>
-                  </Marker>
-                ))}
-              </MapContainer>
+              <>
+                <div className={styles.partnersGrid}>
+                  {paginatedPartners.map((partner) => (
+                    <PartnerCard
+                      key={`partner-${partner.id}`}
+                      partner={partner}
+                      placeholderImage={PARTNER_PLACEHOLDER_IMAGE}
+                      distanceKm={partnerDistanceMap.get(partner.id) ?? null}
+                      promoExpired={isPromoExpired(partner)}
+                      onOpenDetail={openPartnerDetail}
+                      onOpenVoucher={requestOpenVoucher}
+                    />
+                  ))}
+                </div>
+                <div className={styles.paginationCompact} aria-label="Paginazione partner convenzioni">
+                  <button
+                    type="button"
+                    className={styles.pageArrow}
+                    onClick={() => {
+                      if (totalPages <= 1) return;
+                      setCurrentPage((prev) => (prev <= 1 ? totalPages : prev - 1));
+                    }}
+                    aria-label="Pagina precedente partner"
+                    aria-disabled={totalPages <= 1}
+                    disabled={totalPages <= 1}
+                  >
+                    <ChevronLeft size={18} strokeWidth={2.25} aria-hidden="true" />
+                  </button>
+                  <p className={styles.paginationCompactInfo}>
+                    Pag {currentPage}/{totalPages} · {totalPartners} partner
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.pageArrow}
+                    onClick={() => {
+                      if (totalPages <= 1) return;
+                      setCurrentPage((prev) => (prev >= totalPages ? 1 : prev + 1));
+                    }}
+                    aria-label="Pagina successiva partner"
+                    aria-disabled={totalPages <= 1}
+                    disabled={totalPages <= 1}
+                  >
+                    <ChevronRight size={18} strokeWidth={2.25} aria-hidden="true" />
+                  </button>
+                </div>
+              </>
             )}
-          </div>
-        ) : null}
-      </Card>
+          </section>
 
-      <Card className={styles.howItWorksCard}>
-        <HowItWorksConvenzioni />
-      </Card>
+          <Card className={styles.mapCard}>
+            <div className={styles.mapHead}>
+              <div className={styles.titleCard}>
+                <h2>Vedi sulla mappa</h2>
+              </div>
+              <button
+                type="button"
+                className={styles.mapToggle}
+                onClick={() => setIsMapOpen((prev) => !prev)}
+                aria-expanded={isMapOpen}
+                aria-controls="convenzioni-map-content"
+              >
+                {isMapOpen ? 'Chiudi mappa' : 'Apri mappa'}
+              </button>
+            </div>
 
-      <Card className={styles.rulesCard}>
+            {isMapOpen ? (
+              <div id="convenzioni-map-content">
+                {mapPartners.length === 0 ? (
+                  <p className={styles.mapHint}>Nessuna struttura con coordinate disponibili per i filtri selezionati.</p>
+                ) : (
+                  <MapContainer center={mapCenter} zoom={cityFilter === 'all' ? 5.8 : 11} className={styles.mapFrame}>
+                    <TileLayer
+                      attribution="&copy; OpenStreetMap contributors"
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {mapPartners.map((partner) => (
+                      <Marker key={`map-${partner.id}`} position={[partner.lat, partner.lng]}>
+                        <Popup>
+                          <strong>{partner.name}</strong>
+                          <br />
+                          {partner.city} · {partner.kind}
+                          <br />
+                          <button type="button" onClick={() => openPartnerDetail(partner)}>
+                            Apri offerte
+                          </button>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
+                )}
+              </div>
+            ) : null}
+          </Card>
+
+          <Card className={styles.howItWorksCard}>
+            <HowItWorksConvenzioni />
+          </Card>
+            </>
+          ) : null}
+
+          {isJoinView ? (
+            <>
+          <Card className={styles.partnerHeroCard}>
+            <p className={styles.kicker}>
+              <Building2 size={15} aria-hidden="true" /> Area partner
+            </p>
+            <div className={`${styles.titleCard} ${styles.titleCardHero}`}>
+              <h1>Vuoi unirti a Motrice?</h1>
+            </div>
+            <p className="muted">Attiva promozioni locali, genera voucher QR e raggiungi nuovi sportivi nella tua citta.</p>
+            <div className={styles.partnerHeroGrid}>
+              <p className={styles.partnerHeroStat}>
+                <strong>{allPartnersWithBadge.length}</strong>
+                <span>partner nel catalogo</span>
+              </p>
+              <p className={styles.partnerHeroStat}>
+                <strong>1-3 giorni</strong>
+                <span>tempo medio verifica</span>
+              </p>
+              <p className={styles.partnerHeroStat}>
+                <strong>{joinDraft.partner_plan === 'premium' ? Number(joinDraft.courses_count || 1) * 7 : 2}</strong>
+                <span>promo disponibili con piano scelto</span>
+              </p>
+            </div>
+            <div className={styles.heroActionsPrimary}>
+              <Button type="button" onClick={scrollToJoinForm}>
+                Invia candidatura
+              </Button>
+              <Button type="button" variant="secondary" onClick={openPartnerPortal}>
+                Apri portale partner
+              </Button>
+            </div>
+          </Card>
+
+          <Card className={styles.partnerBenefitsCard}>
+            <div className={styles.benefitGrid}>
+              <article className={styles.benefitItem}>
+                <h3>Visibilita locale</h3>
+                <p>Compari in catalogo e mappa convenzioni con profilo e corsi.</p>
+              </article>
+              <article className={styles.benefitItem}>
+                <h3>Voucher QR</h3>
+                <p>Promo verificabili in struttura con validita temporale controllata.</p>
+              </article>
+              <article className={styles.benefitItem}>
+                <h3>Gestione piani</h3>
+                <p>Passa da Free a Premium per aumentare numero e copertura promo.</p>
+              </article>
+            </div>
+          </Card>
+
+          <Card className={styles.rulesCard}>
         <div className={styles.rulesHeader}>
           <div className={styles.titleCard}>
             <h2>Regole convenzioni</h2>
@@ -738,10 +891,10 @@ function ConvenzioniPage() {
             Abbonamento convenzioni
           </Button>
         </div>
-      </Card>
+          </Card>
 
-      {showPlanPanel && canAccessSubscription ? (
-        <Card className={styles.planPanel} ref={planPanelRef}>
+          {showPlanPanel && canAccessSubscription ? (
+            <Card className={styles.planPanel} ref={planPanelRef}>
           <div className={styles.planHeader}>
             <div className={styles.titleCard}>
               <h2>Piano e upgrade convenzioni</h2>
@@ -802,10 +955,10 @@ function ConvenzioniPage() {
               Nascondi abbonamento
             </Button>
           </div>
-        </Card>
-      ) : null}
+            </Card>
+          ) : null}
 
-      <Card className={styles.partnerAreaIntro}>
+          <Card className={styles.partnerAreaIntro}>
         <div className={styles.joinHead}>
           <div className={styles.titleCard}>
             <h2>Sei una palestra/ASD/coach?</h2>
@@ -815,9 +968,9 @@ function ConvenzioniPage() {
           </Button>
         </div>
         <p className="muted">Area partner separata: invia candidatura senza interrompere il flusso utente.</p>
-      </Card>
+          </Card>
 
-      <Card className={styles.joinCard} ref={joinSectionRef}>
+          <Card className={styles.joinCard} ref={joinSectionRef}>
         <div className={styles.joinHead}>
           <div className={styles.titleCard}>
             <h2>Vuoi unirti?</h2>
@@ -828,6 +981,7 @@ function ConvenzioniPage() {
         </div>
         <p className="muted">Compila i dati essenziali e invia la tua candidatura partner.</p>
         <form className={styles.joinForm} onSubmit={submitJoinRequest}>
+          <p className={styles.joinStepLabel}>Step 1 · Dati struttura</p>
           <fieldset className={styles.joinFieldset}>
             <legend>Dati struttura</legend>
             <label>
@@ -857,6 +1011,7 @@ function ConvenzioniPage() {
             </label>
           </fieldset>
 
+          <p className={styles.joinStepLabel}>Step 2 · Piano e contatto</p>
           <fieldset className={styles.joinFieldset}>
             <legend>Piano e contatto</legend>
             <label>
@@ -915,13 +1070,13 @@ function ConvenzioniPage() {
               ? 'Regola attiva: piano Free con 2 promo disponibili.'
               : `Regola attiva: piano Premium con fino a ${Number(joinDraft.courses_count || 1) * 7} promo disponibili (7 per corso).`}
           </p>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="submit" className={styles.joinSubmit} disabled={isSubmitting}>
             {isSubmitting ? 'Invio...' : 'Invia candidatura partner'}
           </Button>
         </form>
-      </Card>
+          </Card>
 
-      <Card className={styles.joinCard}>
+          <Card className={styles.joinCard}>
         <button
           type="button"
           className={styles.contractCardToggle}
@@ -953,7 +1108,11 @@ function ConvenzioniPage() {
             showToast={showToast}
           />
         </div>
-      </Card>
+          </Card>
+            </>
+          ) : null}
+        </>
+      )}
 
       <Modal
         open={Boolean(voucherModalPartner)}

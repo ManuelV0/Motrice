@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Award, Camera, ChevronDown, Cpu, PlayCircle, Save, Sparkles, TrendingUp } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useBilling } from '../context/BillingContext';
@@ -21,7 +21,6 @@ import AccountHero from '../components/account/AccountHero';
 import AccountSectionToolbar from '../components/account/AccountSectionToolbar';
 import AccountFeaturedActions from '../components/account/AccountFeaturedActions';
 import AccountQuickActions from '../components/account/AccountQuickActions';
-import AccountWalletCard from '../components/account/AccountWalletCard';
 import AccountReliabilityCard from '../components/account/AccountReliabilityCard';
 import AccountCard from '../components/account/AccountCard';
 import { useToast } from '../context/ToastContext';
@@ -52,6 +51,7 @@ const CHAT_SLOT_OPTIONS = [
 ];
 
 function AccountPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const {
@@ -108,7 +108,6 @@ function AccountPage() {
   const profileRef = useRef(null);
   const planRef = useRef(null);
   const settingsRef = useRef(null);
-  const walletRef = useRef(null);
 
   const useDemoVideoFlow = String(import.meta.env.VITE_REWARDED_REQUIRE_VIDEO || 'true').toLowerCase() !== 'false';
 
@@ -179,6 +178,14 @@ function AccountPage() {
     return () => window.removeEventListener('focus', refreshWallet);
   }, []);
 
+  useEffect(() => {
+    if (accountLoading) return;
+    const section = new URLSearchParams(location.search).get('section');
+    const shouldOpenWallet = location.hash === '#wallet' || section === 'wallet';
+    if (!shouldOpenWallet) return;
+    navigate('/convenzioni?view=wallet', { replace: true });
+  }, [accountLoading, location.hash, location.search, navigate]);
+
   const isCoachApproved = coachApplicationStatus === 'approved';
 
   useEffect(() => {
@@ -241,7 +248,6 @@ function AccountPage() {
     () => [
       { id: 'profile', category: 'profilo', label: 'Profilo', keywords: ['profilo', 'bio', 'avatar'], available: true },
       { id: 'plan', category: 'billing', label: 'Piano', keywords: ['piano', 'premium', 'abbonamento'], available: true },
-      { id: 'wallet', category: 'billing', label: 'Wallet', keywords: ['wallet', 'salvadanaio', 'piggybank'], available: true },
       { id: 'reliability', category: 'growth', label: 'Affidabilita', keywords: ['reliability', 'xp', 'badge'], available: true },
       { id: 'ai', category: 'utility', label: 'AI Locale', keywords: ['ai', 'locale', 'provider', 'beta'], available: true },
       { id: 'theme', category: 'utility', label: 'Tema', keywords: ['tema', 'dark', 'light'], available: true },
@@ -275,8 +281,8 @@ function AccountPage() {
         id: 'wallet',
         title: Number(wallet.reinvested_cents || 0) > 0 ? 'Gestisci salvadanaio' : 'Attiva reinvestimento',
         description: 'Controlla saldo disponibile e budget reinvestito.',
-        label: 'Apri wallet',
-        onClick: () => walletRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        label: 'Apri salvadanaio',
+        onClick: () => navigate('/convenzioni?view=wallet')
       },
       {
         id: 'plan',
@@ -286,7 +292,7 @@ function AccountPage() {
         onClick: () => planRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
     ],
-    [isPremium, wallet.reinvested_cents]
+    [isPremium, navigate, wallet.reinvested_cents]
   );
 
   useEffect(() => {
@@ -456,26 +462,6 @@ function AccountPage() {
     setOnlyAvailable(false);
   }
 
-  function handleInvestWallet() {
-    try {
-      const next = piggybank.investAvailableBalance();
-      setWallet(next);
-      showToast('Saldo spostato nel budget reinvestito.', 'success');
-    } catch (error) {
-      showToast(error.message || 'Operazione non disponibile.', 'error');
-    }
-  }
-
-  function handleWithdrawWallet() {
-    try {
-      const next = piggybank.withdrawReinvestedBalance();
-      setWallet(next);
-      showToast('Saldo reinvestito riportato su disponibile.', 'success');
-    } catch (error) {
-      showToast(error.message || 'Operazione non disponibile.', 'error');
-    }
-  }
-
   return (
     <section className={styles.page}>
       <AccountHero
@@ -502,7 +488,7 @@ function AccountPage() {
       </Card>
 
       <AccountQuickActions
-        onWallet={() => walletRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        onWallet={() => navigate('/convenzioni?view=wallet')}
         onNotifications={() => navigate('/notifications')}
         onTutorial={handleTutorialPrimary}
         onSettings={() => settingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -757,17 +743,6 @@ function AccountPage() {
               </Button>
             </div>
           </Card>
-        ) : null}
-
-        {!accountLoading && isSectionVisible('wallet') ? (
-          <div ref={walletRef}>
-            <AccountWalletCard
-              wallet={wallet}
-              onInvest={handleInvestWallet}
-              onWithdraw={handleWithdrawWallet}
-              onPricing={() => navigate('/pricing')}
-            />
-          </div>
         ) : null}
 
         {!accountLoading && isSectionVisible('reliability') ? (

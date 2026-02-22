@@ -2,7 +2,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(var(--vv-bottom, 0px) + var(--android-nav-extra, 0px));
+  bottom: 0;
   z-index: var(--z-nav);
   height: var(--bottom-nav-h);
   padding: var(--s-2) var(--s-5) calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
@@ -15,7 +15,7 @@
   box-shadow: 0 -10px 24px rgb(0 0 0 / 26%);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
-  align-items: end;
+  align-items: center;
   gap: var(--s-3);
 }
 
@@ -34,13 +34,35 @@
   font-weight: var(--weight-semibold);
   line-height: 1;
   position: relative;
-  top: -2px;
-  transition: transform var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+  top: 0;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+.tab::after {
+  content: '';
+  position: absolute;
+  bottom: -0.3rem;
+  left: 50%;
+  width: 1.1rem;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transform: translateX(-50%);
 }
 
 .tabActive {
   color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
   text-shadow: 0 0 0.5rem color-mix(in srgb, var(--primary) 34%, transparent);
+}
+
+.tabActive::after {
+  background: color-mix(in srgb, var(--primary) 82%, #ffffff);
 }
 
 .tab:active,
@@ -103,7 +125,7 @@
   position: fixed;
   left: var(--s-3);
   right: var(--s-3);
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2) + var(--vv-bottom, 0px) + var(--android-nav-extra, 0px));
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2));
   z-index: calc(var(--z-nav) - 1);
   border: 1px solid color-mix(in srgb, var(--border) 76%, rgb(255 255 255 / 12%));
   border-radius: var(--r-xl);

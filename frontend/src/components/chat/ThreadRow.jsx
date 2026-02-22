@@ -20,17 +20,19 @@ function formatThreadTime(iso) {
 
 function ThreadRow({ thread, onOpen }) {
   const preview = String(thread?.lastMessage || '').trim() || 'Apri la conversazione';
+  const title = String(thread?.title || 'Chat').trim() || 'Chat';
+  const formattedTime = formatThreadTime(thread?.lastTs);
   return (
-    <button type="button" className={styles.row} onClick={onOpen} aria-label={`Apri chat ${thread.title}`}>
-      <span className={styles.avatar} aria-hidden="true">{initialsFromTitle(thread.title)}</span>
+    <button type="button" className={styles.row} onClick={onOpen} aria-label={`Apri chat ${title}`}>
+      <span className={styles.avatar} aria-hidden="true">{initialsFromTitle(title)}</span>
 
       <span className={styles.copy}>
         <span className={styles.top}>
-          <strong>{thread.title}</strong>
-          <small>{formatThreadTime(thread.lastTs)}</small>
+          <strong className={styles.title}>{title}</strong>
+          <small className={styles.time}>{formattedTime}</small>
         </span>
         <span className={styles.bottom}>
-          <span>{preview}</span>
+          <span className={styles.preview}>{preview}</span>
           {Number(thread?.unreadCount || 0) > 0 ? <span className={styles.badge}>{thread.unreadCount}</span> : null}
         </span>
       </span>

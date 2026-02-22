@@ -1,16 +1,18 @@
 .page {
   display: grid;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--s-4);
+  width: min(100%, 44rem);
+  margin-inline: auto;
+  padding: var(--s-4);
   min-height: calc(100dvh - var(--nav-h));
   padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
   background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--s-2);
 }
 
@@ -24,13 +26,20 @@
 }
 
 .headerCopy h1 {
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: clamp(1.05rem, 0.98rem + 0.35vw, 1.2rem);
+  line-height: var(--lh-tight);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.01em;
 }
 
 .headerCopy p {
-  font-size: 0.78rem;
+  margin-top: var(--micro-gap-2);
+  font-size: var(--text-xs);
+  line-height: 1.4;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .searchWrap {
@@ -42,15 +51,23 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--s-2);
+  color: var(--muted);
 }
 
 .searchWrap input {
   min-height: 2.2rem;
+  min-width: 0;
+  width: 100%;
   border: 0;
   background: transparent;
   color: var(--text);
+  font-size: var(--text-sm);
   padding: 0;
+}
+
+.searchWrap input::placeholder {
+  color: color-mix(in srgb, var(--muted) 92%, var(--text));
 }
 
 .searchWrap input:focus-visible {
@@ -63,6 +80,7 @@
 
 .metPillWrap {
   display: flex;
+  min-width: 0;
 }
 
 .list {
@@ -71,6 +89,7 @@
   background: color-mix(in srgb, var(--surface) 94%, #05080d);
   overflow: hidden;
   min-height: 0;
+  box-shadow: var(--sh-1);
 }
 
 .empty {
@@ -78,7 +97,7 @@
   display: grid;
   place-items: center;
   text-align: center;
-  gap: 0.4rem;
+  gap: var(--s-1);
   color: var(--muted);
   padding: var(--s-4);
 }
@@ -90,15 +109,29 @@
 
 .empty h2 {
   color: var(--text);
-  font-size: 0.98rem;
+  font-size: var(--text-base);
+  line-height: var(--lh-tight);
 }
 
 .empty p {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
+  line-height: var(--lh-normal);
+}
+
+@media (max-width: 420px) {
+  .page {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .header {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (min-width: 980px) {
   .page {
     width: min(38rem, 100%);
+    padding-inline: var(--s-5);
   }
 }

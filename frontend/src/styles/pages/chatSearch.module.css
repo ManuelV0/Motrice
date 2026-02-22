@@ -1,7 +1,7 @@
 .page {
   display: grid;
   gap: var(--s-2);
-  min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-height, var(--bottom-nav-h, 64px)) - env(safe-area-inset-bottom, 0px));
 }
 
 .header {

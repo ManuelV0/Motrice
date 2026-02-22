@@ -30,6 +30,8 @@
 
 .input {
   min-height: 2.8rem;
+  min-width: 0;
+  width: 100%;
   max-height: calc(24px * 4 + 12px);
   resize: none;
   overflow: auto;
@@ -39,6 +41,7 @@
   background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
   color: var(--text);
   line-height: 1.4;
+  font: inherit;
 }
 
 .send {

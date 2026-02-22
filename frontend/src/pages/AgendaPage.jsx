@@ -11,6 +11,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -135,6 +136,15 @@ function AgendaPage() {
 
   return (
     <section className={styles.page}>
+      <ExploreMapToggle
+        activeView="none"
+        leftLabel="Crea (evento)"
+        rightLabel="Mappa"
+        thirdLabel="Esplora"
+        leftTo="/create"
+        rightTo="/map"
+        thirdTo="/explore"
+      />
       <div className={styles.head}>
         <h1>Agenda</h1>
         <div className={styles.tabs}>

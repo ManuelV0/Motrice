@@ -238,6 +238,14 @@ function safeString(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function normalizeSearchText(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function normalizeDisplayName(value, fallback = '') {
   const raw = String(value || '').trim();
   if (!raw) return String(fallback || '').trim();
@@ -891,11 +899,33 @@ function purgeExpiredEvents(store) {
   return true;
 }
 
+function ensureSeededEvents(store) {
+  const existing = new Set((store.events || []).map((event) => String(event.id)));
+  let changed = false;
+
+  seededEvents.forEach((seedEvent, index) => {
+    const normalized = seedCreatorPlan(seedEvent, index);
+    const eventId = String(normalized.id);
+    if (existing.has(eventId)) return;
+    if (isEventExpired(normalized)) return;
+    store.events.push(clone(normalized));
+    existing.add(eventId);
+    changed = true;
+  });
+
+  if (changed) {
+    store.events.sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
+  }
+
+  return changed;
+}
+
 function loadStore() {
   const raw = safeStorageGet(STORAGE_KEY);
   if (!raw) {
     const initial = buildInitialStore();
     purgeExpiredEvents(initial);
+    ensureSeededEvents(initial);
     safeStorageSet(STORAGE_KEY, JSON.stringify(initial));
     return clone(initial);
   }
@@ -997,7 +1027,9 @@ function loadStore() {
     const changedPartnerLifecycle = ensurePartnerProfileLifecycle(merged);
     const changedPartnerBadges = refreshPartnerBadgeSnapshots(merged);
 
-    if (purgeExpiredEvents(merged) || changedPartnerLifecycle || changedPartnerBadges) {
+    const removedExpiredEvents = purgeExpiredEvents(merged);
+    const restoredSeededEvents = ensureSeededEvents(merged);
+    if (removedExpiredEvents || restoredSeededEvents || changedPartnerLifecycle || changedPartnerBadges) {
       saveStore(merged);
     }
     return merged;
@@ -1146,7 +1178,7 @@ function applySort(events, sortBy) {
 
 function applyFilters(events, filters) {
   let result = [...events];
-  const q = safeString(filters.q);
+  const q = normalizeSearchText(filters.q);
 
   if (filters.sport && filters.sport !== 'all') {
     result = result.filter((event) => String(event.sport_id) === String(filters.sport));
@@ -1161,9 +1193,12 @@ function applyFilters(events, filters) {
   }
 
   if (q) {
+    const qTokens = q.split(/\s+/).filter(Boolean);
     result = result.filter((event) => {
-      const hay = `${event.title} ${event.sport_name} ${event.location_name} ${event.city} ${event.route_info?.name || ''}`.toLowerCase();
-      return hay.includes(q);
+      const hay = normalizeSearchText(
+        `${event.title} ${event.sport_name} ${event.location_name} ${event.city} ${event.route_info?.name || ''} ${event.description || ''}`
+      );
+      return qTokens.every((token) => hay.includes(token));
     });
   }
 

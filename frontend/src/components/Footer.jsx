@@ -76,8 +76,8 @@ function Footer() {
           >
             admin convenzioni
           </Link>
-          {location.pathname !== '/pricing' && (
-            <Link to="/pricing" className={styles.adminLink} aria-label="Vai alla sezione salvadanaio">
+          {location.pathname !== '/convenzioni' && (
+            <Link to="/convenzioni?view=wallet" className={styles.adminLink} aria-label="Vai alla sezione salvadanaio">
               salvadanaio
             </Link>
           )}

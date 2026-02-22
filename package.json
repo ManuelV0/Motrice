@@ -17,8 +17,9 @@
     "android:apk": "npm run android:apk --workspace mobile",
     "android:aab": "npm run android:aab --workspace mobile",
     "dev:prepare-mobile": "npm run cap:sync",
-    "dev": "npm run dev:prepare-mobile && concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "dev": "concurrently --kill-others-on-fail \"npm run dev --workspace backend\" \"npm run dev --workspace frontend -- --host 0.0.0.0 --port 5173 --strictPort\"",
     "dev:all": "npm run dev:termux",
+    "dev:stop": "sh -c 'ps -ef | grep -E \"web-codex/.*/(nodemon|vite)|web-codex/backend/server.js\" | grep -v grep | awk \"{print \\$2}\" | xargs -r kill'",
     "dev:termux": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend -- --host 0.0.0.0 --port 5173 --strictPort\" \"npm run dev --workspace partner-portal -- --host 0.0.0.0 --port 5174 --strictPort\"",
     "dev:backend": "npm run dev --workspace backend",
     "dev:frontend": "npm run dev --workspace frontend",
@@ -28,6 +29,7 @@
     "start": "npm run start --workspace backend"
   },
   "devDependencies": {
+    "@rollup/rollup-android-arm64": "^4.58.0",
     "concurrently": "^9.1.2"
   }
 }

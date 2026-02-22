@@ -1,5 +1,7 @@
 .pill {
   min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
@@ -7,9 +9,22 @@
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.55rem;
+  gap: var(--s-2);
   padding: 0 var(--s-3);
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
+  line-height: var(--lh-tight);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pill > svg {
+  flex: 0 0 auto;
+}
+
+.pill > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pill:focus-visible {

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { SearchX, PlusCircle, PiggyBank, Map as MapIcon } from 'lucide-react';
+import { SearchX, PiggyBank, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../services/api';
 import FilterBar from '../components/FilterBar';
 import EventCard from '../components/EventCard';
@@ -12,6 +12,7 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import PaywallModal from '../components/PaywallModal';
 import ExploreHero from '../components/explore/ExploreHero';
+import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import ExploreFiltersToolbar from '../components/explore/ExploreFiltersToolbar';
 import ExploreFeaturedRow from '../components/explore/ExploreFeaturedRow';
 import ExploreHowItWorks from '../components/explore/ExploreHowItWorks';
@@ -25,6 +26,7 @@ import LocationPermissionAlert from '../components/LocationPermissionAlert';
 import styles from '../styles/pages/explore.module.css';
 
 const FILTERS_STORAGE = 'motrice_explore_filters_v1';
+const EVENTS_PER_PAGE = 6;
 const defaults = {
   q: '',
   sport: 'all',
@@ -67,6 +69,8 @@ function ExplorePage() {
   const [groupStakeCents, setGroupStakeCents] = useState(500);
   const [bookingGroupEventId, setBookingGroupEventId] = useState(null);
   const [participantName, setParticipantName] = useState('Partecipante');
+  const [currentPage, setCurrentPage] = useState(1);
+  const eventsRequestRef = useRef(0);
 
   const initialFilters = useMemo(() => {
     const fromStorage = readStoredFiltersSafe();
@@ -75,6 +79,7 @@ function ExplorePage() {
   }, [searchParams]);
 
   const [filters, setFilters] = useState(initialFilters);
+  const [qInput, setQInput] = useState(initialFilters.q || '');
   const { hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
 
   const mapSearch = useMemo(() => writeFiltersToSearch(new URLSearchParams(), filters, defaults).toString(), [filters]);
@@ -93,31 +98,52 @@ function ExplorePage() {
   }, []);
 
   useEffect(() => {
-    const next = readFiltersFromSearch(searchParams, { ...defaults, ...filters });
-    if (JSON.stringify(next) !== JSON.stringify(filters)) {
-      setFilters(next);
-    }
-  }, [searchParams]);
+    setQInput(filters.q || '');
+  }, [filters.q]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters((prev) => {
+        if ((prev.q || '') === qInput) return prev;
+        return { ...prev, q: qInput };
+      });
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [qInput]);
 
   useEffect(() => {
     const base = entitlements.canUseAdvancedFilters
       ? filters
       : { ...filters, distance: 'all', level: 'all', timeOfDay: 'all' };
     const effectiveFilters = { ...base, ...originParams };
+    const requestId = eventsRequestRef.current + 1;
+    eventsRequestRef.current = requestId;
 
     setLoading(true);
     setLoadError('');
     api
       .listEvents(effectiveFilters)
-      .then(setEvents)
+      .then((nextEvents) => {
+        if (requestId !== eventsRequestRef.current) return;
+        setEvents(nextEvents);
+      })
       .catch((error) => {
+        if (requestId !== eventsRequestRef.current) return;
         setEvents([]);
         setLoadError(error?.message || 'Errore nel caricamento eventi.');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId !== eventsRequestRef.current) return;
+        setLoading(false);
+      });
 
     safeStorageSet(FILTERS_STORAGE, JSON.stringify(filters));
-    setSearchParams(writeFiltersToSearch(searchParams, filters, defaults), { replace: true });
+    const nextSearchParams = writeFiltersToSearch(searchParams, filters, defaults);
+    const nextSearchString = nextSearchParams.toString();
+    const currentSearchString = searchParams.toString();
+    if (nextSearchString !== currentSearchString) {
+      setSearchParams(nextSearchParams, { replace: true });
+    }
   }, [filters, originParams]);
 
   const cities = useMemo(() => {
@@ -147,6 +173,31 @@ function ExplorePage() {
       })
       .slice(0, 6);
   }, [filteredEvents]);
+
+  const totalCards = filteredEvents.length;
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(totalCards / EVENTS_PER_PAGE));
+  }, [totalCards]);
+
+  const paginatedEvents = useMemo(() => {
+    const start = (currentPage - 1) * EVENTS_PER_PAGE;
+    return filteredEvents.slice(start, start + EVENTS_PER_PAGE);
+  }, [filteredEvents, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, cityFilter, onlyOpenSpots]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
+
+  useEffect(() => {
+    if (cityFilter === 'all') return;
+    if (cities.includes(cityFilter)) return;
+    setCityFilter('all');
+  }, [cities, cityFilter]);
 
   async function reloadEvents() {
     const base = entitlements.canUseAdvancedFilters
@@ -219,22 +270,31 @@ function ExplorePage() {
 
   function resetFilters() {
     setFilters(defaults);
+    setQInput(defaults.q);
     setCityFilter('all');
     setOnlyOpenSpots(false);
   }
 
+  function updateFilter(key, value) {
+    if (key === 'q') {
+      setQInput(value);
+      return;
+    }
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
   return (
     <div className={styles.page}>
+      <ExploreMapToggle
+        activeView="explore"
+        leftLabel="Esplora"
+        rightLabel="Mappa"
+        thirdLabel="Crea"
+        leftTo="/explore"
+        rightTo={mapSearch ? `/map?${mapSearch}` : '/map'}
+        thirdTo="/create"
+      />
       <ExploreHero onPrimaryAction={handleNearMe} onSecondaryAction={() => setShowHowItWorksModal(true)} />
-
-      <section className={styles.topActions}>
-        <CTAButton to={mapSearch ? `/map?${mapSearch}` : '/map'}>
-          <MapIcon size={18} aria-hidden="true" /> Apri mappa
-        </CTAButton>
-        <CTAButton to="/create">
-          <PlusCircle size={18} aria-hidden="true" /> Crea sessione
-        </CTAButton>
-      </section>
 
       <LocationPermissionAlert
         hasLocation={hasLocation}
@@ -246,14 +306,14 @@ function ExplorePage() {
 
       <Card className={styles.toolbarCard}>
         <ExploreFiltersToolbar
-          filters={filters}
+          filters={{ ...filters, q: qInput }}
           cityFilter={cityFilter}
           onCityFilterChange={setCityFilter}
           cities={cities}
           sports={sports}
           onlyOpenSpots={onlyOpenSpots}
           onOnlyOpenSpotsChange={setOnlyOpenSpots}
-          onFiltersChange={(key, value) => setFilters((prev) => ({ ...prev, [key]: value }))}
+          onFiltersChange={updateFilter}
           resultCount={filteredEvents.length}
           onReset={resetFilters}
           onToggleAdvanced={() => setShowAdvancedFilters((prev) => !prev)}
@@ -264,9 +324,9 @@ function ExplorePage() {
       {showAdvancedFilters ? (
         <Card className={styles.advancedCard}>
           <FilterBar
-            filters={filters}
+            filters={{ ...filters, q: qInput }}
             sports={sports}
-            onChange={(key, value) => setFilters((prev) => ({ ...prev, [key]: value }))}
+            onChange={updateFilter}
             onSubmit={(event) => event.preventDefault()}
             advancedLocked={!entitlements.canUseAdvancedFilters}
             onRequestUpgrade={() => setPaywallOpen(true)}
@@ -334,23 +394,55 @@ function ExplorePage() {
             onSecondaryAction={() => navigate('/create')}
           />
         ) : (
-          <div className={styles.eventsGrid}>
-            {filteredEvents.map((event) => (
-              <div key={event.id} className={styles.eventItem}>
-                <EventCard
-                  event={event}
-                  variant="compact"
-                  onToggleSave={toggleSaveEvent}
-                  onBookGroup={(selectedEvent) => {
-                    setGroupStakeCents(500);
-                    setGroupBookingEvent(selectedEvent);
-                  }}
-                  saving={savingIds.includes(event.id)}
-                  booking={bookingGroupEventId === event.id}
-                />
-              </div>
-            ))}
-          </div>
+          <>
+            <div className={styles.eventsGrid}>
+              {paginatedEvents.map((event) => (
+                <div key={event.id} className={styles.eventItem}>
+                  <EventCard
+                    event={event}
+                    variant="compact"
+                    className={styles.uniformCard}
+                    onToggleSave={toggleSaveEvent}
+                    onBookGroup={(selectedEvent) => {
+                      setGroupStakeCents(500);
+                      setGroupBookingEvent(selectedEvent);
+                    }}
+                    saving={savingIds.includes(event.id)}
+                    booking={bookingGroupEventId === event.id}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className={styles.paginationCompact} aria-label="Paginazione sessioni">
+              <button
+                type="button"
+                className={styles.pageArrow}
+                onClick={() => {
+                  if (totalPages <= 1) return;
+                  setCurrentPage((prev) => (prev <= 1 ? totalPages : prev - 1));
+                }}
+                aria-label="Pagina precedente"
+                aria-disabled={totalPages <= 1}
+                disabled={totalPages <= 1}
+              >
+                <ChevronLeft size={18} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+              <p className={styles.paginationCompactInfo}>Pag {currentPage}/{totalPages} · {totalCards} card</p>
+              <button
+                type="button"
+                className={styles.pageArrow}
+                onClick={() => {
+                  if (totalPages <= 1) return;
+                  setCurrentPage((prev) => (prev >= totalPages ? 1 : prev + 1));
+                }}
+                aria-label="Pagina successiva"
+                aria-disabled={totalPages <= 1}
+                disabled={totalPages <= 1}
+              >
+                <ChevronRight size={18} strokeWidth={2.25} aria-hidden="true" />
+              </button>
+            </div>
+          </>
         )}
       </section>
 

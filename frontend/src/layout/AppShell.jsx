@@ -14,6 +14,7 @@ function AppShell({ children }) {
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
+  const isMapSurfaceRoute = isMapLikeRoute || isCommunityRoute;
   const isAccountRoute = location.pathname.startsWith('/account');
   const isLocalProfileRoute = location.pathname === '/profile/me';
   const isAccountLikeRoute = isAccountRoute || isLocalProfileRoute;
@@ -73,7 +74,7 @@ function AppShell({ children }) {
       <Navbar forceMobile={isAccountLikeRoute} />
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isMapLikeRoute || isChatRoute || isCommunityRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isMapLikeRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''} ${isCommunityRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">

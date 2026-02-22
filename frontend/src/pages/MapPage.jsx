@@ -20,6 +20,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
+import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { writeFiltersToSearch } from '../utils/queryFilters';
@@ -450,6 +451,11 @@ function MapPage() {
     }).length;
   }, [eventsInRadius]);
 
+  const exploreSearch = useMemo(
+    () => writeFiltersToSearch(new URLSearchParams(), filters, baseFilters).toString(),
+    [filters]
+  );
+
   const hasCustomFiltersApplied = useMemo(() => {
     return (
       String(filters.q || '').trim().length > 0 ||
@@ -623,9 +629,30 @@ function MapPage() {
     mapRef.current = map;
     const onWindowResize = () => map.resize();
     window.addEventListener('resize', onWindowResize, { passive: true });
-    requestAnimationFrame(() => map.resize());
+
+    let resizeTimer = null;
+    const syncResize = () => {
+      map.resize();
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => map.resize(), 220);
+    };
+
+    const observer = new ResizeObserver(syncResize);
+    observer.observe(mapNodeRef.current);
+
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', syncResize);
+    vv?.addEventListener('scroll', syncResize);
+    window.addEventListener('orientationchange', syncResize);
+
+    requestAnimationFrame(syncResize);
 
     return () => {
+      if (resizeTimer) window.clearTimeout(resizeTimer);
+      observer.disconnect();
+      vv?.removeEventListener('resize', syncResize);
+      vv?.removeEventListener('scroll', syncResize);
+      window.removeEventListener('orientationchange', syncResize);
       eventMarkersRef.current.forEach((marker) => marker.remove());
       eventMarkersRef.current = [];
       if (userMarkerRef.current) {
@@ -763,6 +790,11 @@ function MapPage() {
         <div className={styles.topReadabilityLayer} aria-hidden="true" />
 
         <div className={styles.topControls}>
+          <ExploreMapToggle
+            activeView="map"
+            exploreTo={exploreSearch ? `/explore?${exploreSearch}` : '/explore'}
+            mapTo="/map"
+          />
           <MapSearchBar value={filters.q || ''} onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))} />
           <MapFilterChips
             selectedChip={selectedChip}

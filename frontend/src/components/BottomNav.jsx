@@ -1,14 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarPlus2, Filter, Home, Plus, Search, UserRound, Users, Dumbbell } from 'lucide-react';
+import { Building2, CalendarPlus2, Home, MapPinned, MessageCircle, PiggyBank, Plus, UserRound } from 'lucide-react';
 import styles from '../styles/components/bottomNav.module.css';
 
 const QUICK_ACTIONS = [
   { id: 'create', label: 'Crea evento', icon: CalendarPlus2, to: '/create' },
-  { id: 'search', label: 'Cerca partita', icon: Search, to: '/explore?q=partita' },
-  { id: 'training', label: 'Allenamento', icon: Dumbbell, to: '/coach' },
-  { id: 'invite', label: 'Invita amici', icon: Users, to: '/profile/me' },
-  { id: 'nearby', label: 'Filtri vicino a me', icon: Filter, to: '/map' }
+  { id: 'map', label: 'Mappa eventi', icon: MapPinned, to: '/map' },
+  { id: 'account', label: 'Account', icon: UserRound, to: '/account' },
+  { id: 'deals', label: 'Convenzioni', icon: Building2, to: '/convenzioni' },
+  { id: 'wallet', label: 'Salvadanaio', icon: PiggyBank, to: '/convenzioni?view=wallet' },
+  { id: 'chat', label: 'Chat', icon: MessageCircle, to: '/chat' }
 ];
 
 function QuickActionsSheet({ open, onClose, onAction, forceVisible = false }) {
@@ -52,11 +53,15 @@ function BottomNav({ forceVisible = false }) {
   const navigate = useNavigate();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const activeTab = useMemo(() => {
-    if (location.pathname.startsWith('/account') || location.pathname.startsWith('/profile')) return 'profile';
-    if (location.pathname === '/' || location.pathname.startsWith('/map') || location.pathname.startsWith('/explore')) return 'home';
-    return null;
-  }, [location.pathname]);
+  const isProfileRoute = useMemo(
+    () => location.pathname.startsWith('/account') || location.pathname.startsWith('/profile'),
+    [location.pathname]
+  );
+  const isHomeRoute = !isProfileRoute;
+
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [location.pathname, location.search]);
 
   function toggleSheet() {
     setSheetOpen((prev) => !prev);
@@ -76,7 +81,7 @@ function BottomNav({ forceVisible = false }) {
       <QuickActionsSheet open={sheetOpen} onClose={closeSheet} onAction={runQuickAction} forceVisible={forceVisible} />
 
       <nav className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''}`} aria-label="Navigazione principale mobile">
-        <NavLink to="/map" className={`${styles.tab} ${activeTab === 'home' ? styles.tabActive : ''}`}>
+        <NavLink to="/map" className={`${styles.tab} ${isHomeRoute ? styles.tabActive : ''}`}>
           <Home size={22} aria-hidden="true" />
           <span>Home</span>
         </NavLink>
@@ -92,9 +97,9 @@ function BottomNav({ forceVisible = false }) {
           <Plus size={24} aria-hidden="true" />
         </button>
 
-        <NavLink to="/account" className={`${styles.tab} ${activeTab === 'profile' ? styles.tabActive : ''}`}>
+        <NavLink to="/account" className={`${styles.tab} ${isProfileRoute ? styles.tabActive : ''}`}>
           <UserRound size={22} aria-hidden="true" />
-          <span>Profile</span>
+          <span>Profilo</span>
         </NavLink>
       </nav>
     </>

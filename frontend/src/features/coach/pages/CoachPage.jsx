@@ -10,6 +10,7 @@ import Card from '../../../components/Card';
 import EmptyState from '../../../components/EmptyState';
 import LoadingSkeleton from '../../../components/LoadingSkeleton';
 import Button from '../../../components/Button';
+import ExploreMapToggle from '../../../components/explore/ExploreMapToggle';
 import avatarPlaceholder from '../../../assets/avatar-placeholder.svg';
 import styles from '../../../styles/pages/coachMarketplace.module.css';
 
@@ -285,6 +286,13 @@ function CoachPage() {
 
   return (
     <section className={styles.page}>
+      <ExploreMapToggle
+        activeView="left"
+        leftLabel="Coach"
+        rightLabel="Le mie schede"
+        leftTo="/coach"
+        rightTo="/dashboard/plans"
+      />
       <header className={styles.hero}>
         <div>
           <p className={styles.kicker}>Trova Coach</p>

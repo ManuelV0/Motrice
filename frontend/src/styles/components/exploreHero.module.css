@@ -1,7 +1,8 @@
 .hero {
+  position: relative;
   display: grid;
   gap: var(--s-3);
-  padding: var(--s-5);
+  padding: var(--s-5) var(--s-7);
   border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
   border-radius: var(--r-xl);
   background:
@@ -45,13 +46,127 @@
   gap: var(--s-2);
 }
 
+.navArrow {
+  position: absolute;
+  top: 50%;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--border));
+  border-radius: 999px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--surface) 92%, #ffffff) 0%, color-mix(in srgb, var(--surface-2) 74%, var(--surface)) 100%);
+  color: color-mix(in srgb, var(--title-primary) 90%, var(--text));
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  box-shadow: var(--sh-1);
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.navArrow span {
+  font-size: 1.2rem;
+  line-height: 1;
+  font-weight: var(--weight-bold);
+}
+
+.navArrow:hover {
+  transform: translateY(calc(-50% - var(--micro-gap)));
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--primary));
+  box-shadow: var(--sh-hover);
+}
+
+.navArrow:active {
+  transform: translateY(-50%);
+}
+
+.navArrow:focus-visible,
+.dot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, var(--primary));
+  outline-offset: 2px;
+}
+
+.navArrowLeft {
+  left: var(--s-3);
+}
+
+.navArrowRight {
+  right: var(--s-3);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 0;
+  background: color-mix(in srgb, var(--border) 70%, var(--surface));
+  cursor: pointer;
+}
+
+.dotActive {
+  width: 1.4rem;
+  background: color-mix(in srgb, var(--accent) 70%, var(--primary));
+}
+
 @media (max-width: 640px) {
   .hero {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--s-2);
     padding: var(--s-4);
+  }
+
+  .content {
+    grid-column: 1 / -1;
+  }
+
+  .content h1 {
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+    line-height: 1.2;
+  }
+
+  .description {
+    max-width: 100%;
+    font-size: 0.96rem;
   }
 
   .actions {
     display: grid;
     grid-template-columns: 1fr;
+    grid-column: 1 / -1;
+  }
+
+  .pagination {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .navArrow {
+    width: 2.35rem;
+    height: 2.35rem;
+    top: auto;
+    bottom: calc(var(--s-8) + var(--s-2));
+    transform: none;
+  }
+
+  .navArrowLeft {
+    left: var(--s-2);
+  }
+
+  .navArrowRight {
+    right: var(--s-2);
+  }
+
+  .navArrow:hover {
+    transform: translateY(calc(var(--micro-gap) * -1));
   }
 }

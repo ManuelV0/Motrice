@@ -1,20 +1,110 @@
 .page {
+  position: relative;
+  inline-size: 100vw;
+  margin-inline: calc(50% - 50vw);
+  block-size: calc(100dvh - var(--nav-h));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.mapViewport {
+  position: relative;
+  inline-size: 100%;
+  block-size: 100%;
+  background: color-mix(in srgb, var(--surface) 94%, #05080d);
+}
+
+.mapCanvas {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
+}
+
+.mapMarker {
+  position: absolute;
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 76%, var(--accent));
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--primary) 26%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--surface) 80%, #000);
+  border: 0;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
+}
+
+.mapMarker:hover,
+.mapMarker:focus-visible {
+  transform: scale(1.08);
+  filter: brightness(1.05);
+}
+
+.mapMarkerPublic {
+  background: color-mix(in srgb, var(--success) 68%, var(--accent));
+}
+
+.mapMarkerSemi {
+  background: color-mix(in srgb, var(--primary) 76%, var(--accent));
+}
+
+.mapMarkerPrivate {
+  background: color-mix(in srgb, var(--danger) 68%, var(--accent));
+}
+
+.mapMarkerActive {
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--accent) 38%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--surface) 80%, #000);
+}
+
+.mapLoading {
+  position: absolute;
+  inset: 0;
   display: grid;
-  gap: var(--s-3);
-  min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+  place-items: center;
+  z-index: var(--z-floating);
+  background:
+    radial-gradient(120% 80% at 20% 10%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 58%),
+    radial-gradient(90% 70% at 80% 70%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 86%, var(--surface)) 0%, color-mix(in srgb, var(--surface) 94%, #03060c) 100%);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.mapCanvas :global(.maplibregl-popup-content) {
+  border-radius: var(--r-sm);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, #05080d);
+  color: var(--text);
+  font-size: var(--text-xs);
+  box-shadow: var(--sh-1);
+}
+
+.topReadabilityLayer {
+  position: absolute;
+  inset: 0 0 auto;
+  block-size: clamp(7rem, 26vh, 11rem);
+  pointer-events: none;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--surface) 86%, transparent), transparent);
+  z-index: var(--z-floating);
+}
+
+.topControls {
+  position: absolute;
+  inset: var(--s-3) var(--s-3) auto;
+  z-index: var(--z-overlay-mid);
+  display: grid;
+  gap: var(--s-2);
+  inline-size: min(42rem, calc(100% - var(--s-6)));
 }
 
 .header {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--s-2);
-  padding: var(--s-2);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  background: color-mix(in srgb, var(--surface) 94%, #05080d);
 }
 
 .backBtn {
@@ -24,6 +114,14 @@
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   background: color-mix(in srgb, var(--surface-2) 84%, var(--surface));
   color: var(--text);
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.backBtn:hover,
+.backBtn:focus-visible {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
 }
 
 .header h1 {
@@ -33,13 +131,171 @@
   gap: var(--s-1);
 }
 
-.hero,
-.block,
-.accordion {
+.subtle {
+  color: var(--muted);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.searchBar {
+  min-block-size: var(--s-10);
+  border-radius: var(--r-xl);
+  border: 1px solid color-mix(in srgb, var(--border) 90%, var(--surface));
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-4);
+  box-shadow: var(--sh-1);
+  backdrop-filter: blur(14px) saturate(1.04);
+  -webkit-backdrop-filter: blur(14px) saturate(1.04);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.searchBar:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  box-shadow: var(--focus);
+  transform: translateY(calc(var(--micro-gap) * -1));
+}
+
+.searchBar > input {
+  inline-size: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  min-block-size: var(--s-8);
+  padding: 0;
+}
+
+.searchBar > input::placeholder {
+  color: var(--muted);
+}
+
+.chipRail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.chip,
+.chipActive {
+  inline-size: 100%;
+  min-block-size: var(--s-8);
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--border));
+  box-shadow: var(--sh-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: color-mix(in srgb, var(--primary) 92%, #fff3e8);
+  background: color-mix(in srgb, var(--primary) 22%, var(--surface));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.chip:hover,
+.chip:focus-visible {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  border-color: color-mix(in srgb, var(--primary) 58%, var(--border));
+  background: color-mix(in srgb, var(--primary) 34%, var(--surface));
+}
+
+.chipActive {
+  background: color-mix(in srgb, var(--primary) 88%, var(--accent));
+  color: var(--primary-contrast);
+}
+
+.fabStack {
+  position: absolute;
+  inset: auto var(--s-3) calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2)) auto;
+  z-index: var(--z-overlay-mid);
+  display: grid;
+  gap: var(--s-2);
+}
+
+.fab {
+  inline-size: 3.35rem;
+  block-size: 3.35rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border) 90%, var(--surface));
+  box-shadow: var(--sh-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
+}
+
+.fab:hover,
+.fab:focus-visible {
+  transform: translateY(calc(var(--micro-gap) * -1));
+  box-shadow: var(--sh-hover);
+  filter: brightness(1.03);
+}
+
+.fabNeutral {
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  color: var(--text);
+}
+
+.fabAccent,
+.fabPrimary {
+  background: color-mix(in srgb, var(--primary) 88%, var(--accent));
+  color: var(--primary-contrast);
+}
+
+.bottomSheet {
+  position: absolute;
+  left: var(--s-3);
+  right: var(--s-3);
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2));
+  border-radius: var(--r-xl) var(--r-xl) var(--r-md) var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--border) 90%, var(--surface));
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--sh-2);
+  backdrop-filter: blur(14px) saturate(1.04);
+  -webkit-backdrop-filter: blur(14px) saturate(1.04);
+  max-block-size: min(58vh, 34rem);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  transition: transform var(--dur-med) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+
+.bottomSheetClosed {
+  transform: translateY(calc(100% + var(--s-2)));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bottomSheetOpen {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.sheetHandle {
+  inline-size: var(--s-10);
+  block-size: var(--micro-gap-2);
+  margin: var(--s-2) auto;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.accessCard {
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--surface-2) 74%, var(--surface));
-  padding: var(--s-2);
+  margin: 0 var(--s-3) var(--s-3);
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
+  overflow: auto;
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
 }
 
 .accessBadge {
@@ -54,6 +310,20 @@
   font-size: var(--text-xs);
 }
 
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.metaRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
 .controls label {
   display: grid;
   gap: var(--s-1);
@@ -61,37 +331,74 @@
   color: var(--muted);
 }
 
-.controls select,
-.inviteWrap input {
-  min-height: 2.6rem;
+.controls select {
+  min-height: 2.7rem;
 }
 
 .cta {
-  margin-top: var(--s-2);
+  margin-top: var(--s-1);
 }
 
 .inviteWrap {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: var(--s-2);
-}
-
-.accordion summary {
-  cursor: pointer;
-  font-weight: var(--weight-semibold);
+  align-items: center;
 }
 
 @media (max-width: 767px) {
-  .page {
-    position: fixed;
-    inset: 0;
-    z-index: calc(var(--z-modal-max, 1200) + 2);
-    background: color-mix(in srgb, var(--surface) 98%, #03060c);
-    padding: env(safe-area-inset-top, 0px) var(--s-2) calc(var(--s-2) + env(safe-area-inset-bottom, 0px) + var(--vv-bottom, 0px));
-    overflow: auto;
+  .topControls {
+    inset: calc(var(--s-3) + env(safe-area-inset-top, 0px)) var(--s-2) auto;
+    inline-size: calc(100% - var(--s-4));
   }
 
-  .header {
-    top: env(safe-area-inset-top, 0px);
+  .searchBar {
+    min-block-size: 2.9rem;
+    padding: 0 var(--s-3);
+  }
+
+  .chipRail {
+    display: flex;
+    overflow-x: auto;
+    gap: var(--s-2);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .chipRail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip,
+  .chipActive {
+    min-inline-size: 6.3rem;
+    flex: 0 0 auto;
+  }
+
+  .fabStack {
+    right: var(--s-2);
+    gap: var(--s-1);
+  }
+
+  .fab {
+    inline-size: 3rem;
+    block-size: 3rem;
+  }
+
+  .bottomSheet {
+    left: var(--s-2);
+    right: var(--s-2);
+    max-block-size: min(64vh, 38rem);
+  }
+}
+
+@media (max-width: 420px) {
+  .topControls {
+    gap: var(--s-1);
+  }
+
+  .accessCard {
+    margin: 0 var(--s-2) var(--s-2);
+    padding: var(--s-2);
   }
 }

@@ -5,7 +5,6 @@ import {
   Compass,
   Map,
   PlusCircle,
-  BadgeDollarSign,
   Handshake,
   UserRound,
   MessageCircle,
@@ -20,20 +19,46 @@ import { useBilling } from '../context/BillingContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import PaywallModal from './PaywallModal';
 import IconButton from './IconButton';
-import Button from './Button';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
   { to: '/explore', label: 'Esplora', icon: Compass },
-  { to: '/map', label: 'Mappa', icon: Map },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/account', label: 'Account', icon: UserRound },
-  { to: '/create', label: 'Crea', icon: PlusCircle },
-  { to: '/coach', label: 'Trova Coach', icon: Target },
-  { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays },
+  { to: '/coach', label: 'Coach', icon: Target },
   { to: '/chat', label: 'Chat', icon: MessageCircle },
-  { to: '/pricing', label: 'Salvadanaio', icon: BadgeDollarSign },
   { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+];
+
+const drawerSections = [
+  {
+    title: 'Scopri',
+    items: [
+      { to: '/explore', label: 'Esplora', icon: Compass },
+      { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+    ]
+  },
+  {
+    title: 'Gestisci',
+    items: [
+      { to: '/create', label: 'Crea evento', icon: PlusCircle },
+      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
+      { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
+    ]
+  },
+  {
+    title: 'Profilo',
+    items: [
+      { to: '/account', label: 'Account', icon: UserRound },
+      { to: '/coach', label: 'Coach', icon: Target },
+      { to: '/chat', label: 'Chat', icon: MessageCircle }
+    ]
+  }
+];
+
+const drawerQuickActions = [
+  { to: '/map', label: 'Mappa', icon: Map },
+  { to: '/create', label: 'Crea', icon: PlusCircle },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays }
 ];
 
 function Navbar({ forceMobile = false }) {
@@ -219,7 +244,7 @@ function Navbar({ forceMobile = false }) {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
-                    `${styles.link} ${link.to === '/pricing' ? styles.walletLink : ''} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
+                    `${styles.link} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
                   }
                 >
                   <Icon size={18} aria-hidden="true" />
@@ -240,30 +265,10 @@ function Navbar({ forceMobile = false }) {
 
       <div id="mobile-nav" className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`} aria-hidden={!isOpen}>
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
-          {links.map((link) => {
-            const Icon = link.icon;
-            if (link.to === '/chat' && !entitlements.canUseNotifications) {
-              return (
-                <Button key={link.to} type="button" variant="secondary" onClick={() => setPaywallOpen(true)}>
-                  <Lock size={18} aria-hidden="true" />
-                  <span>Chat Pro</span>
-                </Button>
-              );
-            }
-            return (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  `${styles.link} ${link.to === '/pricing' ? styles.walletLink : ''} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
-                }
-                onClick={() => setIsOpen(false)}
-              >
-                <Icon size={18} aria-hidden="true" />
-                  <span>{link.label}{link.to === '/chat' && unread > 0 ? ` (${unread})` : ''}</span>
-              </NavLink>
-            );
-          })}
+          <div className={styles.mobileHeader}>
+            <p className={styles.mobileKicker}>Navigazione</p>
+            <h2 className={styles.mobileTitle}>Vai dove ti serve</h2>
+          </div>
 
           <form className={styles.search} onSubmit={onSearchSubmit}>
             <input
@@ -275,6 +280,61 @@ function Navbar({ forceMobile = false }) {
               aria-label="Cerca sport, citta o evento"
             />
           </form>
+
+          <div className={styles.quickActions} role="list" aria-label="Azioni rapide">
+            {drawerQuickActions.map((action) => {
+              const Icon = action.icon;
+              return (
+                <NavLink
+                  key={action.to}
+                  to={action.to}
+                  role="listitem"
+                  className={({ isActive }) => `${styles.quickAction} ${isActive ? styles.quickActionActive : ''}`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span>{action.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+
+          {drawerSections.map((section) => (
+            <section key={section.title} className={styles.mobileSection} aria-label={section.title}>
+              <p className={styles.mobileSectionTitle}>{section.title}</p>
+              <div className={styles.mobileSectionList}>
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  if (item.to === '/chat' && !entitlements.canUseNotifications) {
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        className={`${styles.link} ${styles.drawerLink} ${styles.chatriceLink}`}
+                        onClick={() => setPaywallOpen(true)}
+                      >
+                        <Lock size={18} aria-hidden="true" />
+                        <span>Chat Pro</span>
+                      </button>
+                    );
+                  }
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `${styles.link} ${styles.drawerLink} ${item.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
+                      }
+                      onClick={() => setIsOpen(false)}
+                    >
+                      <Icon size={18} aria-hidden="true" />
+                      <span>{item.label}{item.to === '/chat' && unread > 0 ? ` (${unread})` : ''}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
           <button
             type="button"

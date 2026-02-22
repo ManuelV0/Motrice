@@ -1,5 +1,7 @@
 .page {
-  min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+  min-height: calc(
+    100dvh - var(--nav-h) - var(--bottom-nav-height, var(--bottom-nav-h, 64px)) - env(safe-area-inset-bottom, 0px)
+  );
 }
 
 @media (max-width: 767px) {
