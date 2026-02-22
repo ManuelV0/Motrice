@@ -1,9 +1,0 @@
-.page {
-  min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
-}
-
-@media (max-width: 767px) {
-  .page {
-    min-height: 100dvh;
-  }
-}
