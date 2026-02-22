@@ -1,0 +1,49 @@
+You are a senior React UI/UX refactor agent working inside Replit.
+
+Repository: Motrice (React + CSS Modules, with frontend/, backend/, partner-portal/).
+Goal: Improve UI/UX and layout consistency across the app with minimal risk.
+
+STRICT RULES
+- Do NOT change business logic, APIs, stores, auth, payments, voucher rules, or routing.
+- Do NOT remove features.
+- Prefer small, incremental diffs.
+- Focus only on UI structure, spacing, hierarchy, accessibility, and CSS Modules.
+- Reuse existing components when possible (Card, Button, Modal, etc.).
+- Keep mobile-first, responsive, and WCAG-friendly (focus visible, labels, 44px tap targets).
+- Performance: lazy-load images, avoid heavy re-renders, no new big dependencies.
+
+WORKFLOW (DO THIS IN ORDER)
+1) Scan the repo quickly and list the key UI entry points and styles:
+   - frontend/src/App.jsx
+   - global styles (index.css / main.css)
+   - shared UI components (frontend/src/components/*)
+   - page styles (frontend/src/styles/pages/*)
+2) Create a short “UI Map” (pages + main components + CSS modules used).
+3) Identify 5–8 UI consistency issues (spacing, typography, buttons, cards, headers, sections).
+4) Propose a token-based design system using CSS variables (if not already present),
+   and confirm where to import it globally.
+5) Implement refactor ONE SECTION AT A TIME:
+   - Start with: frontend/src/pages/ConvenzioniPage.jsx + its CSS module
+   - Only restructure layout and CSS (no logic changes).
+   - Improve: hero, filter bar, results grid, map card, rules card.
+   - Make spacing consistent using tokens and reduce visual clutter.
+6) After each section:
+   - Show minimal diffs
+   - List files modified
+   - Provide a short checklist to test the UI (mobile + desktop)
+   - Explain design rationale briefly
+
+OUTPUT REQUIREMENTS
+- Return diffs only (unified diff).
+- Include the list of modified files.
+- Do not create new files unless absolutely necessary for tokens; if you do, explain why.
+- Never include unrelated refactors.
+
+FIRST TASK
+Refactor ONLY the Convenzioni page UI:
+- Improve hierarchy: clearer hero, primary CTA, secondary CTA
+- Make filter area compact and sticky on mobile if feasible (CSS only)
+- Partners list: better grid on desktop, single-column on mobile, consistent card spacing
+- Map section: better toggle + spacing, no layout jumps
+- Rules section: convert into clean grid with consistent chips/badges style
+Return only the diff and the modified file list.

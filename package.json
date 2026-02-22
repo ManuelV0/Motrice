@@ -5,8 +5,7 @@
   "workspaces": [
     "backend",
     "frontend",
-    "partner-portal",
-    "mobile"
+    "partner-portal"
   ],
   "scripts": {
     "build:web": "npm run build --workspace frontend",
@@ -29,7 +28,6 @@
     "start": "npm run start --workspace backend"
   },
   "devDependencies": {
-    "@rollup/rollup-android-arm64": "^4.58.0",
     "concurrently": "^9.1.2"
   }
 }

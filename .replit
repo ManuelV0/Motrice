@@ -1,0 +1,48 @@
+modules = ["web", "nodejs-22"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[userenv]
+
+[userenv.development]
+VITE_API_BASE_URL = ""
+JWT_SECRET = "replit_dev_secret_motrice_2026"
+DB_PATH = "./motrice_dev.db"
+CORS_ORIGIN = "http://localhost:5000"
+TRUST_PROXY = "true"
+SEED_ON_BOOT = "true"
+ALLOW_DEV_AUTH_HEADER = "true"
+STRIPE_ENABLED = "false"
+CLAMAV_ENABLED = "false"
+PORT = "4000"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && npx concurrently --kill-others-on-fail \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\""
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
