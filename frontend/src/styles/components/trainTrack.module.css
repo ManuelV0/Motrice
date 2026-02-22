@@ -1,9 +1,11 @@
 .widget {
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  background: var(--surface-2);
-  box-shadow: var(--sh-1);
-  padding: var(--s-5);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
+  padding: var(--s-4);
   display: grid;
   gap: var(--s-4);
 }
@@ -20,7 +22,7 @@
   margin: 0;
   color: var(--text);
   font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
 }
 
 .meta {
@@ -31,12 +33,13 @@
 
 .track {
   position: relative;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
   min-height: var(--s-10);
   padding: var(--s-4);
   overflow: hidden;
+  box-shadow: var(--sh-inner);
 }
 
 .line {
@@ -45,8 +48,8 @@
   right: var(--s-7);
   top: calc(var(--s-5) + var(--s-1));
   height: var(--micro-gap-2);
-  border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--primary) 24%, var(--border));
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--primary) 20%, var(--glass-border));
 }
 
 .node {
@@ -69,10 +72,10 @@
 .dot {
   width: var(--s-3);
   height: var(--s-3);
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  box-shadow: var(--sh-1);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  box-shadow: var(--sh-card);
 }
 
 .label {
@@ -95,11 +98,11 @@
   top: var(--micro-gap);
   width: var(--s-8);
   height: var(--s-8);
-  border-radius: var(--r-md);
-  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--border));
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, var(--glass-border));
   background: color-mix(in srgb, var(--primary) 10%, var(--surface));
   color: var(--primary);
-  box-shadow: var(--sh-2);
+  box-shadow: var(--sh-card);
   display: grid;
   place-items: center;
   animation: trainMove calc(var(--dur-med) * 15) var(--ease) infinite;
@@ -113,10 +116,10 @@
   transform: translateY(-50%);
   width: var(--s-8);
   height: var(--s-2);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-pill);
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, var(--primary) 35%, transparent),
+    color-mix(in srgb, var(--primary) 30%, transparent),
     color-mix(in srgb, var(--primary) 0%, transparent)
   );
 }
@@ -127,6 +130,12 @@
   }
   to {
     transform: translateX(calc(100% - var(--s-8)));
+  }
+}
+
+@media (min-width: 640px) {
+  .widget {
+    padding: var(--s-5);
   }
 }
 

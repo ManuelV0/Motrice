@@ -1,19 +1,24 @@
 .stack {
   position: fixed;
-  right: var(--s-4);
-  bottom: var(--s-4);
+  right: var(--s-3);
+  bottom: var(--s-3);
   z-index: var(--z-toast);
   display: grid;
   gap: var(--s-2);
+  max-width: min(22rem, calc(100vw - var(--s-6)));
 }
 
 .toast {
-  border-radius: var(--r-md);
+  border-radius: var(--r-xl);
   padding: var(--s-3) var(--s-4);
   color: var(--primary-contrast);
   background: color-mix(in srgb, var(--text) 82%, var(--surface));
-  box-shadow: var(--sh-2);
+  box-shadow: var(--sh-3), var(--sh-glow);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   animation: slideUp var(--dur-med) var(--ease);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .success {
@@ -26,6 +31,13 @@
 
 .info {
   background: color-mix(in srgb, var(--text) 82%, var(--surface));
+}
+
+@media (min-width: 640px) {
+  .stack {
+    right: var(--s-4);
+    bottom: var(--s-4);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

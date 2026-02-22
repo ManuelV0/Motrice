@@ -1,13 +1,15 @@
 .wrap {
   display: grid;
   gap: var(--s-3);
-  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
-  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--warning) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .denied {
-  border-color: color-mix(in srgb, var(--danger) 38%, var(--border));
-  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
 }
 
 .head {
@@ -19,19 +21,20 @@
 .iconBubble {
   width: var(--s-8);
   height: var(--s-8);
-  border-radius: var(--r-md);
-  border: 1px solid color-mix(in srgb, var(--warning) 36%, var(--border));
-  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--warning) 24%, var(--glass-border));
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
   color: color-mix(in srgb, var(--warning) 72%, var(--text));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  box-shadow: var(--sh-inner);
 }
 
 .denied .iconBubble {
-  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
-  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
   color: color-mix(in srgb, var(--danger) 75%, var(--text));
 }
 
