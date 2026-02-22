@@ -10,8 +10,16 @@
   margin-inline: auto;
   width: 100%;
   display: grid;
-  gap: var(--s-4);
-  border-radius: var(--r-xl);
+  gap: var(--s-5);
+  border-radius: var(--r-2xl);
+  border: 1px solid var(--glass-border-strong);
+  padding: var(--s-6);
+  background:
+    var(--card-glass-overlay),
+    var(--card-grad-base);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .kicker {
@@ -34,10 +42,12 @@
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-3);
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
   font-size: var(--text-sm);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 @keyframes fadeIn {

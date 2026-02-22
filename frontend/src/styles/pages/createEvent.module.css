@@ -11,16 +11,24 @@
   display: grid;
   gap: var(--s-5);
   padding: var(--s-6);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  background:
+    var(--card-glass-overlay),
+    var(--card-grad-base);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .fieldset {
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
   padding: var(--s-4);
   display: grid;
   gap: var(--s-3);
-  background: color-mix(in srgb, var(--surface) 84%, var(--surface-2));
+  background: color-mix(in srgb, var(--surface) 80%, var(--surface-2));
 }
 
 .fieldset legend {
@@ -41,10 +49,10 @@
   width: 100%;
   min-height: var(--s-8);
   padding: var(--s-3) var(--s-4);
-  border-radius: var(--r-md);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface-2) 40%, var(--surface));
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 
 .field textarea {
@@ -53,14 +61,13 @@
 }
 
 .field :is(input, select, textarea):focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 58%, var(--surface));
-  outline-offset: 2px;
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--glass-border-strong));
   box-shadow: var(--focus);
 }
 
 .invalid {
-  border-color: color-mix(in srgb, var(--danger) 70%, var(--border));
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--glass-border)) !important;
   background: color-mix(in srgb, var(--danger) 5%, var(--surface));
 }
 
@@ -104,8 +111,8 @@
 
 .routeMapWrap {
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
   background: var(--surface);
 }
 

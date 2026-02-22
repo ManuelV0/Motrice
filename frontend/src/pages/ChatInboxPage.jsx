@@ -1,4 +1,4 @@
-import { MessageCircleOff, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatTabs from '../components/chat/ChatTabs';
@@ -63,7 +63,7 @@ function ChatInboxPage() {
           <LoadingSkeleton rows={4} variant="list" />
         ) : filtered.length === 0 ? (
           <div className={styles.empty}>
-            <MessageCircleOff size={20} aria-hidden="true" />
+            <img src="/images/empty-chat.png" alt="" className={styles.emptyImage} loading="lazy" />
             <h2>Nessuna chat ancora</h2>
             <p>Allenati e sblocca nuove connessioni</p>
           </div>

@@ -2,18 +2,28 @@
   min-height: 2.75rem;
   width: 100%;
   min-width: 0;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border-strong);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 68%, var(--surface));
   color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  padding: 0 var(--s-3);
+  padding: 0 var(--s-4);
   font-size: var(--text-sm);
   line-height: var(--lh-tight);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
   -webkit-tap-highlight-color: transparent;
+}
+
+.pill:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
+  transform: translateY(-1px);
 }
 
 .pill > svg {

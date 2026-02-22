@@ -4,7 +4,9 @@
 }
 
 .hero {
-  background: linear-gradient(135deg, var(--surface), color-mix(in srgb, var(--primary) 10%, var(--surface)));
+  background:
+    radial-gradient(100% 80% at 50% 0%, color-mix(in srgb, var(--primary) 10%, var(--surface)) 0%, transparent 60%),
+    var(--surface);
 }
 
 .ctaRow {
@@ -15,11 +17,16 @@
 
 .walletCard {
   display: grid;
-  gap: var(--s-3);
-  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  gap: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--glass-border));
+  border-radius: var(--r-2xl);
+  padding: var(--s-5);
   background:
     radial-gradient(120% 100% at 0% 0%, color-mix(in srgb, var(--gold-bright) 14%, var(--surface)) 0%, transparent 58%),
-    var(--surface);
+    var(--card-grad-base);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .walletHead {
@@ -51,9 +58,13 @@
   display: grid;
   gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface));
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .eventStakeItem p {
@@ -84,7 +95,10 @@
 }
 
 .premium {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--glass-border-strong));
+  background:
+    radial-gradient(110% 80% at 100% 0%, color-mix(in srgb, var(--gold-bright) 12%, var(--surface)) 0%, transparent 55%),
+    var(--card-grad-base);
 }
 
 .freeActions {

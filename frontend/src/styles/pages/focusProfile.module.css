@@ -1,11 +1,20 @@
 .page {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
 }
 
 .card {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  padding: var(--s-5);
+  background:
+    var(--card-glass-overlay),
+    var(--card-grad-base);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .card h1,
@@ -17,18 +26,21 @@
 .avatar {
   width: 4.5rem;
   height: 4.5rem;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   object-fit: cover;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border: 2px solid var(--glass-border-strong);
+  box-shadow: var(--sh-card);
 }
 
 .metBox {
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: var(--r-md);
-  padding: var(--s-2);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: var(--s-3);
   display: grid;
-  gap: var(--s-1);
-  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
+  gap: var(--s-2);
+  background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .actions {

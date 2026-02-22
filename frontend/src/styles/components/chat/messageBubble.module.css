@@ -1,21 +1,28 @@
 .bubble {
   max-width: min(84%, 34rem);
-  border-radius: var(--r-md);
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  padding: 0.45rem 0.6rem;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  padding: 0.5rem 0.7rem;
   display: grid;
-  gap: 0.2rem;
+  gap: 0.25rem;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .other {
   justify-self: start;
-  background: color-mix(in srgb, var(--surface-2) 72%, #0b111b);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 72%, #0b111b);
+  border-color: var(--glass-border-strong);
 }
 
 .mine {
   justify-self: end;
-  background: color-mix(in srgb, #16a34a 30%, #0d1118);
-  border-color: color-mix(in srgb, #16a34a 54%, var(--border));
+  background:
+    linear-gradient(160deg, color-mix(in srgb, #16a34a 32%, #0d1118) 0%, color-mix(in srgb, #16a34a 22%, #0d1118) 100%);
+  border-color: color-mix(in srgb, #16a34a 40%, var(--glass-border-strong));
+  box-shadow: 0 2px 8px color-mix(in srgb, #16a34a 10%, transparent);
 }
 
 .sender,
@@ -34,6 +41,7 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 0.9rem;
+  line-height: var(--lh-normal);
 }
 
 .meta {

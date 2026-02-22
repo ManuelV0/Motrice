@@ -1,28 +1,38 @@
 .page {
   display: grid;
-  gap: 16px;
+  gap: var(--s-5);
   min-height: calc(100dvh - var(--nav-h));
-  padding: 16px;
-  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
+  padding: var(--s-4);
+  padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
+  background:
+    radial-gradient(110% 60% at 20% 10%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 55%),
+    radial-gradient(80% 50% at 80% 80%, color-mix(in srgb, var(--primary) 5%, transparent) 0%, transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
 }
 
 .header {
-  min-height: 2.2rem;
+  min-height: 2.6rem;
   display: flex;
   align-items: center;
 }
 
 .header h1 {
   margin: 0;
-  font-size: 1.08rem;
-  font-weight: 700;
+  font-size: clamp(1.15rem, 1rem + 0.4vw, 1.35rem);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.01em;
 }
 
 .grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: var(--s-4);
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding: var(--s-5);
+  }
 }
 
 @media (min-width: 980px) {

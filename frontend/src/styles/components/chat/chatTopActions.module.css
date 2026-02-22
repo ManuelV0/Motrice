@@ -9,27 +9,35 @@
   width: 2.75rem;
   min-width: 2.75rem;
   min-height: 2.75rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border-strong);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 78%, var(--surface));
   color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   transition:
     background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+    border-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 
 .iconBtn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--surface-2) 92%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
+  transform: translateY(-1px);
 }
 
 .iconBtn:active:not(:disabled) {
   background: color-mix(in srgb, var(--surface-2) 98%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--glass-border));
+  transform: scale(0.97);
 }
 
 .iconBtn:focus-visible {

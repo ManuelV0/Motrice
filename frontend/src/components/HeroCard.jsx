@@ -1,11 +1,17 @@
 import styles from '../styles/components/heroCard.module.css';
 
-function HeroCard({ icon: Icon, title, subtitle, badge, onClick, ariaLabel }) {
+function HeroCard({ icon: Icon, title, subtitle, badge, onClick, ariaLabel, image }) {
   return (
-    <button type="button" className={styles.card} onClick={onClick} aria-label={ariaLabel || title}>
-      <span className={styles.iconWrap} aria-hidden="true">
-        {Icon ? <Icon size={30} /> : null}
-      </span>
+    <button type="button" className={`${styles.card} ${image ? styles.hasImage : ''}`} onClick={onClick} aria-label={ariaLabel || title}>
+      {image ? (
+        <span className={styles.imageWrap} aria-hidden="true">
+          <img src={image} alt="" className={styles.image} loading="lazy" />
+        </span>
+      ) : (
+        <span className={styles.iconWrap} aria-hidden="true">
+          {Icon ? <Icon size={30} /> : null}
+        </span>
+      )}
 
       <span className={styles.copy}>
         <strong>{title}</strong>

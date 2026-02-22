@@ -5,27 +5,35 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
   gap: var(--s-2);
-  padding: var(--s-2);
-  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px) + var(--vv-bottom, 0px));
-  border-top: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  background: color-mix(in srgb, var(--surface) 96%, #04070c);
-  backdrop-filter: blur(8px);
+  padding: var(--s-3);
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px) + var(--vv-bottom, 0px));
+  border-top: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
 }
 
 .attach,
 .send {
   min-width: 2.8rem;
   min-height: 2.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border-strong);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 
 .attach {
-  background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 72%, var(--surface));
   color: var(--muted);
+}
+
+.attach:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
 }
 
 .input {
@@ -35,22 +43,33 @@
   max-height: calc(24px * 4 + 12px);
   resize: none;
   overflow: auto;
-  border-radius: 1.2rem;
+  border-radius: var(--r-xl);
   padding: 0.7rem 0.95rem;
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  border: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
   color: var(--text);
   line-height: 1.4;
   font: inherit;
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-border-strong));
+  box-shadow: var(--focus);
 }
 
 .send {
-  background: color-mix(in srgb, var(--accent) 82%, #14b8a6);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 82%, #14b8a6) 0%, color-mix(in srgb, var(--accent) 65%, #14b8a6) 100%);
   color: var(--primary-contrast);
-  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--glass-border));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-.input:focus-visible,
+.send:hover:not(:disabled) {
+  transform: scale(1.04);
+}
+
 .send:focus-visible,
 .attach:focus-visible {
   outline: none;

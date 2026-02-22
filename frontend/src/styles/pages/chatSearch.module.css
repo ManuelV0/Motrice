@@ -13,17 +13,34 @@
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-2);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  background: color-mix(in srgb, var(--surface) 94%, #05080d);
+  border-bottom: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(var(--glass-blur-heavy));
+  -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
 }
 
 .backBtn {
   min-width: 2.5rem;
   min-height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  background: color-mix(in srgb, var(--surface-2) 84%, var(--surface));
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border-strong);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 84%, var(--surface));
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.backBtn:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--glass-border-strong));
+}
+
+.backBtn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 
 .header h1,

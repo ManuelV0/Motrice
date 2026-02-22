@@ -1,17 +1,27 @@
 .list {
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
 }
 
 .row {
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--surface-2) 76%, var(--surface));
-  padding: var(--s-2);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+  padding: var(--s-3);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-3);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.row:hover {
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--glass-border-strong));
 }
 
 .identity {

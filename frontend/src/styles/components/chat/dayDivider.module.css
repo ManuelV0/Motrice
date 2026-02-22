@@ -1,14 +1,18 @@
 .wrap {
   display: flex;
   justify-content: center;
-  margin: 0.35rem 0;
+  margin: var(--s-1) 0;
 }
 
 .wrap span {
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: 999px;
-  padding: 0.12rem 0.62rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  padding: 0.15rem 0.7rem;
   font-size: 0.68rem;
   color: var(--muted);
-  background: color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }

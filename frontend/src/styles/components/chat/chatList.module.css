@@ -4,10 +4,13 @@
   min-height: 100%;
   height: 100%;
   align-content: start;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: var(--r-lg);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
   overflow: hidden;
-  background: color-mix(in srgb, var(--surface) 93%, #05080d);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface) 93%, #05080d);
+  box-shadow: var(--sh-card);
 }
 
 .items {

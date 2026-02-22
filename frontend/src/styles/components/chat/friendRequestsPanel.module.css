@@ -1,10 +1,15 @@
 .panel {
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  border-radius: var(--r-md);
-  background: color-mix(in srgb, var(--surface) 95%, #070b11);
-  padding: var(--s-2);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface) 94%, #070b11);
+  padding: var(--s-4);
   display: grid;
-  gap: var(--s-2);
+  gap: var(--s-3);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--sh-card);
 }
 
 .head {
@@ -15,6 +20,7 @@
 .head h3 {
   margin: 0;
   font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
 }
 
 .tabs {
@@ -25,17 +31,23 @@
 
 .tab {
   min-height: 2rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--glass-border-strong);
   background: color-mix(in srgb, var(--surface-2) 82%, var(--surface));
   color: var(--muted);
-  padding: 0 var(--s-2);
+  padding: 0 var(--s-3);
   font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.tab:hover {
+  border-color: color-mix(in srgb, var(--accent) 20%, var(--glass-border-strong));
 }
 
 .tabActive {
   color: var(--text);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--glass-border));
   background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 
@@ -45,10 +57,12 @@
 }
 
 .row {
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: var(--r-md);
-  padding: var(--s-2);
-  background: color-mix(in srgb, var(--surface-2) 75%, var(--surface));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: var(--s-3);
+  background:
+    var(--card-glass-overlay),
+    color-mix(in srgb, var(--surface-2) 60%, var(--surface));
   display: grid;
   gap: var(--s-2);
 }
@@ -67,6 +81,7 @@
 
 .profileBtn small {
   color: var(--muted);
+  font-size: var(--text-xs);
 }
 
 .actions {
