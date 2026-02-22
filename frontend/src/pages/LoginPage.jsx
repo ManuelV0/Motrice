@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Facebook, LockKeyhole, Chrome, LogOut } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Facebook, LockKeyhole, Chrome, LogOut, Zap, ArrowRight } from 'lucide-react';
 import {
   clearAuthSession,
   continueWithProvider,
@@ -19,7 +19,7 @@ function LoginPage() {
 
   usePageMeta({
     title: 'Login | Motrice',
-    description: 'Placeholder login social con struttura pronta per integrazione OAuth/Supabase Auth.'
+    description: 'Accedi a Motrice per trovare eventi sport, validare con QR e accedere a convenzioni reali.'
   });
 
   function onContinue(provider) {
@@ -35,49 +35,86 @@ function LoginPage() {
 
   return (
     <section className={styles.page}>
-      <Card className={styles.card}>
-        <p className={styles.kicker}>Auth Placeholder</p>
-        <h1>Accedi a Motrice</h1>
-        <p className="muted">UI pronta per OAuth con Supabase Auth. In questa fase il flusso e mockato per sviluppo.</p>
+      <div className={styles.heroImage} aria-hidden="true">
+        <img
+          src="/images/landing-hero.png"
+          alt=""
+          loading="eager"
+          width="1280"
+          height="720"
+        />
+      </div>
+      <div className={styles.overlay} aria-hidden="true" />
 
-        {logoutReason?.code === 'voucher_redeemed' ? (
+      <div className={styles.content}>
+        <div className={styles.branding}>
+          <p className={styles.kicker}>
+            <Zap size={14} aria-hidden="true" />
+            Motrice Platform
+          </p>
+          <h1>Entra nel gioco.</h1>
+          <p className={styles.tagline}>
+            Sport locale, QR validato e reputazione che cresce. Accedi per iniziare.
+          </p>
+          <Link to="/" className={styles.backLink}>
+            <ArrowRight size={14} aria-hidden="true" style={{ transform: 'rotate(180deg)' }} />
+            Torna alla home
+          </Link>
+        </div>
+
+        <Card className={styles.card}>
+          <h2 className={styles.cardTitle}>Accedi a Motrice</h2>
+          <p className={styles.cardSub}>Scegli il tuo provider per continuare</p>
+
+          {logoutReason?.code === 'voucher_redeemed' ? (
+            <div className={styles.note}>
+              <LockKeyhole size={16} aria-hidden="true" />
+              <span>
+                Sessione chiusa: il tuo voucher convenzione e stato riscattato dal partner. Effettua nuovamente l accesso.
+              </span>
+            </div>
+          ) : null}
+
+          <div className={styles.actions}>
+            <Button type="button" className={styles.oauthButton} onClick={() => onContinue('google')} icon={Chrome}>
+              Continue with Google
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className={styles.oauthButton}
+              onClick={() => onContinue('facebook')}
+              icon={Facebook}
+            >
+              Continue with Facebook
+            </Button>
+          </div>
+
+          <div className={styles.divider} aria-hidden="true">
+            <span />
+            <small>oppure</small>
+            <span />
+          </div>
+
           <div className={styles.note}>
             <LockKeyhole size={16} aria-hidden="true" />
             <span>
-              Sessione chiusa: il tuo voucher convenzione e stato riscattato dal partner. Effettua nuovamente l accesso.
+              Account attuale: <strong>{session.provider || 'none'}</strong>
+              {session.userId ? ` #${session.userId}` : ''}
             </span>
           </div>
-        ) : null}
 
-        <div className={styles.actions}>
-          <Button type="button" className={styles.oauthButton} onClick={() => onContinue('google')} icon={Chrome}>
-            Continue with Google
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className={styles.oauthButton}
-            onClick={() => onContinue('facebook')}
-            icon={Facebook}
-          >
-            Continue with Facebook
-          </Button>
-        </div>
+          {session.isAuthenticated ? (
+            <Button type="button" variant="ghost" className={styles.oauthButton} icon={LogOut} onClick={onLogout}>
+              Logout
+            </Button>
+          ) : null}
 
-        <div className={styles.note}>
-          <LockKeyhole size={16} aria-hidden="true" />
-          <span>
-            Account attuale: <strong>{session.provider || 'none'}</strong>
-            {session.userId ? ` #${session.userId}` : ''}
-          </span>
-        </div>
-
-        {session.isAuthenticated ? (
-          <Button type="button" variant="ghost" className={styles.oauthButton} icon={LogOut} onClick={onLogout}>
-            Logout
-          </Button>
-        ) : null}
-      </Card>
+          <p className={styles.legal}>
+            Accedendo accetti i termini di servizio e la privacy policy di Motrice.
+          </p>
+        </Card>
+      </div>
     </section>
   );
 }

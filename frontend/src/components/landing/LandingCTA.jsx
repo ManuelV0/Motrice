@@ -1,12 +1,16 @@
-import { ArrowRight, Handshake } from 'lucide-react';
+import { ArrowRight, Handshake, Zap } from 'lucide-react';
 import CTAButton from '../CTAButton';
 import styles from '../../styles/components/landingCta.module.css';
 
 function LandingCTA() {
   return (
     <section className={styles.wrap} aria-labelledby="landing-final-cta-title">
-      <p className={styles.kicker}>Pronto a partire</p>
-      <h2 id="landing-final-cta-title">Passa dallo scrolling all'allenamento reale.</h2>
+      <div className={styles.bgGlow} aria-hidden="true" />
+      <p className={styles.kicker}>
+        <Zap size={14} aria-hidden="true" />
+        Pronto a partire
+      </p>
+      <h2 id="landing-final-cta-title">Passa dallo scrolling<br />all'allenamento reale.</h2>
       <p className={styles.description}>
         Unisciti agli eventi locali o porta nuovi utenti certificati nella tua struttura.
       </p>

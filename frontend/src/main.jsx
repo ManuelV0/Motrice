@@ -29,11 +29,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <RootErrorBoundary>
       <BrowserRouter>
-        <BillingProvider>
-          <ToastProvider>
+        <ToastProvider>
+          <BillingProvider>
             <App />
-          </ToastProvider>
-        </BillingProvider>
+          </BillingProvider>
+        </ToastProvider>
       </BrowserRouter>
     </RootErrorBoundary>
   </React.StrictMode>
