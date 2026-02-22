@@ -1,0 +1,106 @@
+.header {
+  position: sticky;
+  top: calc(var(--nav-h, 0px) + 0.35rem);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--glass-border));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--sh-card);
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+
+.avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--r-lg);
+  border: 2px solid color-mix(in srgb, var(--primary) 30%, var(--glass-border));
+  object-fit: cover;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.info {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.name {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+.planBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 1.45rem;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.xpMini {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 1.45rem;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--glass-border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: color-mix(in srgb, var(--primary) 74%, var(--text));
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+}
+
+.xpMini svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: var(--s-2) var(--s-3);
+    gap: var(--s-2);
+  }
+
+  .avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .name {
+    font-size: var(--text-sm);
+  }
+
+  .planBadge,
+  .xpMini {
+    font-size: 0.6rem;
+    min-height: 1.3rem;
+  }
+}

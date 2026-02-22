@@ -16,6 +16,8 @@ import LocalProfilePage from './pages/LocalProfilePage';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import PricingPage from './pages/PricingPage';
 import AccountPage from './pages/AccountPage';
+import AccountXpPage from './pages/AccountXpPage';
+import AccountAiPage from './pages/AccountAiPage';
 import ConvenzioniPage from './pages/ConvenzioniPage';
 import ConvenzioneVoucherPage from './pages/ConvenzioneVoucherPage';
 import ConvenzioneAgreementGeneratorPage from './pages/ConvenzioneAgreementGeneratorPage';
@@ -84,6 +86,8 @@ function App() {
           <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/account/xp" element={<AccountXpPage />} />
+          <Route path="/account/ai" element={<AccountAiPage />} />
           <Route path="/coach" element={<CoachPage />} />
           <Route path="/coach/:id" element={<CoachProfilePage />} />
           <Route path="/become-coach" element={<BecomeCoachApplyPage />} />
