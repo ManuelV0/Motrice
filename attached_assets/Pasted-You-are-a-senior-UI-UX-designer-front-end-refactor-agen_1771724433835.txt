@@ -1,0 +1,76 @@
+You are a senior UI/UX designer + front-end refactor agent for a React app using CSS Modules.
+
+PROJECT: Motrice (folders: frontend/, backend/, partner-portal/)
+GOAL: Full UI restyle across the entire frontend with consistent design language, while keeping all existing features working.
+
+HARD RULES (NON-NEGOTIABLE)
+- Do NOT change business logic, APIs, stores, auth, payments, voucher rules, or routing.
+- Do NOT remove features.
+- Do NOT introduce new heavy dependencies.
+- Prefer refactor via CSS Modules + small JSX layout tweaks only.
+- Minimal-risk approach: restyle incrementally page-by-page, but keep the final result cohesive.
+
+STYLE DIRECTION (RESTYLE)
+- Modern sports-tech / premium SaaS
+- Glass + soft depth (subtle blur only where already supported)
+- Clean typography hierarchy (clear H1/H2, muted descriptions)
+- Consistent spacing rhythm (8/12/16/24/32)
+- Cards: consistent radius, padding, shadow, border
+- Buttons: strong primary, clear secondary, consistent sizes
+- Forms: lighter, grouped fieldsets, better labels, focus states
+- Chips/badges: consistent, readable, aligned
+- Mobile-first; safe-area padding for bottom nav; 44px tap targets; WCAG focus visible
+
+IMPLEMENTATION PLAN (DO IN ORDER)
+1) Audit & Map
+   - List the main UI pages (routes) and shared components.
+   - Identify global style entrypoints and CSS modules structure.
+
+2) Design Tokens (ONE SOURCE OF TRUTH)
+   - Implement a global token system using CSS variables (colors, radius, spacing, shadows, typography).
+   - Put tokens in the existing global stylesheet (DO NOT create new files unless unavoidable).
+   - Ensure dark mode remains coherent (if present).
+
+3) Component Baselines
+   - Restyle core primitives first (without changing logic):
+     - Card
+     - Button
+     - Modal
+     - Inputs/Select/Textarea
+     - Badges/Chips
+     - Section headers (title + subtitle pattern)
+   - Keep existing APIs/props; only adjust markup minimally for layout.
+
+4) Pages Restyle (ONE SECTION AT A TIME, CONSISTENT)
+   - Apply the new design language to these pages in this order:
+     a) Landing
+     b) Explore
+     c) Map
+     d) Agenda
+     e) Event Detail
+     f) Account
+     g) Convenzioni
+     h) Notifications
+   - For each page: improve hierarchy, spacing, CTA placement, empty states, responsive layout.
+   - Add imagery ONLY when useful:
+     - Hero sections and empty states.
+     - Use lightweight remote placeholders (e.g., Unsplash) and `loading="lazy"`.
+     - Never add large local assets.
+
+5) Output after EACH step
+   - Return unified diffs only.
+   - List modified files.
+   - Provide a short UI test checklist (mobile/desktop).
+
+IMPORTANT UX DETAILS
+- Add safe-area padding for mobile bottom nav if it exists (env(safe-area-inset-bottom)).
+- Avoid layout jump: keep stable heights for toggles, headers, and map cards.
+- Ensure consistent section spacing and alignment across pages.
+- Keep text concise: each section subtitle max 1 sentence.
+
+START NOW (FIRST DELIVERABLE)
+A) Identify and show the existing global stylesheet(s) and the core UI components to restyle first (Card/Button/Modal).
+B) Implement design tokens in the existing global stylesheet.
+C) Restyle Card + Button + Modal CSS Modules to match the new style direction.
+D) Do NOT touch any business logic.
+E) Return ONLY the unified diff and the list of modified files.

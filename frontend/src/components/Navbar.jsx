@@ -225,20 +225,6 @@ function Navbar({ forceMobile = false }) {
           <nav className={styles.desktopNav} aria-label="Navigazione principale">
             {links.map((link) => {
               const Icon = link.icon;
-              if (link.to === '/chat' && !entitlements.canUseNotifications) {
-                return (
-                  <button
-                    key={link.to}
-                    type="button"
-                    className={`${styles.link} ${styles.chatriceLink}`}
-                    onClick={() => setPaywallOpen(true)}
-                    aria-label="Sblocca Chat con Premium"
-                  >
-                    <Lock size={18} aria-hidden="true" />
-                    <span>Chat Pro</span>
-                  </button>
-                );
-              }
               return (
                 <NavLink
                   key={link.to}
@@ -305,19 +291,6 @@ function Navbar({ forceMobile = false }) {
               <div className={styles.mobileSectionList}>
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  if (item.to === '/chat' && !entitlements.canUseNotifications) {
-                    return (
-                      <button
-                        key={item.to}
-                        type="button"
-                        className={`${styles.link} ${styles.drawerLink} ${styles.chatriceLink}`}
-                        onClick={() => setPaywallOpen(true)}
-                      >
-                        <Lock size={18} aria-hidden="true" />
-                        <span>Chat Pro</span>
-                      </button>
-                    );
-                  }
                   return (
                     <NavLink
                       key={item.to}

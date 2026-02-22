@@ -601,28 +601,38 @@ function ConvenzioniPage() {
           {!isJoinView ? (
             <>
           <Card className={`${styles.hero} ${styles.heroPrimary}`}>
-            <p className={styles.kicker}>
-              <ShieldCheck size={15} aria-hidden="true" /> Catalogo partner
-            </p>
-            <div className={`${styles.titleCard} ${styles.titleCardHero}`}>
-              <h1>Convenzioni Motrice</h1>
-            </div>
-            <p className="muted">Sblocca promo locali e valida in palestra con QR.</p>
-            <p className="muted">
-              Buono convenzione: 2 EUR dal saldo reinvestito. Disponibile: <strong>{eur(wallet.available_cents)}</strong>
-            </p>
-            <div className={styles.heroActionsPrimary}>
-              <Button type="button" onClick={findNearMe} aria-label="Trova offerte vicino a me">
-                Trova offerte vicino a me
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setShowHowItWorksModal(true)}
-                aria-label="Apri guida come funziona"
-              >
-                Come funziona
-              </Button>
+            <div className={styles.heroContent}>
+              <div className={styles.heroText}>
+                <p className={styles.kicker}>
+                  <ShieldCheck size={15} aria-hidden="true" /> Catalogo partner
+                </p>
+                <div className={`${styles.titleCard} ${styles.titleCardHero}`}>
+                  <h1>Convenzioni Motrice</h1>
+                </div>
+                <p className={styles.heroSubtitle}>Risparmia sullo sport con le strutture convenzionate nella tua zona.</p>
+                <p className={styles.heroWalletLine}>
+                  Buono: 2 EUR dal saldo reinvestito. Disponibile: <strong>{eur(wallet.available_cents)}</strong>
+                </p>
+                <div className={styles.heroActionsPrimary}>
+                  <Button type="button" onClick={findNearMe} aria-label="Trova offerte vicino a me">
+                    Trova vicino a me
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setShowHowItWorksModal(true)}
+                    aria-label="Apri guida come funziona"
+                  >
+                    Come funziona
+                  </Button>
+                </div>
+              </div>
+              <img
+                className={styles.heroImage}
+                src="https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=480&h=320&fit=crop&q=80"
+                alt=""
+                loading="lazy"
+              />
             </div>
           </Card>
 
@@ -828,8 +838,11 @@ function ConvenzioniPage() {
 
           <Card className={styles.rulesCard}>
         <div className={styles.rulesHeader}>
-          <div className={styles.titleCard}>
-            <h2>Regole convenzioni</h2>
+          <div>
+            <div className={styles.titleCard}>
+              <h2>Regole convenzioni</h2>
+            </div>
+            <p className={styles.rulesSubtitle}>Limiti, piani e scadenze in sintesi.</p>
           </div>
           <span
             className={`${styles.ruleStateChip} ${
@@ -972,14 +985,16 @@ function ConvenzioniPage() {
 
           <Card className={styles.joinCard} ref={joinSectionRef}>
         <div className={styles.joinHead}>
-          <div className={styles.titleCard}>
-            <h2>Vuoi unirti?</h2>
+          <div>
+            <div className={styles.titleCard}>
+              <h2>Vuoi unirti?</h2>
+            </div>
+            <p className={styles.joinSubtitle}>Completa il form e ricevi risposta in 1-3 giorni.</p>
           </div>
           <Button type="button" variant="secondary" onClick={openPartnerPortal}>
             Accedi al portale
           </Button>
         </div>
-        <p className="muted">Compila i dati essenziali e invia la tua candidatura partner.</p>
         <form className={styles.joinForm} onSubmit={submitJoinRequest}>
           <p className={styles.joinStepLabel}>Step 1 · Dati struttura</p>
           <fieldset className={styles.joinFieldset}>
