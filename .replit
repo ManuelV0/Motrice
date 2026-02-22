@@ -40,7 +40,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && node -v && npx concurrently --kill-others-on-fail \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\""
+args = "cd /home/runner/workspace && npx concurrently --kill-others-on-fail \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\""
 waitForPort = 5000
 
 [[ports]]

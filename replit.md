@@ -29,5 +29,26 @@ Motrice is a social-sport platform focused on real territory sessions, event dis
 ## Workflow
 - Single workflow "Start application" runs both backend (nodemon) and frontend (vite) via concurrently
 
+## Design System
+- Glass morphism aesthetic with backdrop-filter, layered shadows, subtle gradients
+- Token-based system: tokens.css -> themes.css -> base.css -> layout.css -> component modules
+- Key tokens: --glass-blur, --glass-border-strong, --card-glass-overlay, --sh-card, --r-2xl, --r-pill
+- Mobile-first responsive: base styles for mobile, min-width media queries for desktop
+- Navbar/Footer keep custom metal theme (already polished)
+- All chat components use consistent glass tokens
+
+## User Preferences
+- Chat feature must remain free and accessible to all users (no paywall)
+- Explore sessions grid: 2-column layout with 6 elements per page and slider pagination
+- Mobile-first responsive design is critical
+- Italian language UI throughout
+
 ## Recent Changes
+- 2026-02-22: Complete UI/UX refactor with glass morphism aesthetic
+  - Landing page: immersive hero with generated images, HeroCard feature row, image-backed sections
+  - Login page: split layout with hero image background, glass card, cohesive branding
+  - Chat pages: all 15 component CSS modules restyled with glass tokens, chat made free (no paywall)
+  - Core components restyled: Card, Button, Modal, Badge, Input, HeroCard
+  - Generated custom images: landing-hero.png, landing-steps.png, landing-reputation.png, landing-gym-qr.png, chat-hero.png, community-hero.png, empty-chat.png
+  - Pages restyled: Landing, Explore, Agenda, EventDetail, Account, FAQ, CreateEvent, Pricing
 - 2026-02-22: Fixed Node.js version compatibility - upgraded to v22 for node:sqlite support
