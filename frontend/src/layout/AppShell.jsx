@@ -6,13 +6,15 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import useViewportInsets from '../hooks/useViewportInsets';
-import StartupAccessDock from '../components/StartupAccessDock';
+import { getAuthSession } from '../services/authSession';
 
 function AppShell({ children }) {
   const location = useLocation();
   const [soonNotification, setSoonNotification] = useState(null);
+  const [authSession, setAuthSession] = useState(getAuthSession);
   const isEmbed = location.pathname.startsWith('/embed/');
   const isLandingRoute = location.pathname === '/';
+  const isStartupAuthRoute = isLandingRoute && !authSession.isAuthenticated;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -22,6 +24,12 @@ function AppShell({ children }) {
   const isAccountLikeRoute = isAccountRoute || isLocalProfileRoute;
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
   useViewportInsets();
+
+  useEffect(() => {
+    const refreshAuthSession = () => setAuthSession(getAuthSession());
+    window.addEventListener('motrice-auth-changed', refreshAuthSession);
+    return () => window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -72,13 +80,13 @@ function AppShell({ children }) {
   }
 
   return (
-    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''}`}>
-      <Navbar forceMobile={isAccountLikeRoute} />
+    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isStartupAuthRoute ? 'startup-auth-shell' : ''}`}>
+      {!isStartupAuthRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isStartupAuthRoute ? 'mainContentStartupAuth' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
-        {soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
+        {!isStartupAuthRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
             <p>
               {soonNotification.message} <Link to={`/events/${soonNotification.event_id}`}>Apri dettaglio</Link>
@@ -92,10 +100,9 @@ function AppShell({ children }) {
         )}
         {children}
       </main>
-      <BottomNav forceVisible={isAccountLikeRoute} />
+      {!isStartupAuthRoute ? <BottomNav forceVisible={isAccountLikeRoute} /> : null}
       {!isLandingRoute ? <Footer /> : null}
-      <StartupAccessDock />
-      <SiteTourOverlay />
+      {!isStartupAuthRoute ? <SiteTourOverlay /> : null}
     </div>
   );
 }

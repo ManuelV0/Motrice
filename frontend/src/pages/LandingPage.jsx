@@ -11,13 +11,15 @@ import {
   Trophy,
   Users
 } from 'lucide-react';
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { getAuthSession } from '../services/authSession';
 import LandingHero from '../components/landing/LandingHero';
 import LandingSection from '../components/landing/LandingSection';
 import LandingCTA from '../components/landing/LandingCTA';
 import HeroCard from '../components/HeroCard';
+import LoginPage from './LoginPage';
 import styles from '../styles/pages/landing.module.css';
 
 const problemBullets = [
@@ -79,9 +81,17 @@ const frameLabels = ['Start', 'Perche', 'Come funziona', 'Reputazione', 'Vantagg
 
 function LandingPage() {
   const navigate = useNavigate();
+  const [session, setSession] = useState(getAuthSession);
   const [activeFrame, setActiveFrame] = useState(0);
 
+  useEffect(() => {
+    const refreshAuthSession = () => setSession(getAuthSession());
+    window.addEventListener('motrice-auth-changed', refreshAuthSession);
+    return () => window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+  }, []);
+
   useLayoutEffect(() => {
+    if (!session.isAuthenticated) return undefined;
     const track = document.getElementById('landing-frame-track');
     if (!track) return undefined;
 
@@ -93,7 +103,7 @@ function LandingPage() {
     });
 
     return () => window.cancelAnimationFrame(resetFrame);
-  }, []);
+  }, [session.isAuthenticated]);
 
   const updateActiveFrame = useCallback((event) => {
     const track = event.currentTarget;
@@ -111,9 +121,17 @@ function LandingPage() {
   }, []);
 
   usePageMeta({
-    title: 'Motrice | Sport locale, QR e convenzioni intelligenti',
-    description: 'Trova eventi vicino a te, valida con QR e accedi a convenzioni reali. Partner: porta traffico certificato in palestra.'
+    title: session.isAuthenticated
+      ? 'Motrice | Sport locale, QR e convenzioni intelligenti'
+      : 'Accedi o registrati | Motrice',
+    description: session.isAuthenticated
+      ? 'Trova eventi vicino a te, valida con QR e accedi a convenzioni reali. Partner: porta traffico certificato in palestra.'
+      : 'Accedi o crea il tuo account Motrice per sincronizzare profilo, eventi e chat.'
   });
+
+  if (!session.isAuthenticated) {
+    return <LoginPage startup />;
+  }
 
   return (
     <div className={styles.viewport}>

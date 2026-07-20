@@ -28,6 +28,17 @@
   overflow: hidden;
 }
 
+.mainContentStartupAuth {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .mainContentAccountMobile {
   width: min(100%, 30rem);
   margin-inline: auto;
@@ -123,6 +134,10 @@
 
   .mainContentLanding {
     padding-top: var(--nav-h);
+  }
+
+  .mainContentStartupAuth {
+    padding-top: 0;
   }
 
   .mainContentChat {

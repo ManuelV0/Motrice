@@ -16,7 +16,7 @@ import Card from '../components/Card';
 import Button from '../components/Button';
 import styles from '../styles/pages/login.module.css';
 
-function LoginPage() {
+function LoginPage({ startup = false }) {
   const navigate = useNavigate();
   const [session, setSession] = useState(getAuthSession());
   const [logoutReason] = useState(() => consumeAuthLogoutReason());
@@ -43,7 +43,7 @@ function LoginPage() {
   function onContinue(provider) {
     const next = continueWithProvider(provider);
     setSession(next);
-    navigate('/coach');
+    if (!startup) navigate('/coach');
   }
 
   async function onLogout() {
@@ -78,7 +78,7 @@ function LoginPage() {
         const next = await signInWithPassword({ email, password });
         setSession(next);
       }
-      navigate('/explore');
+      if (!startup) navigate('/explore');
     } catch (err) {
       setError(err.message || 'Accesso non riuscito');
     } finally {
@@ -87,19 +87,19 @@ function LoginPage() {
   }
 
   return (
-    <section className={styles.page}>
+    <section className={`${styles.page} ${startup ? styles.startupPage : ''}`}>
       <div className={styles.heroImage} aria-hidden="true">
         <img
-          src="/images/landing-hero.png"
+          src="/images/startup-auth.jpeg"
           alt=""
           loading="eager"
-          width="1280"
-          height="720"
+          width="1122"
+          height="1402"
         />
       </div>
       <div className={styles.overlay} aria-hidden="true" />
 
-      <div className={styles.content}>
+      <div className={`${styles.content} ${startup ? styles.startupContent : ''}`}>
         <div className={styles.branding}>
           <p className={styles.kicker}>
             <Zap size={14} aria-hidden="true" />
@@ -109,10 +109,12 @@ function LoginPage() {
           <p className={styles.tagline}>
             Sport locale, QR validato e reputazione che cresce. Accedi per iniziare.
           </p>
-          <Link to="/" className={styles.backLink}>
-            <ArrowRight size={14} aria-hidden="true" style={{ transform: 'rotate(180deg)' }} />
-            Torna alla home
-          </Link>
+          {!startup ? (
+            <Link to="/" className={styles.backLink}>
+              <ArrowRight size={14} aria-hidden="true" style={{ transform: 'rotate(180deg)' }} />
+              Torna alla home
+            </Link>
+          ) : null}
         </div>
 
         <Card className={styles.card}>

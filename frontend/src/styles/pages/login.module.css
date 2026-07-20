@@ -7,6 +7,17 @@
   border-radius: var(--r-2xl);
 }
 
+.startupPage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  min-height: 100dvh;
+  border-radius: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .heroImage {
   position: absolute;
   inset: 0;
@@ -18,6 +29,12 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  object-position: 50% center;
+}
+
+.startupPage .heroImage,
+.startupPage .overlay {
+  position: fixed;
 }
 
 .overlay {
@@ -29,6 +46,12 @@
     radial-gradient(60% 60% at 70% 40%, color-mix(in srgb, var(--primary) 8%, transparent) 0%, transparent 70%);
 }
 
+.startupPage .overlay {
+  background:
+    linear-gradient(180deg, rgb(2 3 2 / 0.22) 0%, rgb(2 3 2 / 0.5) 38%, rgb(2 3 2 / 0.94) 100%),
+    linear-gradient(100deg, rgb(0 0 0 / 0.72) 0%, transparent 58%);
+}
+
 .content {
   position: relative;
   z-index: 2;
@@ -36,6 +59,17 @@
   gap: var(--s-6);
   padding: var(--s-6);
   animation: fadeIn var(--dur-med) var(--ease);
+}
+
+.startupContent {
+  width: min(100%, 72rem);
+  min-height: 100dvh;
+  margin-inline: auto;
+  align-content: end;
+  padding:
+    max(var(--s-4), env(safe-area-inset-top, 0px))
+    var(--s-4)
+    max(var(--s-4), env(safe-area-inset-bottom, 0px));
 }
 
 .branding {
@@ -108,6 +142,14 @@
   backdrop-filter: blur(var(--glass-blur-heavy));
   -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
   box-shadow: var(--sh-2);
+}
+
+.startupContent .card {
+  background:
+    linear-gradient(155deg, rgb(255 255 255 / 0.055), transparent 38%),
+    rgb(8 11 9 / 0.94);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .cardTitle {
@@ -273,6 +315,46 @@
 
   .branding h1 {
     font-size: 2.2rem;
+  }
+
+  .startupContent {
+    align-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .startupContent {
+    gap: var(--s-3);
+    padding-inline: var(--s-3);
+  }
+
+  .startupContent .branding {
+    gap: var(--s-2);
+  }
+
+  .startupContent .branding h1 {
+    font-size: 1.65rem;
+  }
+
+  .startupContent .tagline {
+    font-size: 0.78rem;
+  }
+
+  .startupContent .card {
+    gap: var(--s-3);
+    padding: var(--s-4);
+  }
+
+  .startupContent .authForm {
+    gap: var(--s-2);
+  }
+
+  .startupContent .authForm input {
+    min-height: 2.75rem;
+  }
+
+  .startupContent .note {
+    padding: var(--s-2) var(--s-3);
   }
 }
 
