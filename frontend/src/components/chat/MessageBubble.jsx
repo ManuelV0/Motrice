@@ -1,3 +1,4 @@
+import { AlertCircle, CheckCheck, Clock3 } from 'lucide-react';
 import styles from '../../styles/components/chat/messageBubble.module.css';
 
 function formatTime(iso) {
@@ -15,7 +16,21 @@ function MessageBubble({ message, mine = false, senderLabel = '' }) {
       <p className={styles.text}>{message.text}</p>
       <p className={styles.meta}>
         <small>{formatTime(message.ts)}</small>
-        {mine ? <small>{status === 'sending' ? 'Invio...' : status === 'failed' ? 'Errore' : 'Inviato'}</small> : null}
+        {mine ? (
+          <span
+            className={`${styles.status} ${status === 'failed' ? styles.statusFailed : ''}`}
+            aria-label={status === 'sending' ? 'Invio in corso' : status === 'failed' ? 'Invio non riuscito' : 'Messaggio inviato'}
+            title={status === 'sending' ? 'Invio in corso' : status === 'failed' ? 'Invio non riuscito' : 'Messaggio inviato'}
+          >
+            {status === 'sending' ? (
+              <Clock3 size={13} aria-hidden="true" />
+            ) : status === 'failed' ? (
+              <AlertCircle size={13} aria-hidden="true" />
+            ) : (
+              <CheckCheck size={14} aria-hidden="true" />
+            )}
+          </span>
+        ) : null}
       </p>
     </article>
   );

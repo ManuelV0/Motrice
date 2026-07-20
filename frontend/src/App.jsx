@@ -33,7 +33,6 @@ import LoginPage from './pages/LoginPage';
 import AdminCoachApplicationsPage from './features/coach/pages/AdminCoachApplicationsPage';
 import TutorialPage from './pages/TutorialPage';
 import AdminTutorialPage from './pages/AdminTutorialPage';
-import ChatHubPage from './pages/ChatHubPage';
 import ChatInboxPage from './pages/ChatInboxPage';
 import MetPeoplePage from './pages/MetPeoplePage';
 import FocusProfilePage from './pages/FocusProfilePage';
@@ -60,8 +59,8 @@ function App() {
           <Route path="/create" element={<CreateEventPage />} />
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/chat" element={<ChatHubPage />} />
-          <Route path="/chat/inbox" element={<ChatInboxPage />} />
+          <Route path="/chat" element={<ChatInboxPage />} />
+          <Route path="/chat/inbox" element={<Navigate to="/chat" replace />} />
           <Route path="/chat/search" element={<ChatSearchPage />} />
           <Route path="/chat/friends" element={<FriendsPage />} />
           <Route path="/chat/met" element={<MetPeoplePage />} />

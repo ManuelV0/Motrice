@@ -1,4 +1,4 @@
-import { MoreVertical, ChevronLeft } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatComposer from './ChatComposer';
 import DayDivider from './DayDivider';
@@ -51,6 +51,7 @@ function ChatThread({
   currentUserId,
   onBack,
   onOpenProfile,
+  onOpenEvent,
   mobile = false,
   fullScreenMobile = false
 }) {
@@ -135,7 +136,18 @@ function ChatThread({
           </button>
         ) : null}
 
-        <span className={styles.avatar} aria-hidden="true">{initialsFromTitle(thread.title)}</span>
+        <span className={styles.avatar} aria-hidden="true">
+          {thread.avatarUrl ? (
+            <img
+              src={thread.avatarUrl}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
+            />
+          ) : null}
+          <span>{initialsFromTitle(thread.title)}</span>
+        </span>
 
         <div className={styles.headMeta}>
           {thread.type === 'dm' && Number(thread?.otherUserId || 0) > 0 && typeof onOpenProfile === 'function' ? (
@@ -147,19 +159,35 @@ function ChatThread({
             >
               {thread.title}
             </button>
+          ) : thread.type === 'event' && typeof onOpenEvent === 'function' ? (
+            <button type="button" className={styles.profileLink} onClick={() => onOpenEvent(thread.eventId)}>
+              {thread.title}
+            </button>
           ) : (
             <h2>{thread.title}</h2>
           )}
           {thread.type === 'event' ? (
-            <p>{Number(thread?.meta?.participantsCount || 0)} partecipanti</p>
+            <p>
+              {Number(thread?.meta?.participantsCount || 0)} partecipanti
+              {thread?.meta?.city ? ` · ${thread.meta.city}` : ''}
+            </p>
           ) : (
             <p>{String(thread?.meta?.status || 'online')}</p>
           )}
         </div>
 
-        <button type="button" className={styles.menuBtn} aria-label="Opzioni chat">
-          <MoreVertical size={18} aria-hidden="true" />
-        </button>
+        {thread.type === 'event' && typeof onOpenEvent === 'function' ? (
+          <button
+            type="button"
+            className={styles.menuBtn}
+            onClick={() => onOpenEvent(thread.eventId)}
+            aria-label="Apri dettagli evento"
+          >
+            <CalendarDays size={18} aria-hidden="true" />
+          </button>
+        ) : (
+          <span className={styles.headSpacer} aria-hidden="true" />
+        )}
       </header>
 
       {loading ? (
@@ -185,15 +213,31 @@ function ChatThread({
               </button>
             ) : null}
 
+            {thread.type === 'event' ? (
+              <div className={styles.securityNote}>
+                <ShieldCheck size={15} aria-hidden="true" />
+                <span>Chat riservata ai partecipanti attivi dell’evento.</span>
+              </div>
+            ) : null}
+
             {timeline.map((row) => {
               if (row.type === 'day') {
                 return <DayDivider key={row.id} label={row.label} />;
               }
               const message = row.message;
               const mine = Number(message?.senderId || 0) === Number(currentUserId);
-              const senderLabel = thread.type === 'event' && !mine ? `Utente ${message.senderId}` : '';
+              const senderLabel = thread.type === 'event' && !mine
+                ? String(message?.senderName || `Utente ${message.senderId}`)
+                : '';
               return <MessageBubble key={row.id} message={message} mine={mine} senderLabel={senderLabel} />;
             })}
+
+            {!timeline.length ? (
+              <div className={styles.emptyMessages}>
+                <strong>La chat è pronta</strong>
+                <span>Scrivi il primo messaggio al gruppo.</span>
+              </div>
+            ) : null}
           </div>
 
           {showNewIndicator ? (

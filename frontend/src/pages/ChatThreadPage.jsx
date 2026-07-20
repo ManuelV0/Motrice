@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ChatThread from '../components/chat/ChatThread';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useChatStore } from '../hooks/useChatStore';
 import styles from '../styles/pages/chatThreadPage.module.css';
@@ -29,6 +30,7 @@ function useIsMobileLayout() {
 
 function ChatThreadPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const { threadId } = useParams();
   const mobile = useIsMobileLayout();
   const {
@@ -52,8 +54,11 @@ function ChatThreadPage() {
 
   useEffect(() => {
     if (!threadId) return;
-    selectThread(String(threadId), { showLoader: true });
-  }, [threadId, selectThread]);
+    selectThread(String(threadId), { showLoader: true }).catch((error) => {
+      showToast(error.message || 'Impossibile aprire la chat', 'error');
+      navigate('/chat', { replace: true });
+    });
+  }, [threadId, navigate, selectThread, showToast]);
 
   async function handleSend() {
     const text = String(draft || '').trim();
@@ -61,6 +66,8 @@ function ChatThreadPage() {
     const result = await sendMessage(text);
     if (result?.ok) {
       setDraft('');
+    } else {
+      showToast(result?.error?.message || 'Invio non riuscito', 'error');
     }
   }
 
@@ -79,8 +86,9 @@ function ChatThreadPage() {
         onSend={handleSend}
         sending={sending}
         currentUserId={currentUserId}
-        onBack={() => navigate('/chat/inbox')}
+        onBack={() => navigate('/chat')}
         onOpenProfile={(userId) => navigate(`/chat/focus/${userId}`)}
+        onOpenEvent={(eventId) => navigate(`/events/${eventId}`)}
         mobile={mobile}
         fullScreenMobile
       />

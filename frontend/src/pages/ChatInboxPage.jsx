@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { MessageCircleMore, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatTabs from '../components/chat/ChatTabs';
@@ -36,13 +36,20 @@ function ChatInboxPage() {
     <section className={styles.page}>
       <header className={styles.header}>
         <div className={styles.headerCopy}>
-          <h1>ChatRICE</h1>
-          <p>Eventi, DM e organizzazione</p>
+          <span className={styles.eyebrow}>MESSAGGI</span>
+          <h1>Chat</h1>
+          <p>Organizzati con chi si allena con te.</p>
         </div>
-        <ChatTopActions onSearch={() => navigate('/chat/search')} onFriends={() => navigate('/chat/friends')} onNewChat={() => {}} />
+        <ChatTopActions
+          onSearch={() => navigate('/chat/search')}
+          onFriends={() => navigate('/chat/friends')}
+          onCommunity={() => navigate('/community')}
+        />
       </header>
 
-      <ChatTabs value={activeTab} onChange={setActiveTab} />
+      <div className={styles.tabsWrap}>
+        <ChatTabs value={activeTab} onChange={setActiveTab} />
+      </div>
 
       <label className={styles.searchWrap}>
         <Search size={16} aria-hidden="true" />
@@ -59,13 +66,30 @@ function ChatInboxPage() {
       </div>
 
       <div className={styles.list}>
+        <div className={styles.listHead}>
+          <span>{activeTab === 'event' ? 'Chat degli eventi' : 'Messaggi diretti'}</span>
+          <small>{filtered.length}</small>
+        </div>
         {threadsLoading ? (
           <LoadingSkeleton rows={4} variant="list" />
         ) : filtered.length === 0 ? (
           <div className={styles.empty}>
-            <img src="/images/empty-chat.png" alt="" className={styles.emptyImage} loading="lazy" />
-            <h2>Nessuna chat ancora</h2>
-            <p>Allenati e sblocca nuove connessioni</p>
+            <span className={styles.emptyIcon} aria-hidden="true">
+              <MessageCircleMore size={28} />
+            </span>
+            <h2>{activeTab === 'event' ? 'Nessuna chat evento' : 'Nessun messaggio diretto'}</h2>
+            <p>
+              {activeTab === 'event'
+                ? 'Partecipa a un evento: la chat si attiverà automaticamente.'
+                : 'Aggiungi un amico per iniziare una conversazione privata.'}
+            </p>
+            <button
+              type="button"
+              className={styles.emptyCta}
+              onClick={() => navigate(activeTab === 'event' ? '/explore' : '/chat/friends')}
+            >
+              {activeTab === 'event' ? 'Trova un evento' : 'Apri amici'}
+            </button>
           </div>
         ) : (
           filtered.map((thread) => (

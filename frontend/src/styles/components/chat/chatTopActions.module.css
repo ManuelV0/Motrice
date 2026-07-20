@@ -6,19 +6,19 @@
 }
 
 .iconBtn {
-  width: 2.75rem;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+  width: 2.55rem;
+  min-width: 2.55rem;
+  min-height: 2.55rem;
+  padding: 0;
   border-radius: var(--r-pill);
   border: 1px solid var(--glass-border-strong);
-  background:
-    var(--card-glass-overlay),
-    color-mix(in srgb, var(--surface-2) 78%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
   color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  box-shadow: none;
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   transition:

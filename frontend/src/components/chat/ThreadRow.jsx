@@ -22,18 +22,32 @@ function ThreadRow({ thread, onOpen }) {
   const preview = String(thread?.lastMessage || '').trim() || 'Apri la conversazione';
   const title = String(thread?.title || 'Chat').trim() || 'Chat';
   const formattedTime = formatThreadTime(thread?.lastTs);
+  const unreadCount = Number(thread?.unreadCount || 0);
+  const senderPrefix = String(thread?.lastMessageSenderName || '').trim();
+  const previewText = senderPrefix && thread?.lastMessage ? `${senderPrefix}: ${preview}` : preview;
   return (
     <button type="button" className={styles.row} onClick={onOpen} aria-label={`Apri chat ${title}`}>
-      <span className={styles.avatar} aria-hidden="true">{initialsFromTitle(title)}</span>
+      <span className={styles.avatar} aria-hidden="true">
+        {thread?.avatarUrl ? (
+          <img
+            src={thread.avatarUrl}
+            alt=""
+            onError={(event) => {
+              event.currentTarget.hidden = true;
+            }}
+          />
+        ) : null}
+        <span>{initialsFromTitle(title)}</span>
+      </span>
 
       <span className={styles.copy}>
         <span className={styles.top}>
           <strong className={styles.title}>{title}</strong>
-          <small className={styles.time}>{formattedTime}</small>
+          <small className={`${styles.time} ${unreadCount > 0 ? styles.timeUnread : ''}`}>{formattedTime}</small>
         </span>
         <span className={styles.bottom}>
-          <span className={styles.preview}>{preview}</span>
-          {Number(thread?.unreadCount || 0) > 0 ? <span className={styles.badge}>{thread.unreadCount}</span> : null}
+          <span className={styles.preview}>{previewText}</span>
+          {unreadCount > 0 ? <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
         </span>
       </span>
     </button>

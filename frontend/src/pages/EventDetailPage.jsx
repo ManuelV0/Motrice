@@ -44,7 +44,7 @@ function EventDetailPage() {
 
   const { id } = useParams();
   const currentUserId = Number(getAuthSession().userId) || 1;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { entitlements } = useBilling();
@@ -537,9 +537,7 @@ function EventDetailPage() {
     }
   }
 
-  const canAccessGroupChat =
-    Boolean(event?.is_going) &&
-    (entitlements.canUseCoachChat || [500, 1000].includes(Number(event?.user_rsvp?.participation_fee_cents || 0)));
+  const canAccessGroupChat = Boolean(event?.is_going);
   const isOrganizerForEvent = Boolean(
     event &&
     (
@@ -586,12 +584,8 @@ function EventDetailPage() {
     if (!event) return;
     if (searchParams.get('chat') !== 'group') return;
     if (!canAccessGroupChat) return;
-    setGroupChatOpen(true);
-    loadGroupChatMessages({ forceStick: true });
-    const next = new URLSearchParams(searchParams);
-    next.delete('chat');
-    setSearchParams(next, { replace: true });
-  }, [event, canAccessGroupChat, searchParams, setSearchParams]);
+    navigate(`/chat/event_${event.id}`, { replace: true });
+  }, [event, canAccessGroupChat, navigate, searchParams]);
 
   useEffect(() => {
     if (!groupChatOpen) return undefined;
@@ -795,24 +789,12 @@ function EventDetailPage() {
                 type="button"
                 variant="secondary"
                 icon={MessageCircle}
-                onClick={async () => {
-                  setGroupChatOpen(true);
-                  await loadGroupChatMessages({ forceStick: true });
-                  await loadCheckedInParticipants();
-                }}
+                onClick={() => navigate(`/chat/event_${event.id}`)}
               >
-                Apri chat di gruppo
+                Apri chat evento
               </Button>
             ) : null}
           </div>
-
-          {event.is_going && !canAccessGroupChat ? (
-            <Card subtle>
-              <p className="muted">
-                La chat di gruppo si sblocca dopo prenotazione valida: quota 5/10 EUR oppure accesso Premium.
-              </p>
-            </Card>
-          ) : null}
 
           {event.can_confirm_attendance && (
             <Card subtle>

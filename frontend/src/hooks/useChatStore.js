@@ -58,7 +58,7 @@ export function useChatStore(initialThreadId = null) {
       const list = Array.isArray(payload?.items) ? payload.items : [];
       setMessages(list);
       setHasMoreMessages(Boolean(payload?.hasMore));
-      await chatApi.markThreadRead(threadId);
+      await chatApi.markThreadRead(threadId, list[list.length - 1]?.ts || new Date().toISOString());
       const threadsNext = await chatApi.listThreads();
       setThreads(Array.isArray(threadsNext) ? threadsNext : []);
     } finally {
@@ -110,6 +110,7 @@ export function useChatStore(initialThreadId = null) {
         id: tempId,
         threadId: selectedThreadId,
         senderId: currentUserId,
+        senderName: 'Tu',
         text: body,
         ts: new Date().toISOString(),
         status: 'sending'
@@ -155,6 +156,24 @@ export function useChatStore(initialThreadId = null) {
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
+
+  useEffect(() => {
+    let refreshTimer = null;
+    const unsubscribe = chatApi.subscribe(() => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadThreads();
+        if (selectedThreadId) {
+          loadMessages(selectedThreadId);
+        }
+      }, 180);
+    });
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      unsubscribe();
+    };
+  }, [loadMessages, loadThreads, selectedThreadId]);
 
   useEffect(() => {
     if (!initialThreadId) return;

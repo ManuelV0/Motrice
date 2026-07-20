@@ -1,5 +1,6 @@
-import { getAuthSession } from './authSession';
+import { getAuthSession, legacyIdFromAuthUserId } from './authSession';
 import { api } from './api';
+import { isSupabaseConfigured, requireSupabase, supabase } from './supabaseClient';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 
 const STORAGE_KEY = 'motrice_chat_store_v1';
@@ -45,6 +46,67 @@ function getDmThreadId(userA, userB) {
   return `dm_${min}_${max}`;
 }
 
+function canUseRemoteEventChat() {
+  const session = getAuthSession();
+  return Boolean(isSupabaseConfigured && supabase && session?.isAuthenticated && session?.authUserId);
+}
+
+function parseEventThreadId(threadId) {
+  const raw = String(threadId || '').trim();
+  if (!raw.startsWith('event_')) return null;
+  const eventId = raw.slice('event_'.length);
+  return eventId || null;
+}
+
+function normalizeRemoteMessage(raw, threadId) {
+  return normalizeMessage({
+    id: raw.id,
+    threadId,
+    senderId: legacyIdFromAuthUserId(raw.sender_id),
+    senderAuthUserId: raw.sender_id,
+    senderName: raw.sender?.display_name || 'Partecipante',
+    senderAvatarUrl: raw.sender?.avatar_url || '',
+    text: raw.body,
+    ts: raw.created_at,
+    status: 'sent'
+  });
+}
+
+async function listRemoteEventThreads() {
+  const client = requireSupabase();
+  const session = getAuthSession();
+  const currentUserId = resolveUserId();
+  const { data, error } = await client.rpc('get_event_chat_inbox');
+  if (error) throw error;
+
+  return (Array.isArray(data) ? data : []).map((row) => {
+    const eventId = String(row.event_id);
+    const sportSlug = String(row.sport_slug || '').trim();
+    return {
+      id: `event_${eventId}`,
+      type: 'event',
+      title: String(row.title || 'Chat evento').trim() || 'Chat evento',
+      avatarUrl: sportSlug ? `/images/${sportSlug}.svg` : '',
+      participants: [currentUserId],
+      eventId,
+      meta: {
+        participantsCount: Number(row.participants_count || 0),
+        startsAt: row.starts_at,
+        city: row.city || '',
+        locationName: row.location_name || '',
+        eventStatus: row.event_status || 'scheduled',
+        sportName: row.sport_name || 'Sport',
+        sportSlug
+      },
+      lastMessage: String(row.last_message || '').trim(),
+      lastMessageSenderName: row.last_sender_id === session.authUserId ? 'Tu' : row.last_sender_name || '',
+      lastMessageSenderId: row.last_sender_id ? legacyIdFromAuthUserId(row.last_sender_id) : null,
+      lastTs: row.last_message_at || row.joined_at || row.starts_at || nowIso(),
+      unreadCount: Number(row.unread_count || 0)
+    };
+  });
+}
+
 function ensureThreadMeta(thread, store) {
   const threadId = String(thread.id);
   const items = Array.isArray(store.messagesByThread?.[threadId]) ? store.messagesByThread[threadId] : [];
@@ -54,7 +116,9 @@ function ensureThreadMeta(thread, store) {
   return {
     ...thread,
     lastMessage,
-    lastTs
+    lastTs,
+    lastMessageSenderName: latest?.senderName || thread.lastMessageSenderName || '',
+    lastMessageSenderId: latest?.senderId || thread.lastMessageSenderId || null
   };
 }
 
@@ -78,9 +142,33 @@ function buildSeedStore(currentUserId) {
 
   const messagesByThread = {
     event_101: [
-      { id: 'm_ev_1', threadId: 'event_101', senderId: 4, text: 'Ragazzi oggi campo 2.', ts: ts(25 * 60 * 1000), status: 'sent' },
-      { id: 'm_ev_2', threadId: 'event_101', senderId: 2, text: 'Io arrivo 10 min prima.', ts: ts(22 * 60 * 1000), status: 'sent' },
-      { id: 'm_ev_3', threadId: 'event_101', senderId: currentUserId, text: 'Perfetto, ci vediamo li.', ts: ts(20 * 60 * 1000), status: 'sent' }
+      {
+        id: 'm_ev_1',
+        threadId: 'event_101',
+        senderId: 4,
+        senderName: 'Luca',
+        text: 'Ragazzi oggi campo 2.',
+        ts: ts(25 * 60 * 1000),
+        status: 'sent'
+      },
+      {
+        id: 'm_ev_2',
+        threadId: 'event_101',
+        senderId: 2,
+        senderName: 'Andrea',
+        text: 'Io arrivo 10 min prima.',
+        ts: ts(22 * 60 * 1000),
+        status: 'sent'
+      },
+      {
+        id: 'm_ev_3',
+        threadId: 'event_101',
+        senderId: currentUserId,
+        senderName: 'Tu',
+        text: 'Perfetto, ci vediamo li.',
+        ts: ts(20 * 60 * 1000),
+        status: 'sent'
+      }
     ]
   };
 
@@ -128,6 +216,9 @@ function normalizeMessage(raw) {
     id: String(raw.id || `msg_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
     threadId: String(raw.threadId || ''),
     senderId: Number(raw.senderId || 0),
+    senderAuthUserId: String(raw.senderAuthUserId || ''),
+    senderName: String(raw.senderName || ''),
+    senderAvatarUrl: String(raw.senderAvatarUrl || ''),
     text: String(raw.text || ''),
     ts: String(raw.ts || nowIso()),
     status: String(raw.status || 'sent')
@@ -224,13 +315,37 @@ export const chatApi = {
   async listThreads() {
     const store = loadStore();
     const currentUserId = resolveUserId();
-    await ensureDmThreadsFromFriends(store, currentUserId);
+    try {
+      await ensureDmThreadsFromFriends(store, currentUserId);
+    } catch {
+      // La chat eventi resta disponibile anche se la rubrica locale non risponde.
+    }
     saveStore(store);
-    const items = getVisibleThreads(store, currentUserId);
-    return wait(clone(items));
+    const localItems = getVisibleThreads(store, currentUserId);
+
+    if (!canUseRemoteEventChat()) {
+      return wait(clone(localItems));
+    }
+
+    const remoteEvents = await listRemoteEventThreads();
+    const localDirectMessages = localItems.filter((thread) => String(thread.type) === 'dm');
+    const items = [...remoteEvents, ...localDirectMessages].sort(
+      (a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs)
+    );
+    return clone(items);
   },
 
   async getThread(threadId) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const remoteThreads = await listRemoteEventThreads();
+      const thread = remoteThreads.find((item) => String(item.eventId) === String(remoteEventId));
+      if (!thread) {
+        throw new Error('Partecipa all’evento per accedere alla chat');
+      }
+      return clone(thread);
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
@@ -241,6 +356,43 @@ export const chatApi = {
   },
 
   async listMessages(threadId, options = {}) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const thread = await this.getThread(threadId);
+      const limit = Number.isInteger(Number(options.limit))
+        ? Math.max(1, Math.min(200, Number(options.limit)))
+        : DEFAULT_PAGE_LIMIT;
+      let query = client
+        .from('event_messages')
+        .select(
+          'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
+        )
+        .eq('event_id', remoteEventId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
+
+      if (options.before) {
+        query = query.lt('created_at', String(options.before));
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const descending = Array.isArray(data) ? data : [];
+      const items = descending
+        .slice()
+        .reverse()
+        .map((message) => normalizeRemoteMessage(message, String(threadId)));
+
+      return {
+        thread,
+        items,
+        hasMore: descending.length === limit,
+        nextBefore: descending.length === limit && items.length ? items[0].ts : null
+      };
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
@@ -271,6 +423,30 @@ export const chatApi = {
   },
 
   async sendMessage(threadId, text) {
+    const body = String(text || '').trim();
+    if (!body) throw new Error('Messaggio vuoto');
+    if (body.length > 1000) throw new Error('Messaggio troppo lungo (max 1000 caratteri)');
+
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const session = getAuthSession();
+      await this.getThread(threadId);
+      const { data, error } = await client
+        .from('event_messages')
+        .insert({
+          event_id: remoteEventId,
+          sender_id: session.authUserId,
+          body
+        })
+        .select(
+          'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
+        )
+        .single();
+      if (error) throw error;
+      return normalizeRemoteMessage(data, String(threadId));
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
@@ -286,14 +462,11 @@ export const chatApi = {
       }
     }
 
-    const body = String(text || '').trim();
-    if (!body) throw new Error('Messaggio vuoto');
-    if (body.length > 1000) throw new Error('Messaggio troppo lungo (max 1000 caratteri)');
-
     const created = normalizeMessage({
       id: `m_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
       threadId: String(threadId),
       senderId: currentUserId,
+      senderName: 'Tu',
       text: body,
       ts: nowIso(),
       status: 'sent'
@@ -328,12 +501,23 @@ export const chatApi = {
     return wait(clone(created));
   },
 
-  async markThreadRead(threadId) {
+  async markThreadRead(threadId, readThrough = null) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const { error } = await client.rpc('mark_event_chat_read', {
+        target_event_id: remoteEventId,
+        read_through: readThrough || nowIso()
+      });
+      if (error) throw error;
+      return { ok: true };
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     const key = String(threadId);
     const messages = Array.isArray(store.messagesByThread?.[key]) ? store.messagesByThread[key] : [];
-    const latestTs = messages.length ? messages[messages.length - 1].ts : nowIso();
+    const latestTs = readThrough || (messages.length ? messages[messages.length - 1].ts : nowIso());
 
     store.lastReadByUserThread = {
       ...(store.lastReadByUserThread || {}),
@@ -348,6 +532,15 @@ export const chatApi = {
   },
 
   async createEventThread({ eventId, title, participants = [] }) {
+    if (canUseRemoteEventChat()) {
+      const remoteThreads = await listRemoteEventThreads();
+      const thread = remoteThreads.find((item) => String(item.eventId) === String(eventId));
+      if (!thread) {
+        throw new Error('Partecipa all’evento per accedere alla chat');
+      }
+      return clone(thread);
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     const safeEventId = Number(eventId || 0);
@@ -378,5 +571,31 @@ export const chatApi = {
     store.threads = [thread, ...(Array.isArray(store.threads) ? store.threads : [])];
     saveStore(store);
     return wait(clone(thread));
+  },
+
+  subscribe(onChange) {
+    if (!canUseRemoteEventChat() || typeof onChange !== 'function') {
+      return () => {};
+    }
+
+    const client = requireSupabase();
+    const session = getAuthSession();
+    const channel = client
+      .channel(`motrice-event-chat-${session.authUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'event_messages' },
+        (payload) => onChange({ kind: 'message', payload })
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_participants' },
+        (payload) => onChange({ kind: 'participants', payload })
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
   }
 };
