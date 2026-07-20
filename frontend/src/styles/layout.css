@@ -22,6 +22,12 @@
   padding-bottom: 0;
 }
 
+.mainContentLanding {
+  min-height: 100dvh;
+  padding: var(--nav-h) 0 0;
+  overflow: hidden;
+}
+
 .mainContentAccountMobile {
   width: min(100%, 30rem);
   margin-inline: auto;
@@ -115,6 +121,10 @@
     padding-top: calc(var(--nav-h) + var(--s-3));
   }
 
+  .mainContentLanding {
+    padding-top: var(--nav-h);
+  }
+
   .mainContentChat {
     padding-inline: 0;
   }
@@ -123,6 +133,10 @@
 @media (min-width: 768px) {
   .mainContent {
     padding-bottom: var(--section-gap);
+  }
+
+  .mainContentLanding {
+    padding-bottom: 0;
   }
 
   .appShell.account-mobile-only .mainContent {

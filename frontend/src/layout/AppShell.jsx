@@ -6,11 +6,13 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import useViewportInsets from '../hooks/useViewportInsets';
+import StartupAccessDock from '../components/StartupAccessDock';
 
 function AppShell({ children }) {
   const location = useLocation();
   const [soonNotification, setSoonNotification] = useState(null);
   const isEmbed = location.pathname.startsWith('/embed/');
+  const isLandingRoute = location.pathname === '/';
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -70,11 +72,11 @@ function AppShell({ children }) {
   }
 
   return (
-    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''}`}>
+    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''}`}>
       <Navbar forceMobile={isAccountLikeRoute} />
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
@@ -91,7 +93,8 @@ function AppShell({ children }) {
         {children}
       </main>
       <BottomNav forceVisible={isAccountLikeRoute} />
-      <Footer />
+      {!isLandingRoute ? <Footer /> : null}
+      <StartupAccessDock />
       <SiteTourOverlay />
     </div>
   );

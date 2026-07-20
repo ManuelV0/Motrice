@@ -186,7 +186,7 @@ function AccountPage() {
       label: session.isAuthenticated ? 'Account & Sessione' : 'Accedi',
       sublabel: session.isAuthenticated
         ? `${session.provider || 'Connesso'}${session.userId ? ` · #${session.userId}` : ''}`
-        : 'Entra con Google o Facebook',
+        : 'Email, password e sincronizzazione Supabase',
       iconColor: session.isAuthenticated ? 'success' : 'accent',
       statusText: session.isAuthenticated ? 'CONNESSO' : null
     }
