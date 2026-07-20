@@ -75,7 +75,11 @@ function useUserLocation() {
       Geolocation.checkPermissions()
         .then((status) => {
           if (!active) return;
-          setPermission((prev) => (prev === 'granted' ? prev : status.coarseLocation || status.location || 'prompt'));
+          const nativePermission = status.coarseLocation || status.location || 'prompt';
+          setPermission(nativePermission);
+          if (nativePermission !== 'granted') {
+            setCoords(null);
+          }
         })
         .catch(() => {
           // Il servizio potrebbe essere spento: il messaggio verra mostrato al tap.
