@@ -8,57 +8,41 @@ import {
   Handshake,
   UserRound,
   MessageCircle,
-  Lock,
   Menu,
   Target,
-  LocateFixed
+  LocateFixed,
+  X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
 import { api } from '../services/api';
 import { useBilling } from '../context/BillingContext';
 import { useUserLocation } from '../hooks/useUserLocation';
-import PaywallModal from './PaywallModal';
 import IconButton from './IconButton';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
   { to: '/explore', label: 'Esplora', icon: Compass },
-  { to: '/account', label: 'Account', icon: UserRound },
-  { to: '/coach', label: 'Coach', icon: Target },
+  { to: '/map', label: 'Mappa', icon: Map },
+  { to: '/create', label: 'Crea', icon: PlusCircle, primary: true },
   { to: '/chat', label: 'Chat', icon: MessageCircle },
-  { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+  { to: '/account', label: 'Profilo', icon: UserRound }
 ];
 
 const drawerSections = [
   {
-    title: 'Scopri',
+    title: 'La tua attività',
     items: [
-      { to: '/explore', label: 'Esplora', icon: Compass },
-      { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
-    ]
-  },
-  {
-    title: 'Gestisci',
-    items: [
-      { to: '/create', label: 'Crea evento', icon: PlusCircle },
       { to: '/agenda', label: 'Agenda', icon: CalendarDays },
+      { to: '/coach', label: 'Coach', icon: Target },
       { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
     ]
   },
   {
-    title: 'Profilo',
+    title: 'Altro',
     items: [
-      { to: '/account', label: 'Account', icon: UserRound },
-      { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/chat', label: 'Chat', icon: MessageCircle }
+      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
     ]
   }
-];
-
-const drawerQuickActions = [
-  { to: '/map', label: 'Mappa', icon: Map },
-  { to: '/create', label: 'Crea', icon: PlusCircle },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays }
 ];
 
 function Navbar({ forceMobile = false }) {
@@ -69,7 +53,6 @@ function Navbar({ forceMobile = false }) {
 
   const [query, setQuery] = useState('');
   const [unread, setUnread] = useState(0);
-  const [paywallOpen, setPaywallOpen] = useState(false);
   const { hasLocation, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
 
@@ -180,7 +163,8 @@ function Navbar({ forceMobile = false }) {
           />
 
           <NavLink className={styles.brand} to="/">
-            Motrice
+            <span className={styles.brandMark}>M</span>
+            <span>MOTRICE</span>
           </NavLink>
         </div>
 
@@ -230,7 +214,7 @@ function Navbar({ forceMobile = false }) {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
-                    `${styles.link} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
+                    `${styles.link} ${link.primary ? styles.createLink : ''} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
                   }
                 >
                   <Icon size={18} aria-hidden="true" />
@@ -252,8 +236,18 @@ function Navbar({ forceMobile = false }) {
       <div id="mobile-nav" className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`} aria-hidden={!isOpen}>
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
           <div className={styles.mobileHeader}>
-            <p className={styles.mobileKicker}>Navigazione</p>
-            <h2 className={styles.mobileTitle}>Vai dove ti serve</h2>
+            <div className={styles.mobileHeaderCopy}>
+              <p className={styles.mobileKicker}>MOTRICE</p>
+              <h2 className={styles.mobileTitle}>Tutto il resto, qui.</h2>
+            </div>
+            <button
+              type="button"
+              className={styles.drawerClose}
+              onClick={() => setIsOpen(false)}
+              aria-label="Chiudi menu"
+            >
+              <X size={22} strokeWidth={2.2} aria-hidden="true" />
+            </button>
           </div>
 
           <form className={styles.search} onSubmit={onSearchSubmit}>
@@ -266,24 +260,6 @@ function Navbar({ forceMobile = false }) {
               aria-label="Cerca sport, citta o evento"
             />
           </form>
-
-          <div className={styles.quickActions} role="list" aria-label="Azioni rapide">
-            {drawerQuickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <NavLink
-                  key={action.to}
-                  to={action.to}
-                  role="listitem"
-                  className={({ isActive }) => `${styles.quickAction} ${isActive ? styles.quickActionActive : ''}`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  <span>{action.label}</span>
-                </NavLink>
-              );
-            })}
-          </div>
 
           {drawerSections.map((section) => (
             <section key={section.title} className={styles.mobileSection} aria-label={section.title}>
@@ -321,7 +297,6 @@ function Navbar({ forceMobile = false }) {
         </nav>
       </div>
 
-      <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Upgrade" />
     </header>
   );
 }

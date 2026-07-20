@@ -1,0 +1,18 @@
+{
+  "name": "motrice-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "cap:android": "cap open android",
+    "android:apk": "cd android && ./gradlew assembleDebug",
+    "android:aab": "cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.2"
+  }
+}
