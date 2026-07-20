@@ -1,5 +1,6 @@
 .page {
   display: grid;
+  align-content: start;
   gap: var(--s-5);
   min-height: calc(100dvh - var(--nav-h));
   padding: var(--s-4);

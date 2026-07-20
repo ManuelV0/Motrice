@@ -289,10 +289,8 @@ function ExplorePage() {
         activeView="explore"
         leftLabel="Esplora"
         rightLabel="Mappa"
-        thirdLabel="Crea"
         leftTo="/explore"
         rightTo={mapSearch ? `/map?${mapSearch}` : '/map'}
-        thirdTo="/create"
       />
       <ExploreHero onPrimaryAction={handleNearMe} onSecondaryAction={() => setShowHowItWorksModal(true)} />
 

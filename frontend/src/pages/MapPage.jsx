@@ -113,8 +113,8 @@ function distanceKm(aLat, aLng, bLat, bLng) {
 
 function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
   const data = buildRadiusPolygon(lat, lng, radiusKm);
-  const fillColor = mapTheme === 'light' ? 'rgba(251,146,60,0.18)' : 'rgba(253,186,116,0.18)';
-  const lineColor = mapTheme === 'light' ? 'rgba(251,146,60,0.72)' : 'rgba(253,186,116,0.84)';
+  const fillColor = mapTheme === 'light' ? 'rgba(139,207,0,0.18)' : 'rgba(168,240,0,0.18)';
+  const lineColor = mapTheme === 'light' ? 'rgba(129,189,0,0.72)' : 'rgba(184,255,53,0.84)';
 
   if (!map.getSource(USER_RADIUS_SOURCE)) {
     map.addSource(USER_RADIUS_SOURCE, { type: 'geojson', data });

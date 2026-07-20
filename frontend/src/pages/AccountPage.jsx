@@ -8,9 +8,7 @@ import {
   Cpu,
   HelpCircle,
   LogIn,
-  Moon,
   PiggyBank,
-  Sun,
   User
 } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -19,13 +17,11 @@ import { api } from '../services/api';
 import { piggybank } from '../services/piggybank';
 import { getAuthSession } from '../services/authSession';
 import { getTutorialState, startTutorial } from '../services/tutorialMode';
-import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import AccountStickyHeader from '../components/account/AccountStickyHeader';
 import AccountMenuList from '../components/account/AccountMenuList';
 import AccountSplash from '../components/account/AccountSplash';
 import styles from '../styles/pages/account.module.css';
 
-const THEME_KEY = 'motrice.theme';
 const SPLASH_KEY = 'motrice.accountSplashSeen';
 
 function sessionSplashSeen() {
@@ -39,7 +35,6 @@ function AccountPage() {
   const navigate = useNavigate();
   const { subscription, isPremium } = useBilling();
 
-  const [theme, setTheme] = useState(() => safeStorageGet(THEME_KEY) || 'dark');
   const [profile, setProfile] = useState({ display_name: 'Tu', avatar_url: '' });
   const [xpGlobal, setXpGlobal] = useState(0);
   const [badgeLabel, setBadgeLabel] = useState('Rame');
@@ -91,11 +86,6 @@ function AccountPage() {
     return () => window.removeEventListener('focus', refreshWallet);
   }, []);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
-    safeStorageSet(THEME_KEY, theme);
-  }, [theme]);
-
   const isTutorialActive = tutorialState.status === 'active';
 
   function handleTutorialNav() {
@@ -105,10 +95,6 @@ function AccountPage() {
     }
     setTutorialState(startTutorial(tutorialState.selectedRole));
     navigate('/tutorial');
-  }
-
-  function toggleTheme() {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }
 
   const onSplashFinish = useCallback(() => {
@@ -183,14 +169,6 @@ function AccountPage() {
       iconColor: 'primary'
     },
     {
-      id: 'theme',
-      icon: theme === 'dark' ? Sun : Moon,
-      label: 'Tema',
-      sublabel: theme === 'dark' ? 'Attualmente scuro — tocca per chiaro' : 'Attualmente chiaro — tocca per scuro',
-      iconColor: 'muted',
-      onClick: toggleTheme
-    },
-    {
       id: 'support',
       to: '/faq',
       icon: HelpCircle,
@@ -198,7 +176,7 @@ function AccountPage() {
       sublabel: 'Aiuto, domande frequenti',
       iconColor: 'muted'
     }
-  ], [isTutorialActive, theme]);
+  ], [isTutorialActive]);
 
   const accountItems = useMemo(() => [
     {
@@ -214,26 +192,25 @@ function AccountPage() {
     }
   ], [session.isAuthenticated, session.provider, session.userId]);
 
-  if (showSplash) {
-    return <AccountSplash onFinish={onSplashFinish} />;
-  }
-
   return (
-    <section className={styles.page}>
-      {!loading && (
-        <>
-          <AccountStickyHeader
-            displayName={profile.display_name}
-            avatarUrl={profile.avatar_url}
-            plan={subscription.plan}
-            xpGlobal={xpGlobal}
-          />
-          <AccountMenuList items={mainItems} sectionLabel="Principale" />
-          <AccountMenuList items={utilityItems} sectionLabel="Impostazioni" />
-          <AccountMenuList items={accountItems} sectionLabel="Account" />
-        </>
-      )}
-    </section>
+    <>
+      {showSplash ? <AccountSplash onFinish={onSplashFinish} /> : null}
+      <section className={styles.page}>
+        {!loading && (
+          <>
+            <AccountStickyHeader
+              displayName={profile.display_name}
+              avatarUrl={profile.avatar_url}
+              plan={subscription.plan}
+              xpGlobal={xpGlobal}
+            />
+            <AccountMenuList items={mainItems} sectionLabel="Principale" />
+            <AccountMenuList items={utilityItems} sectionLabel="Impostazioni" />
+            <AccountMenuList items={accountItems} sectionLabel="Account" />
+          </>
+        )}
+      </section>
+    </>
   );
 }
 

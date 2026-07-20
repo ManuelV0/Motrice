@@ -5,6 +5,7 @@
   "workspaces": [
     "backend",
     "frontend",
+    "mobile",
     "partner-portal"
   ],
   "scripts": {

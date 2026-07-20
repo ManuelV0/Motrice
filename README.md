@@ -72,3 +72,31 @@ npm run dev
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:4000`
+
+## Android
+
+Il wrapper Android usa Capacitor e incorpora la build Vite del frontend.
+Sono richiesti Node.js 22 e Java 21. L'application ID Android e
+`com.motrice.app`.
+
+```bash
+npm install
+npm run cap:sync
+npm run android:apk
+```
+
+L'APK debug viene creato in:
+
+```text
+mobile/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Il workflow GitHub Actions `Android Capacitor Build` esegue gli stessi passaggi
+su ogni pull request e push verso `main`. L'APK risultante si scarica dagli
+artifact del workflow. Se sono configurati i quattro secret Android indicati
+nel workflow, viene prodotto anche un AAB release firmato:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`

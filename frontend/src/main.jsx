@@ -8,18 +8,9 @@ import RootErrorBoundary from './components/RootErrorBoundary';
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
-const THEME_KEY = 'motrice.theme';
-
 function bootstrapTheme() {
-  let storedTheme = null;
-  try {
-    storedTheme = window.localStorage.getItem(THEME_KEY);
-  } catch {
-    storedTheme = null;
-  }
-
-  const theme = storedTheme === 'light' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme', 'dark');
+  document.documentElement.style.colorScheme = 'dark';
 }
 
 bootstrapTheme();
