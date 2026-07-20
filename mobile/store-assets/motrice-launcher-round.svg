@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="lime" x1="92" y1="64" x2="426" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C7FF24"/>
+      <stop offset="0.5" stop-color="#A8F000"/>
+      <stop offset="1" stop-color="#82CF00"/>
+    </linearGradient>
+    <clipPath id="circle">
+      <circle cx="256" cy="256" r="232"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#circle)">
+    <rect x="24" y="24" width="464" height="464" fill="url(#lime)"/>
+    <path d="M-22 404 218 512H-22V404ZM534 72 338 24h196v48Z" fill="#0B0E09" opacity="0.08"/>
+    <path
+      d="M133 383 177 129h56l36 111 69-111h60l-3 254h-69l6-129-48 94h-49l-30-91-13 126h-59Z"
+      fill="#090B09"
+    />
+  </g>
+</svg>
