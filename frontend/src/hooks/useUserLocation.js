@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 
 const STORAGE_KEY = 'motrice_user_location_v1';
@@ -34,19 +36,33 @@ function writeCachedLocation(coords) {
 
 function normalizeError(error) {
   if (!error) return { permission: 'error', message: 'Posizione non disponibile.' };
-  if (error.code === 1) {
-    return { permission: 'denied', message: 'Permesso posizione negato. Abilitalo nelle impostazioni del browser.' };
+  const code = String(error.code || '');
+  if (error.code === 1 || code === 'OS-PLUG-GLOC-0003') {
+    return { permission: 'denied', message: 'Permesso posizione negato. Abilitalo nelle impostazioni dell app.' };
   }
-  if (error.code === 2) {
+  if (code === 'OS-PLUG-GLOC-0007' || code === 'OS-PLUG-GLOC-0009' || code === 'OS-PLUG-GLOC-0017') {
+    return { permission: 'unavailable', message: 'Attiva la posizione del telefono e riprova.' };
+  }
+  if (
+    error.code === 2 ||
+    code === 'OS-PLUG-GLOC-0002' ||
+    code === 'OS-PLUG-GLOC-0014' ||
+    code === 'OS-PLUG-GLOC-0015' ||
+    code === 'OS-PLUG-GLOC-0016'
+  ) {
     return { permission: 'unavailable', message: 'Posizione non disponibile sul dispositivo.' };
   }
-  if (error.code === 3) {
+  if (error.code === 3 || code === 'OS-PLUG-GLOC-0010') {
     return { permission: 'timeout', message: 'Timeout geolocalizzazione. Riprova.' };
+  }
+  if (code === 'OS-PLUG-GLOC-0018') {
+    return { permission: 'error', message: 'Permesso posizione non configurato nell app.' };
   }
   return { permission: 'error', message: 'Errore durante il recupero della posizione.' };
 }
 
 function useUserLocation() {
+  const isNative = Capacitor.isNativePlatform();
   const cached = readCachedLocation();
   const [coords, setCoords] = useState(cached ? { lat: cached.lat, lng: cached.lng } : null);
   const [permission, setPermission] = useState(cached ? 'granted' : 'prompt');
@@ -54,6 +70,21 @@ function useUserLocation() {
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
+    if (isNative) {
+      let active = true;
+      Geolocation.checkPermissions()
+        .then((status) => {
+          if (!active) return;
+          setPermission((prev) => (prev === 'granted' ? prev : status.coarseLocation || status.location || 'prompt'));
+        })
+        .catch(() => {
+          // Il servizio potrebbe essere spento: il messaggio verra mostrato al tap.
+        });
+      return () => {
+        active = false;
+      };
+    }
+
     if (!navigator?.permissions?.query) return;
     let active = true;
     let statusRef = null;
@@ -77,10 +108,10 @@ function useUserLocation() {
       active = false;
       if (statusRef) statusRef.onchange = null;
     };
-  }, []);
+  }, [isNative]);
 
   const requestLocation = useCallback(async () => {
-    if (!navigator?.geolocation) {
+    if (!isNative && !navigator?.geolocation) {
       setPermission('unavailable');
       setError('Geolocalizzazione non supportata su questo browser.');
       return null;
@@ -90,13 +121,39 @@ function useUserLocation() {
     setError('');
 
     try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
+      let position;
+
+      if (isNative) {
+        const currentPermission = await Geolocation.checkPermissions();
+        const currentState = currentPermission.coarseLocation || currentPermission.location;
+
+        if (currentState !== 'granted') {
+          const requestedPermission = await Geolocation.requestPermissions({
+            permissions: ['coarseLocation']
+          });
+          const requestedState = requestedPermission.coarseLocation || requestedPermission.location;
+          if (requestedState !== 'granted') {
+            const deniedError = new Error('Permesso posizione negato');
+            deniedError.code = 'OS-PLUG-GLOC-0003';
+            throw deniedError;
+          }
+        }
+
+        position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: false,
-          timeout: 10000,
-          maximumAge: 1000 * 60 * 5
+          timeout: 15000,
+          maximumAge: 1000 * 60 * 5,
+          enableLocationFallback: true
         });
-      });
+      } else {
+        position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 1000 * 60 * 5
+          });
+        });
+      }
 
       const nextCoords = {
         lat: Number(position.coords.latitude),
@@ -115,7 +172,7 @@ function useUserLocation() {
     } finally {
       setRequesting(false);
     }
-  }, []);
+  }, [isNative]);
 
   const originParams = useMemo(() => {
     if (!coords) return {};

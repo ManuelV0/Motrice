@@ -16,6 +16,7 @@ import {
 import { useMobileMenu } from '../hooks/useMobileMenu';
 import { api } from '../services/api';
 import { useBilling } from '../context/BillingContext';
+import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import IconButton from './IconButton';
 import styles from '../styles/components/navbar.module.css';
@@ -50,10 +51,11 @@ function Navbar({ forceMobile = false }) {
   const navigate = useNavigate();
   const { isOpen, setIsOpen } = useMobileMenu();
   const { entitlements } = useBilling();
+  const { showToast } = useToast();
 
   const [query, setQuery] = useState('');
   const [unread, setUnread] = useState(0);
-  const { hasLocation, requesting, requestLocation } = useUserLocation();
+  const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
 
   useEffect(() => {
@@ -80,6 +82,10 @@ function Navbar({ forceMobile = false }) {
       active = false;
     };
   }, [location.pathname, entitlements.canUseNotifications]);
+
+  useEffect(() => {
+    if (locationError) showToast(locationError, 'error');
+  }, [locationError, showToast]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -187,7 +193,7 @@ function Navbar({ forceMobile = false }) {
               if (!hasLocation) requestLocation();
             }}
             aria-label={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione posizione in corso' : 'Attiva posizione'}
-            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Attiva posizione'}
+            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : locationError || 'Attiva posizione'}
           >
             <LocateFixed size={15} aria-hidden="true" />
           </button>
