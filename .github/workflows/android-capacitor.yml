@@ -36,16 +36,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -64,7 +64,7 @@ jobs:
         run: npm run android:apk
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: motrice-app-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload AAB artifact (optional)
         if: ${{ env.HAS_ANDROID_SIGNING == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: motrice-app-release-aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
