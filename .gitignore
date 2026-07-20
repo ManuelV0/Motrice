@@ -1,5 +1,9 @@
 node_modules/
 frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+supabase/.temp/
 backend/motrice.db
 backend/motrice_dev.db
 backend/.env

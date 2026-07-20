@@ -489,7 +489,7 @@ function MapPage() {
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
     if (!map || !event) return;
-    setSelectedEventId(Number(event.id));
+    setSelectedEventId(String(event.id));
     map.flyTo({ center: [event.lng, event.lat], zoom: Math.max(12.8, map.getZoom()), duration: 320, essential: true });
   }, []);
 
@@ -687,7 +687,7 @@ function MapPage() {
     eventsInRadius.forEach((event) => {
       const element = document.createElement('button');
       element.type = 'button';
-      const isSelected = Number(event.id) === Number(selectedEventId);
+      const isSelected = String(event.id) === String(selectedEventId);
       const isSaved = Boolean(event.is_saved);
       element.className = `${styles.eventPin} ${isSaved ? styles.eventPinSaved : styles.eventPinDefault} ${isSelected ? styles.eventPinSelected : ''}`;
       element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;

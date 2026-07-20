@@ -12,6 +12,7 @@ import {
   getPartnerBadgeFromScore,
   updatePartnerBadge
 } from './partnerBadge';
+import { createSupabaseApi } from './supabaseApi';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const EVENT_DURATION_HOURS = 2;
@@ -1252,7 +1253,7 @@ function getCreationStats(store) {
   };
 }
 
-export const api = {
+const localApi = {
   async listEvents(filters = {}) {
     const store = loadStore();
     ensureStartingSoonNotifications(store);
@@ -3878,3 +3879,5 @@ export const api = {
     return withDelay({ success: true });
   }
 };
+
+export const api = createSupabaseApi(localApi);

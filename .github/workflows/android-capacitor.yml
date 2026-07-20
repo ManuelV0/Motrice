@@ -33,6 +33,8 @@ jobs:
       HAS_ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
       ORG_GRADLE_PROJECT_MOTRICE_VERSION_CODE: ${{ github.run_number }}
       ORG_GRADLE_PROJECT_MOTRICE_VERSION_NAME: 1.0.${{ github.run_number }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
     steps:
       - name: Checkout

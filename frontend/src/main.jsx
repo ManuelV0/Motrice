@@ -5,6 +5,7 @@ import App from './App';
 import { ToastProvider } from './context/ToastContext';
 import { BillingProvider } from './context/BillingContext';
 import RootErrorBoundary from './components/RootErrorBoundary';
+import { initializeSupabaseAuth } from './services/authSession';
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
@@ -14,6 +15,9 @@ function bootstrapTheme() {
 }
 
 bootstrapTheme();
+initializeSupabaseAuth().catch(() => {
+  // La pagina di login mostrera l'errore se Supabase non e raggiungibile.
+});
 window.__MOTRICE_BOOT_OK__ = true;
 
 ReactDOM.createRoot(document.getElementById('root')).render(

@@ -129,6 +129,84 @@
   gap: var(--s-3);
 }
 
+.authForm {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.authForm label {
+  display: grid;
+  gap: var(--s-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.authForm input {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  padding: 0 var(--s-3);
+  background: color-mix(in srgb, var(--surface) 82%, #000);
+  color: var(--text);
+}
+
+.authForm input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 70%, transparent);
+  box-shadow: var(--focus);
+}
+
+.modeSwitch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 78%, #000);
+}
+
+.modeSwitch button {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.modeSwitch button:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.modeSwitch .modeActive {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.error,
+.success {
+  margin: 0;
+  padding: var(--s-3);
+  border-radius: var(--r-lg);
+  font-size: var(--text-sm);
+}
+
+.error {
+  border: 1px solid color-mix(in srgb, var(--danger) 50%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: color-mix(in srgb, var(--danger) 78%, white);
+}
+
+.success {
+  border: 1px solid color-mix(in srgb, var(--success) 50%, transparent);
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  color: color-mix(in srgb, var(--success) 78%, white);
+}
+
 .oauthButton {
   justify-content: flex-start;
 }

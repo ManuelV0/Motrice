@@ -100,3 +100,20 @@ nel workflow, viene prodotto anche un AAB release firmato:
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
+
+## Supabase beta
+
+Il frontend usa soltanto la publishable key, protetta dalle policy RLS del
+database. Copia la configurazione locale:
+
+```bash
+cp frontend/.env.example frontend/.env.local
+```
+
+Poi inserisci `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. Non
+inserire mai `sb_secret_...` o `service_role` nel frontend o nei secret della
+build Android. Lo schema iniziale e in `supabase/migrations/`.
+
+Per compilare l'APK su GitHub, crea le stesse due chiavi come repository
+variables (Settings > Secrets and variables > Actions > Variables). Sono valori
+pubblici del client; la sicurezza dei dati e affidata alle policy RLS.

@@ -123,7 +123,7 @@ function EventDetailPage() {
       .then(([eventData, allEvents]) => {
         setEvent(eventData);
         setSimilarEvents(
-          allEvents.filter((item) => item.id !== Number(id) && item.sport_id === eventData.sport_id).slice(0, 3)
+          allEvents.filter((item) => String(item.id) !== String(id) && item.sport_id === eventData.sport_id).slice(0, 3)
         );
       })
       .catch((err) => setError(err.message))
@@ -447,7 +447,7 @@ function EventDetailPage() {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
     const optimistic = {
       id: tempId,
-      event_id: Number(id),
+      event_id: id,
       sender_user_id: Number(currentUserId),
       sender_name: normalizeDisplayName(localProfile.display_name || 'Me', 'Me'),
       sender_avatar_url: String(localProfile.avatar_url || '').trim(),
@@ -948,7 +948,7 @@ function EventDetailPage() {
             <h2>Organizer</h2>
             <p>{event.organizer.name}</p>
             <p className="muted">Affidabilita {event.organizer.reliability_score}%</p>
-            <Link to={`/profile/${event.organizer.id}`}>Vedi profilo pubblico</Link>
+            <Link to={`/profile/${event.organizer.auth_user_id || event.organizer.id}`}>Vedi profilo pubblico</Link>
           </Card>
 
           <Card subtle>
