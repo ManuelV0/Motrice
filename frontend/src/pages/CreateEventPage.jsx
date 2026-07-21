@@ -13,6 +13,7 @@ import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
+import { geocodeAddress, geocodeEventLocation } from '../services/geocoding';
 import styles from '../styles/pages/createEvent.module.css';
 
 const initialState = {
@@ -55,6 +56,7 @@ function CreateEventPage() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [routeResolving, setRouteResolving] = useState(false);
   const [routeResolveError, setRouteResolveError] = useState('');
+  const [locationResolving, setLocationResolving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const { requesting, requestLocation } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
@@ -79,6 +81,14 @@ function CreateEventPage() {
     return ROUTE_SPORT_SLUGS.has(slug);
   }, [selectedSport]);
 
+  const locationPreview = useMemo(() => {
+    const lat = Number(form.lat);
+    const lng = Number(form.lng);
+    if (!form.lat || !form.lng || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng };
+  }, [form.lat, form.lng]);
+
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -99,25 +109,6 @@ function CreateEventPage() {
 
   function invalidClass(name) {
     return errors[name] ? styles.invalid : '';
-  }
-
-  async function geocodeAddress(query) {
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('Servizio geocoding non disponibile');
-    }
-    const items = await response.json();
-    const first = Array.isArray(items) ? items[0] : null;
-    if (!first) {
-      throw new Error(`Via non trovata: ${query}`);
-    }
-    const lat = Number(first.lat);
-    const lng = Number(first.lon);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      throw new Error(`Coordinate non valide per: ${query}`);
-    }
-    return { lat, lng, label: String(first.display_name || query) };
   }
 
   async function resolveRouteOnline() {
@@ -153,6 +144,8 @@ function CreateEventPage() {
 
       setForm((prev) => ({
         ...prev,
+        lat: prev.lat || String(fromGeo.lat),
+        lng: prev.lng || String(fromGeo.lng),
         route_name: prev.route_name || `Da ${from} a ${to}`,
         route_from_lat: String(fromGeo.lat),
         route_from_lng: String(fromGeo.lng),
@@ -168,6 +161,31 @@ function CreateEventPage() {
       showToast(message, 'error');
     } finally {
       setRouteResolving(false);
+    }
+  }
+
+  async function resolveLocationOnline({ silent = false } = {}) {
+    if (!String(form.location_name || '').trim() || !String(form.city || '').trim()) {
+      const message = 'Inserisci nome location e città prima di cercare';
+      setErrors((prev) => ({ ...prev, coordinates: message }));
+      if (!silent) showToast(message, 'error');
+      return null;
+    }
+
+    setLocationResolving(true);
+    try {
+      const result = await geocodeEventLocation(form);
+      setForm((prev) => ({ ...prev, lat: String(result.lat), lng: String(result.lng) }));
+      setErrors((prev) => ({ ...prev, coordinates: undefined }));
+      if (!silent) showToast('Luogo trovato e collegato alla mappa', 'success');
+      return result;
+    } catch (error) {
+      const message = error.message || 'Impossibile trovare il luogo sulla mappa';
+      setErrors((prev) => ({ ...prev, coordinates: message }));
+      if (!silent) showToast(message, 'error');
+      return null;
+    } finally {
+      setLocationResolving(false);
     }
   }
 
@@ -187,6 +205,12 @@ function CreateEventPage() {
 
     if ((form.lat && !form.lng) || (!form.lat && form.lng)) {
       nextErrors.coordinates = 'Inserisci entrambe le coordinate o nessuna';
+    }
+    if (form.lat && (Number(form.lat) < -90 || Number(form.lat) > 90)) {
+      nextErrors.coordinates = 'Latitudine non valida';
+    }
+    if (form.lng && (Number(form.lng) < -180 || Number(form.lng) > 180)) {
+      nextErrors.coordinates = 'Longitudine non valida';
     }
 
     if (form.has_route) {
@@ -227,13 +251,25 @@ function CreateEventPage() {
       return;
     }
 
+    let resolvedLat = form.lat === '' ? null : Number(form.lat);
+    let resolvedLng = form.lng === '' ? null : Number(form.lng);
+    if (resolvedLat == null || resolvedLng == null) {
+      const resolved = await resolveLocationOnline({ silent: true });
+      if (!resolved) {
+        showToast('Trova il luogo sulla mappa prima di pubblicare', 'error');
+        return;
+      }
+      resolvedLat = resolved.lat;
+      resolvedLng = resolved.lng;
+    }
+
     const created = await api.createEvent({
       ...form,
       sport_id: Number(form.sport_id),
       duration_minutes: Number(form.duration_minutes),
       max_participants: Number(form.max_participants),
-      lat: form.lat === '' ? null : Number(form.lat),
-      lng: form.lng === '' ? null : Number(form.lng),
+      lat: resolvedLat,
+      lng: resolvedLng,
       route_info: form.has_route
         ? {
             name: String(form.route_name || '').trim(),
@@ -541,7 +577,7 @@ function CreateEventPage() {
 
           <div className={styles.inlineGrid}>
             <label className={styles.field}>
-              Latitudine (opzionale)
+              Latitudine
               <input
                 type="number"
                 step="any"
@@ -551,7 +587,7 @@ function CreateEventPage() {
               />
             </label>
             <label className={styles.field}>
-              Longitudine (opzionale)
+              Longitudine
               <input
                 type="number"
                 step="any"
@@ -561,7 +597,18 @@ function CreateEventPage() {
               />
             </label>
           </div>
+          <span className="input-helper">Le coordinate vengono trovate automaticamente da nome location e città.</span>
           <div className={styles.locationActions}>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              icon={Navigation}
+              disabled={locationResolving}
+              onClick={() => resolveLocationOnline()}
+            >
+              {locationResolving ? 'Ricerca luogo...' : 'Trova luogo sulla mappa'}
+            </Button>
             <Button
               type="button"
               size="sm"
@@ -583,6 +630,26 @@ function CreateEventPage() {
             </Button>
           </div>
           {errors.coordinates && <span className={`error ${styles.coordError}`}>{errors.coordinates}</span>}
+          {locationPreview ? (
+            <div className={styles.routeMapWrap}>
+              <MapContainer
+                key={`${locationPreview.lat}:${locationPreview.lng}`}
+                center={[locationPreview.lat, locationPreview.lng]}
+                zoom={15}
+                className={styles.routeMap}
+                dragging={false}
+                scrollWheelZoom={false}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker position={[locationPreview.lat, locationPreview.lng]}>
+                  <Popup>{form.location_name || 'Location evento'}</Popup>
+                </Marker>
+              </MapContainer>
+            </div>
+          ) : null}
         </fieldset>
 
         <fieldset className={styles.fieldset}>

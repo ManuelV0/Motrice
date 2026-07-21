@@ -372,6 +372,29 @@ function createRemoteMethods(localApi) {
       return fetchEvent(data.id);
     },
 
+    async updateEventCoordinates(eventId, coordinates = {}) {
+      const client = requireSupabase();
+      const creatorId = requireAuthUserId();
+      const lat = Number(coordinates.lat);
+      const lng = Number(coordinates.lng);
+      if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+        throw new Error('Latitudine evento non valida');
+      }
+      if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+        throw new Error('Longitudine evento non valida');
+      }
+
+      const { data, error } = await client
+        .from('events')
+        .update({ lat, lng })
+        .eq('id', String(eventId))
+        .eq('creator_id', creatorId)
+        .select('id,lat,lng')
+        .maybeSingle();
+      throwIfError(error);
+      return data ? { ...data, updated: true } : { id: eventId, lat, lng, updated: false };
+    },
+
     async joinEvent(id, payload = {}) {
       const client = requireSupabase();
       await ensureMyProfile(client);

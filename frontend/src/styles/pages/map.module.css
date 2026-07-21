@@ -460,6 +460,10 @@
 .eventPin {
   inline-size: var(--s-4);
   block-size: var(--s-4);
+  min-inline-size: 0;
+  min-block-size: 0;
+  min-width: 0;
+  min-height: 0;
   border-radius: 999px;
   border: 2px solid var(--map-ui-surface);
   box-shadow:

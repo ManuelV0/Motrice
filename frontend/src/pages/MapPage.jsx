@@ -23,7 +23,8 @@ import PaywallModal from '../components/PaywallModal';
 import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
-import { writeFiltersToSearch } from '../utils/queryFilters';
+import { geocodeEventLocation } from '../services/geocoding';
+import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
 import styles from '../styles/pages/map.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -34,7 +35,7 @@ const baseFilters = {
   distance: 'all',
   level: 'all',
   timeOfDay: 'all',
-  sortBy: 'closest'
+  sortBy: 'soonest'
 };
 
 const RADIUS_CYCLE_KM = [0, 10, 20, 30, 40];
@@ -342,15 +343,20 @@ function MapPage() {
   const mapRef = useRef(null);
   const userMarkerRef = useRef(null);
   const eventMarkersRef = useRef([]);
+  const coordinateAttemptsRef = useRef(new Set());
+  const hasAutoFitEventsRef = useRef(false);
   const shouldRecenterRef = useRef(true);
   const gpsTapRef = useRef(0);
   const listLongPressRef = useRef({ timer: null, longTriggered: false });
   const mapStyleThemeRef = useRef(null);
 
-  const [filters, setFilters] = useState(baseFilters);
+  const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [sports, setSports] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [resolvedCoordinates, setResolvedCoordinates] = useState({});
+  const [resolvingCoordinates, setResolvingCoordinates] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [savingIds, setSavingIds] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -389,13 +395,17 @@ function MapPage() {
 
     let active = true;
     setLoading(true);
+    setLoadError('');
     api
       .listEvents({ ...base, ...originParams })
       .then((rows) => {
         if (active) setEvents(rows || []);
       })
-      .catch(() => {
-        if (active) setEvents([]);
+      .catch((error) => {
+        if (active) {
+          setEvents([]);
+          setLoadError(error?.message || 'Impossibile caricare gli eventi da Supabase');
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -421,17 +431,63 @@ function MapPage() {
     }
   }, [mapTheme]);
 
+  useEffect(() => {
+    const missing = events.filter((event) => {
+      if (hasValidCoordinates(event.lat, event.lng)) return false;
+      if (Object.prototype.hasOwnProperty.call(resolvedCoordinates, String(event.id))) return false;
+      return !coordinateAttemptsRef.current.has(String(event.id));
+    });
+    if (!missing.length) return undefined;
+
+    let active = true;
+    const controller = new AbortController();
+    setResolvingCoordinates(true);
+
+    async function resolveMissingCoordinates() {
+      for (const event of missing) {
+        if (!active) return;
+        const eventId = String(event.id);
+        coordinateAttemptsRef.current.add(eventId);
+        try {
+          const coordinates = await geocodeEventLocation(event, { signal: controller.signal });
+          if (!active) return;
+          setResolvedCoordinates((prev) => ({ ...prev, [eventId]: coordinates }));
+
+          if (event.source === 'supabase' && event.created_by === 'me' && typeof api.updateEventCoordinates === 'function') {
+            await api.updateEventCoordinates(event.id, coordinates).catch(() => null);
+          }
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+          if (active) setResolvedCoordinates((prev) => ({ ...prev, [eventId]: null }));
+        }
+      }
+    }
+
+    resolveMissingCoordinates().finally(() => {
+      if (active) setResolvingCoordinates(false);
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [events, resolvedCoordinates]);
+
   const withCoords = useMemo(
     () =>
       events
-        .filter((event) => hasValidCoordinates(event.lat, event.lng))
-        .map((event) => ({
-          ...event,
-          lat: Number(event.lat),
-          lng: Number(event.lng)
-        })),
-    [events]
+        .map((event) => {
+          const fallback = resolvedCoordinates[String(event.id)];
+          const lat = hasValidCoordinates(event.lat, event.lng) ? event.lat : fallback?.lat;
+          const lng = hasValidCoordinates(event.lat, event.lng) ? event.lng : fallback?.lng;
+          if (!hasValidCoordinates(lat, lng)) return null;
+          return { ...event, lat: Number(lat), lng: Number(lng) };
+        })
+        .filter(Boolean),
+    [events, resolvedCoordinates]
   );
+
+  const eventsWithoutCoordinates = Math.max(0, events.length - withCoords.length);
 
   const eventsInRadius = useMemo(() => {
     if (!selectedRadiusKm || !coords) return withCoords;
@@ -447,7 +503,9 @@ function MapPage() {
     const now = Date.now();
     return eventsInRadius.filter((event) => {
       const eventAt = Date.parse(event.event_datetime);
-      return Number.isFinite(eventAt) && eventAt >= now;
+      const durationMinutes = Math.max(15, Number(event.duration_minutes) || 120);
+      const eventEndsAt = eventAt + durationMinutes * 60 * 1000;
+      return Number.isFinite(eventAt) && eventEndsAt >= now;
     }).length;
   }, [eventsInRadius]);
 
@@ -692,7 +750,10 @@ function MapPage() {
       element.className = `${styles.eventPin} ${isSaved ? styles.eventPinSaved : styles.eventPinDefault} ${isSelected ? styles.eventPinSelected : ''}`;
       element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;
       element.setAttribute('aria-label', element.title);
-      element.addEventListener('click', () => open3D(event));
+      element.addEventListener('click', () => {
+        focusEvent(event);
+        setListOpen(true);
+      });
 
       const marker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat([event.lng, event.lat]).addTo(map);
       eventMarkersRef.current.push(marker);
@@ -704,7 +765,22 @@ function MapPage() {
       eventMarkersRef.current.forEach((marker) => marker.remove());
       eventMarkersRef.current = [];
     };
-  }, [eventsInRadius, open3D, selectedEventId, syncViewport]);
+  }, [eventsInRadius, focusEvent, selectedEventId, syncViewport]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !withCoords.length || hasAutoFitEventsRef.current) return;
+    hasAutoFitEventsRef.current = true;
+
+    if (withCoords.length === 1) {
+      map.flyTo({ center: [withCoords[0].lng, withCoords[0].lat], zoom: 12.4, duration: 420, essential: true });
+      return;
+    }
+
+    const bounds = new maplibregl.LngLatBounds();
+    withCoords.forEach((event) => bounds.extend([event.lng, event.lat]));
+    map.fitBounds(bounds, { padding: 72, duration: 420, maxZoom: 13 });
+  }, [withCoords]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -856,8 +932,15 @@ function MapPage() {
                 icon={MapPinOff}
                 imageSrc="/images/default-sport.svg"
                 imageAlt="Mappa vuota"
-                title="Nessun evento trovato"
-                description="Allarga la mappa, modifica i filtri oppure crea un nuovo evento nella tua area."
+                title={loadError ? 'Errore nel caricamento' : resolvingCoordinates ? 'Localizzo gli eventi' : 'Nessun evento trovato'}
+                description={
+                  loadError ||
+                  (resolvingCoordinates
+                    ? 'Sto convertendo le location di Esplora in coordinate per mostrarle sulla mappa.'
+                    : eventsWithoutCoordinates > 0
+                      ? `${eventsWithoutCoordinates} eventi non hanno ancora una posizione riconoscibile.`
+                      : 'Allarga la mappa, modifica i filtri oppure crea un nuovo evento nella tua area.')
+                }
                 primaryActionLabel="Crea evento"
                 onPrimaryAction={() => navigate('/create')}
               />
@@ -897,7 +980,9 @@ function MapPage() {
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Filtri avanzati mappa" />
 
       <div className={styles.a11yStatus}>
-        {hasLocation
+        {resolvingCoordinates
+          ? 'Localizzazione eventi in corso'
+          : hasLocation
           ? 'Posizione attiva'
           : permission === 'denied'
             ? 'Permesso posizione negato'
