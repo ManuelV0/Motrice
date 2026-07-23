@@ -51,15 +51,23 @@
 .checkInBody {
   display: grid;
   gap: var(--s-3);
+  min-width: 0;
 }
 
 .checkInMeta {
   display: grid;
   gap: var(--s-1);
+  min-width: 0;
 }
 
 .checkInMeta p {
   margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.checkInMeta code {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .checkInTokenField {
@@ -89,10 +97,30 @@
 
 .checkInQr {
   width: min(20rem, 100%);
+  height: auto;
+  display: block;
+  justify-self: center;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
   border-radius: var(--r-lg);
   border: 1px solid var(--glass-border);
   background: #fff;
   padding: var(--s-3);
+}
+
+@media (max-width: 42rem) {
+  .checkInHead {
+    align-items: stretch;
+  }
+
+  .checkInHead > * {
+    min-width: 0;
+  }
+
+  .checkInHead button,
+  .checkInActions button {
+    width: 100%;
+  }
 }
 
 .postWorkoutCard {

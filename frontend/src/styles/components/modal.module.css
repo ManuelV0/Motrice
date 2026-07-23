@@ -12,7 +12,7 @@
   align-items: flex-start;
   padding: var(--s-6);
   overflow-y: auto;
-  z-index: var(--z-overlay-high);
+  z-index: var(--z-modal-max);
   animation: fadeIn var(--dur-med) var(--ease-out);
 }
 
@@ -48,13 +48,14 @@
 
 @media (max-width: 640px) {
   .overlay {
+    top: 0;
     padding: var(--s-2);
     align-items: flex-end;
   }
 
   .panel {
     width: 100%;
-    max-height: calc(100dvh - var(--nav-h) - (var(--s-2) * 2));
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - (var(--s-2) * 2));
     border-radius: var(--r-2xl) var(--r-2xl) 0 0;
   }
 
