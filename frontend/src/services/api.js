@@ -2306,6 +2306,10 @@ const localApi = {
         : String(payload.display_name).trim().slice(0, 40);
     const nextBio = payload.bio == null ? current.bio : String(payload.bio).trim().slice(0, 600);
     const nextAvatar = payload.avatar_url == null ? current.avatar_url : String(payload.avatar_url);
+    const nextCity =
+      payload.city == null ? String(store.localUser?.city || '') : String(payload.city).trim().slice(0, 80);
+    const nextLevel =
+      payload.level == null ? String(store.localUser?.level || 'beginner') : String(payload.level);
     const nextSlots =
       payload.chat_slots == null
         ? Array.isArray(current.chat_slots) ? current.chat_slots : []
@@ -2326,12 +2330,12 @@ const localApi = {
         chat_slots: nextSlots
       }
     };
-    if (String(userId) === '1') {
-      store.localUser = {
-        ...store.localUser,
-        name: nextDisplayName || store.localUser?.name || 'Tu'
-      };
-    }
+    store.localUser = {
+      ...store.localUser,
+      name: nextDisplayName || store.localUser?.name || 'Tu',
+      city: nextCity,
+      level: nextLevel
+    };
 
     saveStore(store);
     return withDelay(clone(store.accountProfiles[key]));

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ChatThread from '../components/chat/ChatThread';
+import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useChatStore } from '../hooks/useChatStore';
+import { chatApi } from '../services/chatApi';
 import styles from '../styles/pages/chatThreadPage.module.css';
 
 function useIsMobileLayout() {
@@ -46,6 +48,12 @@ function ChatThreadPage() {
   } = useChatStore(threadId || null);
 
   const [draft, setDraft] = useState('');
+  const [profileCard, setProfileCard] = useState({
+    open: false,
+    loading: false,
+    profile: null,
+    error: ''
+  });
 
   usePageMeta({
     title: 'Conversazione | Motrice',
@@ -71,6 +79,31 @@ function ChatThreadPage() {
     }
   }
 
+  async function handleOpenProfile(identity) {
+    const fallback = {
+      userId: identity?.userId || null,
+      authUserId: identity?.authUserId || '',
+      display_name: identity?.displayName || 'Partecipante',
+      avatar_url: identity?.avatarUrl || '',
+      bio: '',
+      city: '',
+      level: '',
+      reliability: 0
+    };
+    setProfileCard({ open: true, loading: true, profile: fallback, error: '' });
+    try {
+      const profile = await chatApi.getParticipantProfile(identity);
+      setProfileCard({ open: true, loading: false, profile, error: '' });
+    } catch (error) {
+      setProfileCard({
+        open: true,
+        loading: false,
+        profile: fallback,
+        error: error?.message || 'Profilo non disponibile'
+      });
+    }
+  }
+
   if (!threadId) return <LoadingSkeleton rows={3} variant="detail" />;
 
   return (
@@ -87,10 +120,17 @@ function ChatThreadPage() {
         sending={sending}
         currentUserId={currentUserId}
         onBack={() => navigate('/chat')}
-        onOpenProfile={(userId) => navigate(`/chat/focus/${userId}`)}
+        onOpenProfile={handleOpenProfile}
         onOpenEvent={(eventId) => navigate(`/events/${eventId}`)}
         mobile={mobile}
         fullScreenMobile
+      />
+      <ChatUserProfileCard
+        open={profileCard.open}
+        loading={profileCard.loading}
+        profile={profileCard.profile}
+        error={profileCard.error}
+        onClose={() => setProfileCard((current) => ({ ...current, open: false }))}
       />
     </section>
   );

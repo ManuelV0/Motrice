@@ -154,7 +154,14 @@ function ChatThread({
             <button
               type="button"
               className={styles.profileLink}
-              onClick={() => onOpenProfile(Number(thread.otherUserId))}
+              onClick={() =>
+                onOpenProfile({
+                  userId: Number(thread.otherUserId),
+                  authUserId: thread.otherAuthUserId || '',
+                  displayName: thread.title,
+                  avatarUrl: thread.avatarUrl
+                })
+              }
               aria-label={`Apri profilo di ${thread.title}`}
             >
               {thread.title}
@@ -229,7 +236,25 @@ function ChatThread({
               const senderLabel = thread.type === 'event' && !mine
                 ? String(message?.senderName || `Utente ${message.senderId}`)
                 : '';
-              return <MessageBubble key={row.id} message={message} mine={mine} senderLabel={senderLabel} />;
+              return (
+                <MessageBubble
+                  key={row.id}
+                  message={message}
+                  mine={mine}
+                  senderLabel={senderLabel}
+                  onSenderClick={
+                    !mine && senderLabel && typeof onOpenProfile === 'function'
+                      ? () =>
+                          onOpenProfile({
+                            userId: Number(message?.senderId || 0),
+                            authUserId: message?.senderAuthUserId || '',
+                            displayName: message?.senderName || senderLabel,
+                            avatarUrl: message?.senderAvatarUrl || ''
+                          })
+                      : undefined
+                  }
+                />
+              );
             })}
 
             {!timeline.length ? (

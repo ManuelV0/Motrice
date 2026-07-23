@@ -319,6 +319,26 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
+  width: fit-content;
+  max-width: 100%;
+  min-height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+}
+
+.groupChatSenderRow:hover {
+  transform: none;
+  box-shadow: none;
+  filter: brightness(1.08);
+}
+
+.groupChatSenderRow:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .groupChatAvatarWrap {

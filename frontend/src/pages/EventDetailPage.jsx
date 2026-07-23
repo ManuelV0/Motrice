@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X, QrCode, Timer } from 'lucide-react';
 import { api } from '../services/api';
+import { chatApi } from '../services/chatApi';
+import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
 import EventBadge from '../components/EventBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
@@ -74,6 +76,12 @@ function EventDetailPage() {
   const [groupChatCanSend, setGroupChatCanSend] = useState(false);
   const [groupChatDraft, setGroupChatDraft] = useState('');
   const [groupChatSending, setGroupChatSending] = useState(false);
+  const [chatProfileCard, setChatProfileCard] = useState({
+    open: false,
+    loading: false,
+    profile: null,
+    error: ''
+  });
   const [checkedInParticipants, setCheckedInParticipants] = useState([]);
   const [friendRequestBusyById, setFriendRequestBusyById] = useState({});
   const [checkInSession, setCheckInSession] = useState(null);
@@ -89,6 +97,31 @@ function EventDetailPage() {
   const groupChatBodyRef = useRef(null);
   const { hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
+
+  async function openChatParticipantProfile(identity) {
+    const fallback = {
+      userId: identity?.userId || null,
+      authUserId: identity?.authUserId || '',
+      display_name: identity?.displayName || 'Partecipante',
+      avatar_url: identity?.avatarUrl || '',
+      bio: '',
+      city: '',
+      level: '',
+      reliability: 0
+    };
+    setChatProfileCard({ open: true, loading: true, profile: fallback, error: '' });
+    try {
+      const profile = await chatApi.getParticipantProfile(identity);
+      setChatProfileCard({ open: true, loading: false, profile, error: '' });
+    } catch (profileError) {
+      setChatProfileCard({
+        open: true,
+        loading: false,
+        profile: fallback,
+        error: profileError?.message || 'Profilo non disponibile'
+      });
+    }
+  }
 
   usePageMeta({
     title: event ? `${event.sport_name} a ${event.location_name} | Motrice` : 'Dettaglio Evento | Motrice',
@@ -1173,6 +1206,7 @@ function EventDetailPage() {
                     'Partecipante'
                   );
                   const avatarUrl = String(profile.avatar_url || msg.sender_avatar_url || '').trim();
+                  const isMine = senderUserId === Number(currentUserId);
                   const isOrganizerMessage =
                     (Number.isFinite(Number(event?.organizer?.id)) &&
                       Number(event?.organizer?.id) === senderUserId) ||
@@ -1182,12 +1216,28 @@ function EventDetailPage() {
                     <div
                       key={msg.id}
                       className={`${styles.groupChatBubble} ${
-                        senderUserId === Number(currentUserId)
+                        isMine
                           ? styles.groupChatBubbleMine
                           : styles.groupChatBubbleOther
                       }`}
                     >
-                      <div className={styles.groupChatSenderRow}>
+                      <button
+                        type="button"
+                        className={styles.groupChatSenderRow}
+                        onClick={
+                          isMine
+                            ? undefined
+                            : () =>
+                                openChatParticipantProfile({
+                                  userId: senderUserId,
+                                  authUserId: msg.sender_auth_user_id || '',
+                                  displayName,
+                                  avatarUrl
+                                })
+                        }
+                        disabled={isMine}
+                        aria-label={!isMine ? `Apri profilo di ${displayName}` : undefined}
+                      >
                         <span className={styles.groupChatAvatarWrap}>
                           {avatarUrl ? (
                             <img src={avatarUrl} alt={`Avatar ${displayName}`} className={styles.groupChatAvatar} />
@@ -1197,11 +1247,11 @@ function EventDetailPage() {
                           {isOrganizerMessage ? <span className={styles.groupChatCrown}>👑</span> : null}
                         </span>
                         <p className={styles.groupChatSenderName}>{displayName}</p>
-                      </div>
+                      </button>
                       <p>{msg.text}</p>
                       <small>
                         {new Date(msg.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                        {senderUserId === Number(currentUserId)
+                        {isMine
                           ? ` · ${
                             msg.delivery_status === 'seen'
                               ? 'Letto'
@@ -1256,6 +1306,13 @@ function EventDetailPage() {
           </div>
         </div>
       ) : null}
+      <ChatUserProfileCard
+        open={chatProfileCard.open}
+        loading={chatProfileCard.loading}
+        profile={chatProfileCard.profile}
+        error={chatProfileCard.error}
+        onClose={() => setChatProfileCard((current) => ({ ...current, open: false }))}
+      />
     </div>
   );
 }

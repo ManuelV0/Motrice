@@ -225,6 +225,70 @@ function normalizeMessage(raw) {
   };
 }
 
+function normalizeParticipantProfile(profile = {}, fallback = {}) {
+  const userId = Number(profile?.userId || fallback?.userId || 0);
+  const authUserId = String(
+    profile?.authUserId || profile?.id || fallback?.authUserId || ''
+  ).trim();
+  const displayName = String(
+    profile?.display_name ||
+      profile?.name ||
+      fallback?.displayName ||
+      (userId > 0 ? `Utente ${userId}` : 'Partecipante')
+  ).trim();
+
+  return {
+    userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+    authUserId,
+    display_name: displayName || 'Partecipante',
+    avatar_url: String(profile?.avatar_url || fallback?.avatarUrl || '').trim(),
+    bio: String(profile?.bio || '').trim(),
+    city: String(profile?.city || '').trim(),
+    level: String(profile?.level || '').trim(),
+    reliability: Number(profile?.reliability ?? profile?.reliability_score ?? 0)
+  };
+}
+
+async function hydrateLocalMessageProfiles(messages, currentUserId) {
+  const items = Array.isArray(messages) ? messages : [];
+  const senderIds = Array.from(
+    new Set(
+      items
+        .map((message) => Number(message?.senderId || 0))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+  const profiles = new Map();
+
+  await Promise.all(
+    senderIds.map(async (senderId) => {
+      try {
+        const profile =
+          senderId === Number(currentUserId)
+            ? await api.getLocalProfile()
+            : await api.getAccountProfileByUserId(senderId);
+        const configuredName = String(profile?.display_name || profile?.name || '').trim();
+        if (senderId !== Number(currentUserId) && !configuredName && !profile?.avatar_url) {
+          return;
+        }
+        profiles.set(senderId, normalizeParticipantProfile(profile, { userId: senderId }));
+      } catch {
+        // Mantiene il nome storico del messaggio se il profilo non è disponibile.
+      }
+    })
+  );
+
+  return items.map((message) => {
+    const profile = profiles.get(Number(message?.senderId || 0));
+    if (!profile) return message;
+    return {
+      ...message,
+      senderName: profile.display_name || message.senderName,
+      senderAvatarUrl: profile.avatar_url || message.senderAvatarUrl
+    };
+  });
+}
+
 function computeUnreadCount(store, threadId, currentUserId) {
   const id = String(threadId);
   const messages = Array.isArray(store.messagesByThread?.[id]) ? store.messagesByThread[id] : [];
@@ -408,7 +472,7 @@ export const chatApi = {
 
     const filtered = beforeMs ? all.filter((item) => parseIsoMs(item.ts) < beforeMs) : all;
     const sliceStart = Math.max(0, filtered.length - limit);
-    const items = filtered.slice(sliceStart);
+    const items = await hydrateLocalMessageProfiles(filtered.slice(sliceStart), currentUserId);
     const hasMore = sliceStart > 0;
     const nextBefore = hasMore && items.length ? items[0].ts : null;
 
@@ -462,11 +526,22 @@ export const chatApi = {
       }
     }
 
+    let localProfile = null;
+    try {
+      localProfile = await api.getLocalProfile();
+    } catch {
+      localProfile = null;
+    }
+    const senderProfile = normalizeParticipantProfile(localProfile, {
+      userId: currentUserId,
+      displayName: 'Tu'
+    });
     const created = normalizeMessage({
       id: `m_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
       threadId: String(threadId),
       senderId: currentUserId,
-      senderName: 'Tu',
+      senderName: senderProfile.display_name,
+      senderAvatarUrl: senderProfile.avatar_url,
       text: body,
       ts: nowIso(),
       status: 'sent'
@@ -499,6 +574,31 @@ export const chatApi = {
 
     saveStore(store);
     return wait(clone(created));
+  },
+
+  async getCurrentUserProfile() {
+    const profile = await api.getLocalProfile();
+    return normalizeParticipantProfile(profile, { userId: resolveUserId(), displayName: 'Tu' });
+  },
+
+  async getParticipantProfile(identity = {}) {
+    const fallback = {
+      userId: identity?.userId,
+      authUserId: identity?.authUserId,
+      displayName: identity?.displayName,
+      avatarUrl: identity?.avatarUrl
+    };
+    const authUserId = String(identity?.authUserId || '').trim();
+    const userId = Number(identity?.userId || 0);
+
+    try {
+      const profile = authUserId
+        ? await api.getProfile(authUserId)
+        : await api.getFocusProfile(userId);
+      return normalizeParticipantProfile(profile, fallback);
+    } catch {
+      return normalizeParticipantProfile({}, fallback);
+    }
   },
 
   async markThreadRead(threadId, readThrough = null) {

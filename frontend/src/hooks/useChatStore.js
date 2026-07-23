@@ -17,6 +17,7 @@ export function useChatStore(initialThreadId = null) {
   const [query, setQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ? String(initialThreadId) : null);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
 
   const currentUserId = useMemo(() => resolveCurrentUserId(), []);
 
@@ -110,7 +111,8 @@ export function useChatStore(initialThreadId = null) {
         id: tempId,
         threadId: selectedThreadId,
         senderId: currentUserId,
-        senderName: 'Tu',
+        senderName: currentUserProfile?.display_name || 'Tu',
+        senderAvatarUrl: currentUserProfile?.avatar_url || '',
         text: body,
         ts: new Date().toISOString(),
         status: 'sending'
@@ -150,12 +152,27 @@ export function useChatStore(initialThreadId = null) {
         setSending(false);
       }
     },
-    [currentUserId, selectedThreadId]
+    [currentUserId, currentUserProfile, selectedThreadId]
   );
 
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
+
+  useEffect(() => {
+    let active = true;
+    chatApi
+      .getCurrentUserProfile()
+      .then((profile) => {
+        if (active) setCurrentUserProfile(profile);
+      })
+      .catch(() => {
+        if (active) setCurrentUserProfile(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let refreshTimer = null;
@@ -184,6 +201,7 @@ export function useChatStore(initialThreadId = null) {
 
   return {
     currentUserId,
+    currentUserProfile,
     threadsLoading,
     messagesLoading,
     sending,
