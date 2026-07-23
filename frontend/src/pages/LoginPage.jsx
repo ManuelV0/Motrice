@@ -245,7 +245,7 @@ function LoginPage({ startup = false }) {
           ) : null}
 
           <p className={styles.legal}>
-            Accedendo accetti i termini di servizio e la privacy policy di Motrice.
+            Accedendo accetti i termini di servizio e la <a href="/privacy/">privacy policy di Motrice</a>.
           </p>
         </Card>
       </div>

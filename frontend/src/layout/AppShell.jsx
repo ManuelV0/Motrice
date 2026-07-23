@@ -64,6 +64,14 @@ function AppShell({ children }) {
   }, [isAccountLikeRoute]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('chat-surface-lock', isChatRoute);
+    return () => {
+      root.classList.remove('chat-surface-lock');
+    };
+  }, [isChatRoute]);
+
+  useEffect(() => {
     if (!isChatRoute) {
       setChatNoticeDismissed(false);
     }
@@ -80,7 +88,7 @@ function AppShell({ children }) {
   }
 
   return (
-    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isStartupAuthRoute ? 'startup-auth-shell' : ''}`}>
+    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isStartupAuthRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
       {!isStartupAuthRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
@@ -100,7 +108,7 @@ function AppShell({ children }) {
         )}
         {children}
       </main>
-      {!isStartupAuthRoute ? <BottomNav forceVisible={isAccountLikeRoute} /> : null}
+      {!isStartupAuthRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
       {!isLandingRoute ? <Footer /> : null}
       {!isStartupAuthRoute ? <SiteTourOverlay /> : null}
     </div>

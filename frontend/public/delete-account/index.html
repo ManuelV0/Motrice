@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b0d0f" />
+    <meta name="robots" content="index,follow" />
+    <meta
+      name="description"
+      content="Istruzioni per richiedere l'eliminazione dell'account Motrice e dei dati personali associati."
+    />
+    <title>Eliminazione account e dati | Motrice</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #090b0c;
+        --surface: #111416;
+        --surface-2: #171b1e;
+        --text: #f5f7f2;
+        --muted: #aeb6ac;
+        --line: #2a302d;
+        --accent: #a8ff00;
+        --accent-soft: rgba(168, 255, 0, 0.12);
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-width: 280px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.65;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 0%, rgba(168, 255, 0, 0.1), transparent 34rem),
+          var(--bg);
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(9, 11, 12, 0.9);
+        backdrop-filter: blur(14px);
+      }
+
+      .topbar__inner,
+      main,
+      footer {
+        width: min(100% - 32px, 880px);
+        margin-inline: auto;
+      }
+
+      .topbar__inner {
+        display: flex;
+        min-height: 64px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .brand {
+        color: var(--text);
+        font-size: 1.1rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-decoration: none;
+        text-transform: uppercase;
+      }
+
+      .back {
+        font-size: 0.92rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      main {
+        padding-block: 56px 72px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2 {
+        line-height: 1.18;
+      }
+
+      h1 {
+        max-width: 760px;
+        margin: 0;
+        font-size: clamp(2.1rem, 6.5vw, 4rem);
+        letter-spacing: -0.045em;
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: clamp(1.18rem, 4vw, 1.55rem);
+      }
+
+      p,
+      li {
+        color: var(--muted);
+      }
+
+      strong {
+        color: var(--text);
+      }
+
+      .intro {
+        max-width: 720px;
+        margin: 18px 0 0;
+        font-size: 1.04rem;
+      }
+
+      .meta {
+        display: inline-flex;
+        margin-top: 24px;
+        padding: 8px 12px;
+        border: 1px solid rgba(168, 255, 0, 0.24);
+        border-radius: 999px;
+        color: var(--text);
+        background: var(--accent-soft);
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+
+      .content {
+        display: grid;
+        gap: 16px;
+        margin-top: 42px;
+      }
+
+      section {
+        padding: clamp(22px, 5vw, 32px);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: linear-gradient(145deg, rgba(23, 27, 30, 0.98), rgba(15, 18, 20, 0.98));
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.2);
+      }
+
+      section p:first-of-type {
+        margin-top: 0;
+      }
+
+      section p:last-child,
+      section ul:last-child,
+      section ol:last-child {
+        margin-bottom: 0;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      .action {
+        border-color: rgba(168, 255, 0, 0.35);
+      }
+
+      .mail {
+        display: inline-flex;
+        margin-top: 8px;
+        padding: 11px 15px;
+        border-radius: 12px;
+        color: #081000;
+        background: var(--accent);
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      footer {
+        padding: 0 0 34px;
+        color: #7f8980;
+        font-size: 0.82rem;
+      }
+
+      @media (max-width: 520px) {
+        .topbar__inner,
+        main,
+        footer {
+          width: min(100% - 24px, 880px);
+        }
+
+        main {
+          padding-top: 38px;
+        }
+
+        .topbar__inner {
+          min-height: 58px;
+        }
+
+        section {
+          border-radius: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar__inner">
+        <a class="brand" href="/">Motrice</a>
+        <a class="back" href="/privacy/">Privacy</a>
+      </div>
+    </header>
+
+    <main>
+      <p class="eyebrow">Controlla i tuoi dati</p>
+      <h1>Eliminazione account e dati</h1>
+      <p class="intro">
+        Questa pagina spiega come un utente dell'app <strong>Motrice</strong> può richiedere la cancellazione dell'account
+        e dei dati associati, oppure la rimozione di dati specifici senza chiudere l'account.
+      </p>
+      <span class="meta">Ultimo aggiornamento: 22 luglio 2026</span>
+
+      <div class="content">
+        <section class="action">
+          <h2>Come richiedere la cancellazione</h2>
+          <ol>
+            <li>Scrivi dall'indirizzo email collegato al tuo account Motrice.</li>
+            <li>Usa come oggetto <strong>Eliminazione account Motrice</strong>.</li>
+            <li>Indica il nome visualizzato del profilo e conferma se vuoi eliminare l'intero account o solo dati specifici.</li>
+            <li>Invieremo una conferma all'indirizzo dell'account e potremo chiedere una verifica dell'identità.</li>
+          </ol>
+          <a
+            class="mail"
+            href="mailto:manuel.voll69+motrice@gmail.com?subject=Eliminazione%20account%20Motrice"
+          >Invia la richiesta</a>
+        </section>
+
+        <section>
+          <h2>Dati eliminati con l'account</h2>
+          <ul>
+            <li>account di autenticazione e indirizzo email;</li>
+            <li>profilo, biografia, città, livello e immagine avatar;</li>
+            <li>partecipazioni, eventi salvati, notifiche e stato di lettura delle chat;</li>
+            <li>eventi creati e contenuti associati, quando la rimozione non compromette i diritti degli altri partecipanti;</li>
+            <li>messaggi e contenuti personali, eliminati o anonimizzati quando necessario per preservare la continuità delle conversazioni condivise.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Tempi e dati eventualmente conservati</h2>
+          <p>
+            La richiesta viene normalmente completata entro 30 giorni dalla verifica. Copie residue possono restare nei
+            backup protetti fino a 90 giorni prima della cancellazione automatica. Alcuni dati strettamente necessari
+            possono essere conservati più a lungo per obblighi legali, prevenzione di frodi, sicurezza o gestione di
+            contestazioni; in questi casi l'accesso resta limitato e i dati non vengono usati per altre finalità.
+          </p>
+        </section>
+
+        <section>
+          <h2>Eliminare solo dati specifici</h2>
+          <p>
+            Puoi usare la stessa procedura senza chiudere l'account. Nell'email indica con precisione quali dati vuoi
+            rimuovere, ad esempio avatar, biografia, dati del profilo, un evento o contenuti inviati. Ti comunicheremo
+            l'esito e gli eventuali dati che devono essere conservati, con la relativa motivazione.
+          </p>
+        </section>
+
+        <section>
+          <h2>Contatti</h2>
+          <p>
+            Per assistenza: <a href="mailto:manuel.voll69+motrice@gmail.com">manuel.voll69+motrice@gmail.com</a>.<br />
+            Consulta anche la <a href="/privacy/">Privacy Policy di Motrice</a>.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <footer>© 2026 Motrice. Tutti i diritti riservati.</footer>
+  </body>
+</html>

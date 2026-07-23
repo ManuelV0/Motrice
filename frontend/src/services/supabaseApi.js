@@ -15,6 +15,22 @@ function normalizeSearchText(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function withCheckInQr(session) {
+  if (!session || typeof session !== 'object') return session || null;
+  const token = normalizeText(session.token);
+  if (!token) return session;
+  const payload = encodeURIComponent(
+    JSON.stringify({
+      eventId: session.event_id,
+      token
+    })
+  );
+  return {
+    ...session,
+    qr_url: `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${payload}`
+  };
+}
+
 function currentAuthUserId() {
   return normalizeText(getAuthSession()?.authUserId);
 }
@@ -237,7 +253,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const participants = context.participants.filter(
     (participant) =>
       String(participant.event_id) === String(rawEvent.id) &&
-      participant.status === 'going'
+      ['going', 'completed'].includes(String(participant.status || ''))
   );
   const ownParticipation =
     participants.find((participant) => String(participant.user_id) === authUserId) || null;
@@ -416,6 +432,62 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
+    async startEventCheckInSession(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('start_event_checkin', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return withCheckInQr(data);
+    },
+
+    async getEventCheckInSession(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('get_event_checkin_session', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return withCheckInQr(data);
+    },
+
+    async checkInToEvent({ eventId, token }) {
+      const client = requireSupabase();
+      const submittedToken = (() => {
+        const raw = normalizeText(token);
+        if (!raw) return '';
+        try {
+          const decoded = decodeURIComponent(raw);
+          const parsed = JSON.parse(decoded);
+          return normalizeText(parsed?.token);
+        } catch {
+          return raw;
+        }
+      })();
+      const { data, error } = await client.rpc('check_in_to_event', {
+        target_event_id: String(eventId),
+        submitted_token: submittedToken
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async listEventCheckInParticipants(eventId) {
+      const client = requireSupabase();
+      const authUserId = requireAuthUserId();
+      const { data, error } = await client.rpc('list_event_checkin_participants', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return (data || []).map((participant) => ({
+        user_id: legacyProfileId(participant.user_id),
+        auth_user_id: participant.user_id,
+        display_name: participant.display_name || 'Partecipante',
+        avatar_url: participant.avatar_url || '',
+        checked_in_at: participant.checked_in_at,
+        friendship_status: participant.user_id === authUserId ? 'self' : 'none'
+      }));
+    },
+
     async saveEvent(id) {
       const client = requireSupabase();
       const userId = requireAuthUserId();
@@ -451,11 +523,15 @@ function createRemoteMethods(localApi) {
       }
       const client = requireSupabase();
       const userId = requireAuthUserId();
-      const { data, error } = await client.from('profiles').select('*').eq('id', userId).single();
+      const [{ data, error }, participantResult] = await Promise.all([
+        client.from('profiles').select('*').eq('id', userId).single(),
+        client.from('event_participants').select('status').eq('user_id', userId)
+      ]);
       if (error?.code === 'PGRST116') {
         return ensureMyProfile(client);
       }
       throwIfError(error);
+      throwIfError(participantResult.error);
       rememberProfile(data);
       let localStats = {};
       try {
@@ -463,11 +539,18 @@ function createRemoteMethods(localApi) {
       } catch {
         localStats = {};
       }
+      const participantRows = participantResult.data || [];
+      const attended = participantRows.filter((item) => item.status === 'completed').length;
+      const noShow = participantRows.filter((item) => item.status === 'no_show').length;
+      const cancelled = participantRows.filter((item) => item.status === 'cancelled').length;
       return {
         ...localStats,
         ...data,
         name: data.display_name,
         reliability: Number(data.reliability_score ?? localStats.reliability ?? 100),
+        attended,
+        no_show: noShow,
+        cancelled,
         chat_slots: localStats.chat_slots || []
       };
     },
@@ -666,6 +749,16 @@ function createRemoteMethods(localApi) {
         .is('read_at', null);
       throwIfError(error);
       return Number(count || 0);
+    },
+
+    async getXpState(userId) {
+      if (!currentAuthUserId()) {
+        return localApi.getXpState(userId);
+      }
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('get_my_xp_state');
+      throwIfError(error);
+      return data;
     }
   };
 }

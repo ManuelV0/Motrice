@@ -41,7 +41,7 @@ function Footer() {
           <ul className={styles.list}>
             <li><Link to="/faq">FAQ</Link></li>
             <li><a href="#">Contatti</a></li>
-            <li><a href="#">Privacy</a></li>
+            <li><a href="/privacy/">Privacy</a></li>
             <li><a href="#">Termini</a></li>
           </ul>
         </nav>

@@ -4,12 +4,19 @@
   gap: var(--s-3);
   width: min(100%, 46rem);
   margin-inline: auto;
-  padding: var(--s-4) var(--s-4) 0;
-  min-height: calc(100dvh - var(--nav-h));
-  padding-bottom: calc(var(--s-5) + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
+  padding: var(--s-4);
+  min-height: calc(
+    100dvh
+    - var(--nav-h)
+    - var(--main-top-gap, var(--s-4))
+    - var(--bottom-nav-h)
+    - env(safe-area-inset-bottom, 0px)
+    - var(--vv-bottom, 0px)
+    - var(--android-nav-extra, 0px)
+  );
   background:
     radial-gradient(70% 30% at 5% 0%, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%),
-    color-mix(in srgb, var(--surface) 98%, #050805);
+    transparent;
 }
 
 .header {
@@ -229,5 +236,11 @@
   .page {
     width: min(42rem, 100%);
     padding-inline: var(--s-5);
+  }
+}
+
+@media (min-width: 768px) {
+  .page {
+    min-height: calc(100dvh - var(--nav-h) - var(--main-top-gap, var(--s-6)) - var(--section-gap));
   }
 }

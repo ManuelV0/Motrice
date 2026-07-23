@@ -1,11 +1,18 @@
 .page {
   min-height: calc(
-    100dvh - var(--nav-h) - var(--bottom-nav-height, var(--bottom-nav-h, 64px)) - env(safe-area-inset-bottom, 0px)
+    100dvh
+    - var(--nav-h)
+    - var(--main-top-gap, var(--s-4))
+    - var(--bottom-nav-h)
+    - env(safe-area-inset-bottom, 0px)
+    - var(--vv-bottom, 0px)
+    - var(--android-nav-extra, 0px)
   );
+  background: var(--chat-page-surface, #080b08);
 }
 
-@media (max-width: 767px) {
+@media (min-width: 768px) {
   .page {
-    min-height: 100dvh;
+    min-height: calc(100dvh - var(--nav-h) - var(--main-top-gap, var(--s-6)) - var(--section-gap));
   }
 }

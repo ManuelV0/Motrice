@@ -11,7 +11,7 @@ const MAIN_TABS = [
   { id: 'profile', label: 'Profilo', icon: UserRound, to: '/account' }
 ];
 
-function BottomNav({ forceVisible = false }) {
+function BottomNav({ forceVisible = false, chatSurface = false }) {
   const location = useLocation();
 
   const activeTab = useMemo(
@@ -26,7 +26,10 @@ function BottomNav({ forceVisible = false }) {
   );
 
   return (
-    <nav className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''}`} aria-label="Navigazione principale mobile">
+    <nav
+      className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''} ${chatSurface ? styles.chatSurface : ''}`}
+      aria-label="Navigazione principale mobile"
+    >
       {MAIN_TABS.map((item) => {
         const Icon = item.icon;
         const isActive = activeTab === item.id;
