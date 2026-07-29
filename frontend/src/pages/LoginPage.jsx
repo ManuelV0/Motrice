@@ -1,20 +1,77 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Facebook, LockKeyhole, Chrome, LogIn, LogOut, Mail, UserPlus, Zap, ArrowRight } from 'lucide-react';
+import { Facebook, LockKeyhole, LogIn, LogOut, Mail, UserPlus, Zap, ArrowRight } from 'lucide-react';
 import {
   continueWithProvider,
   consumeAuthLogoutReason,
   getAuthSession,
   initializeSupabaseAuth,
+  signInWithGoogle,
   signInWithPassword,
   signOutFromSupabase,
   signUpWithPassword
 } from '../services/authSession';
-import { isSupabaseConfigured } from '../services/supabaseClient';
+import { isSupabaseConfigured, supabaseAuthCallbackError } from '../services/supabaseClient';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import styles from '../styles/pages/login.module.css';
+
+function friendlyAuthError(message) {
+  const details = String(message || '').replace(/\+/g, ' ').trim();
+  if (details.toLowerCase().includes('provider is not enabled')) {
+    return 'Accesso Google non ancora attivo nelle impostazioni Supabase.';
+  }
+  return details || 'Accesso non riuscito';
+}
+
+function consumeOAuthCallbackError() {
+  if (typeof window === 'undefined') return '';
+
+  const url = new URL(window.location.href);
+  const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const details =
+    url.searchParams.get('error_description') ||
+    hash.get('error_description') ||
+    url.searchParams.get('error') ||
+    hash.get('error');
+
+  const callbackError = details || supabaseAuthCallbackError;
+  if (!callbackError) return '';
+
+  if (details) {
+    ['error', 'error_code', 'error_description'].forEach((key) => {
+      url.searchParams.delete(key);
+      hash.delete(key);
+    });
+    url.hash = hash.toString() ? `#${hash.toString()}` : '';
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+  return friendlyAuthError(callbackError);
+}
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="#4285f4"
+        d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.89h5.38a4.6 4.6 0 0 1-2 3.02v2.52h3.24c1.9-1.75 2.98-4.33 2.98-7.37Z"
+      />
+      <path
+        fill="#34a853"
+        d="M12 22c2.7 0 4.98-.9 6.63-2.4l-3.24-2.52c-.9.6-2.05.96-3.39.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.6A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#fbbc05"
+        d="M6.39 13.91A6 6 0 0 1 6.08 12c0-.66.11-1.31.31-1.91v-2.6H3.04A10 10 0 0 0 2 12c0 1.61.39 3.14 1.04 4.51l3.35-2.6Z"
+      />
+      <path
+        fill="#ea4335"
+        d="M12 5.96c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.63 9.63 0 0 0 12 2a10 10 0 0 0-8.96 5.49l3.35 2.6C7.18 7.72 9.39 5.96 12 5.96Z"
+      />
+    </svg>
+  );
+}
 
 function LoginPage({ startup = false }) {
   const navigate = useNavigate();
@@ -25,7 +82,8 @@ function LoginPage({ startup = false }) {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [busyAction, setBusyAction] = useState('');
+  const [error, setError] = useState(consumeOAuthCallbackError);
   const [message, setMessage] = useState('');
 
   usePageMeta({
@@ -35,9 +93,14 @@ function LoginPage({ startup = false }) {
 
   useEffect(() => {
     const refresh = () => setSession(getAuthSession());
+    const showAuthError = (event) => setError(event.detail || 'Accesso non riuscito');
     window.addEventListener('motrice-auth-changed', refresh);
+    window.addEventListener('motrice-auth-error', showAuthError);
     initializeSupabaseAuth().then(setSession).catch((err) => setError(err.message || 'Supabase non raggiungibile'));
-    return () => window.removeEventListener('motrice-auth-changed', refresh);
+    return () => {
+      window.removeEventListener('motrice-auth-changed', refresh);
+      window.removeEventListener('motrice-auth-error', showAuthError);
+    };
   }, []);
 
   function onContinue(provider) {
@@ -48,6 +111,7 @@ function LoginPage({ startup = false }) {
 
   async function onLogout() {
     setBusy(true);
+    setBusyAction('logout');
     setError('');
     try {
       await signOutFromSupabase();
@@ -56,12 +120,14 @@ function LoginPage({ startup = false }) {
       setError(err.message || 'Logout non riuscito');
     } finally {
       setBusy(false);
+      setBusyAction('');
     }
   }
 
   async function onSubmit(event) {
     event.preventDefault();
     setBusy(true);
+    setBusyAction('password');
     setError('');
     setMessage('');
 
@@ -83,6 +149,27 @@ function LoginPage({ startup = false }) {
       setError(err.message || 'Accesso non riuscito');
     } finally {
       setBusy(false);
+      setBusyAction('');
+    }
+  }
+
+  async function onGoogleSignIn() {
+    setBusy(true);
+    setBusyAction('google');
+    setError('');
+    setMessage('');
+
+    try {
+      const next = await signInWithGoogle();
+      if (next?.isAuthenticated) {
+        setSession(next);
+        if (!startup) navigate('/explore');
+      }
+    } catch (err) {
+      setError(friendlyAuthError(err?.message || 'Accesso con Google non riuscito'));
+    } finally {
+      setBusy(false);
+      setBusyAction('');
     }
   }
 
@@ -134,6 +221,22 @@ function LoginPage({ startup = false }) {
 
           {isSupabaseConfigured && !session.isAuthenticated ? (
             <>
+              <button
+                type="button"
+                className={styles.googleButton}
+                onClick={onGoogleSignIn}
+                disabled={busy}
+              >
+                <GoogleMark />
+                <span>{busyAction === 'google' ? 'Apertura Google...' : 'Continua con Google'}</span>
+              </button>
+
+              <div className={styles.divider} aria-hidden="true">
+                <span />
+                <small>oppure</small>
+                <span />
+              </div>
+
               <div className={styles.modeSwitch} role="group" aria-label="Tipo accesso">
                 <button
                   type="button"
@@ -194,7 +297,7 @@ function LoginPage({ startup = false }) {
                   disabled={busy}
                   icon={mode === 'register' ? UserPlus : LogIn}
                 >
-                  {busy ? 'Attendi...' : mode === 'register' ? 'Crea account' : 'Accedi'}
+                  {busyAction === 'password' ? 'Attendi...' : mode === 'register' ? 'Crea account' : 'Accedi'}
                 </Button>
               </form>
             </>
@@ -203,9 +306,10 @@ function LoginPage({ startup = false }) {
           {!isSupabaseConfigured ? (
             <>
               <div className={styles.actions}>
-                <Button type="button" className={styles.oauthButton} onClick={() => onContinue('google')} icon={Chrome}>
-                  Demo con Google
-                </Button>
+                <button type="button" className={styles.googleButton} onClick={() => onContinue('google')}>
+                  <GoogleMark />
+                  <span>Demo con Google</span>
+                </button>
                 <Button
                   type="button"
                   variant="secondary"

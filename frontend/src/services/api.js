@@ -1087,6 +1087,12 @@ function enrichEvent(event, store, origin) {
 
   return {
     ...event,
+    deposit_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+    minimum_presence_minutes: Number(event.minimum_presence_minutes ?? 45),
+    verification_mode: String(event.verification_mode || 'both'),
+    geofence_radius_m: Number(event.geofence_radius_m ?? 250),
+    completion_xp: Number(event.completion_xp ?? 50),
+    review_bonus_xp: Number(event.review_bonus_xp ?? 25),
     distance_km,
     analytics,
     is_going: Boolean(rsvp && rsvp.status === 'going'),
@@ -1328,6 +1334,12 @@ const localApi = {
       participants_preview: [creatorDisplayName],
       etiquette: ['Puntualita', 'Comunicazione', 'Rispetto del gruppo'],
       route_info: normalizedRouteInfo,
+      deposit_cents: Number(payload.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+      minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
+      verification_mode: String(payload.verification_mode || 'both'),
+      geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
+      completion_xp: Number(payload.completion_xp ?? 50),
+      review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
       created_by: 'me',
       creator_plan: subscription.effective_plan || subscription.plan,
       featured_boost: subscription.effective_plan === 'premium'
@@ -1379,7 +1391,7 @@ const localApi = {
         piggybank.freezeStake({
           eventId: event.id,
           eventTitle: payload?.event_title || event.title || `${event.sport_name} @ ${event.location_name}`,
-          amountCents: EVENT_JOIN_STAKE_CENTS
+          amountCents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS)
         });
       } catch (error) {
         const message = String(error?.message || '');
@@ -1418,7 +1430,7 @@ const localApi = {
             organizerName,
             organizerBio,
             participationFeeStatus: 'frozen',
-            participationFeeCents: EVENT_JOIN_STAKE_CENTS
+            participationFeeCents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS)
           }),
           created_at: nowIso()
         };
@@ -1440,8 +1452,9 @@ const localApi = {
       name: participantName,
       skill_level: payload.skill_level,
       note: payload.note || '',
-      participation_fee_cents: EVENT_JOIN_STAKE_CENTS,
+      participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
       participation_fee_status: 'frozen',
+      cashback_percent: 0,
       attendance: null,
       updated_at: nowIso()
     };
@@ -1921,6 +1934,266 @@ const localApi = {
       .sort((a, b) => Date.parse(b.checked_in_at || '') - Date.parse(a.checked_in_at || ''));
 
     return withDelay(clone(participants));
+  },
+
+  async getEventParticipationProgress(eventId) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const rsvp = store.rsvps[eventKey];
+    if (!isOrganizer && (!rsvp || !['going', 'completed'].includes(String(rsvp.status || '')))) {
+      throw new Error('Partecipazione non trovata');
+    }
+
+    const flows = store.participationFlowsByEvent || {};
+    const current = flows[eventKey] || {};
+    const token = current.qr_token || buildCheckInToken(`${event.id}_${currentUserId}`);
+    const checkedInAt = current.checked_in_at || null;
+    const elapsedMinutes = checkedInAt
+      ? Math.max(0, Math.floor((nowMs() - Date.parse(checkedInAt)) / 60000))
+      : 0;
+    const cashbackPercent = Number(current.cashback_percent ?? rsvp?.cashback_percent ?? 0);
+    const next = {
+      ...current,
+      qr_token: token,
+      cashback_percent: cashbackPercent,
+      checked_in_at: checkedInAt,
+      participant_status: rsvp?.status || (isOrganizer ? 'going' : null),
+      updated_at: nowIso()
+    };
+    store.participationFlowsByEvent = { ...flows, [eventKey]: next };
+    saveStore(store);
+
+    return withDelay(clone({
+      event_id: event.id,
+      can_manage: isOrganizer,
+      is_participant: Boolean(rsvp) || isOrganizer,
+      participant_status: next.participant_status,
+      stake_cents: isOrganizer ? 0 : Number(rsvp?.participation_fee_cents ?? event.deposit_cents ?? 500),
+      stake_status: isOrganizer ? 'waived' : (next.cashback_percent >= 100 ? 'released' : next.cashback_percent >= 60 ? 'verified' : 'locked'),
+      cashback_percent: next.cashback_percent,
+      checked_in_at: next.checked_in_at,
+      minimum_reached_at: next.minimum_reached_at || null,
+      completed_at: next.completed_at || null,
+      minimum_presence_minutes: Number(event.minimum_presence_minutes ?? 45),
+      elapsed_minutes: elapsedMinutes,
+      participant_sample_count: Number(next.sample_count || 0),
+      organizer_present: Boolean(next.organizer_present || isOrganizer),
+      verification_mode: event.verification_mode || 'both',
+      geofence_radius_m: Number(event.geofence_radius_m ?? 250),
+      completion_xp: Number(event.completion_xp ?? 50),
+      review_bonus_xp: Number(event.review_bonus_xp ?? 25),
+      review_submitted: Boolean(next.review_submitted),
+      qr_token: token,
+      qr_payload: { version: 1, eventId: event.id, token },
+      wallet: piggybank.getWallet()
+    }));
+  },
+
+  async scanEventParticipantQr({ eventId, token, lat = null, lng = null }) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, currentUserId)) {
+      throw new Error('Solo l organizzatore puo scansionare i partecipanti');
+    }
+    const rawToken = extractCheckInToken(token);
+    if (!rawToken) throw new Error('QR personale non valido');
+
+    const eventKey = String(event.id);
+    const current = store.participationFlowsByEvent?.[eventKey] || {};
+    const distanceM =
+      Number.isFinite(Number(lat)) &&
+      Number.isFinite(Number(lng)) &&
+      Number.isFinite(Number(event.lat)) &&
+      Number.isFinite(Number(event.lng))
+        ? haversineKm(Number(lat), Number(lng), Number(event.lat), Number(event.lng)) * 1000
+        : 0;
+    if (
+      (event.verification_mode || 'both') !== 'qr' &&
+      distanceM > Number(event.geofence_radius_m ?? 250)
+    ) {
+      throw new Error('Sei fuori dall area dell evento');
+    }
+
+    store.participationFlowsByEvent = {
+      ...(store.participationFlowsByEvent || {}),
+      [eventKey]: {
+        ...current,
+        qr_token: rawToken,
+        checked_in_at: current.checked_in_at || nowIso(),
+        cashback_percent: Math.max(60, Number(current.cashback_percent || 0)),
+        organizer_present: true,
+        organizer_presence_at: nowIso(),
+        updated_at: nowIso()
+      }
+    };
+    saveStore(store);
+    return withDelay({
+      ok: true,
+      participant_id: currentUserId,
+      cashback_percent: 60,
+      checked_in_at: store.participationFlowsByEvent[eventKey].checked_in_at,
+      distance_m: Number(distanceM.toFixed(1))
+    });
+  },
+
+  async recordEventPresence({ eventId, lat, lng }) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const current = store.participationFlowsByEvent?.[eventKey] || {};
+    const distanceM =
+      Number.isFinite(Number(event.lat)) && Number.isFinite(Number(event.lng))
+        ? haversineKm(Number(lat), Number(lng), Number(event.lat), Number(event.lng)) * 1000
+        : 0;
+    const insideRadius =
+      (event.verification_mode || 'both') === 'qr' ||
+      distanceM <= Number(event.geofence_radius_m ?? 250);
+
+    if (isOrganizer) {
+      store.participationFlowsByEvent = {
+        ...(store.participationFlowsByEvent || {}),
+        [eventKey]: {
+          ...current,
+          organizer_present: insideRadius,
+          organizer_presence_at: nowIso(),
+          updated_at: nowIso()
+        }
+      };
+      saveStore(store);
+      return withDelay({
+        ok: true,
+        role: 'organizer',
+        inside_radius: insideRadius,
+        distance_m: Number(distanceM.toFixed(1))
+      });
+    }
+
+    if (!current.checked_in_at) {
+      throw new Error('Completa prima il check-in QR');
+    }
+
+    const elapsedMinutes = Math.max(0, Math.floor((nowMs() - Date.parse(current.checked_in_at)) / 60000));
+    const sampleCount = Number(current.sample_count || 0) + (insideRadius ? 1 : 0);
+    const minimumMinutes = Number(event.minimum_presence_minutes ?? 45);
+    const completed = insideRadius && elapsedMinutes >= minimumMinutes && sampleCount >= 2;
+    const next = {
+      ...current,
+      sample_count: sampleCount,
+      cashback_percent: completed ? 100 : Math.max(60, Number(current.cashback_percent || 0)),
+      minimum_reached_at: completed ? (current.minimum_reached_at || nowIso()) : null,
+      completed_at: completed ? (current.completed_at || nowIso()) : null,
+      updated_at: nowIso()
+    };
+    if (completed && store.rsvps[eventKey]) {
+      store.rsvps[eventKey] = {
+        ...store.rsvps[eventKey],
+        status: 'completed',
+        attendance: 'attended',
+        cashback_percent: 100,
+        participation_fee_status: 'released',
+        updated_at: nowIso()
+      };
+      piggybank.releaseStake({
+        eventId: event.id,
+        note: 'Partecipazione completata: deposito restituito'
+      });
+    }
+    store.participationFlowsByEvent = {
+      ...(store.participationFlowsByEvent || {}),
+      [eventKey]: next
+    };
+    saveStore(store);
+    return withDelay({
+      ok: true,
+      role: 'participant',
+      inside_radius: insideRadius,
+      distance_m: Number(distanceM.toFixed(1)),
+      elapsed_minutes: elapsedMinutes,
+      minimum_presence_minutes: minimumMinutes,
+      sample_count: sampleCount,
+      organizer_present: Boolean(current.organizer_present),
+      completed_now: completed,
+      cashback_percent: next.cashback_percent
+    });
+  },
+
+  async listEventValidationStatus(eventId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const current = store.participationFlowsByEvent?.[eventKey] || {};
+    const profile = store.accountProfiles?.[String(resolveAuthUserId())] || DEFAULT_ACCOUNT_PROFILE;
+    return withDelay([{
+      user_id: resolveAuthUserId(),
+      display_name: normalizeDisplayName(profile.display_name, 'Partecipante'),
+      avatar_url: profile.avatar_url || '',
+      participant_status: store.rsvps[eventKey]?.status || 'going',
+      stake_cents: Number(store.rsvps[eventKey]?.participation_fee_cents ?? event.deposit_cents ?? 500),
+      stake_status: current.cashback_percent >= 100 ? 'released' : current.cashback_percent >= 60 ? 'verified' : 'locked',
+      cashback_percent: Number(current.cashback_percent || 0),
+      checked_in_at: current.checked_in_at || null,
+      completed_at: current.completed_at || null,
+      reviewed: Boolean(current.review_submitted)
+    }]);
+  },
+
+  async submitEventReview({
+    eventId,
+    partnerRating,
+    organizerPunctuality,
+    descriptionAccuracy,
+    wouldJoinAgain,
+    note = ''
+  }) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const current = store.participationFlowsByEvent?.[eventKey] || {};
+    if (Number(current.cashback_percent || 0) < 100) {
+      throw new Error('Completa la partecipazione prima di valutare');
+    }
+    if (current.review_submitted) {
+      return withDelay({ success: true, already_submitted: true, bonus_xp: 0 });
+    }
+    const bonus = Number(event.review_bonus_xp ?? 25);
+    awardXp({
+      userId: resolveAuthUserId(),
+      type: 'event_review_completed',
+      pointsGlobal: bonus,
+      pointsSport: 0,
+      sportId: event.sport_id || 'generic',
+      refId: `event_${event.id}_review`,
+      meta: {
+        partnerRating,
+        organizerPunctuality,
+        descriptionAccuracy,
+        wouldJoinAgain,
+        note
+      }
+    }, store);
+    store.participationFlowsByEvent = {
+      ...(store.participationFlowsByEvent || {}),
+      [eventKey]: { ...current, review_submitted: true, updated_at: nowIso() }
+    };
+    saveStore(store);
+    return withDelay({ success: true, already_submitted: false, bonus_xp: bonus });
+  },
+
+  async finalizeEventOutcomes(eventId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Solo l organizzatore puo chiudere l evento');
+    }
+    event.status = 'completed';
+    saveStore(store);
+    return withDelay({ success: true, validated_count: 0, no_show_count: 0, event_status: 'completed' });
   },
 
   async requestFriendship(targetUserId) {

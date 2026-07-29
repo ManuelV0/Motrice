@@ -253,6 +253,51 @@
   justify-content: flex-start;
 }
 
+.googleButton {
+  width: 100%;
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  padding: 0 var(--s-4);
+  border: 1px solid rgb(255 255 255 / 0.72);
+  border-radius: var(--r-lg);
+  background: #fff;
+  color: #202124;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.22);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.googleButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.googleButton:hover:not(:disabled) {
+  background: #f8f9fa;
+  box-shadow: 0 3px 9px rgb(0 0 0 / 0.28);
+  transform: translateY(-1px);
+}
+
+.googleButton:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.googleButton:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
 .divider {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

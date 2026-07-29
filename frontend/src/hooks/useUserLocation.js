@@ -75,7 +75,7 @@ function useUserLocation() {
       Geolocation.checkPermissions()
         .then((status) => {
           if (!active) return;
-          const nativePermission = status.coarseLocation || status.location || 'prompt';
+          const nativePermission = status.location || status.coarseLocation || 'prompt';
           setPermission(nativePermission);
           if (nativePermission !== 'granted') {
             setCoords(null);
@@ -129,13 +129,13 @@ function useUserLocation() {
 
       if (isNative) {
         const currentPermission = await Geolocation.checkPermissions();
-        const currentState = currentPermission.coarseLocation || currentPermission.location;
+        const currentState = currentPermission.location || currentPermission.coarseLocation;
 
-        if (currentState !== 'granted') {
+        if (currentPermission.location !== 'granted') {
           const requestedPermission = await Geolocation.requestPermissions({
-            permissions: ['coarseLocation']
+            permissions: ['location', 'coarseLocation']
           });
-          const requestedState = requestedPermission.coarseLocation || requestedPermission.location;
+          const requestedState = requestedPermission.location || requestedPermission.coarseLocation;
           if (requestedState !== 'granted') {
             const deniedError = new Error('Permesso posizione negato');
             deniedError.code = 'OS-PLUG-GLOC-0003';
@@ -144,17 +144,17 @@ function useUserLocation() {
         }
 
         position = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: false,
+          enableHighAccuracy: true,
           timeout: 15000,
-          maximumAge: 1000 * 60 * 5,
+          maximumAge: 1000 * 60,
           enableLocationFallback: true
         });
       } else {
         position = await new Promise((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: false,
+            enableHighAccuracy: true,
             timeout: 15000,
-            maximumAge: 1000 * 60 * 5
+            maximumAge: 1000 * 60
           });
         });
       }

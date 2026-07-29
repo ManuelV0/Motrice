@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
-import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X, QrCode, Timer } from 'lucide-react';
+import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X } from 'lucide-react';
 import { api } from '../services/api';
 import { chatApi } from '../services/chatApi';
 import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
@@ -24,6 +24,7 @@ import { getAuthSession } from '../services/authSession';
 import { markStepByAction } from '../services/tutorialMode';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
+import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import styles from '../styles/pages/eventDetail.module.css';
 
 function EventDetailPage() {
@@ -84,18 +85,22 @@ function EventDetailPage() {
   });
   const [checkedInParticipants, setCheckedInParticipants] = useState([]);
   const [friendRequestBusyById, setFriendRequestBusyById] = useState({});
-  const [checkInSession, setCheckInSession] = useState(null);
-  const [checkInBusy, setCheckInBusy] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
-  const [checkInTokenInput, setCheckInTokenInput] = useState('');
-  const [checkInSubmitting, setCheckInSubmitting] = useState(false);
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
   const [groupChatAiLoading, setGroupChatAiLoading] = useState(false);
   const groupChatBodyRef = useRef(null);
-  const { hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
+  const {
+    coords,
+    hasLocation,
+    permission,
+    error: locationError,
+    requesting,
+    requestLocation,
+    originParams
+  } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
   async function openChatParticipantProfile(identity) {
@@ -198,13 +203,6 @@ function EventDetailPage() {
   async function reload() {
     const fresh = await api.getEvent(id, originParams);
     setEvent(fresh);
-  }
-
-  function formatCountdown(ms) {
-    const safe = Math.max(0, Number(ms || 0));
-    const minutes = Math.floor(safe / 60000);
-    const seconds = Math.floor((safe % 60000) / 1000);
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
   function isNearBottom(node) {
@@ -388,58 +386,6 @@ function EventDetailPage() {
     }
   }
 
-  async function refreshCheckInSession() {
-    try {
-      const session = await api.getEventCheckInSession(id);
-      setCheckInSession(session);
-    } catch (err) {
-      showToast(err.message || 'Impossibile caricare sessione check-in', 'error');
-    }
-  }
-
-  async function startCheckInSession() {
-    setCheckInBusy(true);
-    try {
-      const session = await api.startEventCheckInSession(id);
-      setCheckInSession(session);
-      showToast('Check-in avviato: mostra il QR ai partecipanti.', 'success');
-    } catch (err) {
-      showToast(err.message || 'Impossibile avviare check-in', 'error');
-    } finally {
-      setCheckInBusy(false);
-    }
-  }
-
-  async function submitParticipantCheckIn() {
-    const token = String(checkInTokenInput || '').trim();
-    if (!token) {
-      showToast('Inserisci o incolla il token check-in', 'error');
-      return;
-    }
-
-    setCheckInSubmitting(true);
-    try {
-      const result = await api.checkInToEvent({ eventId: id, token });
-      await reload();
-      await refreshCheckInSession();
-      if (result?.alreadyChecked) {
-        showToast('Check-in gia registrato per questo evento.', 'info');
-      } else {
-        const participantXp = Number(result?.xpAwarded?.participant || 0);
-        const organizerXp = Number(result?.xpAwarded?.organizer || 0);
-        showToast(
-          `Presenza confermata, deposito sbloccato, +${participantXp} XP${organizerXp > 0 ? ` · organizer +${organizerXp} XP` : ''}.`,
-          'success'
-        );
-      }
-      setCheckInTokenInput('');
-    } catch (err) {
-      showToast(err.message || 'Check-in non riuscito', 'error');
-    } finally {
-      setCheckInSubmitting(false);
-    }
-  }
-
   async function copyDetails() {
     const details = `${event.sport_name} | ${event.location_name} | ${new Date(event.event_datetime).toLocaleString('it-IT')}\n${event.description}`;
     try {
@@ -579,27 +525,20 @@ function EventDetailPage() {
       normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
     )
   );
-  const sessionStartsMs = Date.parse(checkInSession?.starts_at || '');
-  const sessionExpiresMs = Date.parse(checkInSession?.expires_at || '');
-  const sessionIsScheduled = Number.isFinite(sessionStartsMs) && checkInNowMs < sessionStartsMs;
-  const sessionIsActive =
-    Number.isFinite(sessionStartsMs) &&
-    Number.isFinite(sessionExpiresMs) &&
-    checkInNowMs >= sessionStartsMs &&
-    checkInNowMs <= sessionExpiresMs;
-  const sessionIsExpired = Number.isFinite(sessionExpiresMs) && checkInNowMs > sessionExpiresMs;
   const eventStartsMs = Date.parse(event?.event_datetime || '');
   const eventDurationMinutes = Number.isFinite(Number(event?.duration_minutes))
     ? Math.max(30, Number(event.duration_minutes))
     : Number.isFinite(Number(event?.duration_hours))
       ? Math.max(1, Number(event.duration_hours)) * 60
       : 120;
-  const eventEndedWithoutSession = !checkInSession && Number.isFinite(eventStartsMs)
+  const eventHasEnded = Number.isFinite(eventStartsMs)
     ? checkInNowMs > (eventStartsMs + eventDurationMinutes * 60 * 1000)
     : false;
-  const canInviteFriendsFromGroupChat = Boolean(sessionIsExpired || eventEndedWithoutSession);
-  const sessionStartsInLabel = sessionIsScheduled ? formatCountdown(sessionStartsMs - checkInNowMs) : '00:00';
-  const sessionExpiresInLabel = sessionIsActive ? formatCountdown(sessionExpiresMs - checkInNowMs) : '00:00';
+  const canInviteFriendsFromGroupChat = Boolean(
+    eventHasEnded ||
+    Number(event?.user_rsvp?.cashback_percent || 0) >= 100 ||
+    String(event?.user_rsvp?.attendance || '') === 'attended'
+  );
   const requestedParticipants = useMemo(
     () => checkedInParticipants.filter((item) => String(item.friendship_status || '') === 'requested'),
     [checkedInParticipants]
@@ -657,18 +596,10 @@ function EventDetailPage() {
   }, [groupChatOpen, groupChatMessages.length]);
 
   useEffect(() => {
-    if (!checkInSession) return undefined;
-    const intervalId = window.setInterval(() => setCheckInNowMs(Date.now()), 1000);
+    if (!event) return undefined;
+    const intervalId = window.setInterval(() => setCheckInNowMs(Date.now()), 60 * 1000);
     return () => window.clearInterval(intervalId);
-  }, [checkInSession]);
-
-  useEffect(() => {
-    if (!event || (!isOrganizerForEvent && !event?.is_going)) {
-      setCheckInSession(null);
-      return;
-    }
-    refreshCheckInSession();
-  }, [event?.id, isOrganizerForEvent, event?.is_going]);
+  }, [event]);
 
   useEffect(() => {
     if (!cancelConfirmOpen) return undefined;
@@ -750,6 +681,20 @@ function EventDetailPage() {
           </p>
           <p>
             <strong>Dove:</strong> {event.location_name}
+          </p>
+          <p>
+            <strong>Deposito:</strong>{' '}
+            {(Number(event.deposit_cents || 0) / 100).toLocaleString('it-IT', {
+              style: 'currency',
+              currency: 'EUR'
+            })}
+            {' · '}
+            <strong>Cashback:</strong> 60% al check-in, 100% al completamento
+          </p>
+          <p>
+            <strong>Obiettivo:</strong> {Number(event.minimum_presence_minutes || 45)} min di presenza
+            {' · '}
+            <strong>Ricompensa:</strong> +{Number(event.completion_xp || 50)} PX
           </p>
           {event.route_info ? (
             <Card subtle>
@@ -843,85 +788,15 @@ function EventDetailPage() {
             </Card>
           )}
 
-          {isOrganizerForEvent ? (
-            <Card subtle className={styles.checkInCard}>
-              <div className={styles.checkInHead}>
-                <h2>Check-in QR evento</h2>
-                <Button type="button" variant="secondary" icon={QrCode} onClick={startCheckInSession} disabled={checkInBusy}>
-                  {checkInBusy ? 'Avvio...' : 'Avvia check-in'}
-                </Button>
-              </div>
-              <p className="muted">
-                Finestra valida da 15 min prima dell inizio evento fino a fine sessione + 15 min (fallback 90 min).
-              </p>
-
-              {!checkInSession ? (
-                <p className="muted">Nessuna sessione attiva. Avvia il check-in quando il gruppo e pronto.</p>
-              ) : (
-                <div className={styles.checkInBody}>
-                  <div className={styles.checkInMeta}>
-                    <p><strong>Inizio validita:</strong> {new Date(checkInSession.starts_at).toLocaleString('it-IT')}</p>
-                    <p><strong>Scadenza:</strong> {new Date(checkInSession.expires_at).toLocaleString('it-IT')}</p>
-                    {sessionIsScheduled ? <p><strong>Stato:</strong> programmato · apre tra {sessionStartsInLabel}</p> : null}
-                    {sessionIsActive ? (
-                      <p className={styles.checkInCountdown}><Timer size={14} aria-hidden="true" /> Attivo · scade tra {sessionExpiresInLabel}</p>
-                    ) : null}
-                    {sessionIsExpired ? <p><strong>Stato:</strong> scaduto</p> : null}
-                    {checkInSession.token ? <p><strong>Token:</strong> <code>{checkInSession.token}</code></p> : null}
-                  </div>
-                  <img
-                    className={styles.checkInQr}
-                    src={checkInSession.qr_url}
-                    alt={`QR check-in evento ${event.sport_name}`}
-                    loading="lazy"
-                  />
-                </div>
-              )}
-            </Card>
-          ) : null}
-
-          {event.is_going && !isOrganizerForEvent ? (
-            <Card subtle className={styles.checkInCard}>
-              <div className={styles.checkInHead}>
-                <h2>Check-in partecipante</h2>
-              </div>
-              <p className="muted">
-                Scansiona o incolla il token QR mostrato dall organizzatore per confermare presenza e sbloccare deposito.
-              </p>
-
-              <div className={styles.checkInBody}>
-                <div className={styles.checkInMeta}>
-                  {checkInSession ? (
-                    <>
-                      <p><strong>Inizio validita:</strong> {new Date(checkInSession.starts_at).toLocaleString('it-IT')}</p>
-                      <p><strong>Scadenza:</strong> {new Date(checkInSession.expires_at).toLocaleString('it-IT')}</p>
-                      {sessionIsScheduled ? <p><strong>Stato:</strong> programmato · apre tra {sessionStartsInLabel}</p> : null}
-                      {sessionIsActive ? (
-                        <p className={styles.checkInCountdown}><Timer size={14} aria-hidden="true" /> Attivo · scade tra {sessionExpiresInLabel}</p>
-                      ) : null}
-                      {sessionIsExpired ? <p><strong>Stato:</strong> scaduto</p> : null}
-                    </>
-                  ) : (
-                    <p className="muted">Nessuna sessione attiva al momento. Attendi l organizzatore.</p>
-                  )}
-                </div>
-                <label className={styles.checkInTokenField}>
-                  Token check-in
-                  <input
-                    value={checkInTokenInput}
-                    onChange={(eventInput) => setCheckInTokenInput(eventInput.target.value)}
-                    placeholder="Incolla token o payload QR"
-                    aria-label="Token check-in evento"
-                  />
-                </label>
-                <div className={styles.checkInActions}>
-                  <Button type="button" onClick={submitParticipantCheckIn} disabled={checkInSubmitting || !checkInSession}>
-                    {checkInSubmitting ? 'Verifica...' : 'Conferma check-in'}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ) : null}
+          <EventParticipationFlow
+            event={event}
+            isOrganizer={isOrganizerForEvent}
+            coords={coords}
+            requestingLocation={requesting}
+            requestLocation={requestLocation}
+            showToast={showToast}
+            onEventRefresh={reload}
+          />
 
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (
             <Card subtle className={styles.postWorkoutCard}>
@@ -1022,7 +897,7 @@ function EventDetailPage() {
         title="Partecipa alla sessione"
         onClose={() => setModalOpen(false)}
         onConfirm={confirmRsvp}
-        confirmText="Conferma RSVP"
+        confirmText="Blocca deposito e partecipa"
       >
         <label>
           Nome
@@ -1051,25 +926,19 @@ function EventDetailPage() {
             onChange={(event) => setRsvpForm((prev) => ({ ...prev, note: event.target.value }))}
           />
         </label>
-        <label>
-          Quota partecipazione gruppo
-          {entitlements.canUseCoachChat ? (
-            <p className="muted">Esente quota con abbonamento Premium attivo.</p>
-          ) : (
-            <select
-              value={rsvpForm.participation_fee_cents}
-              onChange={(event) =>
-                setRsvpForm((prev) => ({
-                  ...prev,
-                  participation_fee_cents: Number(event.target.value)
-                }))
-              }
-            >
-              <option value={500}>5 EUR</option>
-              <option value={1000}>10 EUR</option>
-            </select>
-          )}
-        </label>
+        <Card subtle>
+          <p>
+            <strong>Deposito deciso dall’organizzatore:</strong>{' '}
+            {(Number(event?.deposit_cents || 0) / 100).toLocaleString('it-IT', {
+              style: 'currency',
+              currency: 'EUR'
+            })}
+          </p>
+          <p className="muted">
+            Viene bloccato nel wallet, non addebitato. Il cashback passa al 60% con il QR e al 100%
+            dopo {Number(event?.minimum_presence_minutes || 45)} minuti verificati.
+          </p>
+        </Card>
       </Modal>
 
       <Modal

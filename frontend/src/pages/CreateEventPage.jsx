@@ -23,6 +23,12 @@ const initialState = {
   level: 'beginner',
   event_datetime: '',
   duration_minutes: 120,
+  deposit_cents: 500,
+  minimum_presence_minutes: 45,
+  verification_mode: 'both',
+  geofence_radius_m: 250,
+  completion_xp: 50,
+  review_bonus_xp: 25,
   max_participants: 8,
   location_name: '',
   lat: '',
@@ -200,6 +206,34 @@ function CreateEventPage() {
     if (Number(form.duration_minutes) < 15 || Number(form.duration_minutes) > 360) {
       nextErrors.duration_minutes = 'Durata tra 15 e 360 minuti';
     }
+    if (
+      Number(form.minimum_presence_minutes) < 15 ||
+      Number(form.minimum_presence_minutes) > Number(form.duration_minutes)
+    ) {
+      nextErrors.minimum_presence_minutes = 'Il tempo minimo deve essere compreso nella durata evento';
+    }
+    if (
+      Number(form.deposit_cents) < 0 ||
+      Number(form.deposit_cents) > 5000 ||
+      Number(form.deposit_cents) % 100 !== 0
+    ) {
+      nextErrors.deposit_cents = 'Deposito tra 0 e 50 EUR, in euro interi';
+    }
+    if (!['qr', 'geo', 'both'].includes(form.verification_mode)) {
+      nextErrors.verification_mode = 'Scegli una modalita di verifica';
+    }
+    if (
+      form.verification_mode !== 'qr' &&
+      (Number(form.geofence_radius_m) < 50 || Number(form.geofence_radius_m) > 1000)
+    ) {
+      nextErrors.geofence_radius_m = 'Raggio consentito tra 50 e 1000 metri';
+    }
+    if (Number(form.completion_xp) < 0 || Number(form.completion_xp) > 200) {
+      nextErrors.completion_xp = 'PX evento tra 0 e 200';
+    }
+    if (Number(form.review_bonus_xp) < 0 || Number(form.review_bonus_xp) > 100) {
+      nextErrors.review_bonus_xp = 'Bonus recensione tra 0 e 100 PX';
+    }
     if (Number(form.max_participants) < 2) nextErrors.max_participants = 'Minimo 2 partecipanti';
     if (!form.description || form.description.length < 12) nextErrors.description = 'Descrizione troppo breve';
 
@@ -267,6 +301,12 @@ function CreateEventPage() {
       ...form,
       sport_id: Number(form.sport_id),
       duration_minutes: Number(form.duration_minutes),
+      deposit_cents: Number(form.deposit_cents),
+      minimum_presence_minutes: Number(form.minimum_presence_minutes),
+      verification_mode: form.verification_mode,
+      geofence_radius_m: Number(form.geofence_radius_m),
+      completion_xp: Number(form.completion_xp),
+      review_bonus_xp: Number(form.review_bonus_xp),
       max_participants: Number(form.max_participants),
       lat: resolvedLat,
       lng: resolvedLng,
@@ -554,6 +594,103 @@ function CreateEventPage() {
             />
             {errors.max_participants && <span className="error">{errors.max_participants}</span>}
           </label>
+        </fieldset>
+
+        <fieldset className={styles.fieldset}>
+          <legend>Deposito, presenza e PX</legend>
+
+          <div className={styles.inlineGrid}>
+            <label className={styles.field}>
+              Deposito richiesto (EUR)
+              <input
+                type="number"
+                min="0"
+                max="50"
+                step="1"
+                className={invalidClass('deposit_cents')}
+                value={Number(form.deposit_cents || 0) / 100}
+                onChange={(e) => setField('deposit_cents', Math.round(Number(e.target.value || 0) * 100))}
+              />
+              <span className="input-helper">Viene bloccato all’iscrizione e restituito al completamento.</span>
+              {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
+            </label>
+
+            <label className={styles.field}>
+              Tempo minimo di presenza (minuti)
+              <input
+                type="number"
+                min="15"
+                max={form.duration_minutes || 360}
+                step="5"
+                className={invalidClass('minimum_presence_minutes')}
+                value={form.minimum_presence_minutes}
+                onChange={(e) => setField('minimum_presence_minutes', e.target.value)}
+              />
+              <span className="input-helper">Al raggiungimento il cashback passa dal 60% al 100%.</span>
+              {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
+            </label>
+          </div>
+
+          <label className={styles.field}>
+            Metodo di verifica
+            <select
+              className={invalidClass('verification_mode')}
+              value={form.verification_mode}
+              onChange={(e) => setField('verification_mode', e.target.value)}
+            >
+              <option value="both">QR + geolocalizzazione (consigliato)</option>
+              <option value="qr">Solo QR personale</option>
+              <option value="geo">Solo geolocalizzazione</option>
+            </select>
+            {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
+          </label>
+
+          {form.verification_mode !== 'qr' ? (
+            <label className={styles.field}>
+              Raggio area evento (metri)
+              <input
+                type="number"
+                min="50"
+                max="1000"
+                step="25"
+                className={invalidClass('geofence_radius_m')}
+                value={form.geofence_radius_m}
+                onChange={(e) => setField('geofence_radius_m', e.target.value)}
+              />
+              <span className="input-helper">Partecipante e organizzatore devono rimanere dentro quest’area.</span>
+              {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
+            </label>
+          ) : null}
+
+          <div className={styles.inlineGrid}>
+            <label className={styles.field}>
+              PX completamento
+              <input
+                type="number"
+                min="0"
+                max="200"
+                step="5"
+                className={invalidClass('completion_xp')}
+                value={form.completion_xp}
+                onChange={(e) => setField('completion_xp', e.target.value)}
+              />
+              {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
+            </label>
+
+            <label className={styles.field}>
+              Bonus questionario (PX)
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="5"
+                className={invalidClass('review_bonus_xp')}
+                value={form.review_bonus_xp}
+                onChange={(e) => setField('review_bonus_xp', e.target.value)}
+              />
+              {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
+            </label>
+          </div>
         </fieldset>
 
         <fieldset className={styles.fieldset}>

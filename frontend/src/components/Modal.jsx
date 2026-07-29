@@ -3,7 +3,17 @@ import Card from './Card';
 import Button from './Button';
 import styles from '../styles/components/modal.module.css';
 
-function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Conferma', confirmDisabled = false }) {
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  onConfirm,
+  confirmText = 'Conferma',
+  confirmDisabled = false,
+  closeText = 'Annulla',
+  showConfirm = true
+}) {
   const modalRef = useRef(null);
   const onCloseRef = useRef(onClose);
 
@@ -64,11 +74,13 @@ function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Confe
         <div className={styles.body}>{children}</div>
         <div className={styles.actions}>
           <Button type="button" variant="secondary" onClick={onClose}>
-            Annulla
+            {closeText}
           </Button>
-          <Button type="button" onClick={onConfirm} disabled={confirmDisabled}>
-            {confirmText}
-          </Button>
+          {showConfirm ? (
+            <Button type="button" onClick={onConfirm} disabled={confirmDisabled}>
+              {confirmText}
+            </Button>
+          ) : null}
         </div>
       </Card>
     </div>

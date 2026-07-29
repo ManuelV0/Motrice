@@ -216,7 +216,7 @@ async function loadEventContext(client, rawEvents) {
     client
       .from('event_participants')
       .select(
-        'event_id,user_id,status,skill_level,note,joined_at,profile:profiles!event_participants_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
+        'event_id,user_id,status,skill_level,note,joined_at,stake_cents,stake_status,cashback_percent,checked_in_at,minimum_reached_at,completed_at,review_bonus_awarded,profile:profiles!event_participants_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
       )
       .in('event_id', eventIds),
     client
@@ -297,6 +297,12 @@ function normalizeEvent(rawEvent, context, filters = {}) {
       .slice(0, 8),
     etiquette: ['Puntualita', 'Comunicazione', 'Rispetto del gruppo'],
     route_info: rawEvent.route_info,
+    deposit_cents: Number(rawEvent.deposit_cents ?? 500),
+    minimum_presence_minutes: Number(rawEvent.minimum_presence_minutes ?? 45),
+    verification_mode: rawEvent.verification_mode || 'both',
+    geofence_radius_m: Number(rawEvent.geofence_radius_m ?? 250),
+    completion_xp: Number(rawEvent.completion_xp ?? 50),
+    review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
     created_by: rawEvent.creator_id === authUserId ? 'me' : rawEvent.creator_id,
     creator_plan: 'free',
     featured_boost: false,
@@ -306,7 +312,9 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     user_rsvp: ownParticipation
       ? {
           ...ownParticipation,
-          participation_fee_cents: 500,
+          participation_fee_cents: Number(ownParticipation.stake_cents ?? rawEvent.deposit_cents ?? 500),
+          participation_fee_status: ownParticipation.stake_status || 'locked',
+          cashback_percent: Number(ownParticipation.cashback_percent || 0),
           attendance: ownParticipation.status === 'completed' ? 'attended' : null
         }
       : null,
@@ -380,7 +388,13 @@ function createRemoteMethods(localApi) {
           duration_minutes: Number(payload.duration_minutes || 120),
           max_participants: Number(payload.max_participants),
           required_level: payload.level || 'beginner',
-          route_info: payload.route_info || null
+          route_info: payload.route_info || null,
+          deposit_cents: Number(payload.deposit_cents ?? 500),
+          minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
+          verification_mode: payload.verification_mode || 'both',
+          geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
+          completion_xp: Number(payload.completion_xp ?? 50),
+          review_bonus_xp: Number(payload.review_bonus_xp ?? 25)
         })
         .select('id')
         .single();
@@ -486,6 +500,117 @@ function createRemoteMethods(localApi) {
         checked_in_at: participant.checked_in_at,
         friendship_status: participant.user_id === authUserId ? 'self' : 'none'
       }));
+    },
+
+    async getEventParticipationProgress(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('get_event_participation_progress', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async scanEventParticipantQr({
+      eventId,
+      token,
+      lat = null,
+      lng = null,
+      accuracyM = null
+    }) {
+      const client = requireSupabase();
+      const submittedToken = (() => {
+        const raw = normalizeText(token);
+        if (!raw) return '';
+        try {
+          const parsed = JSON.parse(raw);
+          return normalizeText(parsed?.token);
+        } catch {
+          try {
+            const decoded = decodeURIComponent(raw);
+            const parsed = JSON.parse(decoded);
+            return normalizeText(parsed?.token);
+          } catch {
+            try {
+              const url = new URL(raw);
+              return normalizeText(url.searchParams.get('token'));
+            } catch {
+              return raw;
+            }
+          }
+        }
+      })();
+      const { data, error } = await client.rpc('scan_event_participant_qr', {
+        target_event_id: String(eventId),
+        submitted_token: submittedToken,
+        organizer_lat: Number.isFinite(Number(lat)) ? Number(lat) : null,
+        organizer_lng: Number.isFinite(Number(lng)) ? Number(lng) : null,
+        organizer_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async recordEventPresence({
+      eventId,
+      lat,
+      lng,
+      accuracyM = null,
+      speedMps = null
+    }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('record_event_presence', {
+        target_event_id: String(eventId),
+        sample_lat: Number.isFinite(Number(lat)) && lat !== null ? Number(lat) : null,
+        sample_lng: Number.isFinite(Number(lng)) && lng !== null ? Number(lng) : null,
+        sample_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null,
+        sample_speed_mps: Number.isFinite(Number(speedMps)) ? Number(speedMps) : null
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async listEventValidationStatus(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('list_event_validation_status', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return (data || []).map((participant) => ({
+        ...participant,
+        user_id: legacyProfileId(participant.user_id),
+        auth_user_id: participant.user_id
+      }));
+    },
+
+    async submitEventReview({
+      eventId,
+      partnerRating,
+      organizerPunctuality,
+      descriptionAccuracy,
+      wouldJoinAgain,
+      note = ''
+    }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('submit_event_review', {
+        target_event_id: String(eventId),
+        partner_stars: Number(partnerRating),
+        organizer_stars: Number(organizerPunctuality),
+        description_stars: Number(descriptionAccuracy),
+        join_again: Boolean(wouldJoinAgain),
+        review_note: normalizeText(note)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async finalizeEventOutcomes(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('finalize_event_outcomes', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return data;
     },
 
     async saveEvent(id) {
