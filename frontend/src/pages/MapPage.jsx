@@ -2,17 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import {
+  ArrowRight,
   Bookmark,
   BookmarkCheck,
   ChevronDown,
-  ChevronUp,
   LocateFixed,
-  List,
+  MapPin,
   MapPinOff,
+  Minus,
   Moon,
   Plus,
   Search,
-  Sun
+  Sun,
+  Users
 } from 'lucide-react';
 import { api } from '../services/api';
 import EmptyState from '../components/EmptyState';
@@ -20,7 +22,6 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
-import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
@@ -112,6 +113,26 @@ function distanceKm(aLat, aLng, bLat, bLng) {
   return 2 * earthKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+function formatEventDay(dateValue) {
+  const date = new Date(dateValue);
+  if (!Number.isFinite(date.getTime())) return 'PROSSIMO';
+
+  const today = new Date();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const startEvent = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayDelta = Math.round((startEvent.getTime() - startToday.getTime()) / 86400000);
+
+  if (dayDelta === 0) return 'OGGI';
+  if (dayDelta === 1) return 'DOMANI';
+  return date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }).toUpperCase();
+}
+
+function formatEventTime(dateValue) {
+  const date = new Date(dateValue);
+  if (!Number.isFinite(date.getTime())) return '';
+  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
 function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
   const data = buildRadiusPolygon(lat, lng, radiusKm);
   const fillColor = mapTheme === 'light' ? 'rgba(139,207,0,0.18)' : 'rgba(168,240,0,0.18)';
@@ -172,10 +193,11 @@ function MapSearchBar({ value, onChange }) {
 function MapFilterChips({
   selectedChip,
   selectedRadiusKm,
-  activeEventsCount,
   customApplied,
+  onAllClick,
+  onTodayClick,
+  onWeekClick,
   onRadiusCycle,
-  onEventsClick,
   onCustomClick
 }) {
   return (
@@ -183,63 +205,89 @@ function MapFilterChips({
       <button
         type="button"
         role="tab"
-        aria-selected={selectedChip === '0-350+'}
-        className={selectedChip === '0-350+' ? styles.chipActive : styles.chip}
+        aria-selected={selectedChip === 'all'}
+        className={selectedChip === 'all' ? styles.chipActive : styles.chip}
+        onClick={onAllClick}
+      >
+        <span>Tutti</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selectedChip === 'today'}
+        className={selectedChip === 'today' ? styles.chipActive : styles.chip}
+        onClick={onTodayClick}
+      >
+        <span>Oggi</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selectedChip === 'week'}
+        className={selectedChip === 'week' ? styles.chipActive : styles.chip}
+        onClick={onWeekClick}
+      >
+        <span>Settimana</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        aria-selected={selectedChip === 'radius'}
+        className={selectedChip === 'radius' ? styles.chipActive : styles.chip}
         onClick={onRadiusCycle}
       >
-        <span>{`KM ${selectedRadiusKm || 0}`}</span>
+        <span>{selectedRadiusKm ? `${selectedRadiusKm} km` : 'Distanza'}</span>
       </button>
       <button
         type="button"
         role="tab"
-        aria-selected={selectedChip === 'Eventi'}
-        className={selectedChip === 'Eventi' ? styles.chipActive : styles.chip}
-        onClick={onEventsClick}
-      >
-        <span>{`Eventi ${activeEventsCount}`}</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'Personalizzata'}
-        className={selectedChip === 'Personalizzata' ? styles.chipActive : styles.chip}
+        aria-selected={selectedChip === 'custom'}
+        className={selectedChip === 'custom' ? styles.chipActive : styles.chip}
         onClick={onCustomClick}
       >
-        <span>Personalizzata</span>
+        <span>Filtri</span>
         {customApplied && <span className={styles.chipDot} aria-hidden="true" />}
       </button>
     </div>
   );
 }
 
-function MapFloatingControls({ listOpen, onToggleList, onCreate, onGps, onToggleTheme, mapTheme }) {
+function MapFloatingControls({ onZoomIn, onZoomOut, onGps, onToggleTheme, mapTheme }) {
   return (
-    <div className={styles.fabStack}>
+    <div className={styles.fabStack} aria-label="Controlli mappa">
       <button
         type="button"
-        className={`${styles.fab} ${styles.fabNeutral} ${listOpen ? styles.fabPrimary : ''}`}
-        onClick={onToggleList.onClick}
-        onPointerDown={onToggleList.onPointerDown}
-        onPointerUp={onToggleList.onPointerUp}
-        onPointerCancel={onToggleList.onPointerUp}
-        aria-pressed={listOpen}
-      >
-        <List size={18} aria-hidden="true" />
-        <span>Lista</span>
-      </button>
-      <button
-        type="button"
-        className={`${styles.fab} ${styles.fabAccent} ${onCreate.suggested ? styles.fabSuggested : ''}`}
-        onClick={onCreate.onClick}
+        className={`${styles.fab} ${styles.fabNeutral}`}
+        onClick={onZoomIn}
+        aria-label="Aumenta zoom"
       >
         <Plus size={18} aria-hidden="true" />
-        <span>Crea</span>
+        <span>Zoom avanti</span>
       </button>
-      <button type="button" className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`} onClick={onGps.onClick}>
+      <button
+        type="button"
+        className={`${styles.fab} ${styles.fabNeutral}`}
+        onClick={onZoomOut}
+        aria-label="Riduci zoom"
+      >
+        <Minus size={18} aria-hidden="true" />
+        <span>Zoom indietro</span>
+      </button>
+      <button
+        type="button"
+        className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
+        onClick={onGps.onClick}
+        aria-label="Centra sulla mia posizione"
+      >
         <LocateFixed size={18} aria-hidden="true" />
-        <span>GPS</span>
+        <span>La mia posizione</span>
       </button>
-      <button type="button" className={`${styles.fab} ${styles.fabNeutral}`} onClick={onToggleTheme}>
+      <button
+        type="button"
+        className={`${styles.fab} ${styles.fabNeutral}`}
+        onClick={onToggleTheme}
+        aria-label={mapTheme === 'dark' ? 'Usa mappa chiara' : 'Usa mappa scura'}
+      >
         {mapTheme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
         <span>{mapTheme === 'dark' ? 'Chiaro' : 'Scuro'}</span>
       </button>
@@ -347,8 +395,8 @@ function MapPage() {
   const hasAutoFitEventsRef = useRef(false);
   const shouldRecenterRef = useRef(true);
   const gpsTapRef = useRef(0);
-  const listLongPressRef = useRef({ timer: null, longTriggered: false });
   const mapStyleThemeRef = useRef(null);
+  const eventsSectionRef = useRef(null);
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [sports, setSports] = useState([]);
@@ -360,8 +408,11 @@ function MapPage() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [savingIds, setSavingIds] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [listOpen, setListOpen] = useState(false);
-  const [selectedChip, setSelectedChip] = useState(null);
+  const [selectedChip, setSelectedChip] = useState(() => {
+    if (filters.dateRange === 'today') return 'today';
+    if (filters.dateRange === 'week') return 'week';
+    return 'all';
+  });
   const [selectedRadiusKm, setSelectedRadiusKm] = useState(null);
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
@@ -509,11 +560,6 @@ function MapPage() {
     }).length;
   }, [eventsInRadius]);
 
-  const exploreSearch = useMemo(
-    () => writeFiltersToSearch(new URLSearchParams(), filters, baseFilters).toString(),
-    [filters]
-  );
-
   const hasCustomFiltersApplied = useMemo(() => {
     return (
       String(filters.q || '').trim().length > 0 ||
@@ -522,7 +568,7 @@ function MapPage() {
       String(filters.distance) !== 'all' ||
       String(filters.level) !== 'all' ||
       String(filters.timeOfDay) !== 'all' ||
-      String(filters.sortBy) !== 'closest'
+      String(filters.sortBy) !== 'soonest'
     );
   }, [filters]);
 
@@ -564,16 +610,16 @@ function MapPage() {
       if (next > 0) shouldRecenterRef.current = true;
       return next;
     });
-    setSelectedChip('0-350+');
+    setSelectedChip('radius');
   }
 
-  function handleEventsChip() {
-    setSelectedChip('Eventi');
-    setListOpen(true);
+  function handleQuickDate(dateRange) {
+    setFilters((prev) => ({ ...prev, dateRange }));
+    setSelectedChip(dateRange);
   }
 
   function handleCustomChip() {
-    setSelectedChip('Personalizzata');
+    setSelectedChip('custom');
     setDraftFilters(filters);
     setFiltersDrawerOpen(true);
   }
@@ -603,6 +649,13 @@ function MapPage() {
     map.flyTo({ center: [coords.lng, coords.lat], zoom: Math.max(11.4, map.getZoom()), duration: 280, essential: true });
   }
 
+  function zoomMap(direction) {
+    const map = mapRef.current;
+    if (!map) return;
+    const nextZoom = direction === 'in' ? map.getZoom() + 1 : map.getZoom() - 1;
+    map.easeTo({ zoom: nextZoom, duration: 220 });
+  }
+
   const hasRestrictiveFilters = useMemo(() => {
     return (
       String(filters.q || '').trim().length > 0 ||
@@ -615,36 +668,6 @@ function MapPage() {
   }, [filters]);
 
   const createSuggested = useMemo(() => eventsInRadius.length === 0 && hasRestrictiveFilters, [eventsInRadius.length, hasRestrictiveFilters]);
-
-  function handleListPointerDown() {
-    listLongPressRef.current.longTriggered = false;
-    listLongPressRef.current.timer = window.setTimeout(() => {
-      listLongPressRef.current.longTriggered = true;
-      setDraftFilters(filters);
-      setFiltersDrawerOpen(true);
-    }, 420);
-  }
-
-  function handleListPointerUp() {
-    const activeTimer = listLongPressRef.current.timer;
-    if (activeTimer) {
-      clearTimeout(activeTimer);
-      listLongPressRef.current.timer = null;
-    }
-  }
-
-  useEffect(() => {
-    return () => {
-      if (listLongPressRef.current.timer) {
-        clearTimeout(listLongPressRef.current.timer);
-      }
-    };
-  }, []);
-
-  function handleListTap() {
-    if (listLongPressRef.current.longTriggered) return;
-    setListOpen((prev) => !prev);
-  }
 
   const syncViewport = useCallback(() => {
     const map = mapRef.current;
@@ -752,10 +775,10 @@ function MapPage() {
       element.setAttribute('aria-label', element.title);
       element.addEventListener('click', () => {
         focusEvent(event);
-        setListOpen(true);
+        eventsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
 
-      const marker = new maplibregl.Marker({ element, anchor: 'center' }).setLngLat([event.lng, event.lat]).addTo(map);
+      const marker = new maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat([event.lng, event.lat]).addTo(map);
       eventMarkersRef.current.push(marker);
     });
 
@@ -856,126 +879,175 @@ function MapPage() {
 
   function applyCustomFilters() {
     setFilters(draftFilters);
+    setSelectedChip('custom');
     setFiltersDrawerOpen(false);
   }
 
   return (
     <section className={`${styles.page} ${mapTheme === 'light' ? styles.themeLight : styles.themeDark}`}>
-      <div className={styles.mapViewport}>
-        <div ref={mapNodeRef} className={styles.mapCanvas} />
-        <div className={styles.topReadabilityLayer} aria-hidden="true" />
+      <div className={styles.pageInner}>
+        <header className={styles.pageHeader}>
+          <div className={styles.pageHeading}>
+            <span className={styles.eyebrow}>MAPPA LIVE</span>
+            <h1>Allenati vicino a te</h1>
+            <p>Scopri gli eventi attivi nella tua zona e scegli dove muoverti.</p>
+          </div>
+          <button
+            type="button"
+            className={`${styles.locationPill} ${hasLocation ? styles.locationPillActive : ''}`}
+            onClick={() => {
+              if (hasLocation) onGpsAction();
+              else requestLocation();
+            }}
+          >
+            <MapPin size={16} aria-hidden="true" />
+            <span>{hasLocation ? 'Vicino a te' : requesting ? 'Attivazione…' : 'Attiva GPS'}</span>
+          </button>
+        </header>
 
         <div className={styles.topControls}>
-          <ExploreMapToggle
-            activeView="map"
-            exploreTo={exploreSearch ? `/explore?${exploreSearch}` : '/explore'}
-            mapTo="/map"
-          />
           <MapSearchBar value={filters.q || ''} onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))} />
           <MapFilterChips
             selectedChip={selectedChip}
             selectedRadiusKm={selectedRadiusKm}
-            activeEventsCount={activeEventsCount}
             customApplied={hasCustomFiltersApplied}
+            onAllClick={() => handleQuickDate('all')}
+            onTodayClick={() => handleQuickDate('today')}
+            onWeekClick={() => handleQuickDate('week')}
             onRadiusCycle={handleRadiusCycle}
-            onEventsClick={handleEventsChip}
             onCustomClick={handleCustomChip}
           />
         </div>
 
-        <MapFloatingControls
-          listOpen={listOpen}
-          onToggleList={{
-            onClick: handleListTap,
-            onPointerDown: handleListPointerDown,
-            onPointerUp: handleListPointerUp
-          }}
-          onCreate={{ onClick: () => navigate('/create'), suggested: createSuggested }}
-          onGps={{ onClick: onGpsAction, active: followUser }}
-          onToggleTheme={() => setMapTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-          mapTheme={mapTheme}
-        />
-
-        <MapFiltersDrawer
-          open={filtersDrawerOpen}
-          filters={draftFilters}
-          setFilters={setDraftFilters}
-          sports={sports}
-          entitlements={entitlements}
-          onClose={() => setFiltersDrawerOpen(false)}
-          onApply={applyCustomFilters}
-          onPaywall={() => setPaywallOpen(true)}
-        />
-
-        <div className={`${styles.bottomSheet} ${listOpen ? styles.bottomSheetOpen : styles.bottomSheetClosed}`}>
-          <div className={styles.sheetHandle} aria-hidden="true" />
-          <div className={styles.sheetHeaderRow}>
-            <h2>Eventi visibili ({visibleEvents.length})</h2>
-            <button
-              type="button"
-              className={styles.sheetToggle}
-              onClick={() => {
-                setDraftFilters(filters);
-                setFiltersDrawerOpen((prev) => !prev);
-              }}
-            >
-              <span>Filtri</span>
-              {filtersDrawerOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
+        <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi">
+          <div className={styles.mapStageHeader}>
+            <div>
+              <span className={styles.mapStageKicker}>{hasLocation ? 'LA TUA ZONA' : 'ITALIA'}</span>
+              <strong>{activeEventsCount} {activeEventsCount === 1 ? 'evento attivo' : 'eventi attivi'}</strong>
+            </div>
+            {resolvingCoordinates ? <span className={styles.mapSync}>Aggiorno posizioni…</span> : null}
           </div>
 
-          <div className={styles.sheetBody}>
-            {loading ? (
-              <LoadingSkeleton rows={4} />
-            ) : visibleEvents.length === 0 ? (
+          <div className={styles.mapViewport}>
+            <div ref={mapNodeRef} className={styles.mapCanvas} />
+            <div className={styles.mapShade} aria-hidden="true" />
+            <MapFloatingControls
+              onZoomIn={() => zoomMap('in')}
+              onZoomOut={() => zoomMap('out')}
+              onGps={{ onClick: onGpsAction, active: followUser }}
+              onToggleTheme={() => setMapTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              mapTheme={mapTheme}
+            />
+          </div>
+        </section>
+
+        <section ref={eventsSectionRef} className={styles.eventsSection} aria-labelledby="map-events-title">
+          <div className={styles.eventsHeader}>
+            <div>
+              <span className={styles.eyebrow}>VICINO A TE</span>
+              <h2 id="map-events-title">Eventi sulla mappa</h2>
+            </div>
+            <span className={styles.eventsCount}>{visibleEvents.length}</span>
+          </div>
+
+          {loading ? (
+            <div className={styles.loadingWrap}>
+              <LoadingSkeleton rows={3} />
+            </div>
+          ) : visibleEvents.length === 0 ? (
+            <div className={styles.emptyWrap}>
               <EmptyState
                 icon={MapPinOff}
                 imageSrc="/images/default-sport.svg"
                 imageAlt="Mappa vuota"
-                title={loadError ? 'Errore nel caricamento' : resolvingCoordinates ? 'Localizzo gli eventi' : 'Nessun evento trovato'}
+                title={loadError ? 'Errore nel caricamento' : resolvingCoordinates ? 'Localizzo gli eventi' : 'Nessun evento vicino'}
                 description={
                   loadError ||
                   (resolvingCoordinates
-                    ? 'Sto convertendo le location di Esplora in coordinate per mostrarle sulla mappa.'
+                    ? 'Sto convertendo le località degli eventi in coordinate.'
                     : eventsWithoutCoordinates > 0
                       ? `${eventsWithoutCoordinates} eventi non hanno ancora una posizione riconoscibile.`
-                      : 'Allarga la mappa, modifica i filtri oppure crea un nuovo evento nella tua area.')
+                      : 'Sposta la mappa, cambia i filtri oppure crea il primo evento nella tua area.')
                 }
                 primaryActionLabel="Crea evento"
                 onPrimaryAction={() => navigate('/create')}
               />
-            ) : (
-              <ul className={styles.sheetList}>
-                {visibleEvents.map((event) => (
-                  <li key={event.id} className={styles.sheetItem}>
-                    <button type="button" className={styles.sheetItemMain} onClick={() => focusEvent(event)}>
-                      <strong>{event.sport_name}</strong>
-                      <span>{event.location_name}</span>
-                    </button>
-                    <div className={styles.sheetItemActions}>
-                      <button type="button" className={styles.inlineAction} onClick={() => open3D(event)}>
-                        3D
+            </div>
+          ) : (
+            <ul className={styles.eventList}>
+              {visibleEvents.map((event) => {
+                const isSelected = String(event.id) === String(selectedEventId);
+                return (
+                  <li key={event.id}>
+                    <article className={`${styles.eventCard} ${isSelected ? styles.eventCardSelected : ''}`}>
+                      <button type="button" className={styles.eventCardMain} onClick={() => focusEvent(event)}>
+                        <span className={styles.eventAccent} aria-hidden="true" />
+                        <span className={styles.eventMeta}>
+                          <span className={styles.eventDay}>{formatEventDay(event.event_datetime)}</span>
+                          <span>
+                            {event.location_name || event.city || 'Luogo da definire'}
+                            {formatEventTime(event.event_datetime) ? ` · ${formatEventTime(event.event_datetime)}` : ''}
+                          </span>
+                        </span>
+                        <strong>{event.title || event.sport_name}</strong>
+                        <span className={styles.eventCardFoot}>
+                          <span>
+                            <Users size={15} aria-hidden="true" />
+                            {Number(event.participants_count || 0)}/{Number(event.max_participants || 0)} partecipanti
+                          </span>
+                          <span className={styles.focusHint}>Mostra sulla mappa</span>
+                        </span>
                       </button>
-                      <button
-                        type="button"
-                        className={`${styles.inlineAction} ${event.is_saved ? styles.inlineActionActive : ''}`}
-                        onClick={() => toggleSaveEvent(event)}
-                        disabled={savingIds.includes(event.id)}
-                      >
-                        {event.is_saved ? <BookmarkCheck size={14} aria-hidden="true" /> : <Bookmark size={14} aria-hidden="true" />}
-                        {event.is_saved ? 'Salvato' : 'Salva'}
-                      </button>
-                      <Link className={styles.eventLink} to={`/events/${event.id}`}>
-                        Evento
-                      </Link>
-                    </div>
+
+                      <div className={styles.eventCardActions}>
+                        <button type="button" className={styles.inlineAction} onClick={() => open3D(event)}>
+                          3D
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.inlineAction} ${event.is_saved ? styles.inlineActionActive : ''}`}
+                          onClick={() => toggleSaveEvent(event)}
+                          disabled={savingIds.includes(event.id)}
+                        >
+                          {event.is_saved ? <BookmarkCheck size={14} aria-hidden="true" /> : <Bookmark size={14} aria-hidden="true" />}
+                          {event.is_saved ? 'Salvato' : 'Salva'}
+                        </button>
+                        <Link className={styles.eventLink} to={`/events/${event.id}`}>
+                          Dettagli <ArrowRight size={14} aria-hidden="true" />
+                        </Link>
+                      </div>
+                    </article>
                   </li>
-                ))}
-              </ul>
-            )}
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className={`${styles.createPrompt} ${createSuggested ? styles.createPromptSuggested : ''}`}>
+          <button type="button" className={styles.createPromptIcon} onClick={() => navigate('/create')} aria-label="Crea un evento">
+            <Plus size={23} aria-hidden="true" />
+          </button>
+          <div>
+            <h2>Nessun evento adatto?</h2>
+            <p>Crea il primo nella tua zona e invita gli altri.</p>
           </div>
-        </div>
+          <button type="button" className={styles.createButton} onClick={() => navigate('/create')}>
+            Crea
+          </button>
+        </section>
       </div>
+
+      <MapFiltersDrawer
+        open={filtersDrawerOpen}
+        filters={draftFilters}
+        setFilters={setDraftFilters}
+        sports={sports}
+        entitlements={entitlements}
+        onClose={() => setFiltersDrawerOpen(false)}
+        onApply={applyCustomFilters}
+        onPaywall={() => setPaywallOpen(true)}
+      />
 
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Filtri avanzati mappa" />
 
