@@ -271,6 +271,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
 
   return {
     id: rawEvent.id,
+    organizerId: rawEvent.creator_id,
     title: rawEvent.title,
     city: rawEvent.city,
     sport_id: rawEvent.sport_id,

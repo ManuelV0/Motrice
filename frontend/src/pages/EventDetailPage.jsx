@@ -46,7 +46,11 @@ function EventDetailPage() {
   }
 
   const { id } = useParams();
-  const currentUserId = Number(getAuthSession().userId) || 1;
+  const authSession = getAuthSession();
+  const currentUserId = Number(authSession.userId) || 1;
+  const currentUser = {
+    id: String(authSession.authUserId || authSession.userId || '')
+  };
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -516,8 +520,9 @@ function EventDetailPage() {
     }
   }
 
-  const canAccessGroupChat = Boolean(event?.is_going);
+  const isOrganizer = Boolean(event && currentUser?.id === String(event.organizerId || ''));
   const isOrganizerForEvent = Boolean(
+    isOrganizer ||
     event &&
     (
       String(event.organizer?.id || '') === 'me' ||
@@ -525,6 +530,7 @@ function EventDetailPage() {
       normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
     )
   );
+  const canAccessGroupChat = Boolean(event?.is_going || isOrganizerForEvent);
   const eventStartsMs = Date.parse(event?.event_datetime || '');
   const eventDurationMinutes = Number.isFinite(Number(event?.duration_minutes))
     ? Math.max(30, Number(event.duration_minutes))
@@ -724,15 +730,17 @@ function EventDetailPage() {
           ) : null}
 
           <div className={styles.actions}>
-            {!event.is_going ? (
-              <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
-                Partecipa
-              </Button>
-            ) : (
-              <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
-                Annulla partecipazione
-              </Button>
-            )}
+            {!isOrganizerForEvent ? (
+              !event.is_going ? (
+                <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
+                  Partecipa
+                </Button>
+              ) : (
+                <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
+                  Annulla partecipazione
+                </Button>
+              )
+            ) : null}
             <Button
               type="button"
               variant={event.is_saved ? 'secondary' : 'ghost'}
@@ -791,6 +799,7 @@ function EventDetailPage() {
           <EventParticipationFlow
             event={event}
             isOrganizer={isOrganizerForEvent}
+            currentUser={currentUser}
             coords={coords}
             requestingLocation={requesting}
             requestLocation={requestLocation}

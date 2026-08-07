@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Card from './Card';
 import Button from './Button';
 import styles from '../styles/components/modal.module.css';
@@ -25,6 +26,8 @@ function Modal({
     if (!open) return undefined;
 
     const previousActive = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const getFocusable = () =>
       Array.from(
         modalRef.current?.querySelectorAll(
@@ -59,6 +62,7 @@ function Modal({
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
       if (previousActive && typeof previousActive.focus === 'function') {
         previousActive.focus();
       }
@@ -67,7 +71,7 @@ function Modal({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={title}>
       <Card className={styles.panel} ref={modalRef}>
         <h3>{title}</h3>
@@ -83,7 +87,8 @@ function Modal({
           ) : null}
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
 

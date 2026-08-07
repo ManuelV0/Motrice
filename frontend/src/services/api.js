@@ -1087,6 +1087,9 @@ function enrichEvent(event, store, origin) {
 
   return {
     ...event,
+    organizerId: String(
+      event.organizerId ?? event.organizer?.auth_user_id ?? event.organizer?.id ?? ''
+    ),
     deposit_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
     minimum_presence_minutes: Number(event.minimum_presence_minutes ?? 45),
     verification_mode: String(event.verification_mode || 'both'),
