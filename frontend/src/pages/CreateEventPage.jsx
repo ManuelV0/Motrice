@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Navigation, Sparkles } from 'lucide-react';
+import {
+  CalendarDays,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  MapPin,
+  Minus,
+  Navigation,
+  Plus,
+  Route,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  WalletCards
+} from 'lucide-react';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -50,6 +65,61 @@ const initialState = {
 
 const ROUTE_SPORT_SLUGS = new Set(['running', 'bici', 'trekking', 'ciclismo', 'cycling', 'trail']);
 
+const WIZARD_STEPS = [
+  { id: 1, label: 'Info base', description: 'Sport, livello e orario' },
+  { id: 2, label: 'Luogo', description: 'Posizione e percorso' },
+  { id: 3, label: 'Regole', description: 'Deposito, verifica e dettagli' }
+];
+
+const LEVEL_OPTIONS = [
+  { value: 'beginner', label: 'Principiante' },
+  { value: 'intermediate', label: 'Intermedio' },
+  { value: 'advanced', label: 'Avanzato' },
+  { value: 'all', label: 'Open' }
+];
+
+const DURATION_PRESETS = [60, 90, 120];
+const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
+const PRESENCE_PRESETS = [30, 45, 60, 90];
+
+const SPORT_VISUALS = {
+  running: { emoji: '🏃', subtitle: 'Gruppi corsa' },
+  padel: { emoji: '🎾', subtitle: 'Doppio · Singolo' },
+  calcio: { emoji: '⚽', subtitle: '5vs5 · 11vs11' },
+  palestra: { emoji: '🏋️', subtitle: 'Forza · Fitness' },
+  bici: { emoji: '🚴', subtitle: 'Strada · Gravel' },
+  trekking: { emoji: '🥾', subtitle: 'Sentieri · Gruppi' }
+};
+
+const STEP_ERROR_FIELDS = {
+  1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants'],
+  2: [
+    'city',
+    'location_name',
+    'coordinates',
+    'route_name',
+    'route_from',
+    'route_to',
+    'route_distance_km',
+    'route_elevation_gain_m',
+    'route_map_url'
+  ],
+  3: [
+    'deposit_cents',
+    'minimum_presence_minutes',
+    'verification_mode',
+    'geofence_radius_m',
+    'completion_xp',
+    'review_bonus_xp',
+    'description'
+  ]
+};
+
+function getSportVisual(sport) {
+  const key = String(sport?.slug || sport?.name || '').trim().toLowerCase();
+  return SPORT_VISUALS[key] || { emoji: '🏅', subtitle: 'Allenamento di gruppo' };
+}
+
 function CreateEventPage() {
   ensureLeafletIcons();
   const { entitlements } = useBilling();
@@ -64,6 +134,9 @@ function CreateEventPage() {
   const [routeResolveError, setRouteResolveError] = useState('');
   const [locationResolving, setLocationResolving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [activeStep, setActiveStep] = useState(1);
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
   const { requesting, requestLocation } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
@@ -97,6 +170,13 @@ function CreateEventPage() {
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => {
+      const errorKey = key === 'lat' || key === 'lng' ? 'coordinates' : key;
+      if (!prev[errorKey]) return prev;
+      const next = { ...prev };
+      delete next[errorKey];
+      return next;
+    });
   }
 
   function onSportChange(value) {
@@ -111,6 +191,21 @@ function CreateEventPage() {
           return ROUTE_SPORT_SLUGS.has(slug);
         })()
     }));
+    setErrors((prev) => {
+      if (!prev.sport_id) return prev;
+      const next = { ...prev };
+      delete next.sport_id;
+      return next;
+    });
+  }
+
+  function updateEventDateTime(nextDate, nextTime) {
+    setField('event_datetime', nextDate && nextTime ? `${nextDate}T${nextTime}` : '');
+  }
+
+  function changeParticipantCount(delta) {
+    const current = Number(form.max_participants || 2);
+    setField('max_participants', Math.min(500, Math.max(2, current + delta)));
   }
 
   function invalidClass(name) {
@@ -195,7 +290,7 @@ function CreateEventPage() {
     }
   }
 
-  function validate() {
+  function collectValidationErrors() {
     const nextErrors = {};
 
     if (!form.sport_id) nextErrors.sport_id = 'Seleziona uno sport';
@@ -272,8 +367,46 @@ function CreateEventPage() {
       }
     }
 
+    return nextErrors;
+  }
+
+  function validate() {
+    const nextErrors = collectValidationErrors();
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    if (Object.keys(nextErrors).length) {
+      const firstInvalidStep = WIZARD_STEPS.find((step) =>
+        STEP_ERROR_FIELDS[step.id].some((field) => nextErrors[field])
+      );
+      if (firstInvalidStep) setActiveStep(firstInvalidStep.id);
+      return false;
+    }
+    return true;
+  }
+
+  function goToNextStep() {
+    const nextErrors = collectValidationErrors();
+    const fields = STEP_ERROR_FIELDS[activeStep];
+    const currentStepErrors = Object.fromEntries(
+      Object.entries(nextErrors).filter(([field]) => fields.includes(field))
+    );
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      fields.forEach((field) => delete next[field]);
+      return { ...next, ...currentStepErrors };
+    });
+
+    if (Object.keys(currentStepErrors).length) {
+      showToast('Completa i campi evidenziati prima di continuare', 'error');
+      return;
+    }
+    setActiveStep((step) => Math.min(WIZARD_STEPS.length, step + 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function goToPreviousStep() {
+    setActiveStep((step) => Math.max(1, step - 1));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   async function onSubmit(event) {
@@ -365,464 +498,633 @@ function CreateEventPage() {
 
   return (
     <section className={styles.page}>
-      <ExploreMapToggle
-        activeView="right"
-        leftLabel="Esplora"
-        rightLabel="Crea (evento)"
-        thirdLabel="Agenda"
-        leftTo="/explore"
-        rightTo="/create"
-        thirdTo="/agenda"
-      />
-      <h1>Crea sessione</h1>
-      {!Number.isFinite(entitlements.maxEventsPerMonth) ? null : (
-        <p className={styles.meta}>
-          Piano Free: {creationStats.created_this_month}/{entitlements.maxEventsPerMonth} eventi creati questo mese.
-        </p>
-      )}
+      <div className={styles.topToggle}>
+        <ExploreMapToggle
+          activeView="right"
+          leftLabel="Esplora"
+          rightLabel="Crea (evento)"
+          thirdLabel="Agenda"
+          leftTo="/explore"
+          rightTo="/create"
+          thirdTo="/agenda"
+        />
+      </div>
 
-      <form className={`card ${styles.formCard}`} onSubmit={onSubmit} noValidate>
-        <fieldset className={styles.fieldset}>
-          <legend>Dettagli sessione</legend>
+      <header className={styles.pageHeader}>
+        <div>
+          <span className={styles.pageEyebrow}>Nuova sessione</span>
+          <h1>Crea il tuo evento</h1>
+        </div>
+        {!Number.isFinite(entitlements.maxEventsPerMonth) ? null : (
+          <span className={styles.planBadge}>
+            {creationStats.created_this_month}/{entitlements.maxEventsPerMonth} questo mese
+          </span>
+        )}
+      </header>
 
-          <label className={styles.field}>
-            Titolo sessione
-            <input
-              className={invalidClass('title')}
-              value={form.title}
-              onChange={(e) => setField('title', e.target.value)}
+      <form className={styles.formCard} onSubmit={onSubmit} noValidate>
+        <div className={styles.stepProgress} aria-label={`Passaggio ${activeStep} di ${WIZARD_STEPS.length}`}>
+          {WIZARD_STEPS.map((step) => (
+            <span
+              key={step.id}
+              className={step.id <= activeStep ? styles.stepProgressActive : ''}
+              aria-hidden="true"
             />
-            <span className="input-helper">Es. Running collettivo serale</span>
-            {errors.title && <span className="error">{errors.title}</span>}
-          </label>
+          ))}
+        </div>
 
-          <label className={styles.field}>
-            Sport
-            <select
-              className={invalidClass('sport_id')}
-              value={form.sport_id}
-              onChange={(e) => onSportChange(e.target.value)}
-            >
-              <option value="">Seleziona</option>
-              {sports.map((sport) => (
-                <option key={sport.id} value={sport.id}>
-                  {sport.name}
-                </option>
-              ))}
-            </select>
-            {errors.sport_id && <span className="error">{errors.sport_id}</span>}
-          </label>
+        <div className={styles.stepIntro}>
+          <div>
+            <span>{WIZARD_STEPS[activeStep - 1].label}</span>
+            <h2>{WIZARD_STEPS[activeStep - 1].description}</h2>
+          </div>
+          <strong>{activeStep}/{WIZARD_STEPS.length}</strong>
+        </div>
 
-          <label className={styles.field}>
-            Livello richiesto
-            <select value={form.level} onChange={(e) => setField('level', e.target.value)}>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
-            </select>
-          </label>
-        </fieldset>
+        {activeStep === 1 ? (
+          <fieldset className={styles.wizardStep}>
+            <legend className="sr-only">Informazioni base</legend>
 
-        <fieldset className={styles.fieldset}>
-          <legend>Percorso</legend>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Nome evento</span>
+              <input
+                className={invalidClass('title')}
+                value={form.title}
+                onChange={(e) => setField('title', e.target.value)}
+                placeholder="Es. Allenamento serale al parco"
+                maxLength="100"
+              />
+              {errors.title && <span className="error">{errors.title}</span>}
+            </label>
 
-          <label className={styles.field}>
-            <span className={styles.routeToggleRow}>
+            <div className={styles.choiceSection}>
+              <div className={styles.sectionLabelRow}>
+                <span>Che sport?</span>
+                <small>{selectedSport ? selectedSport.name : 'Seleziona uno'}</small>
+              </div>
+              <div className={styles.sportGrid} role="group" aria-label="Scegli lo sport">
+                {sports.map((sport) => {
+                  const visual = getSportVisual(sport);
+                  const selected = String(form.sport_id) === String(sport.id);
+                  return (
+                    <button
+                      key={sport.id}
+                      type="button"
+                      className={`${styles.sportCard} ${selected ? styles.sportCardSelected : ''}`}
+                      aria-pressed={selected}
+                      onClick={() => onSportChange(sport.id)}
+                    >
+                      <span className={styles.sportEmoji} aria-hidden="true">{visual.emoji}</span>
+                      <strong>{sport.name}</strong>
+                      <small>{visual.subtitle}</small>
+                      {selected ? <span className={styles.sportCheck}><Check size={17} /></span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+              {errors.sport_id && <span className="error">{errors.sport_id}</span>}
+            </div>
+
+            <div className={styles.choiceSection}>
+              <div className={styles.sectionLabelRow}><span>Livello richiesto</span></div>
+              <div className={styles.levelGrid} role="group" aria-label="Livello richiesto">
+                {LEVEL_OPTIONS.map((level) => (
+                  <button
+                    key={level.value}
+                    type="button"
+                    className={form.level === level.value ? styles.levelSelected : ''}
+                    aria-pressed={form.level === level.value}
+                    onClick={() => setField('level', level.value)}
+                  >
+                    {level.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className={styles.dateTimeGrid}>
+              <label className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
+                <span><CalendarDays size={18} />Data</span>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={(e) => {
+                    setEventDate(e.target.value);
+                    updateEventDateTime(e.target.value, eventTime);
+                  }}
+                />
+              </label>
+              <label className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
+                <span><Clock3 size={18} />Ora</span>
+                <input
+                  type="time"
+                  value={eventTime}
+                  onChange={(e) => {
+                    setEventTime(e.target.value);
+                    updateEventDateTime(eventDate, e.target.value);
+                  }}
+                />
+              </label>
+            </div>
+            {errors.event_datetime && <span className="error">{errors.event_datetime}</span>}
+
+            <div className={styles.controlGrid}>
+              <div className={`${styles.controlCard} ${errors.duration_minutes ? styles.invalidCard : ''}`}>
+                <span className={styles.controlTitle}><Clock3 size={18} />Durata</span>
+                <div className={styles.presetRow}>
+                  {DURATION_PRESETS.map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      className={Number(form.duration_minutes) === minutes ? styles.presetSelected : ''}
+                      onClick={() => setField('duration_minutes', minutes)}
+                    >
+                      {minutes}′
+                    </button>
+                  ))}
+                </div>
+                <label className={styles.compactNumber}>
+                  Altro
+                  <input
+                    type="number"
+                    min="15"
+                    max="360"
+                    step="15"
+                    value={form.duration_minutes}
+                    onChange={(e) => setField('duration_minutes', e.target.value)}
+                    aria-label="Durata personalizzata in minuti"
+                  />
+                </label>
+                {errors.duration_minutes && <span className="error">{errors.duration_minutes}</span>}
+              </div>
+
+              <div className={`${styles.controlCard} ${errors.max_participants ? styles.invalidCard : ''}`}>
+                <span className={styles.controlTitle}><Users size={18} />Partecipanti</span>
+                <div className={styles.stepper}>
+                  <button type="button" onClick={() => changeParticipantCount(-1)} aria-label="Riduci partecipanti">
+                    <Minus size={20} />
+                  </button>
+                  <input
+                    type="number"
+                    min="2"
+                    max="500"
+                    value={form.max_participants}
+                    onChange={(e) => setField('max_participants', e.target.value)}
+                    aria-label="Numero massimo partecipanti"
+                  />
+                  <button type="button" onClick={() => changeParticipantCount(1)} aria-label="Aumenta partecipanti">
+                    <Plus size={20} />
+                  </button>
+                </div>
+                {errors.max_participants && <span className="error">{errors.max_participants}</span>}
+              </div>
+            </div>
+          </fieldset>
+        ) : null}
+
+        {activeStep === 2 ? (
+          <fieldset className={styles.wizardStep}>
+            <legend className="sr-only">Luogo e percorso</legend>
+
+            <div className={styles.sectionHero}>
+              <span><MapPin size={22} /></span>
+              <div>
+                <strong>Dove vi allenate?</strong>
+                <small>Inserisci luogo e città: penseremo noi alle coordinate.</small>
+              </div>
+            </div>
+
+            <div className={styles.inlineGrid}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Città</span>
+                <input
+                  className={invalidClass('city')}
+                  value={form.city}
+                  onChange={(e) => setField('city', e.target.value)}
+                  placeholder="Es. Milano"
+                />
+                {errors.city && <span className="error">{errors.city}</span>}
+              </label>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Nome location</span>
+                <input
+                  className={invalidClass('location_name')}
+                  value={form.location_name}
+                  onChange={(e) => setField('location_name', e.target.value)}
+                  placeholder="Es. Parco di Porta Romana"
+                />
+                {errors.location_name && <span className="error">{errors.location_name}</span>}
+              </label>
+            </div>
+
+            <div className={styles.locationActions}>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={Navigation}
+                disabled={locationResolving}
+                onClick={() => resolveLocationOnline()}
+              >
+                {locationResolving ? 'Ricerca luogo...' : 'Trova sulla mappa'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon={Navigation}
+                disabled={requesting}
+                onClick={async () => {
+                  const coords = await requestLocation();
+                  if (!coords) {
+                    showToast('Impossibile ottenere la posizione. Controlla i permessi browser.', 'error');
+                    return;
+                  }
+                  setField('lat', String(coords.lat));
+                  setField('lng', String(coords.lng));
+                  showToast('Coordinate compilate automaticamente', 'success');
+                }}
+              >
+                {requesting ? 'Rilevazione...' : 'Usa la mia posizione'}
+              </Button>
+            </div>
+
+            {locationPreview ? (
+              <div className={styles.routeMapWrap}>
+                <MapContainer
+                  key={`${locationPreview.lat}:${locationPreview.lng}`}
+                  center={[locationPreview.lat, locationPreview.lng]}
+                  zoom={15}
+                  className={styles.routeMap}
+                  dragging={false}
+                  scrollWheelZoom={false}
+                >
+                  <TileLayer
+                    attribution='&copy; OpenStreetMap contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  <Marker position={[locationPreview.lat, locationPreview.lng]}>
+                    <Popup>{form.location_name || 'Location evento'}</Popup>
+                  </Marker>
+                </MapContainer>
+              </div>
+            ) : null}
+
+            <details className={styles.advancedDetails}>
+              <summary>Coordinate avanzate</summary>
+              <div className={styles.inlineGrid}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Latitudine</span>
+                  <input
+                    type="number"
+                    step="any"
+                    className={invalidClass('coordinates')}
+                    value={form.lat}
+                    onChange={(e) => setField('lat', e.target.value)}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Longitudine</span>
+                  <input
+                    type="number"
+                    step="any"
+                    className={invalidClass('coordinates')}
+                    value={form.lng}
+                    onChange={(e) => setField('lng', e.target.value)}
+                  />
+                </label>
+              </div>
+              <span className="input-helper">Compilate automaticamente dalla ricerca del luogo.</span>
+            </details>
+            {errors.coordinates && <span className={`error ${styles.coordError}`}>{errors.coordinates}</span>}
+
+            <label className={`${styles.routeSwitch} ${form.has_route ? styles.routeSwitchActive : ''}`}>
               <input
                 type="checkbox"
                 checked={Boolean(form.has_route)}
                 onChange={(e) => setField('has_route', e.target.checked)}
               />
-              <span>Questo evento ha un percorso di viaggio</span>
-            </span>
-            <span className="input-helper">
-              {selectedSportHasRoute
-                ? 'Sport con percorso rilevato: aggiungi dettagli rotta per Esplora e scheda informazioni.'
-                : 'Attiva solo se la sessione prevede un itinerario (strada/sentiero/giro).'}
-            </span>
-          </label>
-
-          {form.has_route ? (
-            <>
-              <label className={styles.field}>
-                Nome percorso
-                <input
-                  className={invalidClass('route_name')}
-                  value={form.route_name}
-                  onChange={(e) => setField('route_name', e.target.value)}
-                  placeholder="Es. Anello Parco Nord"
-                />
-                {errors.route_name && <span className="error">{errors.route_name}</span>}
-              </label>
-
-              <div className={styles.inlineGrid}>
-                <label className={styles.field}>
-                  Via di partenza (X)
-                  <input
-                    className={invalidClass('route_from')}
-                    value={form.route_from}
-                    onChange={(e) => setField('route_from', e.target.value)}
-                    placeholder="Es. Via X"
-                  />
-                  {errors.route_from && <span className="error">{errors.route_from}</span>}
-                </label>
-                <label className={styles.field}>
-                  Via di arrivo (Y)
-                  <input
-                    className={invalidClass('route_to')}
-                    value={form.route_to}
-                    onChange={(e) => setField('route_to', e.target.value)}
-                    placeholder="Es. Via Y"
-                  />
-                  {errors.route_to && <span className="error">{errors.route_to}</span>}
-                </label>
+              <span><Route size={22} /></span>
+              <div>
+                <strong>Questo evento ha un percorso</strong>
+                <small>
+                  {selectedSportHasRoute
+                    ? 'Consigliato per questo sport: aggiungi partenza e arrivo.'
+                    : 'Attivalo per itinerari, giri o sentieri.'}
+                </small>
               </div>
+              <b>{form.has_route ? 'Sì' : 'No'}</b>
+            </label>
 
-              <div className={styles.locationActions}>
+            {form.has_route ? (
+              <div className={styles.routeFields}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Nome percorso</span>
+                  <input
+                    className={invalidClass('route_name')}
+                    value={form.route_name}
+                    onChange={(e) => setField('route_name', e.target.value)}
+                    placeholder="Es. Anello Parco Nord"
+                  />
+                  {errors.route_name && <span className="error">{errors.route_name}</span>}
+                </label>
+
+                <div className={styles.inlineGrid}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Partenza</span>
+                    <input
+                      className={invalidClass('route_from')}
+                      value={form.route_from}
+                      onChange={(e) => setField('route_from', e.target.value)}
+                      placeholder="Via o punto di partenza"
+                    />
+                    {errors.route_from && <span className="error">{errors.route_from}</span>}
+                  </label>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Arrivo</span>
+                    <input
+                      className={invalidClass('route_to')}
+                      value={form.route_to}
+                      onChange={(e) => setField('route_to', e.target.value)}
+                      placeholder="Via o punto di arrivo"
+                    />
+                    {errors.route_to && <span className="error">{errors.route_to}</span>}
+                  </label>
+                </div>
+
                 <Button
                   type="button"
                   size="sm"
                   variant="secondary"
+                  icon={Route}
                   disabled={routeResolving}
                   onClick={resolveRouteOnline}
+                  fullWidth
                 >
-                  {routeResolving ? 'Ricerca percorso online...' : 'Cerca via online e traccia su mappa'}
+                  {routeResolving ? 'Tracciamento...' : 'Cerca e traccia percorso'}
                 </Button>
-              </div>
-              {routeResolveError ? <span className={`error ${styles.coordError}`}>{routeResolveError}</span> : null}
+                {routeResolveError ? <span className={`error ${styles.coordError}`}>{routeResolveError}</span> : null}
 
-              {Array.isArray(form.route_points) && form.route_points.length >= 2 ? (
-                <div className={styles.routeMapWrap}>
-                  <MapContainer
-                    center={form.route_points[0]}
-                    zoom={12}
-                    className={styles.routeMap}
-                  >
-                    <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                {Array.isArray(form.route_points) && form.route_points.length >= 2 ? (
+                  <div className={styles.routeMapWrap}>
+                    <MapContainer center={form.route_points[0]} zoom={12} className={styles.routeMap}>
+                      <TileLayer
+                        attribution='&copy; OpenStreetMap contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                      />
+                      <Polyline positions={form.route_points} />
+                      <Marker position={form.route_points[0]}><Popup>Partenza: {form.route_from}</Popup></Marker>
+                      <Marker position={form.route_points[form.route_points.length - 1]}><Popup>Arrivo: {form.route_to}</Popup></Marker>
+                    </MapContainer>
+                  </div>
+                ) : null}
+
+                <div className={styles.inlineGrid}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Distanza (km)</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      className={invalidClass('route_distance_km')}
+                      value={form.route_distance_km}
+                      onChange={(e) => setField('route_distance_km', e.target.value)}
                     />
-                    <Polyline positions={form.route_points} />
-                    <Marker position={form.route_points[0]}>
-                      <Popup>Partenza: {form.route_from || 'Via X'}</Popup>
-                    </Marker>
-                    <Marker position={form.route_points[form.route_points.length - 1]}>
-                      <Popup>Arrivo: {form.route_to || 'Via Y'}</Popup>
-                    </Marker>
-                  </MapContainer>
+                    {errors.route_distance_km && <span className="error">{errors.route_distance_km}</span>}
+                  </label>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Dislivello (m)</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      className={invalidClass('route_elevation_gain_m')}
+                      value={form.route_elevation_gain_m}
+                      onChange={(e) => setField('route_elevation_gain_m', e.target.value)}
+                      placeholder="Opzionale"
+                    />
+                    {errors.route_elevation_gain_m && <span className="error">{errors.route_elevation_gain_m}</span>}
+                  </label>
                 </div>
-              ) : null}
 
-              <div className={styles.inlineGrid}>
-                <label className={styles.field}>
-                  Distanza percorso (km)
+                <details className={styles.advancedDetails}>
+                  <summary>Link mappa opzionale</summary>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>URL percorso</span>
+                    <input
+                      className={invalidClass('route_map_url')}
+                      value={form.route_map_url}
+                      onChange={(e) => setField('route_map_url', e.target.value)}
+                      placeholder="https://..."
+                    />
+                    {errors.route_map_url && <span className="error">{errors.route_map_url}</span>}
+                  </label>
+                </details>
+              </div>
+            ) : null}
+          </fieldset>
+        ) : null}
+
+        {activeStep === 3 ? (
+          <fieldset className={styles.wizardStep}>
+            <legend className="sr-only">Regole e pubblicazione</legend>
+
+            <div className={styles.sectionHero}>
+              <span><ShieldCheck size={22} /></span>
+              <div>
+                <strong>Proteggi la partecipazione</strong>
+                <small>Definisci deposito, presenza minima e metodo di verifica.</small>
+              </div>
+            </div>
+
+            <div className={styles.ruleCardGrid}>
+              <div className={`${styles.ruleCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
+                <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
+                <div className={styles.presetRow}>
+                  {DEPOSIT_PRESETS.map((cents) => (
+                    <button
+                      key={cents}
+                      type="button"
+                      className={Number(form.deposit_cents) === cents ? styles.presetSelected : ''}
+                      onClick={() => setField('deposit_cents', cents)}
+                    >
+                      {cents === 0 ? 'No' : `${cents / 100} €`}
+                    </button>
+                  ))}
+                </div>
+                <label className={styles.compactNumber}>
+                  Altro importo (€)
                   <input
                     type="number"
-                    step="0.1"
-                    min="0.1"
-                    className={invalidClass('route_distance_km')}
-                    value={form.route_distance_km}
-                    onChange={(e) => setField('route_distance_km', e.target.value)}
-                  />
-                  {errors.route_distance_km && <span className="error">{errors.route_distance_km}</span>}
-                </label>
-                <label className={styles.field}>
-                  Dislivello positivo (m, opzionale)
-                  <input
-                    type="number"
-                    step="1"
                     min="0"
-                    className={invalidClass('route_elevation_gain_m')}
-                    value={form.route_elevation_gain_m}
-                    onChange={(e) => setField('route_elevation_gain_m', e.target.value)}
+                    max="50"
+                    step="1"
+                    value={Number(form.deposit_cents || 0) / 100}
+                    onChange={(e) => setField('deposit_cents', Math.round(Number(e.target.value || 0) * 100))}
                   />
-                  {errors.route_elevation_gain_m && <span className="error">{errors.route_elevation_gain_m}</span>}
                 </label>
+                <small>Bloccato all’iscrizione e restituito al completamento.</small>
+                {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
               </div>
 
+              <div className={`${styles.ruleCard} ${errors.minimum_presence_minutes ? styles.invalidCard : ''}`}>
+                <span className={styles.controlTitle}><Clock3 size={18} />Presenza minima</span>
+                <div className={styles.presetRow}>
+                  {PRESENCE_PRESETS.map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      className={Number(form.minimum_presence_minutes) === minutes ? styles.presetSelected : ''}
+                      onClick={() => setField('minimum_presence_minutes', minutes)}
+                    >
+                      {minutes}′
+                    </button>
+                  ))}
+                </div>
+                <label className={styles.compactNumber}>
+                  Minuti personalizzati
+                  <input
+                    type="number"
+                    min="15"
+                    max={form.duration_minutes || 360}
+                    step="5"
+                    value={form.minimum_presence_minutes}
+                    onChange={(e) => setField('minimum_presence_minutes', e.target.value)}
+                  />
+                </label>
+                <small>Al raggiungimento il cashback passa al 100%.</small>
+                {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
+              </div>
+            </div>
+
+            <div className={styles.choiceSection}>
+              <div className={styles.sectionLabelRow}><span>Metodo di verifica</span></div>
+              <div className={styles.verificationGrid} role="group" aria-label="Metodo di verifica">
+                {[
+                  { value: 'both', title: 'QR + GPS', copy: 'Più sicuro', icon: '◎' },
+                  { value: 'qr', title: 'Solo QR', copy: 'Più rapido', icon: '▦' },
+                  { value: 'geo', title: 'Solo GPS', copy: 'Automatico', icon: '⌖' }
+                ].map((mode) => (
+                  <button
+                    key={mode.value}
+                    type="button"
+                    className={form.verification_mode === mode.value ? styles.verificationSelected : ''}
+                    aria-pressed={form.verification_mode === mode.value}
+                    onClick={() => setField('verification_mode', mode.value)}
+                  >
+                    <span aria-hidden="true">{mode.icon}</span>
+                    <strong>{mode.title}</strong>
+                    <small>{mode.copy}</small>
+                  </button>
+                ))}
+              </div>
+              {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
+            </div>
+
+            {form.verification_mode !== 'qr' ? (
               <label className={styles.field}>
-                Link mappa percorso (opzionale)
+                <span className={styles.fieldLabel}>Raggio area evento (metri)</span>
                 <input
-                  className={invalidClass('route_map_url')}
-                  value={form.route_map_url}
-                  onChange={(e) => setField('route_map_url', e.target.value)}
-                  placeholder="https://..."
+                  type="number"
+                  min="50"
+                  max="1000"
+                  step="25"
+                  className={invalidClass('geofence_radius_m')}
+                  value={form.geofence_radius_m}
+                  onChange={(e) => setField('geofence_radius_m', e.target.value)}
                 />
-                {errors.route_map_url && <span className="error">{errors.route_map_url}</span>}
+                <span className="input-helper">Organizer e partecipanti devono rimanere dentro quest’area.</span>
+                {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
               </label>
-            </>
-          ) : null}
-        </fieldset>
+            ) : null}
 
-        <fieldset className={styles.fieldset}>
-          <legend>Programmazione</legend>
-
-          <label className={styles.field}>
-            Data e ora
-            <input
-              type="datetime-local"
-              className={invalidClass('event_datetime')}
-              value={form.event_datetime}
-              onChange={(e) => setField('event_datetime', e.target.value)}
-            />
-            {errors.event_datetime && <span className="error">{errors.event_datetime}</span>}
-          </label>
-
-          <label className={styles.field}>
-            Durata sessione (minuti)
-            <input
-              type="number"
-              min="15"
-              max="360"
-              step="15"
-              className={invalidClass('duration_minutes')}
-              value={form.duration_minutes}
-              onChange={(e) => setField('duration_minutes', e.target.value)}
-            />
-            <span className="input-helper">Al termine, la sessione si chiude e l'evento viene rimosso automaticamente.</span>
-            {errors.duration_minutes && <span className="error">{errors.duration_minutes}</span>}
-          </label>
-
-          <label className={styles.field}>
-            Max partecipanti
-            <input
-              type="number"
-              min="2"
-              className={invalidClass('max_participants')}
-              value={form.max_participants}
-              onChange={(e) => setField('max_participants', e.target.value)}
-            />
-            {errors.max_participants && <span className="error">{errors.max_participants}</span>}
-          </label>
-        </fieldset>
-
-        <fieldset className={styles.fieldset}>
-          <legend>Deposito, presenza e PX</legend>
-
-          <div className={styles.inlineGrid}>
-            <label className={styles.field}>
-              Deposito richiesto (EUR)
-              <input
-                type="number"
-                min="0"
-                max="50"
-                step="1"
-                className={invalidClass('deposit_cents')}
-                value={Number(form.deposit_cents || 0) / 100}
-                onChange={(e) => setField('deposit_cents', Math.round(Number(e.target.value || 0) * 100))}
-              />
-              <span className="input-helper">Viene bloccato all’iscrizione e restituito al completamento.</span>
-              {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
-            </label>
-
-            <label className={styles.field}>
-              Tempo minimo di presenza (minuti)
-              <input
-                type="number"
-                min="15"
-                max={form.duration_minutes || 360}
-                step="5"
-                className={invalidClass('minimum_presence_minutes')}
-                value={form.minimum_presence_minutes}
-                onChange={(e) => setField('minimum_presence_minutes', e.target.value)}
-              />
-              <span className="input-helper">Al raggiungimento il cashback passa dal 60% al 100%.</span>
-              {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
-            </label>
-          </div>
-
-          <label className={styles.field}>
-            Metodo di verifica
-            <select
-              className={invalidClass('verification_mode')}
-              value={form.verification_mode}
-              onChange={(e) => setField('verification_mode', e.target.value)}
-            >
-              <option value="both">QR + geolocalizzazione (consigliato)</option>
-              <option value="qr">Solo QR personale</option>
-              <option value="geo">Solo geolocalizzazione</option>
-            </select>
-            {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
-          </label>
-
-          {form.verification_mode !== 'qr' ? (
-            <label className={styles.field}>
-              Raggio area evento (metri)
-              <input
-                type="number"
-                min="50"
-                max="1000"
-                step="25"
-                className={invalidClass('geofence_radius_m')}
-                value={form.geofence_radius_m}
-                onChange={(e) => setField('geofence_radius_m', e.target.value)}
-              />
-              <span className="input-helper">Partecipante e organizzatore devono rimanere dentro quest’area.</span>
-              {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
-            </label>
-          ) : null}
-
-          <div className={styles.inlineGrid}>
-            <label className={styles.field}>
-              PX completamento
-              <input
-                type="number"
-                min="0"
-                max="200"
-                step="5"
-                className={invalidClass('completion_xp')}
-                value={form.completion_xp}
-                onChange={(e) => setField('completion_xp', e.target.value)}
-              />
-              {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
-            </label>
-
-            <label className={styles.field}>
-              Bonus questionario (PX)
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="5"
-                className={invalidClass('review_bonus_xp')}
-                value={form.review_bonus_xp}
-                onChange={(e) => setField('review_bonus_xp', e.target.value)}
-              />
-              {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset className={styles.fieldset}>
-          <legend>Location</legend>
-
-          <label className={styles.field}>
-            Citta
-            <input className={invalidClass('city')} value={form.city} onChange={(e) => setField('city', e.target.value)} />
-            {errors.city && <span className="error">{errors.city}</span>}
-          </label>
-
-          <label className={styles.field}>
-            Nome location
-            <input
-              className={invalidClass('location_name')}
-              value={form.location_name}
-              onChange={(e) => setField('location_name', e.target.value)}
-            />
-            {errors.location_name && <span className="error">{errors.location_name}</span>}
-          </label>
-
-          <div className={styles.inlineGrid}>
-            <label className={styles.field}>
-              Latitudine
-              <input
-                type="number"
-                step="any"
-                className={invalidClass('coordinates')}
-                value={form.lat}
-                onChange={(e) => setField('lat', e.target.value)}
-              />
-            </label>
-            <label className={styles.field}>
-              Longitudine
-              <input
-                type="number"
-                step="any"
-                className={invalidClass('coordinates')}
-                value={form.lng}
-                onChange={(e) => setField('lng', e.target.value)}
-              />
-            </label>
-          </div>
-          <span className="input-helper">Le coordinate vengono trovate automaticamente da nome location e città.</span>
-          <div className={styles.locationActions}>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              icon={Navigation}
-              disabled={locationResolving}
-              onClick={() => resolveLocationOnline()}
-            >
-              {locationResolving ? 'Ricerca luogo...' : 'Trova luogo sulla mappa'}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              icon={Navigation}
-              disabled={requesting}
-              onClick={async () => {
-                const coords = await requestLocation();
-                if (!coords) {
-                  showToast('Impossibile ottenere la posizione. Controlla i permessi browser.', 'error');
-                  return;
-                }
-                setField('lat', String(coords.lat));
-                setField('lng', String(coords.lng));
-                showToast('Coordinate compilate automaticamente', 'success');
-              }}
-            >
-              {requesting ? 'Rilevazione posizione...' : 'Usa la mia posizione'}
-            </Button>
-          </div>
-          {errors.coordinates && <span className={`error ${styles.coordError}`}>{errors.coordinates}</span>}
-          {locationPreview ? (
-            <div className={styles.routeMapWrap}>
-              <MapContainer
-                key={`${locationPreview.lat}:${locationPreview.lng}`}
-                center={[locationPreview.lat, locationPreview.lng]}
-                zoom={15}
-                className={styles.routeMap}
-                dragging={false}
-                scrollWheelZoom={false}
-              >
-                <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            <div className={styles.inlineGrid}>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>PX completamento</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="200"
+                  step="5"
+                  className={invalidClass('completion_xp')}
+                  value={form.completion_xp}
+                  onChange={(e) => setField('completion_xp', e.target.value)}
                 />
-                <Marker position={[locationPreview.lat, locationPreview.lng]}>
-                  <Popup>{form.location_name || 'Location evento'}</Popup>
-                </Marker>
-              </MapContainer>
+                {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
+              </label>
+              <label className={styles.field}>
+                <span className={styles.fieldLabel}>Bonus questionario (PX)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  className={invalidClass('review_bonus_xp')}
+                  value={form.review_bonus_xp}
+                  onChange={(e) => setField('review_bonus_xp', e.target.value)}
+                />
+                {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
+              </label>
             </div>
+
+            <label className={styles.field}>
+              <span className={styles.descriptionLabel}>
+                <span className={styles.fieldLabel}>Descrizione</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  icon={Sparkles}
+                  onClick={suggestDescriptionWithAi}
+                  disabled={!aiEnabled || aiLoading}
+                  aria-label="Suggerisci descrizione evento con AI"
+                  title={aiEnabled ? 'Genera descrizione breve con AI' : 'Attiva AI Locale in Account'}
+                >
+                  {aiLoading ? 'Generazione...' : 'Suggerisci con AI'}
+                </Button>
+              </span>
+              <textarea
+                rows="5"
+                className={invalidClass('description')}
+                value={form.description}
+                onChange={(e) => setField('description', e.target.value)}
+                placeholder="Ritmo, attrezzatura, punto di incontro e obiettivo..."
+                maxLength="2000"
+              />
+              {!aiEnabled ? <span className="input-helper">Attiva AI Locale (Beta) dalla sezione Account.</span> : null}
+              {errors.description && <span className="error">{errors.description}</span>}
+            </label>
+
+            <div className={styles.summaryCard}>
+              <span>{getSportVisual(selectedSport).emoji}</span>
+              <div>
+                <strong>{form.title || 'Il tuo evento'}</strong>
+                <small>
+                  {[selectedSport?.name, form.city, eventDate && eventTime ? `${eventDate} · ${eventTime}` : 'Data da scegliere']
+                    .filter(Boolean)
+                    .join(' · ')}
+                </small>
+              </div>
+            </div>
+          </fieldset>
+        ) : null}
+
+        <footer className={`${styles.wizardFooter} ${activeStep === 1 ? styles.wizardFooterSingle : ''}`}>
+          {activeStep > 1 ? (
+            <button type="button" className={styles.backButton} onClick={goToPreviousStep}>
+              <ChevronLeft size={21} />Indietro
+            </button>
           ) : null}
-        </fieldset>
-
-        <fieldset className={styles.fieldset}>
-          <legend>Descrizione</legend>
-
-          <label className={styles.field}>
-            Dettagli utili
-            <div className={styles.aiActionRow}>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                icon={Sparkles}
-                onClick={suggestDescriptionWithAi}
-                disabled={!aiEnabled || aiLoading}
-                aria-label="Suggerisci descrizione evento con AI"
-                title={aiEnabled ? 'Genera descrizione breve con AI' : 'Attiva AI Locale in Account'}
-              >
-                {aiLoading ? 'Generazione...' : 'Suggerisci descrizione (AI)'}
-              </Button>
-            </div>
-            <textarea
-              rows="4"
-              className={invalidClass('description')}
-              value={form.description}
-              onChange={(e) => setField('description', e.target.value)}
-            />
-            {!aiEnabled ? <span className="input-helper">Attiva AI Locale (Beta) dalla sezione Account.</span> : null}
-            <span className="input-helper">Spiega ritmo, attrezzatura e obiettivo della sessione.</span>
-            {errors.description && <span className="error">{errors.description}</span>}
-          </label>
-        </fieldset>
-
-        <button type="submit" className={styles.submit}>
-          Pubblica sessione
-        </button>
+          {activeStep < WIZARD_STEPS.length ? (
+            <button type="button" className={styles.nextButton} onClick={goToNextStep}>
+              Avanti <ChevronRight size={23} />
+            </button>
+          ) : (
+            <button type="submit" className={styles.nextButton}>
+              Pubblica evento <Check size={23} />
+            </button>
+          )}
+        </footer>
       </form>
 
       <PaywallModal
