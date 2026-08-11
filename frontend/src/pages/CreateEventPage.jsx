@@ -24,7 +24,6 @@ import { useBilling } from '../context/BillingContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import PaywallModal from '../components/PaywallModal';
 import Button from '../components/Button';
-import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
@@ -498,18 +497,6 @@ function CreateEventPage() {
 
   return (
     <section className={styles.page}>
-      <div className={styles.topToggle}>
-        <ExploreMapToggle
-          activeView="right"
-          leftLabel="Esplora"
-          rightLabel="Crea (evento)"
-          thirdLabel="Agenda"
-          leftTo="/explore"
-          rightTo="/create"
-          thirdTo="/agenda"
-        />
-      </div>
-
       <header className={styles.pageHeader}>
         <div>
           <span className={styles.pageEyebrow}>Nuova sessione</span>

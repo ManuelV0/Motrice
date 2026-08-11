@@ -16,8 +16,6 @@
   min-width: 0;
 }
 
-.topToggle { width: 100%; }
-
 .pageHeader {
   display: flex;
   align-items: end;

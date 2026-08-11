@@ -12,7 +12,6 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import PaywallModal from '../components/PaywallModal';
 import ExploreHero from '../components/explore/ExploreHero';
-import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import ExploreFiltersToolbar from '../components/explore/ExploreFiltersToolbar';
 import ExploreFeaturedRow from '../components/explore/ExploreFeaturedRow';
 import ExploreHowItWorks from '../components/explore/ExploreHowItWorks';
@@ -285,13 +284,6 @@ function ExplorePage() {
 
   return (
     <div className={styles.page}>
-      <ExploreMapToggle
-        activeView="explore"
-        leftLabel="Esplora"
-        rightLabel="Mappa"
-        leftTo="/explore"
-        rightTo={mapSearch ? `/map?${mapSearch}` : '/map'}
-      />
       <ExploreHero onPrimaryAction={handleNearMe} onSecondaryAction={() => setShowHowItWorksModal(true)} />
 
       <LocationPermissionAlert
