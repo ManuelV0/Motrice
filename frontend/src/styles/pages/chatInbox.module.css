@@ -206,6 +206,52 @@
   box-shadow: var(--focus);
 }
 
+.deleteDialog {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-3);
+}
+
+.deleteDialogIcon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(217 47 61 / 14%);
+  border: 1px solid rgb(255 94 107 / 28%);
+  color: #ff6572;
+}
+
+.deleteDialog div {
+  min-width: 0;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.deleteDialog p,
+.deleteDialog small { margin: 0; }
+
+.deleteDialog p {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.deleteDialog small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.deleteConfirmButton.deleteConfirmButton {
+  --_bg: linear-gradient(135deg, #e13b49, #bd2432);
+  --_fg: #fff;
+  --_border: rgb(255 110 122 / 42%);
+}
+
 @media (max-width: 420px) {
   .page {
     padding: var(--s-3) 0 0;

@@ -7,16 +7,19 @@ import {
   ChevronRight,
   Clock3,
   MapPin,
+  MapPinned,
   Minus,
   Navigation,
   Plus,
   Route,
   ShieldCheck,
   Sparkles,
+  Trash2,
+  Undo2,
   Users,
   WalletCards
 } from 'lucide-react';
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
@@ -119,6 +122,44 @@ function getSportVisual(sport) {
   return SPORT_VISUALS[key] || { emoji: '🏅', subtitle: 'Allenamento di gruppo' };
 }
 
+function isValidRoutePoint(point) {
+  return (
+    Array.isArray(point) &&
+    point.length >= 2 &&
+    Number.isFinite(Number(point[0])) &&
+    Number.isFinite(Number(point[1]))
+  );
+}
+
+function calculateRouteDistanceKm(points) {
+  if (!Array.isArray(points) || points.length < 2) return 0;
+  const earthRadiusKm = 6371;
+  const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+  return points.slice(1).reduce((total, point, index) => {
+    const previous = points[index];
+    const lat1 = toRadians(previous[0]);
+    const lat2 = toRadians(point[0]);
+    const deltaLat = lat2 - lat1;
+    const deltaLng = toRadians(point[1]) - toRadians(previous[1]);
+    const haversine =
+      Math.sin(deltaLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+    const segmentKm = earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+    return total + segmentKm;
+  }, 0);
+}
+
+function RouteMapTapHandler({ active, onAddPoint }) {
+  useMapEvents({
+    click(event) {
+      if (!active) return;
+      onAddPoint([event.latlng.lat, event.latlng.lng]);
+    }
+  });
+  return null;
+}
+
 function CreateEventPage() {
   ensureLeafletIcons();
   const { entitlements } = useBilling();
@@ -131,6 +172,8 @@ function CreateEventPage() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [routeResolving, setRouteResolving] = useState(false);
   const [routeResolveError, setRouteResolveError] = useState('');
+  const [routePicking, setRoutePicking] = useState(false);
+  const [manualRouteSelection, setManualRouteSelection] = useState(false);
   const [locationResolving, setLocationResolving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
@@ -166,6 +209,17 @@ function CreateEventPage() {
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     return { lat, lng };
   }, [form.lat, form.lng]);
+
+  const routePoints = useMemo(
+    () => (Array.isArray(form.route_points) ? form.route_points.filter(isValidRoutePoint) : []),
+    [form.route_points]
+  );
+
+  const routeMapCenter = useMemo(() => {
+    if (routePoints.length) return routePoints[0];
+    if (locationPreview) return [locationPreview.lat, locationPreview.lng];
+    return [41.8719, 12.5674];
+  }, [locationPreview, routePoints]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -205,6 +259,113 @@ function CreateEventPage() {
   function changeParticipantCount(delta) {
     const current = Number(form.max_participants || 2);
     setField('max_participants', Math.min(500, Math.max(2, current + delta)));
+  }
+
+  function clearRouteFieldErrors() {
+    setErrors((prev) => {
+      const next = { ...prev };
+      ['route_name', 'route_from', 'route_to', 'route_distance_km'].forEach((field) => delete next[field]);
+      return next;
+    });
+  }
+
+  function addRoutePoint(point) {
+    if (!isValidRoutePoint(point)) return;
+    if (routePoints.length >= 30) {
+      showToast('Puoi inserire al massimo 30 punti per percorso', 'error');
+      return;
+    }
+
+    const normalizedPoint = [Number(point[0]), Number(point[1])];
+    setForm((prev) => {
+      const currentPoints = Array.isArray(prev.route_points) ? prev.route_points.filter(isValidRoutePoint) : [];
+      const nextPoints = [...currentPoints, normalizedPoint];
+      const firstPoint = nextPoints[0];
+      const lastPoint = nextPoints[nextPoints.length - 1];
+      const distanceKm = calculateRouteDistanceKm(nextPoints);
+
+      return {
+        ...prev,
+        has_route: true,
+        lat: prev.lat || String(firstPoint[0]),
+        lng: prev.lng || String(firstPoint[1]),
+        route_name: prev.route_name || 'Percorso selezionato sulla mappa',
+        route_from: prev.route_from || 'Partenza selezionata',
+        route_to: nextPoints.length >= 2 ? prev.route_to || 'Arrivo selezionato' : prev.route_to,
+        route_from_lat: String(firstPoint[0]),
+        route_from_lng: String(firstPoint[1]),
+        route_to_lat: nextPoints.length >= 2 ? String(lastPoint[0]) : '',
+        route_to_lng: nextPoints.length >= 2 ? String(lastPoint[1]) : '',
+        route_distance_km: nextPoints.length >= 2 ? distanceKm.toFixed(1) : '',
+        route_points: nextPoints
+      };
+    });
+    clearRouteFieldErrors();
+  }
+
+  function startRoutePointSelection() {
+    if (routePicking) {
+      if (routePoints.length < 2) {
+        showToast('Aggiungi almeno partenza e arrivo', 'error');
+        return;
+      }
+      setRoutePicking(false);
+      showToast(`Percorso salvato con ${routePoints.length} punti`, 'success');
+      return;
+    }
+
+    if (!manualRouteSelection && routePoints.length) {
+      setForm((prev) => ({
+        ...prev,
+        route_from_lat: '',
+        route_from_lng: '',
+        route_to_lat: '',
+        route_to_lng: '',
+        route_distance_km: '',
+        route_points: []
+      }));
+      showToast('Tocca la mappa per creare un nuovo percorso manuale', 'info');
+    }
+    setManualRouteSelection(true);
+    setRoutePicking(true);
+  }
+
+  function undoLastRoutePoint() {
+    setForm((prev) => {
+      const currentPoints = Array.isArray(prev.route_points) ? prev.route_points.filter(isValidRoutePoint) : [];
+      const nextPoints = currentPoints.slice(0, -1);
+      const firstPoint = nextPoints[0];
+      const lastPoint = nextPoints[nextPoints.length - 1];
+      const distanceKm = calculateRouteDistanceKm(nextPoints);
+
+      return {
+        ...prev,
+        route_from: !nextPoints.length && prev.route_from === 'Partenza selezionata' ? '' : prev.route_from,
+        route_to: nextPoints.length < 2 && prev.route_to === 'Arrivo selezionato' ? '' : prev.route_to,
+        route_from_lat: firstPoint ? String(firstPoint[0]) : '',
+        route_from_lng: firstPoint ? String(firstPoint[1]) : '',
+        route_to_lat: nextPoints.length >= 2 ? String(lastPoint[0]) : '',
+        route_to_lng: nextPoints.length >= 2 ? String(lastPoint[1]) : '',
+        route_distance_km: nextPoints.length >= 2 ? distanceKm.toFixed(1) : '',
+        route_points: nextPoints
+      };
+    });
+  }
+
+  function clearRoutePoints() {
+    setForm((prev) => ({
+      ...prev,
+      route_name: prev.route_name === 'Percorso selezionato sulla mappa' ? '' : prev.route_name,
+      route_from: prev.route_from === 'Partenza selezionata' ? '' : prev.route_from,
+      route_to: prev.route_to === 'Arrivo selezionato' ? '' : prev.route_to,
+      route_from_lat: '',
+      route_from_lng: '',
+      route_to_lat: '',
+      route_to_lng: '',
+      route_distance_km: '',
+      route_points: []
+    }));
+    showToast('Punti del percorso cancellati', 'info');
   }
 
   function invalidClass(name) {
@@ -254,6 +415,8 @@ function CreateEventPage() {
         route_distance_km: Number.isFinite(routeDistanceKm) && routeDistanceKm > 0 ? routeDistanceKm.toFixed(1) : prev.route_distance_km,
         route_points: routePoints
       }));
+      setRoutePicking(false);
+      setManualRouteSelection(false);
       showToast('Percorso tracciato su mappa', 'success');
     } catch (error) {
       const message = error.message || 'Impossibile trovare percorso online';
@@ -736,7 +899,7 @@ function CreateEventPage() {
               </Button>
             </div>
 
-            {locationPreview ? (
+            {locationPreview && !(form.has_route && (routePicking || routePoints.length)) ? (
               <div className={styles.routeMapWrap}>
                 <MapContainer
                   key={`${locationPreview.lat}:${locationPreview.lng}`}
@@ -789,7 +952,11 @@ function CreateEventPage() {
               <input
                 type="checkbox"
                 checked={Boolean(form.has_route)}
-                onChange={(e) => setField('has_route', e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setField('has_route', checked);
+                  if (!checked) setRoutePicking(false);
+                }}
               />
               <span><Route size={22} /></span>
               <div>
@@ -852,19 +1019,122 @@ function CreateEventPage() {
                 </Button>
                 {routeResolveError ? <span className={`error ${styles.coordError}`}>{routeResolveError}</span> : null}
 
-                {Array.isArray(form.route_points) && form.route_points.length >= 2 ? (
-                  <div className={styles.routeMapWrap}>
-                    <MapContainer center={form.route_points[0]} zoom={12} className={styles.routeMap}>
-                      <TileLayer
-                        attribution='&copy; OpenStreetMap contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                      />
-                      <Polyline positions={form.route_points} />
-                      <Marker position={form.route_points[0]}><Popup>Partenza: {form.route_from}</Popup></Marker>
-                      <Marker position={form.route_points[form.route_points.length - 1]}><Popup>Arrivo: {form.route_to}</Popup></Marker>
-                    </MapContainer>
+                <section className={`${styles.routePicker} ${routePicking ? styles.routePickerActive : ''}`}>
+                  <div className={styles.routePickerHead}>
+                    <div>
+                      <span className={styles.routePickerEyebrow}>Percorso personalizzato</span>
+                      <strong>Seleziona i punti sulla mappa</strong>
+                      <small>
+                        {routePicking
+                          ? 'Tocca la mappa: il primo punto è la partenza, l’ultimo è l’arrivo.'
+                          : manualRouteSelection && routePoints.length
+                            ? `${routePoints.length} punti selezionati · ${form.route_distance_km || '0'} km`
+                            : 'In alternativa alla ricerca, disegna liberamente il tuo itinerario.'}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      className={`${styles.routePickerButton} ${routePicking ? styles.routePickerButtonActive : ''}`}
+                      aria-pressed={routePicking}
+                      onClick={startRoutePointSelection}
+                    >
+                      {routePicking ? <Check size={19} /> : <MapPinned size={19} />}
+                      {routePicking ? 'Concludi' : 'Seleziona punti'}
+                    </button>
                   </div>
-                ) : null}
+
+                  {routePicking || routePoints.length ? (
+                    <>
+                      <div className={`${styles.routeMapWrap} ${routePicking ? styles.routeMapPicking : ''}`}>
+                        <MapContainer
+                          key={`route-${manualRouteSelection ? 'manual' : 'automatic'}-${routeMapCenter.join(':')}`}
+                          center={routeMapCenter}
+                          zoom={routePoints.length || locationPreview ? 13 : 6}
+                          className={styles.routeMap}
+                          scrollWheelZoom={false}
+                          doubleClickZoom={!routePicking}
+                        >
+                          <TileLayer
+                            attribution='&copy; OpenStreetMap contributors'
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          />
+                          <RouteMapTapHandler active={routePicking} onAddPoint={addRoutePoint} />
+                          {routePoints.length >= 2 ? (
+                            <Polyline
+                              positions={routePoints}
+                              pathOptions={{ color: '#a8f000', weight: 5, opacity: 0.9 }}
+                            />
+                          ) : null}
+
+                          {manualRouteSelection
+                            ? routePoints.map((point, index) => {
+                                const isFirst = index === 0;
+                                const isLast = index === routePoints.length - 1;
+                                const label = routePoints.length === 1
+                                  ? 'Punto 1'
+                                  : isFirst
+                                    ? 'Partenza'
+                                    : isLast
+                                      ? 'Arrivo'
+                                      : `Tappa ${index}`;
+                                return (
+                                  <CircleMarker
+                                    key={`${point[0]}:${point[1]}:${index}`}
+                                    center={point}
+                                    radius={isFirst || isLast ? 9 : 7}
+                                    className={styles.routePingMarker}
+                                    pathOptions={{
+                                      color: '#111511',
+                                      fillColor: '#a8f000',
+                                      fillOpacity: 1,
+                                      weight: 4
+                                    }}
+                                  >
+                                    <Popup>{label}</Popup>
+                                  </CircleMarker>
+                                );
+                              })
+                            : routePoints.length >= 2
+                              ? (
+                                  <>
+                                    <Marker position={routePoints[0]}>
+                                      <Popup>Partenza: {form.route_from}</Popup>
+                                    </Marker>
+                                    <Marker position={routePoints[routePoints.length - 1]}>
+                                      <Popup>Arrivo: {form.route_to}</Popup>
+                                    </Marker>
+                                  </>
+                                )
+                              : null}
+                        </MapContainer>
+                      </div>
+
+                      {manualRouteSelection ? (
+                        <div className={styles.routePointMeta}>
+                          <span>
+                            <MapPin size={16} />
+                            <b>{routePoints.length}/30</b> punti
+                          </span>
+                          <div className={styles.routePointActions}>
+                            <button type="button" disabled={!routePoints.length} onClick={undoLastRoutePoint}>
+                              <Undo2 size={17} />
+                              Annulla ultimo
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.routePointDanger}
+                              disabled={!routePoints.length}
+                              onClick={clearRoutePoints}
+                            >
+                              <Trash2 size={17} />
+                              Cancella
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </section>
 
                 <div className={styles.inlineGrid}>
                   <label className={styles.field}>

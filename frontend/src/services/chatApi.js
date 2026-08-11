@@ -178,7 +178,7 @@ function buildSeedStore(currentUserId) {
     }
   };
 
-  return { threads, messagesByThread, lastReadByUserThread };
+  return { threads, messagesByThread, lastReadByUserThread, deletedThreadsByUser: {} };
 }
 
 function loadStore() {
@@ -196,7 +196,11 @@ function loadStore() {
     const merged = {
       threads: Array.isArray(parsed.threads) ? parsed.threads : [],
       messagesByThread: parsed.messagesByThread && typeof parsed.messagesByThread === 'object' ? parsed.messagesByThread : {},
-      lastReadByUserThread: parsed.lastReadByUserThread && typeof parsed.lastReadByUserThread === 'object' ? parsed.lastReadByUserThread : {}
+      lastReadByUserThread: parsed.lastReadByUserThread && typeof parsed.lastReadByUserThread === 'object' ? parsed.lastReadByUserThread : {},
+      deletedThreadsByUser:
+        parsed.deletedThreadsByUser && typeof parsed.deletedThreadsByUser === 'object'
+          ? parsed.deletedThreadsByUser
+          : {}
     };
 
     return merged;
@@ -357,7 +361,32 @@ async function ensureDmThreadsFromFriends(store, currentUserId) {
   store.threads = filtered;
 }
 
-function getVisibleThreads(store, currentUserId) {
+function isThreadDeletedLocally(store, thread, currentUserId) {
+  const record = store.deletedThreadsByUser?.[String(currentUserId)]?.[String(thread?.id || '')];
+  if (!record || typeof record !== 'object') return false;
+
+  return (
+    String(record.lastTs || '') === String(thread?.lastTs || '') &&
+    String(record.lastMessage || '') === String(thread?.lastMessage || '')
+  );
+}
+
+function restoreThreadVisibility(store, threadId, currentUserId) {
+  const userKey = String(currentUserId);
+  const threadKey = String(threadId || '');
+  const userRecords = store.deletedThreadsByUser?.[userKey];
+  if (!userRecords?.[threadKey]) return false;
+
+  const nextUserRecords = { ...userRecords };
+  delete nextUserRecords[threadKey];
+  store.deletedThreadsByUser = {
+    ...(store.deletedThreadsByUser || {}),
+    [userKey]: nextUserRecords
+  };
+  return true;
+}
+
+function getVisibleThreads(store, currentUserId, { includeDeleted = false } = {}) {
   return (Array.isArray(store.threads) ? store.threads : [])
     .filter((thread) => (Array.isArray(thread.participants) ? thread.participants : []).some((id) => Number(id) === Number(currentUserId)))
     .map((thread) => {
@@ -367,11 +396,12 @@ function getVisibleThreads(store, currentUserId) {
         unreadCount: computeUnreadCount(store, withMeta.id, currentUserId)
       };
     })
+    .filter((thread) => includeDeleted || !isThreadDeletedLocally(store, thread, currentUserId))
     .sort((a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs));
 }
 
 function getThreadById(store, threadId, currentUserId) {
-  const threads = getVisibleThreads(store, currentUserId);
+  const threads = getVisibleThreads(store, currentUserId, { includeDeleted: true });
   return threads.find((thread) => String(thread.id) === String(threadId)) || null;
 }
 
@@ -393,9 +423,9 @@ export const chatApi = {
 
     const remoteEvents = await listRemoteEventThreads();
     const localDirectMessages = localItems.filter((thread) => String(thread.type) === 'dm');
-    const items = [...remoteEvents, ...localDirectMessages].sort(
-      (a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs)
-    );
+    const items = [...remoteEvents, ...localDirectMessages]
+      .filter((thread) => !isThreadDeletedLocally(store, thread, currentUserId))
+      .sort((a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs));
     return clone(items);
   },
 
@@ -407,6 +437,8 @@ export const chatApi = {
       if (!thread) {
         throw new Error('Partecipa all’evento per accedere alla chat');
       }
+      const store = loadStore();
+      if (restoreThreadVisibility(store, threadId, resolveUserId())) saveStore(store);
       return clone(thread);
     }
 
@@ -416,6 +448,7 @@ export const chatApi = {
     saveStore(store);
     const thread = getThreadById(store, threadId, currentUserId);
     if (!thread) throw new Error('Chat non trovata');
+    if (restoreThreadVisibility(store, threadId, currentUserId)) saveStore(store);
     return wait(clone(thread));
   },
 
@@ -574,6 +607,46 @@ export const chatApi = {
 
     saveStore(store);
     return wait(clone(created));
+  },
+
+  async deleteThread(threadId, threadSnapshot = null) {
+    const key = String(threadId || '').trim();
+    if (!key) throw new Error('Chat non valida');
+
+    const store = loadStore();
+    const currentUserId = resolveUserId();
+    let thread =
+      threadSnapshot && String(threadSnapshot?.id || '') === key
+        ? threadSnapshot
+        : null;
+
+    if (!thread) {
+      const remoteEventId = parseEventThreadId(key);
+      if (canUseRemoteEventChat() && remoteEventId) {
+        const remoteThreads = await listRemoteEventThreads();
+        thread = remoteThreads.find((item) => String(item.id) === key) || null;
+      } else {
+        await ensureDmThreadsFromFriends(store, currentUserId);
+        thread = getThreadById(store, key, currentUserId);
+      }
+    }
+
+    if (!thread) throw new Error('Chat non trovata');
+
+    store.deletedThreadsByUser = {
+      ...(store.deletedThreadsByUser || {}),
+      [String(currentUserId)]: {
+        ...(store.deletedThreadsByUser?.[String(currentUserId)] || {}),
+        [key]: {
+          deletedAt: nowIso(),
+          lastTs: String(thread.lastTs || ''),
+          lastMessage: String(thread.lastMessage || '')
+        }
+      }
+    };
+
+    saveStore(store);
+    return wait({ ok: true, threadId: key });
   },
 
   async getCurrentUserProfile() {

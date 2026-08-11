@@ -12,6 +12,7 @@ function Modal({
   onConfirm,
   confirmText = 'Conferma',
   confirmDisabled = false,
+  confirmClassName = '',
   closeText = 'Annulla',
   showConfirm = true
 }) {
@@ -81,7 +82,7 @@ function Modal({
             {closeText}
           </Button>
           {showConfirm ? (
-            <Button type="button" onClick={onConfirm} disabled={confirmDisabled}>
+            <Button type="button" className={confirmClassName} onClick={onConfirm} disabled={confirmDisabled}>
               {confirmText}
             </Button>
           ) : null}

@@ -155,6 +155,26 @@ export function useChatStore(initialThreadId = null) {
     [currentUserId, currentUserProfile, selectedThreadId]
   );
 
+  const deleteThread = useCallback(
+    async (threadId) => {
+      const safeId = String(threadId || '').trim();
+      if (!safeId) throw new Error('Chat non valida');
+      const snapshot = threads.find((thread) => String(thread.id) === safeId) || null;
+
+      await chatApi.deleteThread(safeId, snapshot);
+      setThreads((prev) => (Array.isArray(prev) ? prev : []).filter((thread) => String(thread.id) !== safeId));
+
+      if (String(selectedThreadId || '') === safeId) {
+        setSelectedThreadId(null);
+        setMessages([]);
+        setHasMoreMessages(false);
+      }
+
+      return { ok: true };
+    },
+    [selectedThreadId, threads]
+  );
+
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
@@ -216,6 +236,7 @@ export function useChatStore(initialThreadId = null) {
     loadThreads,
     selectThread,
     sendMessage,
+    deleteThread,
     loadOlderMessages
   };
 }
