@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { CalendarX2 } from 'lucide-react';
+import {
+  Activity,
+  CalendarX2,
+  Clock3,
+  MapPin,
+  Plus,
+  QrCode,
+  Users,
+  WalletCards
+} from 'lucide-react';
+import QRCode from 'qrcode';
 import { api } from '../services/api';
 import { piggybank } from '../services/piggybank';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -11,6 +21,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import Modal from '../components/Modal';
 import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
@@ -19,11 +30,32 @@ import LocationPermissionAlert from '../components/LocationPermissionAlert';
 import styles from '../styles/pages/agenda.module.css';
 
 const defaults = {
+  section: 'owned',
   view: 'today',
   sport: 'all',
   level: 'all',
   timeOfDay: 'all'
 };
+
+function formatEventDay(value) {
+  const date = new Date(value);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  if (date.toDateString() === today.toDateString()) return 'Oggi';
+  if (date.toDateString() === tomorrow.toDateString()) return 'Domani';
+  return date.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+}
+
+function formatEventTime(value) {
+  return new Date(value).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDeposit(value) {
+  const amount = Number(value || 0) / 100;
+  return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 }).format(amount)}€ deposito`;
+}
 
 function readStoredAgendaFiltersSafe() {
   try {
@@ -43,8 +75,11 @@ function AgendaPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sports, setSports] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [ownedEvents, setOwnedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [qrEvent, setQrEvent] = useState(null);
+  const [organizerQrUrl, setOrganizerQrUrl] = useState('');
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation } = useUserLocation();
 
   const [filters, setFilters] = useState(() => {
@@ -62,17 +97,76 @@ function AgendaPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     setLoading(true);
-    api
-      .listAgenda(filters.view, filters)
-      .then(setGroups)
-      .finally(() => setLoading(false));
+    Promise.all([
+      api.listAgenda(filters.view, filters),
+      api.listEvents({ ...filters, dateRange: 'all', sortBy: 'soonest' })
+    ])
+      .then(([nextGroups, events]) => {
+        if (!active) return;
+        setGroups(nextGroups);
+        setOwnedEvents(events.filter((event) => event.created_by === 'me'));
+      })
+      .catch((error) => {
+        if (active) showToast(error?.message || 'Impossibile aggiornare l agenda', 'error');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
     safeStorageSet('motrice_agenda_filters_v1', JSON.stringify(filters));
     setSearchParams(writeFiltersToSearch(searchParams, filters, defaults), { replace: true });
+
+    return () => {
+      active = false;
+    };
   }, [filters]);
 
-  const hasItems = useMemo(() => groups.some((group) => group.items.length > 0), [groups]);
+  const participatingGroups = useMemo(
+    () =>
+      groups
+        .map((group) => ({ ...group, items: group.items.filter((event) => event.is_going) }))
+        .filter((group) => group.items.length > 0),
+    [groups]
+  );
+  const participatingCount = useMemo(
+    () => new Set(participatingGroups.flatMap((group) => group.items.map((event) => String(event.id)))).size,
+    [participatingGroups]
+  );
+  const hasItems = filters.section === 'owned' ? ownedEvents.length > 0 : participatingCount > 0;
+
+  useEffect(() => {
+    let active = true;
+    if (!qrEvent) {
+      setOrganizerQrUrl('');
+      return undefined;
+    }
+
+    const payload = {
+      version: 1,
+      type: 'organizer',
+      eventId: String(qrEvent.id),
+      organizerId: String(qrEvent.organizerId || qrEvent.organizer?.auth_user_id || '')
+    };
+
+    QRCode.toDataURL(JSON.stringify(payload), {
+      width: 720,
+      margin: 2,
+      color: { dark: '#090b0d', light: '#ffffff' },
+      errorCorrectionLevel: 'M'
+    })
+      .then((url) => {
+        if (active) setOrganizerQrUrl(url);
+      })
+      .catch(() => {
+        if (active) setOrganizerQrUrl('');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [qrEvent]);
 
   async function removeFromAgenda(eventId) {
     try {
@@ -137,88 +231,177 @@ function AgendaPage() {
   return (
     <section className={styles.page}>
       <ExploreMapToggle
-        activeView="none"
-        leftLabel="Crea (evento)"
+        activeView="left"
+        leftLabel="I miei eventi"
         rightLabel="Mappa"
         thirdLabel="Esplora"
-        leftTo="/create"
+        leftTo="/agenda"
         rightTo="/map"
         thirdTo="/explore"
       />
       <div className={styles.head}>
-        <h1>Agenda</h1>
-        <div className={styles.tabs}>
-          <Button type="button" variant={filters.view === 'today' ? 'primary' : 'secondary'} onClick={() => selectView('today')}>
-            Oggi
-          </Button>
-          <Button type="button" variant={filters.view === 'week' ? 'primary' : 'secondary'} onClick={() => selectView('week')}>
-            Settimana {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
-          </Button>
-          <Button type="button" variant={filters.view === 'month' ? 'primary' : 'secondary'} onClick={() => selectView('month')}>
-            Mese {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
-          </Button>
+        <div>
+          <span className={styles.eyebrow}>Agenda personale</span>
+          <h1>Agenda</h1>
         </div>
+        {filters.section === 'participating' ? (
+          <div className={styles.tabs}>
+            <Button type="button" variant={filters.view === 'today' ? 'primary' : 'secondary'} onClick={() => selectView('today')}>
+              Oggi
+            </Button>
+            <Button type="button" variant={filters.view === 'week' ? 'primary' : 'secondary'} onClick={() => selectView('week')}>
+              Settimana {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
+            </Button>
+            <Button type="button" variant={filters.view === 'month' ? 'primary' : 'secondary'} onClick={() => selectView('month')}>
+              Mese {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
+            </Button>
+          </div>
+        ) : null}
       </div>
 
-      <LocationPermissionAlert
-        hasLocation={hasLocation}
-        permission={permission}
-        error={locationError}
-        requesting={requesting}
-        onRequest={requestLocation}
-      />
+      <div className={styles.sectionSwitch} role="tablist" aria-label="Tipo di eventi in agenda">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={filters.section === 'owned'}
+          className={filters.section === 'owned' ? styles.sectionActive : ''}
+          onClick={() => setFilters((prev) => ({ ...prev, section: 'owned' }))}
+        >
+          I miei eventi <span>{ownedEvents.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={filters.section === 'participating'}
+          className={filters.section === 'participating' ? styles.sectionActive : ''}
+          onClick={() => setFilters((prev) => ({ ...prev, section: 'participating' }))}
+        >
+          Partecipo <span>{participatingCount}</span>
+        </button>
+      </div>
 
-      <Card className="grid3">
-        <label>
-          Sport
-          <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
-            <option value="all">Tutti</option>
-            {sports.map((sport) => (
-              <option key={sport.id} value={sport.id}>
-                {sport.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      {filters.section === 'participating' ? (
+        <>
+          <LocationPermissionAlert
+            hasLocation={hasLocation}
+            permission={permission}
+            error={locationError}
+            requesting={requesting}
+            onRequest={requestLocation}
+          />
 
-        <label>
-          Livello
-          <select value={filters.level} onChange={(event) => setFilters((prev) => ({ ...prev, level: event.target.value }))}>
-            <option value="all">Tutti</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </label>
+          <Card className="grid3">
+            <label>
+              Sport
+              <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
+                <option value="all">Tutti</option>
+                {sports.map((sport) => (
+                  <option key={sport.id} value={sport.id}>
+                    {sport.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <label>
-          Fascia
-          <select value={filters.timeOfDay} onChange={(event) => setFilters((prev) => ({ ...prev, timeOfDay: event.target.value }))}>
-            <option value="all">Tutte</option>
-            <option value="morning">Mattina</option>
-            <option value="afternoon">Pomeriggio</option>
-            <option value="evening">Sera</option>
-          </select>
-        </label>
-      </Card>
+            <label>
+              Livello
+              <select value={filters.level} onChange={(event) => setFilters((prev) => ({ ...prev, level: event.target.value }))}>
+                <option value="all">Tutti</option>
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+              </select>
+            </label>
+
+            <label>
+              Fascia
+              <select value={filters.timeOfDay} onChange={(event) => setFilters((prev) => ({ ...prev, timeOfDay: event.target.value }))}>
+                <option value="all">Tutte</option>
+                <option value="morning">Mattina</option>
+                <option value="afternoon">Pomeriggio</option>
+                <option value="evening">Sera</option>
+              </select>
+            </label>
+          </Card>
+        </>
+      ) : null}
 
       {loading ? (
         <LoadingSkeleton rows={3} variant="detail" />
       ) : !hasItems ? (
         <EmptyState
           icon={CalendarX2}
-          imageSrc="/images/default-sport.svg"
-          imageAlt="Illustrazione sport"
-          title="Nessuna sessione in agenda"
-          description="Non ci sono eventi in questa finestra temporale."
-          primaryActionLabel="Explore nearby"
-          onPrimaryAction={() => navigate('/explore')}
-          secondaryActionLabel="Reset filters"
+          title={filters.section === 'owned' ? 'Nessun evento organizzato' : 'Nessuna partecipazione in agenda'}
+          description={
+            filters.section === 'owned'
+              ? 'Crea il tuo primo evento e gestisci iscritti, QR e check-in da qui.'
+              : 'Non partecipi ancora a eventi in questa finestra temporale.'
+          }
+          primaryActionLabel={filters.section === 'owned' ? 'Crea evento' : 'Esplora eventi'}
+          onPrimaryAction={() => navigate(filters.section === 'owned' ? '/create' : '/explore')}
+          secondaryActionLabel="Azzera filtri"
           onSecondaryAction={() => setFilters(defaults)}
         />
+      ) : filters.section === 'owned' ? (
+        <div className={styles.ownedList} role="tabpanel">
+          {ownedEvents.map((event) => {
+            const participants = Math.max(0, Number(event.participants_count || 0));
+            const capacity = Math.max(1, Number(event.max_participants || 1));
+            const fillPercent = Math.min(100, Math.round((participants / capacity) * 100));
+
+            return (
+              <article
+                key={event.id}
+                className={styles.ownedCard}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/events/${event.id}`)}
+                onKeyDown={(keyboardEvent) => {
+                  if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                    keyboardEvent.preventDefault();
+                    navigate(`/events/${event.id}`);
+                  }
+                }}
+              >
+                <div className={styles.cardTopline}>
+                  <span className={styles.sportIcon} aria-hidden="true"><Activity size={26} /></span>
+                  <div className={styles.cardTitle}>
+                    <h2>{event.title || event.sport_name}</h2>
+                    <span><MapPin size={15} /> {event.location_name || event.city}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.qrShortcut}
+                    aria-label={`Mostra QR organizer per ${event.title}`}
+                    onClick={(clickEvent) => {
+                      clickEvent.stopPropagation();
+                      setQrEvent(event);
+                    }}
+                  >
+                    <QrCode size={22} />
+                  </button>
+                </div>
+
+                <div className={styles.cardMeta}>
+                  <span><Clock3 size={16} /> {formatEventDay(event.event_datetime)} {formatEventTime(event.event_datetime)}</span>
+                  <span><Users size={16} /> {participants}/{capacity} iscritti</span>
+                  <span className={styles.deposit}><WalletCards size={16} /> {formatDeposit(event.deposit_cents)}</span>
+                </div>
+
+                <div className={styles.capacityTrack} aria-label={`Capienza ${fillPercent}%`}>
+                  <span style={{ width: `${fillPercent}%` }} />
+                </div>
+              </article>
+            );
+          })}
+
+          <Link className={styles.createFab} to="/create" aria-label="Crea un nuovo evento">
+            <Plus size={32} />
+          </Link>
+        </div>
       ) : (
         <div className={styles.groups}>
-          {groups.map((group) => (
+          {participatingGroups.map((group) => (
             <Card as="section" key={group.label}>
               <h2>{group.label}</h2>
               <ul className={styles.list}>
@@ -275,6 +458,33 @@ function AgendaPage() {
       )}
 
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Vista agenda Settimana/Mese" />
+      <Modal
+        open={Boolean(qrEvent)}
+        title="QR presenza organizer"
+        onClose={() => setQrEvent(null)}
+        closeText="Chiudi"
+        showConfirm={false}
+      >
+        {qrEvent ? (
+          <div className={styles.qrSheetContent}>
+            <p>Usa questo QR come identificativo dell’organizzatore per il check-in dell’evento.</p>
+            <div className={styles.qrCanvas}>
+              {organizerQrUrl ? (
+                <img src={organizerQrUrl} alt={`QR organizer per ${qrEvent.title}`} />
+              ) : (
+                <span>Generazione QR…</span>
+              )}
+            </div>
+            <strong>{qrEvent.title}</strong>
+            <span className={styles.qrEventTime}>
+              {formatEventDay(qrEvent.event_datetime)} · {formatEventTime(qrEvent.event_datetime)}
+            </span>
+            <span className={styles.qrStatus}>
+              <i aria-hidden="true" /> Attivo · {Number(qrEvent.participants_count || 0)}/{Number(qrEvent.max_participants || 0)} iscritti
+            </span>
+          </div>
+        ) : null}
+      </Modal>
     </section>
   );
 }
