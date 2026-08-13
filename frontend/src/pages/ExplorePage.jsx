@@ -58,6 +58,10 @@ function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
@@ -282,6 +286,16 @@ function ExplorePage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleFiltersPanel() {
+    if (filtersOpen) setShowAdvancedFilters(false);
+    setFiltersOpen((prev) => !prev);
+  }
+
+  function collapseFiltersPanel() {
+    setFiltersOpen(false);
+    setShowAdvancedFilters(false);
+  }
+
   return (
     <div className={styles.page}>
       <ExploreHero onPrimaryAction={handleNearMe} onSecondaryAction={() => setShowHowItWorksModal(true)} />
@@ -308,10 +322,13 @@ function ExplorePage() {
           onReset={resetFilters}
           onToggleAdvanced={() => setShowAdvancedFilters((prev) => !prev)}
           advancedOpen={showAdvancedFilters}
+          open={filtersOpen}
+          onToggle={toggleFiltersPanel}
+          onCollapse={collapseFiltersPanel}
         />
       </Card>
 
-      {showAdvancedFilters ? (
+      {filtersOpen && showAdvancedFilters ? (
         <Card className={styles.advancedCard}>
           <FilterBar
             filters={{ ...filters, q: qInput }}
