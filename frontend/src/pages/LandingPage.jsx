@@ -12,7 +12,7 @@ import {
   Users
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { getAuthSession } from '../services/authSession';
 import LandingHero from '../components/landing/LandingHero';
@@ -20,6 +20,7 @@ import LandingSection from '../components/landing/LandingSection';
 import LandingCTA from '../components/landing/LandingCTA';
 import HeroCard from '../components/HeroCard';
 import LoginPage from './LoginPage';
+import { completeAppIntro, hasCompletedAppIntro } from '../services/appIntro';
 import styles from '../styles/pages/landing.module.css';
 
 const problemBullets = [
@@ -120,6 +121,11 @@ function LandingPage() {
     setActiveFrame(safeIndex);
   }, []);
 
+  const finishIntro = useCallback((destination = '/map', outcome = 'completed') => {
+    completeAppIntro(session, outcome);
+    navigate(destination, { replace: true });
+  }, [navigate, session]);
+
   usePageMeta({
     title: session.isAuthenticated
       ? 'Motrice | Sport locale, QR e convenzioni intelligenti'
@@ -133,8 +139,22 @@ function LandingPage() {
     return <LoginPage startup />;
   }
 
+  if (hasCompletedAppIntro(session)) {
+    return <Navigate to="/map" replace />;
+  }
+
   return (
     <div className={styles.viewport}>
+      <header className={styles.introHeader}>
+        <span className={styles.introEyebrow}>Primo accesso</span>
+        <button
+          type="button"
+          className={styles.skipButton}
+          onClick={() => finishIntro('/map', 'skipped')}
+        >
+          Salta
+        </button>
+      </header>
       <div
         id="landing-frame-track"
         className={styles.page}
@@ -143,16 +163,19 @@ function LandingPage() {
       >
         <section className={`${styles.frame} ${styles.heroFrame}`} data-frame-index="0" aria-label="Introduzione Motrice">
           <div className={styles.frameInner}>
-            <LandingHero />
+            <LandingHero
+              onPrimaryClick={() => finishIntro('/map')}
+              onSecondaryClick={() => finishIntro('/convenzioni#join')}
+            />
           </div>
         </section>
 
         <section className={styles.frame} data-frame-index="1" aria-label="Perche nasce Motrice">
           <div className={styles.frameInner}>
             <div className={styles.heroCards}>
-              <HeroCard icon={Users} title="Eventi sulla mappa" subtitle="Sessioni sport vicino a te" badge="Live" onClick={() => navigate('/map')} ariaLabel="Vai alla mappa eventi" />
-              <HeroCard icon={QrCode} title="Check-in QR" subtitle="Valida in 90 secondi" badge="Nuovo" onClick={() => navigate('/agenda')} ariaLabel="Apri i miei eventi" />
-              <HeroCard icon={Trophy} title="Reputazione" subtitle="Sali di livello" badge="XP" onClick={() => navigate('/pricing')} ariaLabel="Sistema reputazione" />
+              <HeroCard icon={Users} title="Eventi sulla mappa" subtitle="Sessioni sport vicino a te" badge="Live" onClick={() => finishIntro('/map')} ariaLabel="Vai alla mappa eventi" />
+              <HeroCard icon={QrCode} title="Check-in QR" subtitle="Valida in 90 secondi" badge="Nuovo" onClick={() => finishIntro('/agenda')} ariaLabel="Apri i miei eventi" />
+              <HeroCard icon={Trophy} title="Reputazione" subtitle="Sali di livello" badge="XP" onClick={() => finishIntro('/pricing')} ariaLabel="Sistema reputazione" />
             </div>
             <LandingSection id="problema" kicker="Perche nasce Motrice" title="Lo sport locale oggi e ancora troppo caotico" description="Motrice trasforma caos e no-show in flussi chiari e verificabili.">
               <ul className={styles.problemList}>
@@ -223,7 +246,10 @@ function LandingPage() {
                 {trustItems.map((item) => <article key={item.title} className={styles.trustCard}><h3><ShieldCheck size={16} aria-hidden="true" /> {item.title}</h3><p>{item.text}</p></article>)}
               </div>
             </LandingSection>
-            <LandingCTA />
+            <LandingCTA
+              onPrimaryClick={() => finishIntro('/map')}
+              onSecondaryClick={() => finishIntro('/convenzioni#join')}
+            />
           </div>
         </section>
       </div>
@@ -238,7 +264,12 @@ function LandingPage() {
           ))}
         </div>
         <span className={styles.frameCount}>{String(activeFrame + 1).padStart(2, '0')} / {String(frameLabels.length).padStart(2, '0')}</span>
-        <button type="button" className={styles.frameArrow} onClick={() => scrollToFrame(activeFrame + 1)} disabled={activeFrame === frameLabels.length - 1} aria-label="Frame successivo">
+        <button
+          type="button"
+          className={`${styles.frameArrow} ${activeFrame === frameLabels.length - 1 ? styles.frameArrowDone : ''}`}
+          onClick={() => activeFrame === frameLabels.length - 1 ? finishIntro('/map') : scrollToFrame(activeFrame + 1)}
+          aria-label={activeFrame === frameLabels.length - 1 ? 'Completa e apri la mappa' : 'Frame successivo'}
+        >
           <ChevronRight size={18} aria-hidden="true" />
         </button>
       </nav>

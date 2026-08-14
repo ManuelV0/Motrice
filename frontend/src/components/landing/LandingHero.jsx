@@ -2,7 +2,12 @@ import { ArrowRight, Handshake, MapPin, QrCode, Zap } from 'lucide-react';
 import CTAButton from '../CTAButton';
 import styles from '../../styles/components/landingHero.module.css';
 
-function LandingHero({ onPrimaryHref = '/map', onSecondaryHref = '/convenzioni#join' }) {
+function LandingHero({
+  onPrimaryHref = '/map',
+  onSecondaryHref = '/convenzioni#join',
+  onPrimaryClick,
+  onSecondaryClick
+}) {
   return (
     <section className={styles.hero} aria-labelledby="landing-hero-title">
       <div className={styles.bgImage} aria-hidden="true">
@@ -30,10 +35,10 @@ function LandingHero({ onPrimaryHref = '/map', onSecondaryHref = '/convenzioni#j
           </p>
 
           <div className={styles.actions}>
-            <CTAButton to={onPrimaryHref} aria-label="Trova eventi vicino a te">
+            <CTAButton to={onPrimaryClick ? undefined : onPrimaryHref} onClick={onPrimaryClick} aria-label="Trova eventi vicino a te">
               Trova eventi vicino a te <ArrowRight size={16} aria-hidden="true" />
             </CTAButton>
-            <CTAButton to={onSecondaryHref} variant="secondary" aria-label="Sei una palestra?">
+            <CTAButton to={onSecondaryClick ? undefined : onSecondaryHref} onClick={onSecondaryClick} variant="secondary" aria-label="Sei una palestra?">
               <Handshake size={16} aria-hidden="true" /> Sei una palestra?
             </CTAButton>
           </div>

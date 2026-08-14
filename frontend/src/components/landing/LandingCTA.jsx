@@ -2,7 +2,7 @@ import { ArrowRight, Handshake, Zap } from 'lucide-react';
 import CTAButton from '../CTAButton';
 import styles from '../../styles/components/landingCta.module.css';
 
-function LandingCTA() {
+function LandingCTA({ onPrimaryClick, onSecondaryClick }) {
   return (
     <section className={styles.wrap} aria-labelledby="landing-final-cta-title">
       <div className={styles.bgGlow} aria-hidden="true" />
@@ -15,10 +15,10 @@ function LandingCTA() {
         Unisciti agli eventi locali o porta nuovi utenti certificati nella tua struttura.
       </p>
       <div className={styles.actions}>
-        <CTAButton to="/map" aria-label="Trova eventi vicino a te ora">
+        <CTAButton to={onPrimaryClick ? undefined : '/map'} onClick={onPrimaryClick} aria-label="Trova eventi vicino a te ora">
           Trova eventi vicino a te <ArrowRight size={16} aria-hidden="true" />
         </CTAButton>
-        <CTAButton to="/convenzioni#join" variant="secondary" aria-label="Diventa partner Motrice">
+        <CTAButton to={onSecondaryClick ? undefined : '/convenzioni#join'} onClick={onSecondaryClick} variant="secondary" aria-label="Diventa partner Motrice">
           <Handshake size={16} aria-hidden="true" /> Diventa partner
         </CTAButton>
       </div>

@@ -103,10 +103,15 @@ function LoginPage({ startup = false }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (startup || !session.isAuthenticated) return;
+    navigate('/', { replace: true });
+  }, [navigate, session.isAuthenticated, startup]);
+
   function onContinue(provider) {
     const next = continueWithProvider(provider);
     setSession(next);
-    if (!startup) navigate('/coach');
+    if (!startup) navigate('/', { replace: true });
   }
 
   async function onLogout() {
@@ -144,7 +149,7 @@ function LoginPage({ startup = false }) {
         const next = await signInWithPassword({ email, password });
         setSession(next);
       }
-      if (!startup) navigate('/agenda');
+      if (!startup) navigate('/', { replace: true });
     } catch (err) {
       setError(err.message || 'Accesso non riuscito');
     } finally {
@@ -163,7 +168,7 @@ function LoginPage({ startup = false }) {
       const next = await signInWithGoogle();
       if (next?.isAuthenticated) {
         setSession(next);
-        if (!startup) navigate('/agenda');
+        if (!startup) navigate('/', { replace: true });
       }
     } catch (err) {
       setError(friendlyAuthError(err?.message || 'Accesso con Google non riuscito'));

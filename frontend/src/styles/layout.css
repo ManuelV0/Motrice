@@ -40,6 +40,10 @@
   overflow: hidden;
 }
 
+.mainContentFirstAccessIntro {
+  background: #050705;
+}
+
 .mainContentAccountMobile {
   width: min(100%, 30rem);
   margin-inline: auto;

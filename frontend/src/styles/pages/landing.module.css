@@ -1,11 +1,49 @@
 .viewport {
   position: relative;
   width: 100%;
-  height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+  height: 100dvh;
   overflow: hidden;
   background:
     radial-gradient(70% 100% at 100% 0%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 70%),
     color-mix(in srgb, var(--surface) 92%, #000);
+}
+
+.introHeader {
+  position: absolute;
+  top: max(var(--s-3), env(safe-area-inset-top, 0px));
+  right: max(var(--s-3), env(safe-area-inset-right, 0px));
+  left: max(var(--s-3), env(safe-area-inset-left, 0px));
+  z-index: calc(var(--z-sticky) + 1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.introEyebrow,
+.skipButton {
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: 0 0.6rem 1.8rem rgb(0 0 0 / 34%);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.introEyebrow {
+  padding: 0.52rem 0.8rem;
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: var(--weight-extrabold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.skipButton {
+  min-height: 2.45rem;
+  padding: 0.45rem 0.9rem;
+  color: var(--text);
+  pointer-events: auto;
 }
 
 .page {
@@ -90,6 +128,12 @@
 .frameArrow:disabled {
   opacity: 0.28;
   cursor: default;
+}
+
+.frameArrowDone {
+  color: var(--surface);
+  background: var(--primary);
+  box-shadow: 0 0 1.25rem color-mix(in srgb, var(--primary) 32%, transparent);
 }
 
 .frameDots {
@@ -412,10 +456,6 @@
 }
 
 @media (min-width: 760px) {
-  .viewport {
-    height: calc(100dvh - var(--nav-h));
-  }
-
   .frameInner {
     padding-block: var(--s-6) 5.5rem;
     gap: var(--s-6);

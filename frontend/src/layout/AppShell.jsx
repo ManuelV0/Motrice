@@ -7,6 +7,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
+import { hasCompletedAppIntro } from '../services/appIntro';
 
 function AppShell({ children }) {
   const location = useLocation();
@@ -15,6 +16,9 @@ function AppShell({ children }) {
   const isEmbed = location.pathname.startsWith('/embed/');
   const isLandingRoute = location.pathname === '/';
   const isStartupAuthRoute = isLandingRoute && !authSession.isAuthenticated;
+  const isFirstAccessIntro =
+    isLandingRoute && authSession.isAuthenticated && !hasCompletedAppIntro(authSession);
+  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -88,13 +92,13 @@ function AppShell({ children }) {
   }
 
   return (
-    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isStartupAuthRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
-      {!isStartupAuthRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
+    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
+      {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isStartupAuthRoute ? 'mainContentStartupAuth' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFullscreenEntryRoute ? 'mainContentStartupAuth' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
-        {!isStartupAuthRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
+        {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
             <p>
               {soonNotification.message} <Link to={`/events/${soonNotification.event_id}`}>Apri dettaglio</Link>
@@ -108,9 +112,9 @@ function AppShell({ children }) {
         )}
         {children}
       </main>
-      {!isStartupAuthRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
+      {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
       {!isLandingRoute ? <Footer /> : null}
-      {!isStartupAuthRoute ? <SiteTourOverlay /> : null}
+      {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>
   );
 }
