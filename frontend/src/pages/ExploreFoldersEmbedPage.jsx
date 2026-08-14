@@ -85,8 +85,8 @@ function ExploreFoldersEmbedPage() {
           <p className={styles.kicker}>Embed Explore</p>
           <h1>Sezione Cartelle</h1>
         </div>
-        <Link to="/explore" target="_top" className={styles.openLink}>
-          Apri Esplora completa
+        <Link to="/map" target="_top" className={styles.openLink}>
+          Apri la mappa eventi
         </Link>
       </header>
 

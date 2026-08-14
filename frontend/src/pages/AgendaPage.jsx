@@ -22,7 +22,6 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
-import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import { useToast } from '../context/ToastContext';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -230,15 +229,6 @@ function AgendaPage() {
 
   return (
     <section className={styles.page}>
-      <ExploreMapToggle
-        activeView="left"
-        leftLabel="I miei eventi"
-        rightLabel="Mappa"
-        thirdLabel="Esplora"
-        leftTo="/agenda"
-        rightTo="/map"
-        thirdTo="/explore"
-      />
       <div className={styles.head}>
         <div>
           <span className={styles.eyebrow}>Agenda personale</span>
@@ -337,8 +327,8 @@ function AgendaPage() {
               ? 'Crea il tuo primo evento e gestisci iscritti, QR e check-in da qui.'
               : 'Non partecipi ancora a eventi in questa finestra temporale.'
           }
-          primaryActionLabel={filters.section === 'owned' ? 'Crea evento' : 'Esplora eventi'}
-          onPrimaryAction={() => navigate(filters.section === 'owned' ? '/create' : '/explore')}
+          primaryActionLabel={filters.section === 'owned' ? 'Crea evento' : 'Apri la mappa'}
+          onPrimaryAction={() => navigate(filters.section === 'owned' ? '/create' : '/map')}
           secondaryActionLabel="Azzera filtri"
           onSecondaryAction={() => setFilters(defaults)}
         />

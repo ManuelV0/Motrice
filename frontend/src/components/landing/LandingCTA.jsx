@@ -15,7 +15,7 @@ function LandingCTA() {
         Unisciti agli eventi locali o porta nuovi utenti certificati nella tua struttura.
       </p>
       <div className={styles.actions}>
-        <CTAButton to="/explore" aria-label="Trova eventi vicino a te ora">
+        <CTAButton to="/map" aria-label="Trova eventi vicino a te ora">
           Trova eventi vicino a te <ArrowRight size={16} aria-hidden="true" />
         </CTAButton>
         <CTAButton to="/convenzioni#join" variant="secondary" aria-label="Diventa partner Motrice">

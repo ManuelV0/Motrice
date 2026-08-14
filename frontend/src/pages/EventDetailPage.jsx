@@ -644,8 +644,8 @@ function EventDetailPage() {
         description={error}
         imageSrc="/images/default-sport.svg"
         imageAlt="Icona sport"
-        primaryActionLabel="Explore nearby"
-        onPrimaryAction={() => navigate('/explore')}
+        primaryActionLabel="Apri la mappa"
+        onPrimaryAction={() => navigate('/map')}
       />
     );
 

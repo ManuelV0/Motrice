@@ -42,6 +42,7 @@ import ChatSearchPage from './pages/ChatSearchPage';
 import FriendsPage from './pages/FriendsPage';
 
 const GameMapPage = lazy(() => import('./features/game/pages/GameMapPage'));
+const EXPLORE_SECTION_ENABLED = false;
 
 function App() {
   const location = useLocation();
@@ -51,7 +52,10 @@ function App() {
       <AppShell>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/explore" element={<ExplorePage />} />
+          <Route
+            path="/explore"
+            element={EXPLORE_SECTION_ENABLED ? <ExplorePage /> : <Navigate to="/agenda" replace />}
+          />
           <Route path="/embed/cartelle" element={<ExploreFoldersEmbedPage />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/tutorial" element={<TutorialPage />} />

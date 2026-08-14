@@ -2,7 +2,7 @@ import { ArrowRight, Handshake, MapPin, QrCode, Zap } from 'lucide-react';
 import CTAButton from '../CTAButton';
 import styles from '../../styles/components/landingHero.module.css';
 
-function LandingHero({ onPrimaryHref = '/explore', onSecondaryHref = '/convenzioni#join' }) {
+function LandingHero({ onPrimaryHref = '/map', onSecondaryHref = '/convenzioni#join' }) {
   return (
     <section className={styles.hero} aria-labelledby="landing-hero-title">
       <div className={styles.bgImage} aria-hidden="true">

@@ -144,7 +144,7 @@ function LoginPage({ startup = false }) {
         const next = await signInWithPassword({ email, password });
         setSession(next);
       }
-      if (!startup) navigate('/explore');
+      if (!startup) navigate('/agenda');
     } catch (err) {
       setError(err.message || 'Accesso non riuscito');
     } finally {
@@ -163,7 +163,7 @@ function LoginPage({ startup = false }) {
       const next = await signInWithGoogle();
       if (next?.isAuthenticated) {
         setSession(next);
-        if (!startup) navigate('/explore');
+        if (!startup) navigate('/agenda');
       }
     } catch (err) {
       setError(friendlyAuthError(err?.message || 'Accesso con Google non riuscito'));

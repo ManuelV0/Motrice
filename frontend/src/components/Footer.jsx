@@ -29,9 +29,8 @@ function Footer() {
         <nav className={styles.navBlock} aria-label="Navigazione rapida">
           <h4>Navigazione</h4>
           <ul className={styles.list}>
-            <li><Link to="/explore">Esplora</Link></li>
             <li><Link to="/map">Mappa</Link></li>
-            <li><Link to="/agenda">Agenda</Link></li>
+            <li><Link to="/agenda">I miei eventi</Link></li>
             <li><Link to="/account">Account</Link></li>
           </ul>
         </nav>

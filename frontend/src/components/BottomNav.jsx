@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Compass, MapPinned, MessageCircle, Plus, UserRound } from 'lucide-react';
+import { CalendarDays, MapPinned, MessageCircle, Plus, UserRound } from 'lucide-react';
 import styles from '../styles/components/bottomNav.module.css';
 
 const MAIN_TABS = [
-  { id: 'explore', label: 'Esplora', icon: Compass, to: '/explore' },
+  { id: 'agenda', label: 'I miei eventi', icon: CalendarDays, to: '/agenda' },
   { id: 'map', label: 'Mappa', icon: MapPinned, to: '/map' },
   { id: 'create', label: 'Crea', icon: Plus, to: '/create', primary: true },
   { id: 'chat', label: 'Chat', icon: MessageCircle, to: '/chat' },
@@ -20,7 +20,8 @@ function BottomNav({ forceVisible = false, chatSurface = false }) {
       if (location.pathname.startsWith('/chat') || location.pathname.startsWith('/community')) return 'chat';
       if (location.pathname.startsWith('/create')) return 'create';
       if (location.pathname.startsWith('/map') || location.pathname.startsWith('/game')) return 'map';
-      return 'explore';
+      if (location.pathname.startsWith('/agenda')) return 'agenda';
+      return null;
     },
     [location.pathname]
   );

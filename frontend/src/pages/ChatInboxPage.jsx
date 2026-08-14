@@ -105,7 +105,7 @@ function ChatInboxPage() {
             <button
               type="button"
               className={styles.emptyCta}
-              onClick={() => navigate(activeTab === 'event' ? '/explore' : '/chat/friends')}
+              onClick={() => navigate(activeTab === 'event' ? '/map' : '/chat/friends')}
             >
               {activeTab === 'event' ? 'Trova un evento' : 'Apri amici'}
             </button>

@@ -48,8 +48,8 @@ function ProfilePage() {
               imageAlt="Icona palestra"
               title="Nessuno sport configurato"
               description="Questo atleta non ha ancora aggiunto sport al profilo."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
+              primaryActionLabel="Apri la mappa"
+              onPrimaryAction={() => navigate('/map')}
             />
           ) : (
             <ul>
@@ -71,8 +71,8 @@ function ProfilePage() {
               imageAlt="Icona running"
               title="Nessuna disponibilita"
               description="Nessuna fascia oraria impostata."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
+              primaryActionLabel="Apri la mappa"
+              onPrimaryAction={() => navigate('/map')}
             />
           ) : (
             <ul>

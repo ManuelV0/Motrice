@@ -97,8 +97,8 @@ function NotificationsPage() {
               imageAlt="Icona notifiche"
               title="Nessuna notifica"
               description="Sei aggiornato. Quando ci saranno novita le vedrai qui."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
+              primaryActionLabel="Apri la mappa"
+              onPrimaryAction={() => navigate('/map')}
             />
           ) : (
             notifications.map((item) => {

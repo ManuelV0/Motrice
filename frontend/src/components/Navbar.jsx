@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
-  Compass,
   Map,
   PlusCircle,
   Handshake,
@@ -22,7 +21,7 @@ import IconButton from './IconButton';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
-  { to: '/explore', label: 'Esplora', icon: Compass },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
   { to: '/map', label: 'Mappa', icon: Map },
   { to: '/create', label: 'Crea', icon: PlusCircle, primary: true },
   { to: '/chat', label: 'Chat', icon: MessageCircle },
@@ -33,7 +32,6 @@ const drawerSections = [
   {
     title: 'La tua attività',
     items: [
-      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
       { to: '/coach', label: 'Coach', icon: Target },
       { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
     ]
@@ -146,7 +144,7 @@ function Navbar({ forceMobile = false }) {
 
   function onSearchSubmit(event) {
     event.preventDefault();
-    navigate(`/explore?q=${encodeURIComponent(query)}`);
+    navigate(`/map?q=${encodeURIComponent(query)}`);
     setIsOpen(false);
   }
 

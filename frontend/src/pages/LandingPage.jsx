@@ -150,8 +150,8 @@ function LandingPage() {
         <section className={styles.frame} data-frame-index="1" aria-label="Perche nasce Motrice">
           <div className={styles.frameInner}>
             <div className={styles.heroCards}>
-              <HeroCard icon={Users} title="Esplora Eventi" subtitle="Sessioni sport vicino a te" badge="Live" onClick={() => navigate('/explore')} ariaLabel="Vai a Esplora eventi" />
-              <HeroCard icon={QrCode} title="Check-in QR" subtitle="Valida in 90 secondi" badge="Nuovo" onClick={() => navigate('/explore')} ariaLabel="Scopri il check-in QR" />
+              <HeroCard icon={Users} title="Eventi sulla mappa" subtitle="Sessioni sport vicino a te" badge="Live" onClick={() => navigate('/map')} ariaLabel="Vai alla mappa eventi" />
+              <HeroCard icon={QrCode} title="Check-in QR" subtitle="Valida in 90 secondi" badge="Nuovo" onClick={() => navigate('/agenda')} ariaLabel="Apri i miei eventi" />
               <HeroCard icon={Trophy} title="Reputazione" subtitle="Sali di livello" badge="XP" onClick={() => navigate('/pricing')} ariaLabel="Sistema reputazione" />
             </div>
             <LandingSection id="problema" kicker="Perche nasce Motrice" title="Lo sport locale oggi e ancora troppo caotico" description="Motrice trasforma caos e no-show in flussi chiari e verificabili.">
