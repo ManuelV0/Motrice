@@ -17,8 +17,8 @@ const FAQ_SECTIONS = [
         a: 'Serve a mostrare sessioni e luoghi vicini a te. Se e disattivata puoi usare comunque il sito, ma i risultati possono essere meno pertinenti.'
       },
       {
-        q: 'Come funziona Agenda?',
-        a: 'Agenda raccoglie i tuoi eventi salvati e le sessioni a cui partecipi, con vista giorno/settimana/mese.'
+        q: 'Come funziona la sezione Eventi?',
+        a: 'La sezione Eventi mostra insieme gli eventi che crei, quelli salvati e le sessioni a cui partecipi.'
       }
     ]
   },

@@ -582,7 +582,7 @@ function BecomeCoachApplyPage() {
             <strong>Area personale coach</strong>
             <small className="muted">
               {canAccessPersonalArea
-                ? 'Espandi per vedere agenda richieste e lavoro per il coach'
+                ? 'Espandi per vedere eventi, richieste e lavoro per il coach'
                 : 'Accesso disponibile solo per coach approvati'}
             </small>
           </span>

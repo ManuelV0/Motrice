@@ -859,10 +859,10 @@ function MapPage() {
     try {
       if (event.is_saved) {
         await api.unsaveEvent(eventId);
-        showToast('Evento rimosso dall agenda', 'info');
+        showToast('Evento rimosso dai tuoi eventi', 'info');
       } else {
         await api.saveEvent(eventId);
-        showToast('Evento salvato in agenda', 'success');
+        showToast('Evento salvato nei tuoi eventi', 'success');
       }
 
       const effectiveFilters = entitlements.canUseAdvancedFilters
@@ -871,7 +871,7 @@ function MapPage() {
       const refreshed = await api.listEvents({ ...effectiveFilters, ...originParams });
       setEvents(refreshed);
     } catch (error) {
-      showToast(error.message || 'Impossibile aggiornare agenda', 'error');
+      showToast(error.message || 'Impossibile aggiornare i tuoi eventi', 'error');
     } finally {
       setSavingIds((prev) => prev.filter((id) => id !== eventId));
     }

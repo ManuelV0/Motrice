@@ -413,10 +413,10 @@ function EventDetailPage() {
     try {
       if (event.is_saved) {
         await api.unsaveEvent(id);
-        showToast('Evento rimosso dall agenda', 'info');
+        showToast('Evento rimosso dai tuoi eventi', 'info');
       } else {
         await api.saveEvent(id);
-        showToast('Evento salvato in agenda', 'success');
+        showToast('Evento salvato nei tuoi eventi', 'success');
       }
       await reload();
     } catch (err) {
@@ -747,7 +747,7 @@ function EventDetailPage() {
               onClick={toggleSaveAgenda}
               icon={event.is_saved ? BookmarkCheck : Bookmark}
             >
-              {event.is_saved ? 'Salvato in agenda' : 'Salva in agenda'}
+              {event.is_saved ? 'Salvato nei tuoi eventi' : 'Salva nei tuoi eventi'}
             </Button>
 
             <Button
@@ -986,7 +986,7 @@ function EventDetailPage() {
               </div>
               <div className={styles.groupChatHeaderActions}>
                 <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/agenda')}>
-                  Agenda
+                  Eventi
                 </Button>
                 <Button type="button" variant="ghost" size="sm" icon={X} onClick={() => setGroupChatOpen(false)}>
                   Chiudi

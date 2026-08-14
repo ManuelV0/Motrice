@@ -21,7 +21,7 @@ import IconButton from './IconButton';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { to: '/agenda', label: 'Eventi', icon: CalendarDays },
   { to: '/map', label: 'Mappa', icon: Map },
   { to: '/create', label: 'Crea', icon: PlusCircle, primary: true },
   { to: '/chat', label: 'Chat', icon: MessageCircle },

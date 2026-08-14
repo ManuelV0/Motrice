@@ -88,7 +88,7 @@ function PricingPage() {
         <div className={styles.walletActions}>
           <Link to="/agenda">
             <Button type="button" variant="secondary">
-              Vai in Agenda per sblocco quota
+              Vai in Eventi per sblocco quota
             </Button>
           </Link>
           <Button type="button" variant="ghost" onClick={unlockDeferred} disabled={!hasDeferred}>

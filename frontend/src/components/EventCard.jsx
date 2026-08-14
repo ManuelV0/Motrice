@@ -103,7 +103,7 @@ function EventCard({
             icon={event.is_saved ? BookmarkCheck : Bookmark}
             size={isFolder ? 'sm' : 'md'}
           >
-            {event.is_saved ? (isFolder ? 'Salvato' : 'Salvato in agenda') : isFolder ? 'Salva' : 'Salva in agenda'}
+            {event.is_saved ? (isFolder ? 'Salvato' : 'Salvato nei tuoi eventi') : isFolder ? 'Salva' : 'Salva nei tuoi eventi'}
           </Button>
         )}
         <Link to={`/events/${event.id}`}>

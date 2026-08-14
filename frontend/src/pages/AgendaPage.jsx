@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Activity,
   CalendarX2,
@@ -14,27 +14,15 @@ import QRCode from 'qrcode';
 import { api } from '../services/api';
 import { piggybank } from '../services/piggybank';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
-import { useBilling } from '../context/BillingContext';
-import PaywallModal from '../components/PaywallModal';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
-import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import { useUserLocation } from '../hooks/useUserLocation';
 import LocationPermissionAlert from '../components/LocationPermissionAlert';
 import styles from '../styles/pages/agenda.module.css';
-
-const defaults = {
-  section: 'owned',
-  view: 'today',
-  sport: 'all',
-  level: 'all',
-  timeOfDay: 'all'
-};
 
 function formatEventDay(value) {
   const date = new Date(value);
@@ -56,84 +44,73 @@ function formatDeposit(value) {
   return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: 2 }).format(amount)}€ deposito`;
 }
 
-function readStoredAgendaFiltersSafe() {
-  try {
-    const raw = safeStorageGet('motrice_agenda_filters_v1');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
+function groupEventsByDate(events) {
+  const groups = new Map();
+
+  events.forEach((event) => {
+    const date = new Date(event.event_datetime);
+    const label = date.toLocaleDateString('it-IT', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+    groups.set(label, [...(groups.get(label) || []), event]);
+  });
+
+  return Array.from(groups, ([label, items]) => ({ label, items }));
 }
 
 function AgendaPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { entitlements } = useBilling();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [sports, setSports] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [ownedEvents, setOwnedEvents] = useState([]);
+  const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [paywallOpen, setPaywallOpen] = useState(false);
   const [qrEvent, setQrEvent] = useState(null);
   const [organizerQrUrl, setOrganizerQrUrl] = useState('');
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation } = useUserLocation();
 
-  const [filters, setFilters] = useState(() => {
-    const local = readStoredAgendaFiltersSafe();
-    return readFiltersFromSearch(searchParams, { ...defaults, ...(local || {}) });
-  });
-
   usePageMeta({
-    title: 'Agenda | Motrice',
-    description: 'Vista oggi, settimana e mese delle tue sessioni sportive locali.'
+    title: 'Eventi | Motrice',
+    description: 'Tutti gli eventi che organizzi, salvi o a cui partecipi in un unica vista.'
   });
-
-  useEffect(() => {
-    api.listSports().then(setSports);
-  }, []);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([
-      api.listAgenda(filters.view, filters),
-      api.listEvents({ ...filters, dateRange: 'all', sortBy: 'soonest' })
-    ])
-      .then(([nextGroups, events]) => {
+    api
+      .listEvents({ dateRange: 'all', sortBy: 'soonest' })
+      .then((nextEvents) => {
         if (!active) return;
-        setGroups(nextGroups);
-        setOwnedEvents(events.filter((event) => event.created_by === 'me'));
+        setEvents(Array.isArray(nextEvents) ? nextEvents : []);
       })
       .catch((error) => {
-        if (active) showToast(error?.message || 'Impossibile aggiornare l agenda', 'error');
+        if (active) showToast(error?.message || 'Impossibile aggiornare gli eventi', 'error');
       })
       .finally(() => {
         if (active) setLoading(false);
       });
 
-    safeStorageSet('motrice_agenda_filters_v1', JSON.stringify(filters));
-    setSearchParams(writeFiltersToSearch(searchParams, filters, defaults), { replace: true });
-
     return () => {
       active = false;
     };
-  }, [filters]);
+  }, [showToast]);
+
+  const ownedEvents = useMemo(
+    () => events.filter((event) => event.created_by === 'me'),
+    [events]
+  );
+  const participatingEvents = useMemo(
+    () => events.filter((event) => event.created_by !== 'me' && (event.is_going || event.is_saved)),
+    [events]
+  );
 
   const participatingGroups = useMemo(
-    () =>
-      groups
-        .map((group) => ({ ...group, items: group.items.filter((event) => event.is_going) }))
-        .filter((group) => group.items.length > 0),
-    [groups]
+    () => groupEventsByDate(participatingEvents),
+    [participatingEvents]
   );
-  const participatingCount = useMemo(
-    () => new Set(participatingGroups.flatMap((group) => group.items.map((event) => String(event.id)))).size,
-    [participatingGroups]
-  );
-  const hasItems = filters.section === 'owned' ? ownedEvents.length > 0 : participatingCount > 0;
+  const participatingCount = participatingEvents.length;
+  const hasItems = ownedEvents.length > 0 || participatingCount > 0;
 
   useEffect(() => {
     let active = true;
@@ -170,9 +147,9 @@ function AgendaPage() {
   async function removeFromAgenda(eventId) {
     try {
       await api.unsaveEvent(eventId);
-      const refreshed = await api.listAgenda(filters.view, filters);
-      setGroups(refreshed);
-      showToast('Evento rimosso dall agenda', 'info');
+      const refreshed = await api.listEvents({ dateRange: 'all', sortBy: 'soonest' });
+      setEvents(Array.isArray(refreshed) ? refreshed : []);
+      showToast('Evento rimosso dai tuoi eventi', 'info');
     } catch (error) {
       showToast(error.message || 'Impossibile rimuovere evento', 'error');
     }
@@ -219,235 +196,181 @@ function AgendaPage() {
     }
   }
 
-  function selectView(view) {
-    if ((view === 'week' || view === 'month') && !entitlements.canUseAgendaWeekMonth) {
-      setPaywallOpen(true);
-      return;
-    }
-    setFilters((prev) => ({ ...prev, view }));
-  }
-
   return (
     <section className={styles.page}>
       <div className={styles.head}>
         <div>
-          <span className={styles.eyebrow}>Agenda personale</span>
-          <h1>Agenda</h1>
+          <span className={styles.eyebrow}>Tutto in un unico posto</span>
+          <h1>I miei eventi</h1>
+          <p>Eventi creati, partecipazioni e contenuti salvati senza filtri.</p>
         </div>
-        {filters.section === 'participating' ? (
-          <div className={styles.tabs}>
-            <Button type="button" variant={filters.view === 'today' ? 'primary' : 'secondary'} onClick={() => selectView('today')}>
-              Oggi
-            </Button>
-            <Button type="button" variant={filters.view === 'week' ? 'primary' : 'secondary'} onClick={() => selectView('week')}>
-              Settimana {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
-            </Button>
-            <Button type="button" variant={filters.view === 'month' ? 'primary' : 'secondary'} onClick={() => selectView('month')}>
-              Mese {!entitlements.canUseAgendaWeekMonth ? '🔒' : ''}
-            </Button>
-          </div>
-        ) : null}
+        <div className={styles.summary} aria-label="Riepilogo eventi">
+          <span><strong>{ownedEvents.length}</strong> creati</span>
+          <span><strong>{participatingCount}</strong> partecipo o salvati</span>
+        </div>
       </div>
-
-      <div className={styles.sectionSwitch} role="tablist" aria-label="Tipo di eventi in agenda">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={filters.section === 'owned'}
-          className={filters.section === 'owned' ? styles.sectionActive : ''}
-          onClick={() => setFilters((prev) => ({ ...prev, section: 'owned' }))}
-        >
-          I miei eventi <span>{ownedEvents.length}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={filters.section === 'participating'}
-          className={filters.section === 'participating' ? styles.sectionActive : ''}
-          onClick={() => setFilters((prev) => ({ ...prev, section: 'participating' }))}
-        >
-          Partecipo <span>{participatingCount}</span>
-        </button>
-      </div>
-
-      {filters.section === 'participating' ? (
-        <>
-          <LocationPermissionAlert
-            hasLocation={hasLocation}
-            permission={permission}
-            error={locationError}
-            requesting={requesting}
-            onRequest={requestLocation}
-          />
-
-          <Card className="grid3">
-            <label>
-              Sport
-              <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
-                <option value="all">Tutti</option>
-                {sports.map((sport) => (
-                  <option key={sport.id} value={sport.id}>
-                    {sport.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              Livello
-              <select value={filters.level} onChange={(event) => setFilters((prev) => ({ ...prev, level: event.target.value }))}>
-                <option value="all">Tutti</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-            </label>
-
-            <label>
-              Fascia
-              <select value={filters.timeOfDay} onChange={(event) => setFilters((prev) => ({ ...prev, timeOfDay: event.target.value }))}>
-                <option value="all">Tutte</option>
-                <option value="morning">Mattina</option>
-                <option value="afternoon">Pomeriggio</option>
-                <option value="evening">Sera</option>
-              </select>
-            </label>
-          </Card>
-        </>
-      ) : null}
 
       {loading ? (
         <LoadingSkeleton rows={3} variant="detail" />
       ) : !hasItems ? (
         <EmptyState
           icon={CalendarX2}
-          title={filters.section === 'owned' ? 'Nessun evento organizzato' : 'Nessuna partecipazione in agenda'}
-          description={
-            filters.section === 'owned'
-              ? 'Crea il tuo primo evento e gestisci iscritti, QR e check-in da qui.'
-              : 'Non partecipi ancora a eventi in questa finestra temporale.'
-          }
-          primaryActionLabel={filters.section === 'owned' ? 'Crea evento' : 'Apri la mappa'}
-          onPrimaryAction={() => navigate(filters.section === 'owned' ? '/create' : '/map')}
-          secondaryActionLabel="Azzera filtri"
-          onSecondaryAction={() => setFilters(defaults)}
+          title="Nessun evento"
+          description="Crea un evento oppure trova sulla mappa la prossima attività a cui partecipare."
+          primaryActionLabel="Crea evento"
+          onPrimaryAction={() => navigate('/create')}
+          secondaryActionLabel="Apri la mappa"
+          onSecondaryAction={() => navigate('/map')}
         />
-      ) : filters.section === 'owned' ? (
-        <div className={styles.ownedList} role="tabpanel">
-          {ownedEvents.map((event) => {
-            const participants = Math.max(0, Number(event.participants_count || 0));
-            const capacity = Math.max(1, Number(event.max_participants || 1));
-            const fillPercent = Math.min(100, Math.round((participants / capacity) * 100));
-
-            return (
-              <article
-                key={event.id}
-                className={styles.ownedCard}
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate(`/events/${event.id}`)}
-                onKeyDown={(keyboardEvent) => {
-                  if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
-                    keyboardEvent.preventDefault();
-                    navigate(`/events/${event.id}`);
-                  }
-                }}
-              >
-                <div className={styles.cardTopline}>
-                  <span className={styles.sportIcon} aria-hidden="true"><Activity size={26} /></span>
-                  <div className={styles.cardTitle}>
-                    <h2>{event.title || event.sport_name}</h2>
-                    <span><MapPin size={15} /> {event.location_name || event.city}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className={styles.qrShortcut}
-                    aria-label={`Mostra QR organizer per ${event.title}`}
-                    onClick={(clickEvent) => {
-                      clickEvent.stopPropagation();
-                      setQrEvent(event);
-                    }}
-                  >
-                    <QrCode size={22} />
-                  </button>
+      ) : (
+        <>
+          {ownedEvents.length > 0 ? (
+            <section className={styles.eventSection} aria-labelledby="owned-events-title">
+              <div className={styles.sectionHeader}>
+                <div>
+                  <span className={styles.eyebrow}>Modalità organizer</span>
+                  <h2 id="owned-events-title">Creati da te</h2>
                 </div>
+                <span className={styles.sectionCount}>{ownedEvents.length}</span>
+              </div>
 
-                <div className={styles.cardMeta}>
-                  <span><Clock3 size={16} /> {formatEventDay(event.event_datetime)} {formatEventTime(event.event_datetime)}</span>
-                  <span><Users size={16} /> {participants}/{capacity} iscritti</span>
-                  <span className={styles.deposit}><WalletCards size={16} /> {formatDeposit(event.deposit_cents)}</span>
-                </div>
+              <div className={styles.ownedList}>
+                {ownedEvents.map((event) => {
+                  const participants = Math.max(0, Number(event.participants_count || 0));
+                  const capacity = Math.max(1, Number(event.max_participants || 1));
+                  const fillPercent = Math.min(100, Math.round((participants / capacity) * 100));
 
-                <div className={styles.capacityTrack} aria-label={`Capienza ${fillPercent}%`}>
-                  <span style={{ width: `${fillPercent}%` }} />
+                  return (
+                    <article
+                      key={event.id}
+                      className={styles.ownedCard}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/events/${event.id}`)}
+                      onKeyDown={(keyboardEvent) => {
+                        if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                          keyboardEvent.preventDefault();
+                          navigate(`/events/${event.id}`);
+                        }
+                      }}
+                    >
+                      <div className={styles.cardTopline}>
+                        <span className={styles.sportIcon} aria-hidden="true"><Activity size={26} /></span>
+                        <div className={styles.cardTitle}>
+                          <h2>{event.title || event.sport_name}</h2>
+                          <span><MapPin size={15} /> {event.location_name || event.city}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className={styles.qrShortcut}
+                          aria-label={`Mostra QR organizer per ${event.title}`}
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation();
+                            setQrEvent(event);
+                          }}
+                        >
+                          <QrCode size={22} />
+                        </button>
+                      </div>
+
+                      <div className={styles.cardMeta}>
+                        <span><Clock3 size={16} /> {formatEventDay(event.event_datetime)} {formatEventTime(event.event_datetime)}</span>
+                        <span><Users size={16} /> {participants}/{capacity} iscritti</span>
+                        <span className={styles.deposit}><WalletCards size={16} /> {formatDeposit(event.deposit_cents)}</span>
+                      </div>
+
+                      <div className={styles.capacityTrack} aria-label={`Capienza ${fillPercent}%`}>
+                        <span style={{ width: `${fillPercent}%` }} />
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {participatingCount > 0 ? (
+            <section className={styles.eventSection} aria-labelledby="participating-events-title">
+              <div className={styles.sectionHeader}>
+                <div>
+                  <span className={styles.eyebrow}>Partecipazioni e preferiti</span>
+                  <h2 id="participating-events-title">Partecipo o salvati</h2>
                 </div>
-              </article>
-            );
-          })}
+                <span className={styles.sectionCount}>{participatingCount}</span>
+              </div>
+
+              <LocationPermissionAlert
+                hasLocation={hasLocation}
+                permission={permission}
+                error={locationError}
+                requesting={requesting}
+                onRequest={requestLocation}
+              />
+
+              <div className={styles.groups}>
+                {participatingGroups.map((group) => (
+                  <Card as="section" key={group.label}>
+                    <h2>{group.label}</h2>
+                    <ul className={styles.list}>
+                      {group.items.map((event) => (
+                        <li key={event.id} className={styles.item}>
+                          <div className={styles.itemMain}>
+                            <div>
+                              <Link to={`/events/${event.id}`}>{event.title || event.sport_name}</Link>
+                              <span className="muted"> {event.location_name}</span>
+                              <span className="muted">{' '}
+                                {new Date(event.event_datetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className={styles.metaRow}>
+                              {event.is_going ? (
+                                <span className={styles.metaBadge}>
+                                  {Number(event.user_rsvp?.participation_fee_cents || 0) > 0
+                                    ? `Quota ${Number(event.user_rsvp.participation_fee_cents) / 100} EUR`
+                                    : 'Quota esente (Premium)'}
+                                </span>
+                              ) : null}
+                              {Number(event.group_chat_unread_count || 0) > 0 ? (
+                                <span className={styles.unreadBadge}>
+                                  Chat gruppo: {event.group_chat_unread_count} new
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className={styles.itemActions}>
+                            {event.is_going && [500, 1000].includes(Number(event.user_rsvp?.participation_fee_cents || 0)) ? (
+                              <Button type="button" variant="secondary" size="sm" onClick={() => unlockStakeWithPosition(event)}>
+                                Sblocca quota (posizione)
+                              </Button>
+                            ) : null}
+                            {event.is_going ? (
+                              <Link to={`/events/${event.id}?chat=group`}>
+                                <Button type="button" variant="secondary" size="sm">Chat gruppo</Button>
+                              </Link>
+                            ) : null}
+                            {event.is_saved ? (
+                              <Button type="button" variant="ghost" size="sm" onClick={() => removeFromAgenda(event.id)}>
+                                Rimuovi
+                              </Button>
+                            ) : (
+                              <span className="muted">RSVP</span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <Link className={styles.createFab} to="/create" aria-label="Crea un nuovo evento">
             <Plus size={32} />
           </Link>
-        </div>
-      ) : (
-        <div className={styles.groups}>
-          {participatingGroups.map((group) => (
-            <Card as="section" key={group.label}>
-              <h2>{group.label}</h2>
-              <ul className={styles.list}>
-                {group.items.map((event) => (
-                  <li key={event.id} className={styles.item}>
-                    <div className={styles.itemMain}>
-                      <div>
-                        <Link to={`/events/${event.id}`}>{event.sport_name}</Link>
-                        <span className="muted"> {event.location_name}</span>
-                        <span className="muted">{' '}
-                          {new Date(event.event_datetime).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      <div className={styles.metaRow}>
-                        {event.is_going ? (
-                          <span className={styles.metaBadge}>
-                            {Number(event.user_rsvp?.participation_fee_cents || 0) > 0
-                              ? `Quota ${Number(event.user_rsvp.participation_fee_cents) / 100} EUR`
-                              : 'Quota esente (Premium)'}
-                          </span>
-                        ) : null}
-                        {Number(event.group_chat_unread_count || 0) > 0 ? (
-                          <span className={styles.unreadBadge}>
-                            Chat gruppo: {event.group_chat_unread_count} new
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className={styles.itemActions}>
-                      {event.is_going && [500, 1000].includes(Number(event.user_rsvp?.participation_fee_cents || 0)) ? (
-                        <Button type="button" variant="secondary" size="sm" onClick={() => unlockStakeWithPosition(event)}>
-                          Sblocca quota (posizione)
-                        </Button>
-                      ) : null}
-                      {event.is_going ? (
-                        <Link to={`/events/${event.id}?chat=group`}>
-                          <Button type="button" variant="secondary" size="sm">Chat gruppo</Button>
-                        </Link>
-                      ) : null}
-                      {event.is_saved ? (
-                        <Button type="button" variant="ghost" size="sm" onClick={() => removeFromAgenda(event.id)}>
-                          Rimuovi
-                        </Button>
-                      ) : (
-                        <span className="muted">RSVP</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ))}
-        </div>
+        </>
       )}
 
-      <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Vista agenda Settimana/Mese" />
       <Modal
         open={Boolean(qrEvent)}
         title="QR presenza organizer"
