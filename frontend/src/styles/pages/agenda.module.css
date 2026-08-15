@@ -147,7 +147,6 @@
   position: relative;
   display: grid;
   gap: var(--s-4);
-  padding-bottom: 5.5rem;
 }
 
 .ownedCard {
@@ -297,32 +296,6 @@
   background: var(--accent);
   box-shadow: 0 0 0.8rem color-mix(in srgb, var(--accent) 55%, transparent);
   transition: width var(--dur-med) var(--ease-out);
-}
-
-.createFab {
-  position: fixed;
-  right: max(var(--s-5), calc((100vw - var(--w-content, 74rem)) / 2 + var(--s-5)));
-  bottom: calc(var(--bottom-nav-h, 0px) + env(safe-area-inset-bottom, 0px) + var(--s-5));
-  z-index: var(--z-sticky);
-  width: 4.25rem;
-  height: 4.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--primary-contrast);
-  box-shadow: 0 0 2rem color-mix(in srgb, var(--accent) 42%, transparent), var(--sh-2);
-  text-decoration: none;
-  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
-}
-
-.createFab:hover,
-.createFab:focus-visible {
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 0 2.4rem color-mix(in srgb, var(--accent) 55%, transparent), var(--sh-3);
-  outline: 2px solid color-mix(in srgb, var(--accent) 50%, white);
-  outline-offset: 3px;
 }
 
 .qrSheetContent {
@@ -494,16 +467,11 @@
     grid-column: 1 / -1;
   }
 
-  .createFab {
-    right: var(--s-4);
-    bottom: calc(var(--bottom-nav-h, 4.75rem) + env(safe-area-inset-bottom, 0px) + var(--s-3));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ownedCard,
   .qrShortcut,
-  .createFab,
   .capacityTrack span {
     transition: none;
   }

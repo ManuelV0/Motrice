@@ -5,7 +5,6 @@ import {
   CalendarX2,
   Clock3,
   MapPin,
-  Plus,
   QrCode,
   Users,
   WalletCards
@@ -66,6 +65,7 @@ function AgendaPage() {
   const { showToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState('created');
   const [qrEvent, setQrEvent] = useState(null);
   const [organizerQrUrl, setOrganizerQrUrl] = useState('');
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation } = useUserLocation();
@@ -210,21 +210,40 @@ function AgendaPage() {
         </div>
       </div>
 
+      <div className={styles.sectionSwitch} role="tablist" aria-label="Seleziona gli eventi da mostrare">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'created'}
+          className={activeSection === 'created' ? styles.sectionActive : undefined}
+          onClick={() => setActiveSection('created')}
+        >
+          Creati <span>{ownedEvents.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'participating'}
+          className={activeSection === 'participating' ? styles.sectionActive : undefined}
+          onClick={() => setActiveSection('participating')}
+        >
+          Partecipo <span>{participatingCount}</span>
+        </button>
+      </div>
+
       {loading ? (
         <LoadingSkeleton rows={3} variant="detail" />
       ) : !hasItems ? (
         <EmptyState
           icon={CalendarX2}
           title="Nessun evento"
-          description="Crea un evento oppure trova sulla mappa la prossima attività a cui partecipare."
-          primaryActionLabel="Crea evento"
-          onPrimaryAction={() => navigate('/create')}
-          secondaryActionLabel="Apri la mappa"
-          onSecondaryAction={() => navigate('/map')}
+          description="Trova sulla mappa la prossima attività a cui partecipare."
+          primaryActionLabel="Apri la mappa"
+          onPrimaryAction={() => navigate('/map')}
         />
       ) : (
         <>
-          {ownedEvents.length > 0 ? (
+          {activeSection === 'created' && ownedEvents.length > 0 ? (
             <section className={styles.eventSection} aria-labelledby="owned-events-title">
               <div className={styles.sectionHeader}>
                 <div>
@@ -289,7 +308,15 @@ function AgendaPage() {
             </section>
           ) : null}
 
-          {participatingCount > 0 ? (
+          {activeSection === 'created' && ownedEvents.length === 0 ? (
+            <EmptyState
+              icon={CalendarX2}
+              title="Nessun evento creato"
+              description="Gli eventi che organizzerai compariranno qui."
+            />
+          ) : null}
+
+          {activeSection === 'participating' && participatingCount > 0 ? (
             <section className={styles.eventSection} aria-labelledby="participating-events-title">
               <div className={styles.sectionHeader}>
                 <div>
@@ -365,9 +392,15 @@ function AgendaPage() {
             </section>
           ) : null}
 
-          <Link className={styles.createFab} to="/create" aria-label="Crea un nuovo evento">
-            <Plus size={32} />
-          </Link>
+          {activeSection === 'participating' && participatingCount === 0 ? (
+            <EmptyState
+              icon={CalendarX2}
+              title="Nessuna partecipazione"
+              description="Gli eventi a cui partecipi o che salvi compariranno qui."
+              primaryActionLabel="Apri la mappa"
+              onPrimaryAction={() => navigate('/map')}
+            />
+          ) : null}
         </>
       )}
 
