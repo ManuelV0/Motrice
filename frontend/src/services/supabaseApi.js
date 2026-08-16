@@ -205,14 +205,14 @@ async function loadEventContext(client, rawEvents) {
   const authUserId = currentAuthUserId();
 
   if (!eventIds.length) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map() };
+    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map() };
   }
 
   if (!authUserId) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map() };
+    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map() };
   }
 
-  const [participantsResult, savedResult, organizersResult] = await Promise.all([
+  const [participantsResult, savedResult, organizersResult, joinRequestsResult] = await Promise.all([
     client
       .from('event_participants')
       .select(
@@ -229,12 +229,18 @@ async function loadEventContext(client, rawEvents) {
           .from('profiles')
           .select('id,display_name,avatar_url,bio,reliability_score')
           .in('id', creatorIds)
-      : Promise.resolve({ data: [], error: null })
+      : Promise.resolve({ data: [], error: null }),
+    client
+      .from('event_join_requests')
+      .select('event_id,status,requested_at')
+      .eq('user_id', authUserId)
+      .in('event_id', eventIds)
   ]);
 
   throwIfError(participantsResult.error);
   throwIfError(savedResult.error);
   throwIfError(organizersResult.error);
+  throwIfError(joinRequestsResult.error);
 
   const participants = participantsResult.data || [];
   participants.forEach((participant) => rememberProfile(participant.profile));
@@ -244,7 +250,10 @@ async function loadEventContext(client, rawEvents) {
   return {
     participants,
     savedEventIds: new Set((savedResult.data || []).map((item) => String(item.event_id))),
-    organizers: new Map(organizerRows.map((profile) => [String(profile.id), profile]))
+    organizers: new Map(organizerRows.map((profile) => [String(profile.id), profile])),
+    joinRequests: new Map(
+      (joinRequestsResult.data || []).map((request) => [String(request.event_id), request])
+    )
   };
 }
 
@@ -257,6 +266,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   );
   const ownParticipation =
     participants.find((participant) => String(participant.user_id) === authUserId) || null;
+  const ownJoinRequest = context.joinRequests.get(String(rawEvent.id)) || null;
   const organizer = context.organizers.get(String(rawEvent.creator_id)) || null;
   if (organizer) rememberProfile(organizer);
   const origin = resolveOrigin(filters);
@@ -304,11 +314,18 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     geofence_radius_m: Number(rawEvent.geofence_radius_m ?? 250),
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
+    status: rawEvent.status || 'scheduled',
+    audience: rawEvent.audience || 'mixed',
+    visibility: rawEvent.visibility || 'public',
+    join_policy: rawEvent.join_policy || 'open',
+    is_personal: Boolean(rawEvent.is_personal),
     created_by: rawEvent.creator_id === authUserId ? 'me' : rawEvent.creator_id,
     creator_plan: 'free',
     featured_boost: false,
     distance_km: distanceKm,
     is_going: Boolean(ownParticipation),
+    is_join_pending: ownJoinRequest?.status === 'pending',
+    join_request_status: ownJoinRequest?.status || null,
     is_saved: context.savedEventIds.has(String(rawEvent.id)),
     user_rsvp: ownParticipation
       ? {
@@ -342,8 +359,17 @@ async function fetchEvents(filters = {}) {
   const { data, error } = await query;
   throwIfError(error);
   const context = await loadEventContext(client, data);
+  const authUserId = currentAuthUserId();
+  const visibleEvents = (data || []).filter((event) => {
+    if (event.visibility !== 'private') return true;
+    if (event.creator_id === authUserId) return true;
+    const participant = context.participants.some(
+      (item) => String(item.event_id) === String(event.id) && String(item.user_id) === authUserId
+    );
+    return participant || context.joinRequests.has(String(event.id));
+  });
   return filterAndSortEvents(
-    (data || []).map((event) => normalizeEvent(event, context, filters)),
+    visibleEvents.map((event) => normalizeEvent(event, context, filters)),
     filters
   );
 }
@@ -395,7 +421,11 @@ function createRemoteMethods(localApi) {
           verification_mode: payload.verification_mode || 'both',
           geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
           completion_xp: Number(payload.completion_xp ?? 50),
-          review_bonus_xp: Number(payload.review_bonus_xp ?? 25)
+          review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
+          audience: payload.audience || 'mixed',
+          visibility: payload.visibility || 'public',
+          join_policy: payload.join_policy || 'open',
+          is_personal: Boolean(payload.is_personal)
         })
         .select('id')
         .single();
@@ -429,10 +459,78 @@ function createRemoteMethods(localApi) {
     async joinEvent(id, payload = {}) {
       const client = requireSupabase();
       await ensureMyProfile(client);
-      const { data, error } = await client.rpc('join_event', {
+      const eventResult = await client
+        .from('events')
+        .select('id,join_policy,is_personal')
+        .eq('id', String(id))
+        .single();
+      throwIfError(eventResult.error);
+      if (eventResult.data?.is_personal) {
+        throw new Error('Questo evento e un promemoria personale');
+      }
+      const rpcName = eventResult.data?.join_policy === 'approval' ? 'request_event_join' : 'join_event';
+      const { data, error } = await client.rpc(rpcName, {
         target_event_id: String(id),
         participant_skill_level: payload.skill_level || 'beginner',
         participant_note: normalizeText(payload.note)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async listEventJoinRequests(eventId) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client
+        .from('event_join_requests')
+        .select(
+          'event_id,user_id,status,skill_level,note,requested_at,profile:profiles!event_join_requests_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
+        )
+        .eq('event_id', String(eventId))
+        .eq('status', 'pending')
+        .order('requested_at', { ascending: true });
+      throwIfError(error);
+      return (data || []).map((request) => {
+        rememberProfile(request.profile);
+        return {
+          ...request,
+          user_id: legacyProfileId(request.user_id),
+          auth_user_id: request.user_id,
+          display_name: request.profile?.display_name || 'Partecipante',
+          avatar_url: request.profile?.avatar_url || '',
+          bio: request.profile?.bio || ''
+        };
+      });
+    },
+
+    async approveEventJoinRequest(eventId, userId) {
+      const client = requireSupabase();
+      const targetUserId = resolveProfileUuid(userId);
+      if (!targetUserId) throw new Error('Partecipante non valido');
+      const { data, error } = await client.rpc('approve_event_join_request', {
+        target_event_id: String(eventId),
+        target_user_id: targetUserId
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async declineEventJoinRequest(eventId, userId) {
+      const client = requireSupabase();
+      const targetUserId = resolveProfileUuid(userId);
+      if (!targetUserId) throw new Error('Partecipante non valido');
+      const { data, error } = await client.rpc('decline_event_join_request', {
+        target_event_id: String(eventId),
+        target_user_id: targetUserId
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async completePersonalEvent(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('complete_personal_event', {
+        target_event_id: String(eventId)
       });
       throwIfError(error);
       return data;

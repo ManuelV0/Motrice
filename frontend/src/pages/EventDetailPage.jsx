@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
-import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X } from 'lucide-react';
+import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X, CheckCircle2 } from 'lucide-react';
 import { api } from '../services/api';
 import { chatApi } from '../services/chatApi';
 import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
@@ -89,6 +89,7 @@ function EventDetailPage() {
   });
   const [checkedInParticipants, setCheckedInParticipants] = useState([]);
   const [friendRequestBusyById, setFriendRequestBusyById] = useState({});
+  const [personalEventBusy, setPersonalEventBusy] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
@@ -341,10 +342,14 @@ function EventDetailPage() {
     }
 
     try {
-      await api.joinEvent(id, rsvpForm);
+      const result = await api.joinEvent(id, rsvpForm);
       await reload();
-      showToast('RSVP confermato', 'success');
-      markStepByAction('rsvp_confirmed');
+      if (result?.pending) {
+        showToast('Richiesta inviata all organizer', 'success');
+      } else {
+        showToast('RSVP confermato', 'success');
+        markStepByAction('rsvp_confirmed');
+      }
       setModalOpen(false);
     } catch (err) {
       showToast(err.message, 'error');
@@ -372,6 +377,24 @@ function EventDetailPage() {
       setCancelConfirmOpen(false);
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  }
+
+  async function completePersonalEvent() {
+    setPersonalEventBusy(true);
+    try {
+      const result = await api.completePersonalEvent(id);
+      await reload();
+      showToast(
+        result?.already_completed
+          ? 'Allenamento gia registrato'
+          : `Allenamento registrato · +${result?.xp_awarded || event?.completion_xp || 5} PX`,
+        result?.already_completed ? 'info' : 'success'
+      );
+    } catch (err) {
+      showToast(err.message || 'Impossibile completare il promemoria', 'error');
+    } finally {
+      setPersonalEventBusy(false);
     }
   }
 
@@ -674,6 +697,8 @@ function EventDetailPage() {
               <EventBadge label={event.level} type="level" />
               <EventBadge label={`${event.participants_count}/${event.max_participants}`} type="status" />
               {event.is_going && <EventBadge label="You're going" type="status" />}
+              {event.is_join_pending && <EventBadge label="Richiesta inviata" type="status" />}
+              {event.is_personal && <EventBadge label="Solo tu" type="premium" />}
               {event.creator_plan === 'premium' && <EventBadge label="Premium" type="premium" />}
             </div>
           </div>
@@ -689,19 +714,34 @@ function EventDetailPage() {
             <strong>Dove:</strong> {event.location_name}
           </p>
           <p>
-            <strong>Deposito:</strong>{' '}
-            {(Number(event.deposit_cents || 0) / 100).toLocaleString('it-IT', {
-              style: 'currency',
-              currency: 'EUR'
-            })}
+            <strong>Categoria:</strong>{' '}
+            {event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto'}
             {' · '}
-            <strong>Cashback:</strong> 60% al check-in, 100% al completamento
+            <strong>Visibilita:</strong> {event.visibility === 'private' ? 'Privato' : 'Pubblico'}
+            {!event.is_personal && event.visibility === 'public' ? (
+              <> {' · '}<strong>Accesso:</strong> {event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</>
+            ) : null}
           </p>
-          <p>
-            <strong>Obiettivo:</strong> {Number(event.minimum_presence_minutes || 45)} min di presenza
-            {' · '}
-            <strong>Ricompensa:</strong> +{Number(event.completion_xp || 50)} PX
-          </p>
+          {event.is_personal ? (
+            <p><strong>Promemoria personale:</strong> visibile soltanto a te.</p>
+          ) : (
+            <>
+              <p>
+                <strong>Deposito:</strong>{' '}
+                {(Number(event.deposit_cents || 0) / 100).toLocaleString('it-IT', {
+                  style: 'currency',
+                  currency: 'EUR'
+                })}
+                {' · '}
+                <strong>Cashback:</strong> 60% al check-in, 100% al completamento
+              </p>
+              <p>
+                <strong>Obiettivo:</strong> {Number(event.minimum_presence_minutes || 45)} min di presenza
+                {' · '}
+                <strong>Ricompensa:</strong> +{Number(event.completion_xp || 50)} PX
+              </p>
+            </>
+          )}
           {event.route_info ? (
             <Card subtle>
               <h2>Informazioni percorso</h2>
@@ -730,10 +770,30 @@ function EventDetailPage() {
           ) : null}
 
           <div className={styles.actions}>
-            {!isOrganizerForEvent ? (
-              !event.is_going ? (
+            {isOrganizerForEvent && event.is_personal ? (
+              <Button
+                type="button"
+                onClick={completePersonalEvent}
+                icon={CheckCircle2}
+                disabled={personalEventBusy || !event.has_passed || event.status === 'completed'}
+              >
+                {event.status === 'completed'
+                  ? 'Allenamento completato'
+                  : personalEventBusy
+                    ? 'Registrazione...'
+                    : event.has_passed
+                      ? `Completa e ottieni +${event.completion_xp || 5} PX`
+                      : 'Disponibile al termine'}
+              </Button>
+            ) : null}
+            {!isOrganizerForEvent && !event.is_personal ? (
+              event.is_join_pending ? (
+                <Button type="button" variant="secondary" disabled icon={UserPlus}>
+                  Richiesta inviata
+                </Button>
+              ) : !event.is_going ? (
                 <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
-                  Partecipa
+                  {event.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa'}
                 </Button>
               ) : (
                 <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
@@ -796,16 +856,18 @@ function EventDetailPage() {
             </Card>
           )}
 
-          <EventParticipationFlow
-            event={event}
-            isOrganizer={isOrganizerForEvent}
-            currentUser={currentUser}
-            coords={coords}
-            requestingLocation={requesting}
-            requestLocation={requestLocation}
-            showToast={showToast}
-            onEventRefresh={reload}
-          />
+          {!event.is_personal ? (
+            <EventParticipationFlow
+              event={event}
+              isOrganizer={isOrganizerForEvent}
+              currentUser={currentUser}
+              coords={coords}
+              requestingLocation={requesting}
+              requestLocation={requestLocation}
+              showToast={showToast}
+              onEventRefresh={reload}
+            />
+          ) : null}
 
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (
             <Card subtle className={styles.postWorkoutCard}>
@@ -903,10 +965,10 @@ function EventDetailPage() {
 
       <Modal
         open={modalOpen}
-        title="Partecipa alla sessione"
+        title={event?.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa alla sessione'}
         onClose={() => setModalOpen(false)}
         onConfirm={confirmRsvp}
-        confirmText="Blocca deposito e partecipa"
+        confirmText={event?.join_policy === 'approval' ? 'Invia richiesta' : 'Blocca deposito e partecipa'}
       >
         <label>
           Nome
@@ -944,8 +1006,9 @@ function EventDetailPage() {
             })}
           </p>
           <p className="muted">
-            Viene bloccato nel wallet, non addebitato. Il cashback passa al 60% con il QR e al 100%
-            dopo {Number(event?.minimum_presence_minutes || 45)} minuti verificati.
+            {event?.join_policy === 'approval'
+              ? `Il deposito verra bloccato soltanto dopo l approvazione. Riceverai quindi il QR personale.`
+              : `Viene bloccato nel wallet, non addebitato. Il cashback passa al 60% con il QR e al 100% dopo ${Number(event?.minimum_presence_minutes || 45)} minuti verificati.`}
           </p>
         </Card>
       </Modal>

@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
+  CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Globe2,
+  LockKeyhole,
   MapPin,
   MapPinned,
   Minus,
@@ -16,7 +19,10 @@ import {
   Sparkles,
   Trash2,
   Undo2,
+  UserRound,
+  UserRoundCheck,
   Users,
+  UsersRound,
   WalletCards
 } from 'lucide-react';
 import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
@@ -31,6 +37,7 @@ import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
 import { geocodeAddress, geocodeEventLocation } from '../services/geocoding';
+import { downloadEventIcs } from '../utils/ics';
 import styles from '../styles/pages/createEvent.module.css';
 
 const initialState = {
@@ -47,6 +54,11 @@ const initialState = {
   completion_xp: 50,
   review_bonus_xp: 25,
   max_participants: 8,
+  audience: 'mixed',
+  visibility: 'public',
+  join_policy: 'open',
+  add_to_calendar: true,
+  is_personal: false,
   location_name: '',
   lat: '',
   lng: '',
@@ -70,7 +82,7 @@ const ROUTE_SPORT_SLUGS = new Set(['running', 'bici', 'trekking', 'ciclismo', 'c
 const WIZARD_STEPS = [
   { id: 1, label: 'Info base', description: 'Sport, livello e orario' },
   { id: 2, label: 'Luogo', description: 'Posizione e percorso' },
-  { id: 3, label: 'Regole', description: 'Deposito, verifica e dettagli' }
+  { id: 3, label: 'Regole', description: 'Accesso, verifica e pubblicazione' }
 ];
 
 const LEVEL_OPTIONS = [
@@ -84,6 +96,12 @@ const DURATION_PRESETS = [60, 90, 120];
 const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
 const PRESENCE_PRESETS = [30, 45, 60, 90];
 
+const AUDIENCE_OPTIONS = [
+  { value: 'mixed', label: 'Misto', copy: 'Aperto a tutti, senza distinzioni.', icon: UsersRound },
+  { value: 'male', label: 'Maschile', copy: 'Categoria maschile.', icon: UserRound },
+  { value: 'female', label: 'Femminile', copy: 'Categoria femminile.', icon: UserRoundCheck }
+];
+
 const SPORT_VISUALS = {
   running: { emoji: '🏃', subtitle: 'Gruppi corsa' },
   padel: { emoji: '🎾', subtitle: 'Doppio · Singolo' },
@@ -94,7 +112,7 @@ const SPORT_VISUALS = {
 };
 
 const STEP_ERROR_FIELDS = {
-  1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants'],
+  1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants', 'audience'],
   2: [
     'city',
     'location_name',
@@ -113,6 +131,8 @@ const STEP_ERROR_FIELDS = {
     'geofence_radius_m',
     'completion_xp',
     'review_bonus_xp',
+    'visibility',
+    'join_policy',
     'description'
   ]
 };
@@ -179,6 +199,7 @@ function CreateEventPage() {
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const groupSettingsRef = useRef(null);
   const { requesting, requestLocation } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
@@ -191,6 +212,19 @@ function CreateEventPage() {
     api.listSports().then(setSports);
     api.getEventCreationStats().then(setCreationStats);
   }, []);
+
+  useEffect(() => {
+    const eventDateTime = eventDate && eventTime ? `${eventDate}T${eventTime}` : '';
+    setForm((prev) => (prev.event_datetime === eventDateTime ? prev : { ...prev, event_datetime: eventDateTime }));
+    if (eventDateTime) {
+      setErrors((prev) => {
+        if (!prev.event_datetime) return prev;
+        const next = { ...prev };
+        delete next.event_datetime;
+        return next;
+      });
+    }
+  }, [eventDate, eventTime]);
 
   const selectedSport = useMemo(
     () => sports.find((item) => String(item.id) === String(form.sport_id)) || null,
@@ -252,13 +286,71 @@ function CreateEventPage() {
     });
   }
 
-  function updateEventDateTime(nextDate, nextTime) {
-    setField('event_datetime', nextDate && nextTime ? `${nextDate}T${nextTime}` : '');
-  }
-
   function changeParticipantCount(delta) {
     const current = Number(form.max_participants || 2);
-    setField('max_participants', Math.min(500, Math.max(2, current + delta)));
+    const minimum = form.is_personal ? 1 : 2;
+    setField('max_participants', Math.min(500, Math.max(minimum, current + delta)));
+  }
+
+  function setVisibility(value) {
+    if (form.is_personal) return;
+    setForm((prev) => ({
+      ...prev,
+      visibility: value,
+      join_policy: value === 'private' ? 'open' : prev.join_policy
+    }));
+    setErrors((prev) => {
+      if (!prev.visibility && !prev.join_policy) return prev;
+      const next = { ...prev };
+      delete next.visibility;
+      delete next.join_policy;
+      return next;
+    });
+  }
+
+  function togglePersonalEvent(enabled) {
+    if (enabled) {
+      groupSettingsRef.current = {
+        visibility: form.visibility,
+        join_policy: form.join_policy,
+        max_participants: form.max_participants,
+        deposit_cents: form.deposit_cents,
+        minimum_presence_minutes: form.minimum_presence_minutes,
+        verification_mode: form.verification_mode,
+        geofence_radius_m: form.geofence_radius_m,
+        completion_xp: form.completion_xp,
+        review_bonus_xp: form.review_bonus_xp
+      };
+      setForm((prev) => ({
+        ...prev,
+        is_personal: true,
+        visibility: 'private',
+        join_policy: 'open',
+        max_participants: 1,
+        deposit_cents: 0,
+        minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
+        verification_mode: 'geo',
+        geofence_radius_m: 250,
+        completion_xp: 5,
+        review_bonus_xp: 0
+      }));
+      return;
+    }
+
+    const previous = groupSettingsRef.current || {};
+    setForm((prev) => ({
+      ...prev,
+      is_personal: false,
+      visibility: previous.visibility || 'public',
+      join_policy: previous.join_policy || 'open',
+      max_participants: Math.max(2, Number(previous.max_participants || 8)),
+      deposit_cents: Number(previous.deposit_cents ?? 500),
+      minimum_presence_minutes: Number(previous.minimum_presence_minutes ?? 45),
+      verification_mode: previous.verification_mode || 'both',
+      geofence_radius_m: Number(previous.geofence_radius_m ?? 250),
+      completion_xp: Number(previous.completion_xp ?? 50),
+      review_bonus_xp: Number(previous.review_bonus_xp ?? 25)
+    }));
   }
 
   function clearRouteFieldErrors() {
@@ -491,7 +583,24 @@ function CreateEventPage() {
     if (Number(form.review_bonus_xp) < 0 || Number(form.review_bonus_xp) > 100) {
       nextErrors.review_bonus_xp = 'Bonus recensione tra 0 e 100 PX';
     }
-    if (Number(form.max_participants) < 2) nextErrors.max_participants = 'Minimo 2 partecipanti';
+    if (!['mixed', 'male', 'female'].includes(form.audience)) {
+      nextErrors.audience = 'Scegli la categoria dell evento';
+    }
+    if (!['public', 'private'].includes(form.visibility)) {
+      nextErrors.visibility = 'Scegli la visibilita dell evento';
+    }
+    if (!['open', 'approval'].includes(form.join_policy)) {
+      nextErrors.join_policy = 'Scegli la modalita di accesso';
+    }
+    if (form.visibility === 'private' && form.join_policy !== 'open') {
+      nextErrors.join_policy = 'Gli eventi privati sono accessibili tramite link';
+    }
+    if (form.is_personal && (form.visibility !== 'private' || Number(form.max_participants) !== 1)) {
+      nextErrors.visibility = 'Il promemoria personale deve restare privato';
+    }
+    if (Number(form.max_participants) < (form.is_personal ? 1 : 2)) {
+      nextErrors.max_participants = form.is_personal ? 'Partecipanti non validi' : 'Minimo 2 partecipanti';
+    }
     if (!form.description || form.description.length < 12) nextErrors.description = 'Descrizione troppo breve';
 
     if ((form.lat && !form.lng) || (!form.lat && form.lng)) {
@@ -603,6 +712,10 @@ function CreateEventPage() {
       completion_xp: Number(form.completion_xp),
       review_bonus_xp: Number(form.review_bonus_xp),
       max_participants: Number(form.max_participants),
+      audience: form.audience,
+      visibility: form.visibility,
+      join_policy: form.join_policy,
+      is_personal: Boolean(form.is_personal),
       lat: resolvedLat,
       lng: resolvedLng,
       route_info: form.has_route
@@ -623,7 +736,15 @@ function CreateEventPage() {
         : null
     });
 
-    showToast('Evento creato con successo', 'success');
+    if (form.add_to_calendar) {
+      try {
+        downloadEventIcs(created);
+      } catch {
+        showToast('Evento creato, ma il calendario non e stato aperto', 'info');
+      }
+    }
+
+    showToast(form.is_personal ? 'Promemoria creato con successo' : 'Evento creato con successo', 'success');
     markStepByAction('event_created');
     const stats = await api.getEventCreationStats();
     setCreationStats(stats);
@@ -758,9 +879,8 @@ function CreateEventPage() {
                 <input
                   type="date"
                   value={eventDate}
-                  onChange={(e) => {
+                  onInput={(e) => {
                     setEventDate(e.target.value);
-                    updateEventDateTime(e.target.value, eventTime);
                   }}
                 />
               </label>
@@ -769,9 +889,8 @@ function CreateEventPage() {
                 <input
                   type="time"
                   value={eventTime}
-                  onChange={(e) => {
+                  onInput={(e) => {
                     setEventTime(e.target.value);
-                    updateEventDateTime(eventDate, e.target.value);
                   }}
                 />
               </label>
@@ -816,7 +935,7 @@ function CreateEventPage() {
                   </button>
                   <input
                     type="number"
-                    min="2"
+                    min={form.is_personal ? 1 : 2}
                     max="500"
                     value={form.max_participants}
                     onChange={(e) => setField('max_participants', e.target.value)}
@@ -828,6 +947,35 @@ function CreateEventPage() {
                 </div>
                 {errors.max_participants && <span className="error">{errors.max_participants}</span>}
               </div>
+            </div>
+
+            <div className={styles.choiceSection}>
+              <div className={styles.sectionLabelRow}>
+                <span>Categoria</span>
+                <small>{AUDIENCE_OPTIONS.find((option) => option.value === form.audience)?.label}</small>
+              </div>
+              <div className={styles.audienceGrid} role="group" aria-label="Categoria partecipanti">
+                {AUDIENCE_OPTIONS.map((option) => {
+                  const Icon = option.icon;
+                  const selected = form.audience === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={selected ? styles.audienceSelected : ''}
+                      aria-pressed={selected}
+                      onClick={() => setField('audience', option.value)}
+                    >
+                      <Icon size={24} aria-hidden="true" />
+                      <strong>{option.label}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className={styles.choiceHelper}>
+                {AUDIENCE_OPTIONS.find((option) => option.value === form.audience)?.copy}
+              </p>
+              {errors.audience && <span className="error">{errors.audience}</span>}
             </div>
           </fieldset>
         ) : null}
@@ -1189,12 +1337,32 @@ function CreateEventPage() {
             <div className={styles.sectionHero}>
               <span><ShieldCheck size={22} /></span>
               <div>
-                <strong>Proteggi la partecipazione</strong>
-                <small>Definisci deposito, presenza minima e metodo di verifica.</small>
+                <strong>{form.is_personal ? 'Promemoria personale' : 'Proteggi la partecipazione'}</strong>
+                <small>
+                  {form.is_personal
+                    ? 'Resta visibile soltanto a te e non richiede deposito o check-in.'
+                    : 'Definisci deposito, presenza minima e metodo di verifica.'}
+                </small>
               </div>
             </div>
 
-            <div className={styles.ruleCardGrid}>
+            <label className={`${styles.settingRow} ${form.is_personal ? styles.settingRowActive : ''}`}>
+              <span className={styles.settingIcon}><UserRoundCheck size={22} /></span>
+              <span className={styles.settingCopy}>
+                <strong>Evento personale</strong>
+                <small>Solo promemoria, per tracciare un allenamento individuale.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={form.is_personal}
+                onChange={(event) => togglePersonalEvent(event.target.checked)}
+              />
+              <span className={styles.switchTrack} aria-hidden="true"><i /></span>
+            </label>
+
+            {!form.is_personal ? (
+              <>
+              <div className={styles.ruleCardGrid}>
               <div className={`${styles.ruleCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
                 <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
                 <div className={styles.presetRow}>
@@ -1324,6 +1492,110 @@ function CreateEventPage() {
               </label>
             </div>
 
+              </>
+            ) : (
+              <div className={styles.personalNotice}>
+                <UserRoundCheck size={24} aria-hidden="true" />
+                <div>
+                  <strong>Solo tu</strong>
+                  <span>Deposito, partecipanti, approvazioni e QR vengono disattivati automaticamente.</span>
+                </div>
+              </div>
+            )}
+
+            <div className={styles.choiceSection}>
+              <div className={styles.sectionLabelRow}><span>Visibilita</span></div>
+              <div className={styles.segmentedControl} role="group" aria-label="Visibilita evento">
+                <button
+                  type="button"
+                  className={form.visibility === 'public' ? styles.segmentSelected : ''}
+                  aria-pressed={form.visibility === 'public'}
+                  disabled={form.is_personal}
+                  onClick={() => setVisibility('public')}
+                >
+                  <Globe2 size={20} /> Pubblico
+                </button>
+                <button
+                  type="button"
+                  className={form.visibility === 'private' ? styles.segmentSelected : ''}
+                  aria-pressed={form.visibility === 'private'}
+                  onClick={() => setVisibility('private')}
+                >
+                  <LockKeyhole size={20} /> Privato
+                </button>
+              </div>
+              <div className={styles.settingHint}>
+                <i aria-hidden="true" />
+                <span>
+                  {form.is_personal
+                    ? 'Promemoria privato: compare solo nella tua sezione I miei eventi.'
+                    : form.visibility === 'private'
+                      ? 'Solo su invito con link. Non compare nella mappa o nelle liste pubbliche.'
+                      : `Visibile a tutti${form.city ? ` a ${form.city}` : ''}. Chiunque puo trovare l evento.`}
+                </span>
+              </div>
+              {errors.visibility && <span className="error">{errors.visibility}</span>}
+            </div>
+
+            {!form.is_personal && form.visibility === 'public' ? (
+              <div className={styles.choiceSection}>
+                <div className={styles.sectionLabelRow}><span>Accesso</span></div>
+                <div className={styles.segmentedControl} role="group" aria-label="Modalita di accesso">
+                  <button
+                    type="button"
+                    className={form.join_policy === 'open' ? styles.segmentSelected : ''}
+                    aria-pressed={form.join_policy === 'open'}
+                    onClick={() => setField('join_policy', 'open')}
+                  >
+                    Aperto a tutti
+                  </button>
+                  <button
+                    type="button"
+                    className={form.join_policy === 'approval' ? styles.segmentSelected : ''}
+                    aria-pressed={form.join_policy === 'approval'}
+                    onClick={() => setField('join_policy', 'approval')}
+                  >
+                    Su richiesta
+                  </button>
+                </div>
+                <p className={styles.choiceHelper}>
+                  {form.join_policy === 'approval'
+                    ? 'L organizer approva ogni richiesta prima del blocco del deposito.'
+                    : 'La partecipazione viene confermata subito, senza approvazione.'}
+                </p>
+                {errors.join_policy && <span className="error">{errors.join_policy}</span>}
+              </div>
+            ) : null}
+
+            <div className={styles.extraSettings}>
+              <div className={styles.sectionLabelRow}><span>Impostazioni extra</span></div>
+              <label className={`${styles.settingRow} ${form.add_to_calendar ? styles.settingRowActive : ''}`}>
+                <span className={styles.settingIcon}><CalendarPlus size={22} /></span>
+                <span className={styles.settingCopy}>
+                  <strong>Aggiungi al mio calendario</strong>
+                  <small>Al termine apre un file calendario compatibile con Android, iPhone e desktop.</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.add_to_calendar}
+                  onChange={(event) => setField('add_to_calendar', event.target.checked)}
+                />
+                <span className={styles.switchTrack} aria-hidden="true"><i /></span>
+              </label>
+            </div>
+
+            <div className={styles.rewardCallout}>
+              <span><Sparkles size={24} /></span>
+              <div>
+                <small>Premio PX</small>
+                <strong>
+                  {form.is_personal
+                    ? `Questo promemoria vale ${form.completion_xp} PX al completamento.`
+                    : `I partecipanti possono ottenere fino a ${Number(form.completion_xp || 0) + Number(form.review_bonus_xp || 0)} PX.`}
+                </strong>
+              </div>
+            </div>
+
             <label className={styles.field}>
               <span className={styles.descriptionLabel}>
                 <span className={styles.fieldLabel}>Descrizione</span>
@@ -1378,7 +1650,12 @@ function CreateEventPage() {
             </button>
           ) : (
             <button type="submit" className={styles.nextButton}>
-              Pubblica evento <Check size={23} />
+              {form.is_personal
+                ? 'Crea promemoria'
+                : form.visibility === 'private'
+                  ? 'Crea evento privato'
+                  : 'Pubblica evento'}{' '}
+              <Check size={23} />
             </button>
           )}
         </footer>

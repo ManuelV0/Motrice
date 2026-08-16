@@ -811,6 +811,7 @@ function getFriendshipStatus(store, viewerUserId, targetUserId) {
 }
 
 function isEventExpired(event, now = nowMs()) {
+  if (event?.is_personal) return false;
   const startMs = Date.parse(event.event_datetime);
   if (!Number.isFinite(startMs)) return false;
   return startMs + getEventDurationMs(event) < now;
@@ -830,6 +831,7 @@ function buildInitialStore() {
     hotspots: seededHotspots,
     localUser: localUserSeed,
     rsvps: {},
+    eventJoinRequests: {},
     savedEvents: {},
     accountProfiles: {
       '1': { ...DEFAULT_ACCOUNT_PROFILE, display_name: '' },
@@ -979,6 +981,9 @@ function loadStore() {
     if (!merged.checkinSessionsByEvent || typeof merged.checkinSessionsByEvent !== 'object') {
       merged.checkinSessionsByEvent = {};
     }
+    if (!merged.eventJoinRequests || typeof merged.eventJoinRequests !== 'object') {
+      merged.eventJoinRequests = {};
+    }
     if (!merged.checkinRecordsByEvent || typeof merged.checkinRecordsByEvent !== 'object') {
       merged.checkinRecordsByEvent = {};
     }
@@ -1068,6 +1073,7 @@ function computeReliability(localUser) {
 function enrichEvent(event, store, origin) {
   const currentUserId = resolveAuthUserId();
   const rsvp = store.rsvps[String(event.id)] || null;
+  const joinRequest = store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)] || null;
   const isSaved = Boolean(store.savedEvents && store.savedEvents[String(event.id)]);
   const eventMs = Date.parse(event.event_datetime);
   const hasPassed = eventMs + getEventDurationMs(event) < nowMs();
@@ -1096,9 +1102,15 @@ function enrichEvent(event, store, origin) {
     geofence_radius_m: Number(event.geofence_radius_m ?? 250),
     completion_xp: Number(event.completion_xp ?? 50),
     review_bonus_xp: Number(event.review_bonus_xp ?? 25),
+    audience: String(event.audience || 'mixed'),
+    visibility: String(event.visibility || 'public'),
+    join_policy: String(event.join_policy || 'open'),
+    is_personal: Boolean(event.is_personal),
     distance_km,
     analytics,
     is_going: Boolean(rsvp && rsvp.status === 'going'),
+    is_join_pending: joinRequest?.status === 'pending',
+    join_request_status: joinRequest?.status || null,
     is_saved: isSaved,
     user_rsvp: rsvp,
     group_chat_unread_count: groupChatUnreadCount,
@@ -1269,7 +1281,15 @@ const localApi = {
 
     const origin = resolveOrigin(filters);
 
-    const enriched = store.events.map((event) => enrichEvent(event, store, origin));
+    const currentUserId = resolveAuthUserId();
+    const enriched = store.events
+      .filter((event) => {
+        if (String(event.visibility || 'public') !== 'private') return true;
+        if (event.created_by === 'me' || isEventOrganizerForUser(store, event, currentUserId)) return true;
+        if (store.rsvps?.[String(event.id)]?.status === 'going') return true;
+        return Boolean(store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)]);
+      })
+      .map((event) => enrichEvent(event, store, origin));
     const filtered = applyFilters(enriched, filters);
 
     saveStore(store);
@@ -1343,6 +1363,11 @@ const localApi = {
       geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
       completion_xp: Number(payload.completion_xp ?? 50),
       review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
+      status: 'scheduled',
+      audience: String(payload.audience || 'mixed'),
+      visibility: String(payload.visibility || 'public'),
+      join_policy: String(payload.join_policy || 'open'),
+      is_personal: Boolean(payload.is_personal),
       created_by: 'me',
       creator_plan: subscription.effective_plan || subscription.plan,
       featured_boost: subscription.effective_plan === 'premium'
@@ -1375,6 +1400,9 @@ const localApi = {
     const event = ensureEventExists(store, id);
     const key = String(id);
     const accountProfile = store.accountProfiles?.[String(currentUserId)] || DEFAULT_ACCOUNT_PROFILE;
+    if (event.is_personal) {
+      throw new Error('Questo evento e un promemoria personale');
+    }
     if (!isProfileCompleteForGroup(accountProfile)) {
       throw new Error('Completa profilo (nome utente, bio e immagine) prima di prenotare un gruppo');
     }
@@ -1385,6 +1413,38 @@ const localApi = {
 
     if (!isAlreadyGoing && Number.isFinite(maxParticipants) && maxParticipants > 0 && isFull) {
       throw new Error('Evento completo: posti disponibili terminati');
+    }
+
+    if (!isAlreadyGoing && event.join_policy === 'approval') {
+      const participantName = normalizeDisplayName(
+        accountProfile.display_name || payload?.name || '',
+        'Partecipante'
+      );
+      store.eventJoinRequests = {
+        ...(store.eventJoinRequests || {}),
+        [key]: {
+          ...(store.eventJoinRequests?.[key] || {}),
+          [String(currentUserId)]: {
+            event_id: event.id,
+            user_id: currentUserId,
+            status: 'pending',
+            skill_level: payload?.skill_level || 'beginner',
+            note: payload?.note || '',
+            display_name: participantName,
+            avatar_url: accountProfile.avatar_url || '',
+            bio: accountProfile.bio || '',
+            requested_at: nowIso()
+          }
+        }
+      };
+      addNotification(store, {
+        type: 'event_join_requested',
+        title: 'Richiesta inviata',
+        message: `La richiesta per ${event.title || event.sport_name} e in attesa di approvazione.`,
+        event_id: event.id
+      });
+      saveStore(store);
+      return withDelay({ success: true, pending: true, event_id: event.id });
     }
 
     if (!isAlreadyGoing) {
@@ -1474,6 +1534,90 @@ const localApi = {
     });
     saveStore(store);
     return withDelay({ success: true, event: clone(event), rsvp: clone(store.rsvps[key]) });
+  },
+
+  async listEventJoinRequests(eventId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Solo l organizzatore puo vedere le richieste');
+    }
+    const requests = Object.values(store.eventJoinRequests?.[String(event.id)] || {})
+      .filter((request) => request?.status === 'pending')
+      .sort((a, b) => Date.parse(a.requested_at || '') - Date.parse(b.requested_at || ''));
+    return withDelay(clone(requests));
+  },
+
+  async approveEventJoinRequest(eventId, userId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Solo l organizzatore puo approvare');
+    }
+    const eventKey = String(event.id);
+    const userKey = String(userId);
+    const request = store.eventJoinRequests?.[eventKey]?.[userKey];
+    if (!request || request.status !== 'pending') throw new Error('Richiesta non disponibile');
+    if (Number(event.participants_count || 0) >= Number(event.max_participants || 0)) {
+      throw new Error('Evento completo: posti disponibili terminati');
+    }
+    request.status = 'approved';
+    request.decided_at = nowIso();
+    event.participants_count = Math.min(
+      Number(event.max_participants || 0),
+      Number(event.participants_count || 0) + 1
+    );
+    const preview = Array.isArray(event.participants_preview) ? event.participants_preview : [];
+    if (request.display_name && !preview.includes(request.display_name)) {
+      event.participants_preview = [request.display_name, ...preview].slice(0, 8);
+    }
+    saveStore(store);
+    return withDelay({ success: true, approved: true });
+  },
+
+  async declineEventJoinRequest(eventId, userId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Solo l organizzatore puo rifiutare');
+    }
+    const request = store.eventJoinRequests?.[String(event.id)]?.[String(userId)];
+    if (!request || request.status !== 'pending') throw new Error('Richiesta non disponibile');
+    request.status = 'declined';
+    request.decided_at = nowIso();
+    saveStore(store);
+    return withDelay({ success: true, declined: true });
+  },
+
+  async completePersonalEvent(eventId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!event.is_personal || !isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Promemoria personale non valido');
+    }
+    if (event.status === 'completed') {
+      return withDelay({ success: true, already_completed: true, xp_awarded: 0 });
+    }
+    if (nowMs() < Date.parse(event.event_datetime) + getEventDurationMs(event)) {
+      throw new Error('Potrai completarlo al termine dell allenamento');
+    }
+    const xp = Number(event.completion_xp || 5);
+    const result = awardXp({
+      userId: resolveAuthUserId(),
+      type: 'personal_event_completed',
+      pointsGlobal: xp,
+      pointsSport: xp,
+      sportId: event.sport_id || event.sport_name || 'generic',
+      refId: `personal_event_${event.id}`,
+      meta: { eventId: Number(event.id), title: event.title }
+    }, store);
+    event.status = 'completed';
+    saveStore(store);
+    return withDelay({
+      success: true,
+      already_completed: false,
+      xp_awarded: Number(result?.event?.points || xp)
+    });
   },
 
   async leaveEvent(id) {

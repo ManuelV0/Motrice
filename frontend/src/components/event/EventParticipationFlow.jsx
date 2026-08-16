@@ -186,6 +186,7 @@ function EventParticipationFlow({
 }) {
   const [progress, setProgress] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [joinRequests, setJoinRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -216,12 +217,14 @@ function EventParticipationFlow({
     if (!canLoad) return;
     if (!silent) setLoading(true);
     try {
-      const [flow, validation] = await Promise.all([
+      const [flow, validation, requests] = await Promise.all([
         api.getEventParticipationProgress(event.id),
-        api.listEventValidationStatus(event.id)
+        api.listEventValidationStatus(event.id),
+        isOrganizer ? api.listEventJoinRequests(event.id) : Promise.resolve([])
       ]);
       setProgress(flow);
       setParticipants(Array.isArray(validation) ? validation : []);
+      setJoinRequests(Array.isArray(requests) ? requests : []);
     } catch (error) {
       if (!silent) {
         showToast(error?.message || 'Flusso partecipazione non disponibile', 'error');
@@ -229,7 +232,7 @@ function EventParticipationFlow({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [canLoad, event?.id, showToast]);
+  }, [canLoad, event?.id, isOrganizer, showToast]);
 
   useEffect(() => {
     loadFlow();
@@ -598,6 +601,26 @@ function EventParticipationFlow({
     setManualToken('');
   }
 
+  async function decideJoinRequest(request, decision) {
+    const requestUserId = request.auth_user_id || request.user_id;
+    setBusy(true);
+    try {
+      if (decision === 'approve') {
+        await api.approveEventJoinRequest(event.id, requestUserId);
+        showToast(`${request.display_name || 'Partecipante'} approvato`, 'success');
+      } else {
+        await api.declineEventJoinRequest(event.id, requestUserId);
+        showToast('Richiesta rifiutata', 'info');
+      }
+      await loadFlow({ silent: true });
+      await onEventRefresh?.();
+    } catch (error) {
+      showToast(error?.message || 'Richiesta non aggiornata', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!canLoad) return null;
 
   return (
@@ -762,6 +785,52 @@ function EventParticipationFlow({
                 <p><MapPin size={18} aria-hidden="true" /><span>Luogo</span><strong>{event.location_name}</strong></p>
               </div>
             </section>
+
+            {joinRequests.length ? (
+              <section className={styles.requestSection} aria-label="Richieste di partecipazione">
+                <div className={styles.participantSectionTitle}>
+                  <div>
+                    <span className={styles.eyebrow}>Accesso su richiesta</span>
+                    <h3>Da approvare</h3>
+                  </div>
+                  <span>{joinRequests.length}</span>
+                </div>
+                <div className={styles.requestList} aria-live="polite">
+                  {joinRequests.map((request) => (
+                    <article key={request.auth_user_id || request.user_id} className={styles.requestRow}>
+                      <span className={styles.avatar}>
+                        {request.avatar_url
+                          ? <img src={request.avatar_url} alt="" />
+                          : request.display_name?.slice(0, 1)}
+                      </span>
+                      <div className={styles.requestCopy}>
+                        <strong>{request.display_name}</strong>
+                        <span>{request.note || `Livello: ${request.skill_level || 'non indicato'}`}</span>
+                      </div>
+                      <div className={styles.requestActions}>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => decideJoinRequest(request, 'approve')}
+                          disabled={busy}
+                        >
+                          Approva
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => decideJoinRequest(request, 'decline')}
+                          disabled={busy}
+                        >
+                          Rifiuta
+                        </Button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <div className={styles.organizerStats}>
               <div><Users size={18} /><strong>{validationSummary.total}</strong><span>Iscritti</span></div>

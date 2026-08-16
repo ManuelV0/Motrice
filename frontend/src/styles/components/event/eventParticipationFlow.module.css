@@ -333,6 +333,48 @@
   background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
 }
 
+.requestSection {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--glass-border-strong));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.requestList { display: grid; gap: var(--s-2); }
+
+.requestRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+}
+
+.requestCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.requestCopy span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requestActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
 .participantSectionTitle {
   display: flex;
   align-items: center;
@@ -681,6 +723,18 @@
     display: grid;
     justify-content: stretch;
   }
+
+  .requestRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .requestActions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .requestActions > * { width: 100%; }
 }
 
 @media (max-width: 24rem) {

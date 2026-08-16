@@ -225,6 +225,9 @@
 
 .sportCard:focus-visible,
 .levelGrid button:focus-visible,
+.audienceGrid button:focus-visible,
+.segmentedControl button:focus-visible,
+.settingRow:focus-within,
 .presetRow button:focus-visible,
 .verificationGrid button:focus-visible,
 .stepper button:focus-visible,
@@ -295,6 +298,45 @@
   background: #fff;
   color: #090a09;
   box-shadow: 0 6px 24px rgb(255 255 255 / 9%);
+}
+
+.audienceGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.audienceGrid button {
+  min-height: 6.8rem;
+  padding: var(--s-3) var(--s-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  color: #999f96;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.audienceGrid button strong { font-size: var(--text-sm); }
+
+.audienceGrid .audienceSelected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  box-shadow: 0 0 26px rgb(168 240 0 / 19%);
+}
+
+.choiceHelper {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
 }
 
 .dateTimeGrid,
@@ -757,6 +799,183 @@
   box-shadow: 0 0 22px rgb(168 240 0 / 12%);
 }
 
+.settingRow {
+  position: relative;
+  min-height: 6.2rem;
+  padding: var(--s-4);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.settingRowActive {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--create-border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--create-panel-2));
+}
+
+.settingRow > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.settingIcon {
+  width: 2.8rem;
+  height: 2.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #262a26;
+  color: var(--primary);
+}
+
+.settingCopy { display: grid; gap: 0.22rem; }
+.settingCopy strong { color: var(--text); }
+
+.settingCopy small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.switchTrack {
+  position: relative;
+  width: 3.55rem;
+  height: 2rem;
+  padding: 0.18rem;
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  background: #3a3e3a;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.switchTrack i {
+  display: block;
+  width: 1.64rem;
+  height: 1.64rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 7px rgb(0 0 0 / 30%);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.settingRow input:checked + .switchTrack { background: var(--primary); }
+.settingRow input:checked + .switchTrack i { transform: translateX(1.55rem); }
+
+.personalNotice,
+.settingHint,
+.rewardCallout {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border-radius: var(--r-xl);
+}
+
+.personalNotice {
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--create-border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--create-panel));
+  color: var(--primary);
+}
+
+.personalNotice div { display: grid; gap: 0.18rem; }
+.personalNotice span { color: var(--muted); font-size: var(--text-sm); line-height: 1.45; }
+
+.segmentedControl {
+  padding: 0.35rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+}
+
+.segmentedControl button {
+  min-height: 3.75rem;
+  padding: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.48rem;
+  border: 0;
+  border-radius: calc(var(--r-xl) - 0.35rem);
+  background: transparent;
+  color: #898f87;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.segmentedControl button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+.segmentedControl .segmentSelected {
+  background: #fff;
+  color: #090b09;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 24%);
+  opacity: 1;
+}
+
+.settingHint {
+  padding: var(--s-3) var(--s-4);
+  align-items: flex-start;
+  border: 1px solid var(--create-border);
+  background: var(--create-panel);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.settingHint i {
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.36rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 12px rgb(168 240 0 / 48%);
+}
+
+.extraSettings { display: grid; gap: var(--s-2); }
+
+.rewardCallout {
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--create-border));
+  background: linear-gradient(110deg, rgb(168 240 0 / 14%), rgb(168 240 0 / 3%)), #11150d;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.rewardCallout > span {
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-contrast);
+  box-shadow: 0 0 22px rgb(168 240 0 / 24%);
+}
+
+.rewardCallout div { display: grid; gap: 0.25rem; }
+
+.rewardCallout small {
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rewardCallout strong { line-height: 1.38; }
+
 .descriptionLabel {
   display: flex;
   align-items: center;
@@ -894,6 +1113,10 @@
 
   .verificationGrid button strong { font-size: 0.74rem; }
 
+  .settingRow { grid-template-columns: minmax(0, 1fr) auto; }
+  .settingIcon { display: none; }
+  .settingCopy small { max-width: 16rem; }
+
   .wizardFooter { grid-template-columns: minmax(6.8rem, 0.4fr) minmax(0, 1fr); }
   .wizardFooterSingle { grid-template-columns: 1fr; }
 }
@@ -905,6 +1128,13 @@
   .descriptionLabel {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .audienceGrid { grid-template-columns: 1fr; }
+
+  .audienceGrid button {
+    min-height: 3.8rem;
+    flex-direction: row;
   }
 }
 
