@@ -79,6 +79,7 @@ const trustItems = [
 ];
 
 const frameLabels = ['Start', 'Perche', 'Come funziona', 'Reputazione', 'Vantaggi', 'Fiducia'];
+const POST_LOGIN_INTRO_ENABLED = false;
 
 function LandingPage() {
   const navigate = useNavigate();
@@ -139,7 +140,7 @@ function LandingPage() {
     return <LoginPage startup />;
   }
 
-  if (hasCompletedAppIntro(session)) {
+  if (!POST_LOGIN_INTRO_ENABLED || hasCompletedAppIntro(session)) {
     return <Navigate to="/map" replace />;
   }
 

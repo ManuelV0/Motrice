@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarPlus,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -36,7 +37,7 @@ import Button from '../components/Button';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
-import { geocodeAddress, geocodeEventLocation } from '../services/geocoding';
+import { geocodeAddress, geocodeEventLocation, reverseGeocodeCoordinates } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
 import styles from '../styles/pages/createEvent.module.css';
 
@@ -55,6 +56,7 @@ const initialState = {
   review_bonus_xp: 25,
   max_participants: 8,
   audience: 'mixed',
+  participation_protection: true,
   visibility: 'public',
   join_policy: 'open',
   add_to_calendar: true,
@@ -95,6 +97,14 @@ const LEVEL_OPTIONS = [
 const DURATION_PRESETS = [60, 90, 120];
 const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
 const PRESENCE_PRESETS = [30, 45, 60, 90];
+const ADVANCED_RULE_FIELDS = [
+  'deposit_cents',
+  'minimum_presence_minutes',
+  'verification_mode',
+  'geofence_radius_m',
+  'completion_xp',
+  'review_bonus_xp'
+];
 
 const AUDIENCE_OPTIONS = [
   { value: 'mixed', label: 'Misto', copy: 'Aperto a tutti, senza distinzioni.', icon: UsersRound },
@@ -180,6 +190,16 @@ function RouteMapTapHandler({ active, onAddPoint }) {
   return null;
 }
 
+function LocationMapTapHandler({ active, onSelect }) {
+  useMapEvents({
+    click(event) {
+      if (!active) return;
+      onSelect({ lat: event.latlng.lat, lng: event.latlng.lng });
+    }
+  });
+  return null;
+}
+
 function CreateEventPage() {
   ensureLeafletIcons();
   const { entitlements } = useBilling();
@@ -195,11 +215,16 @@ function CreateEventPage() {
   const [routePicking, setRoutePicking] = useState(false);
   const [manualRouteSelection, setManualRouteSelection] = useState(false);
   const [locationResolving, setLocationResolving] = useState(false);
+  const [locationPicking, setLocationPicking] = useState(false);
+  const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const groupSettingsRef = useRef(null);
+  const protectionSettingsRef = useRef(null);
+  const locationRequestRef = useRef(null);
   const { requesting, requestLocation } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
@@ -212,6 +237,8 @@ function CreateEventPage() {
     api.listSports().then(setSports);
     api.getEventCreationStats().then(setCreationStats);
   }, []);
+
+  useEffect(() => () => locationRequestRef.current?.abort(), []);
 
   useEffect(() => {
     const eventDateTime = eventDate && eventTime ? `${eventDate}T${eventTime}` : '';
@@ -254,6 +281,11 @@ function CreateEventPage() {
     if (locationPreview) return [locationPreview.lat, locationPreview.lng];
     return [41.8719, 12.5674];
   }, [locationPreview, routePoints]);
+
+  const locationMapCenter = useMemo(
+    () => (locationPreview ? [locationPreview.lat, locationPreview.lng] : [41.8719, 12.5674]),
+    [locationPreview]
+  );
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -308,6 +340,41 @@ function CreateEventPage() {
     });
   }
 
+  function toggleParticipationProtection(enabled) {
+    if (form.is_personal) return;
+
+    if (!enabled) {
+      protectionSettingsRef.current = {
+        deposit_cents: form.deposit_cents,
+        minimum_presence_minutes: form.minimum_presence_minutes,
+        verification_mode: form.verification_mode,
+        geofence_radius_m: form.geofence_radius_m
+      };
+      setForm((prev) => ({
+        ...prev,
+        participation_protection: false,
+        deposit_cents: 0,
+        minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
+        verification_mode: 'qr',
+        geofence_radius_m: 250
+      }));
+      setAdvancedSettingsOpen(false);
+      return;
+    }
+
+    const previous = protectionSettingsRef.current || {};
+    setForm((prev) => ({
+      ...prev,
+      participation_protection: true,
+      deposit_cents: Number(previous.deposit_cents ?? 500),
+      minimum_presence_minutes: Number(
+        previous.minimum_presence_minutes ?? Math.min(45, Number(prev.duration_minutes || 45))
+      ),
+      verification_mode: previous.verification_mode || 'both',
+      geofence_radius_m: Number(previous.geofence_radius_m ?? 250)
+    }));
+  }
+
   function togglePersonalEvent(enabled) {
     if (enabled) {
       groupSettingsRef.current = {
@@ -319,11 +386,13 @@ function CreateEventPage() {
         verification_mode: form.verification_mode,
         geofence_radius_m: form.geofence_radius_m,
         completion_xp: form.completion_xp,
-        review_bonus_xp: form.review_bonus_xp
+        review_bonus_xp: form.review_bonus_xp,
+        participation_protection: form.participation_protection
       };
       setForm((prev) => ({
         ...prev,
         is_personal: true,
+        participation_protection: false,
         visibility: 'private',
         join_policy: 'open',
         max_participants: 1,
@@ -334,6 +403,7 @@ function CreateEventPage() {
         completion_xp: 5,
         review_bonus_xp: 0
       }));
+      setAdvancedSettingsOpen(false);
       return;
     }
 
@@ -341,6 +411,7 @@ function CreateEventPage() {
     setForm((prev) => ({
       ...prev,
       is_personal: false,
+      participation_protection: previous.participation_protection ?? true,
       visibility: previous.visibility || 'public',
       join_policy: previous.join_policy || 'open',
       max_participants: Math.max(2, Number(previous.max_participants || 8)),
@@ -528,19 +599,81 @@ function CreateEventPage() {
     }
 
     setLocationResolving(true);
+    setLocationSelectionMessage('Ricerca del luogo in corso...');
     try {
       const result = await geocodeEventLocation(form);
       setForm((prev) => ({ ...prev, lat: String(result.lat), lng: String(result.lng) }));
       setErrors((prev) => ({ ...prev, coordinates: undefined }));
+      setLocationSelectionMessage('Luogo trovato. Tocca la mappa per spostare il punto con precisione.');
       if (!silent) showToast('Luogo trovato e collegato alla mappa', 'success');
       return result;
     } catch (error) {
       const message = error.message || 'Impossibile trovare il luogo sulla mappa';
       setErrors((prev) => ({ ...prev, coordinates: message }));
+      setLocationSelectionMessage(message);
       if (!silent) showToast(message, 'error');
       return null;
     } finally {
       setLocationResolving(false);
+    }
+  }
+
+  async function resolveSelectedCoordinates(coords, { source = 'map' } = {}) {
+    const lat = Number(coords?.lat);
+    const lng = Number(coords?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    locationRequestRef.current?.abort();
+    const controller = new AbortController();
+    locationRequestRef.current = controller;
+    setLocationPicking(false);
+    setLocationResolving(true);
+    setLocationSelectionMessage('Posizione selezionata. Sto recuperando l’indirizzo...');
+    setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.coordinates;
+      return next;
+    });
+
+    try {
+      const result = await reverseGeocodeCoordinates(lat, lng, { signal: controller.signal });
+      if (controller.signal.aborted) return null;
+      setForm((prev) => ({
+        ...prev,
+        lat: String(result.lat),
+        lng: String(result.lng),
+        city: result.city || prev.city,
+        location_name: result.locationName || prev.location_name
+      }));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.city;
+        delete next.location_name;
+        delete next.coordinates;
+        return next;
+      });
+      setLocationSelectionMessage('Indirizzo trovato e campi aggiornati. Puoi correggerli manualmente.');
+      showToast(source === 'device' ? 'Posizione e indirizzo compilati' : 'Punto e indirizzo aggiornati', 'success');
+      return result;
+    } catch (error) {
+      if (error?.name === 'AbortError') return null;
+      setLocationSelectionMessage('Punto salvato. Completa manualmente nome location e città.');
+      showToast('Coordinate salvate, ma non ho trovato l’indirizzo', 'info');
+      return null;
+    } finally {
+      if (locationRequestRef.current === controller) {
+        locationRequestRef.current = null;
+        setLocationResolving(false);
+      }
+    }
+  }
+
+  async function startLocationPicking() {
+    setLocationPicking(true);
+    setLocationSelectionMessage('Tocca un punto sulla mappa per inserire automaticamente via e città.');
+    if (!locationPreview && String(form.location_name || '').trim() && String(form.city || '').trim()) {
+      await resolveLocationOnline({ silent: true });
     }
   }
 
@@ -556,8 +689,11 @@ function CreateEventPage() {
       nextErrors.duration_minutes = 'Durata tra 15 e 360 minuti';
     }
     if (
-      Number(form.minimum_presence_minutes) < 15 ||
-      Number(form.minimum_presence_minutes) > Number(form.duration_minutes)
+      form.participation_protection &&
+      (
+        Number(form.minimum_presence_minutes) < 15 ||
+        Number(form.minimum_presence_minutes) > Number(form.duration_minutes)
+      )
     ) {
       nextErrors.minimum_presence_minutes = 'Il tempo minimo deve essere compreso nella durata evento';
     }
@@ -568,10 +704,11 @@ function CreateEventPage() {
     ) {
       nextErrors.deposit_cents = 'Deposito tra 0 e 50 EUR, in euro interi';
     }
-    if (!['qr', 'geo', 'both'].includes(form.verification_mode)) {
+    if (form.participation_protection && !['qr', 'geo', 'both'].includes(form.verification_mode)) {
       nextErrors.verification_mode = 'Scegli una modalita di verifica';
     }
     if (
+      form.participation_protection &&
       form.verification_mode !== 'qr' &&
       (Number(form.geofence_radius_m) < 50 || Number(form.geofence_radius_m) > 1000)
     ) {
@@ -601,7 +738,9 @@ function CreateEventPage() {
     if (Number(form.max_participants) < (form.is_personal ? 1 : 2)) {
       nextErrors.max_participants = form.is_personal ? 'Partecipanti non validi' : 'Minimo 2 partecipanti';
     }
-    if (!form.description || form.description.length < 12) nextErrors.description = 'Descrizione troppo breve';
+    if (!form.description || form.description.trim().length < 20) {
+      nextErrors.description = 'Inserisci almeno 20 caratteri';
+    }
 
     if ((form.lat && !form.lng) || (!form.lat && form.lng)) {
       nextErrors.coordinates = 'Inserisci entrambe le coordinate o nessuna';
@@ -644,6 +783,9 @@ function CreateEventPage() {
   function validate() {
     const nextErrors = collectValidationErrors();
     setErrors(nextErrors);
+    if (ADVANCED_RULE_FIELDS.some((field) => nextErrors[field])) {
+      setAdvancedSettingsOpen(true);
+    }
     if (Object.keys(nextErrors).length) {
       const firstInvalidStep = WIZARD_STEPS.find((step) =>
         STEP_ERROR_FIELDS[step.id].some((field) => nextErrors[field])
@@ -713,6 +855,7 @@ function CreateEventPage() {
       review_bonus_xp: Number(form.review_bonus_xp),
       max_participants: Number(form.max_participants),
       audience: form.audience,
+      participation_protection: Boolean(form.participation_protection),
       visibility: form.visibility,
       join_policy: form.join_policy,
       is_personal: Boolean(form.is_personal),
@@ -813,8 +956,7 @@ function CreateEventPage() {
         </div>
 
         {activeStep === 1 ? (
-          <fieldset className={styles.wizardStep}>
-            <legend className="sr-only">Informazioni base</legend>
+          <fieldset className={styles.wizardStep} aria-label="Informazioni base">
 
             <label className={styles.field}>
               <span className={styles.fieldLabel}>Nome evento</span>
@@ -981,8 +1123,7 @@ function CreateEventPage() {
         ) : null}
 
         {activeStep === 2 ? (
-          <fieldset className={styles.wizardStep}>
-            <legend className="sr-only">Luogo e percorso</legend>
+          <fieldset className={styles.wizardStep} aria-label="Luogo e percorso">
 
             <div className={styles.sectionHero}>
               <span><MapPin size={22} /></span>
@@ -1022,49 +1163,71 @@ function CreateEventPage() {
                 variant="secondary"
                 icon={Navigation}
                 disabled={locationResolving}
-                onClick={() => resolveLocationOnline()}
+                onClick={() => {
+                  if (locationPicking) {
+                    setLocationPicking(false);
+                    setLocationSelectionMessage('Selezione annullata. Il punto attuale resta salvato.');
+                    return;
+                  }
+                  startLocationPicking();
+                }}
               >
-                {locationResolving ? 'Ricerca luogo...' : 'Trova sulla mappa'}
+                {locationResolving ? 'Ricerca luogo...' : locationPicking ? 'Annulla selezione' : 'Trova sulla mappa'}
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="secondary"
                 icon={Navigation}
-                disabled={requesting}
+                disabled={requesting || locationResolving}
                 onClick={async () => {
                   const coords = await requestLocation();
                   if (!coords) {
                     showToast('Impossibile ottenere la posizione. Controlla i permessi browser.', 'error');
                     return;
                   }
-                  setField('lat', String(coords.lat));
-                  setField('lng', String(coords.lng));
-                  showToast('Coordinate compilate automaticamente', 'success');
+                  await resolveSelectedCoordinates(coords, { source: 'device' });
                 }}
               >
-                {requesting ? 'Rilevazione...' : 'Usa la mia posizione'}
+                {requesting ? 'Rilevazione...' : locationResolving ? 'Recupero indirizzo...' : 'Usa la mia posizione'}
               </Button>
             </div>
 
-            {locationPreview && !(form.has_route && (routePicking || routePoints.length)) ? (
-              <div className={styles.routeMapWrap}>
-                <MapContainer
-                  key={`${locationPreview.lat}:${locationPreview.lng}`}
-                  center={[locationPreview.lat, locationPreview.lng]}
-                  zoom={15}
-                  className={styles.routeMap}
-                  dragging={false}
-                  scrollWheelZoom={false}
-                >
-                  <TileLayer
-                    attribution='&copy; OpenStreetMap contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <Marker position={[locationPreview.lat, locationPreview.lng]}>
-                    <Popup>{form.location_name || 'Location evento'}</Popup>
-                  </Marker>
-                </MapContainer>
+            {!(form.has_route && (routePicking || routePoints.length)) ? (
+              <div className={`${styles.locationPicker} ${locationPicking ? styles.locationPickerActive : ''}`}>
+                <div className={styles.locationMapHead}>
+                  <span>
+                    <MapPinned size={17} aria-hidden="true" />
+                    {locationPicking ? 'Seleziona il punto' : locationPreview ? 'Punto evento' : 'Mappa del luogo'}
+                  </span>
+                  <small>{locationPicking ? 'Tocca la mappa' : 'Trascina e usa il pinch per esplorare'}</small>
+                </div>
+                <div className={`${styles.routeMapWrap} ${locationPicking ? styles.routeMapPicking : ''}`}>
+                  <MapContainer
+                    key={`${locationMapCenter[0]}:${locationMapCenter[1]}:${locationPreview ? 'selected' : 'default'}`}
+                    center={locationMapCenter}
+                    zoom={locationPreview ? 16 : 6}
+                    className={styles.routeMap}
+                    dragging
+                    scrollWheelZoom={false}
+                    touchZoom
+                  >
+                    <TileLayer
+                      attribution='&copy; OpenStreetMap contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <LocationMapTapHandler active={locationPicking && !locationResolving} onSelect={resolveSelectedCoordinates} />
+                    {locationPreview ? (
+                      <Marker position={[locationPreview.lat, locationPreview.lng]}>
+                        <Popup>{form.location_name || 'Location evento'}</Popup>
+                      </Marker>
+                    ) : null}
+                  </MapContainer>
+                  {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
+                </div>
+                <p className={styles.locationSelectionMessage} role="status">
+                  {locationSelectionMessage || 'Inserisci un luogo oppure scegli direttamente un punto sulla mappa.'}
+                </p>
               </div>
             ) : null}
 
@@ -1331,169 +1494,44 @@ function CreateEventPage() {
         ) : null}
 
         {activeStep === 3 ? (
-          <fieldset className={styles.wizardStep}>
-            <legend className="sr-only">Regole e pubblicazione</legend>
+          <fieldset className={styles.wizardStep} aria-label="Regole e pubblicazione">
 
-            <div className={styles.sectionHero}>
-              <span><ShieldCheck size={22} /></span>
-              <div>
-                <strong>{form.is_personal ? 'Promemoria personale' : 'Proteggi la partecipazione'}</strong>
-                <small>
-                  {form.is_personal
-                    ? 'Resta visibile soltanto a te e non richiede deposito o check-in.'
-                    : 'Definisci deposito, presenza minima e metodo di verifica.'}
-                </small>
-              </div>
-            </div>
-
-            <label className={`${styles.settingRow} ${form.is_personal ? styles.settingRowActive : ''}`}>
-              <span className={styles.settingIcon}><UserRoundCheck size={22} /></span>
-              <span className={styles.settingCopy}>
-                <strong>Evento personale</strong>
-                <small>Solo promemoria, per tracciare un allenamento individuale.</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={form.is_personal}
-                onChange={(event) => togglePersonalEvent(event.target.checked)}
-              />
-              <span className={styles.switchTrack} aria-hidden="true"><i /></span>
-            </label>
-
-            {!form.is_personal ? (
-              <>
-              <div className={styles.ruleCardGrid}>
-              <div className={`${styles.ruleCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
-                <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
-                <div className={styles.presetRow}>
-                  {DEPOSIT_PRESETS.map((cents) => (
-                    <button
-                      key={cents}
-                      type="button"
-                      className={Number(form.deposit_cents) === cents ? styles.presetSelected : ''}
-                      onClick={() => setField('deposit_cents', cents)}
-                    >
-                      {cents === 0 ? 'No' : `${cents / 100} €`}
-                    </button>
-                  ))}
-                </div>
-                <label className={styles.compactNumber}>
-                  Altro importo (€)
-                  <input
-                    type="number"
-                    min="0"
-                    max="50"
-                    step="1"
-                    value={Number(form.deposit_cents || 0) / 100}
-                    onChange={(e) => setField('deposit_cents', Math.round(Number(e.target.value || 0) * 100))}
-                  />
-                </label>
-                <small>Bloccato all’iscrizione e restituito al completamento.</small>
-                {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
-              </div>
-
-              <div className={`${styles.ruleCard} ${errors.minimum_presence_minutes ? styles.invalidCard : ''}`}>
-                <span className={styles.controlTitle}><Clock3 size={18} />Presenza minima</span>
-                <div className={styles.presetRow}>
-                  {PRESENCE_PRESETS.map((minutes) => (
-                    <button
-                      key={minutes}
-                      type="button"
-                      className={Number(form.minimum_presence_minutes) === minutes ? styles.presetSelected : ''}
-                      onClick={() => setField('minimum_presence_minutes', minutes)}
-                    >
-                      {minutes}′
-                    </button>
-                  ))}
-                </div>
-                <label className={styles.compactNumber}>
-                  Minuti personalizzati
-                  <input
-                    type="number"
-                    min="15"
-                    max={form.duration_minutes || 360}
-                    step="5"
-                    value={form.minimum_presence_minutes}
-                    onChange={(e) => setField('minimum_presence_minutes', e.target.value)}
-                  />
-                </label>
-                <small>Al raggiungimento il cashback passa al 100%.</small>
-                {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
-              </div>
-            </div>
-
-            <div className={styles.choiceSection}>
-              <div className={styles.sectionLabelRow}><span>Metodo di verifica</span></div>
-              <div className={styles.verificationGrid} role="group" aria-label="Metodo di verifica">
-                {[
-                  { value: 'both', title: 'QR + GPS', copy: 'Più sicuro', icon: '◎' },
-                  { value: 'qr', title: 'Solo QR', copy: 'Più rapido', icon: '▦' },
-                  { value: 'geo', title: 'Solo GPS', copy: 'Automatico', icon: '⌖' }
-                ].map((mode) => (
-                  <button
-                    key={mode.value}
-                    type="button"
-                    className={form.verification_mode === mode.value ? styles.verificationSelected : ''}
-                    aria-pressed={form.verification_mode === mode.value}
-                    onClick={() => setField('verification_mode', mode.value)}
-                  >
-                    <span aria-hidden="true">{mode.icon}</span>
-                    <strong>{mode.title}</strong>
-                    <small>{mode.copy}</small>
-                  </button>
-                ))}
-              </div>
-              {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
-            </div>
-
-            {form.verification_mode !== 'qr' ? (
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Raggio area evento (metri)</span>
+            <div className={styles.primarySettingsCard}>
+              <label
+                className={`${styles.settingRow} ${styles.settingRowCompact} ${form.participation_protection ? styles.settingRowActive : ''}`}
+              >
+                <span className={styles.settingIcon}><ShieldCheck size={22} /></span>
+                <span className={styles.settingCopy}>
+                  <strong>Proteggi la partecipazione</strong>
+                  <small>Attiva deposito, presenza minima e verifica QR/GPS per una partecipazione affidabile.</small>
+                </span>
                 <input
-                  type="number"
-                  min="50"
-                  max="1000"
-                  step="25"
-                  className={invalidClass('geofence_radius_m')}
-                  value={form.geofence_radius_m}
-                  onChange={(e) => setField('geofence_radius_m', e.target.value)}
+                  type="checkbox"
+                  checked={form.participation_protection}
+                  disabled={form.is_personal}
+                  onChange={(event) => toggleParticipationProtection(event.target.checked)}
                 />
-                <span className="input-helper">Organizer e partecipanti devono rimanere dentro quest’area.</span>
-                {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
+                <span className={styles.switchTrack} aria-hidden="true"><i /></span>
               </label>
-            ) : null}
 
-            <div className={styles.inlineGrid}>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>PX completamento</span>
+              <label
+                className={`${styles.settingRow} ${styles.settingRowCompact} ${form.is_personal ? styles.settingRowActive : ''}`}
+              >
+                <span className={styles.settingIcon}><UserRoundCheck size={22} /></span>
+                <span className={styles.settingCopy}>
+                  <strong>Evento personale</strong>
+                  <small>Attiva per tracciare un allenamento personale visibile solo a te.</small>
+                </span>
                 <input
-                  type="number"
-                  min="0"
-                  max="200"
-                  step="5"
-                  className={invalidClass('completion_xp')}
-                  value={form.completion_xp}
-                  onChange={(e) => setField('completion_xp', e.target.value)}
+                  type="checkbox"
+                  checked={form.is_personal}
+                  onChange={(event) => togglePersonalEvent(event.target.checked)}
                 />
-                {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Bonus questionario (PX)</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="5"
-                  className={invalidClass('review_bonus_xp')}
-                  value={form.review_bonus_xp}
-                  onChange={(e) => setField('review_bonus_xp', e.target.value)}
-                />
-                {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
+                <span className={styles.switchTrack} aria-hidden="true"><i /></span>
               </label>
             </div>
 
-              </>
-            ) : (
+            {form.is_personal ? (
               <div className={styles.personalNotice}>
                 <UserRoundCheck size={24} aria-hidden="true" />
                 <div>
@@ -1501,9 +1539,9 @@ function CreateEventPage() {
                   <span>Deposito, partecipanti, approvazioni e QR vengono disattivati automaticamente.</span>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            <div className={styles.choiceSection}>
+            <div className={`${styles.choiceSection} ${styles.optionCard}`}>
               <div className={styles.sectionLabelRow}><span>Visibilita</span></div>
               <div className={styles.segmentedControl} role="group" aria-label="Visibilita evento">
                 <button
@@ -1538,7 +1576,7 @@ function CreateEventPage() {
             </div>
 
             {!form.is_personal && form.visibility === 'public' ? (
-              <div className={styles.choiceSection}>
+              <div className={`${styles.choiceSection} ${styles.optionCard}`}>
                 <div className={styles.sectionLabelRow}><span>Accesso</span></div>
                 <div className={styles.segmentedControl} role="group" aria-label="Modalita di accesso">
                   <button
@@ -1547,7 +1585,7 @@ function CreateEventPage() {
                     aria-pressed={form.join_policy === 'open'}
                     onClick={() => setField('join_policy', 'open')}
                   >
-                    Aperto a tutti
+                    <Users size={20} /> Aperto a tutti
                   </button>
                   <button
                     type="button"
@@ -1555,7 +1593,7 @@ function CreateEventPage() {
                     aria-pressed={form.join_policy === 'approval'}
                     onClick={() => setField('join_policy', 'approval')}
                   >
-                    Su richiesta
+                    <ShieldCheck size={20} /> Su richiesta
                   </button>
                 </div>
                 <p className={styles.choiceHelper}>
@@ -1569,7 +1607,7 @@ function CreateEventPage() {
 
             <div className={styles.extraSettings}>
               <div className={styles.sectionLabelRow}><span>Impostazioni extra</span></div>
-              <label className={`${styles.settingRow} ${form.add_to_calendar ? styles.settingRowActive : ''}`}>
+              <label className={`${styles.settingRow} ${styles.settingRowCompact} ${form.add_to_calendar ? styles.settingRowActive : ''}`}>
                 <span className={styles.settingIcon}><CalendarPlus size={22} /></span>
                 <span className={styles.settingCopy}>
                   <strong>Aggiungi al mio calendario</strong>
@@ -1582,21 +1620,169 @@ function CreateEventPage() {
                 />
                 <span className={styles.switchTrack} aria-hidden="true"><i /></span>
               </label>
-            </div>
-
-            <div className={styles.rewardCallout}>
-              <span><Sparkles size={24} /></span>
-              <div>
-                <small>Premio PX</small>
-                <strong>
-                  {form.is_personal
-                    ? `Questo promemoria vale ${form.completion_xp} PX al completamento.`
-                    : `I partecipanti possono ottenere fino a ${Number(form.completion_xp || 0) + Number(form.review_bonus_xp || 0)} PX.`}
-                </strong>
+              <div className={styles.rewardCallout}>
+                <span><Sparkles size={24} /></span>
+                <div>
+                  <small>Premio PX</small>
+                  <strong>
+                    {form.is_personal
+                      ? `Questo promemoria vale ${form.completion_xp} PX al completamento.`
+                      : `I partecipanti possono ottenere fino a ${Number(form.completion_xp || 0) + Number(form.review_bonus_xp || 0)} PX.`}
+                  </strong>
+                </div>
               </div>
             </div>
 
-            <label className={styles.field}>
+            {!form.is_personal && form.participation_protection ? (
+              <details
+                className={styles.advancedRuleDetails}
+                open={advancedSettingsOpen}
+                onToggle={(event) => setAdvancedSettingsOpen(event.currentTarget.open)}
+              >
+                <summary>
+                  <span>Impostazioni avanzate</span>
+                  <ChevronDown size={22} aria-hidden="true" />
+                </summary>
+                <div className={styles.advancedRuleBody}>
+                  <div className={styles.ruleCardGrid}>
+                    <div className={`${styles.ruleCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
+                      <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
+                      <div className={styles.presetRow}>
+                        {DEPOSIT_PRESETS.map((cents) => (
+                          <button
+                            key={cents}
+                            type="button"
+                            className={Number(form.deposit_cents) === cents ? styles.presetSelected : ''}
+                            onClick={() => setField('deposit_cents', cents)}
+                          >
+                            {cents === 0 ? 'No' : `${cents / 100} €`}
+                          </button>
+                        ))}
+                      </div>
+                      <label className={styles.compactNumber}>
+                        Altro importo (€)
+                        <input
+                          type="number"
+                          min="0"
+                          max="50"
+                          step="1"
+                          value={Number(form.deposit_cents || 0) / 100}
+                          onChange={(event) => setField('deposit_cents', Math.round(Number(event.target.value || 0) * 100))}
+                        />
+                      </label>
+                      <small>Bloccato all’iscrizione e restituito al completamento.</small>
+                      {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
+                    </div>
+
+                    <div className={`${styles.ruleCard} ${errors.minimum_presence_minutes ? styles.invalidCard : ''}`}>
+                      <span className={styles.controlTitle}><Clock3 size={18} />Presenza minima</span>
+                      <div className={styles.presetRow}>
+                        {PRESENCE_PRESETS.map((minutes) => (
+                          <button
+                            key={minutes}
+                            type="button"
+                            className={Number(form.minimum_presence_minutes) === minutes ? styles.presetSelected : ''}
+                            onClick={() => setField('minimum_presence_minutes', minutes)}
+                          >
+                            {minutes}′
+                          </button>
+                        ))}
+                      </div>
+                      <label className={styles.compactNumber}>
+                        Minuti personalizzati
+                        <input
+                          type="number"
+                          min="15"
+                          max={form.duration_minutes || 360}
+                          step="5"
+                          value={form.minimum_presence_minutes}
+                          onChange={(event) => setField('minimum_presence_minutes', event.target.value)}
+                        />
+                      </label>
+                      <small>Al raggiungimento il cashback passa al 100%.</small>
+                      {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
+                    </div>
+                  </div>
+
+                  <div className={styles.choiceSection}>
+                    <div className={styles.sectionLabelRow}><span>Metodo di verifica</span></div>
+                    <div className={styles.verificationGrid} role="group" aria-label="Metodo di verifica">
+                      {[
+                        { value: 'both', title: 'QR + GPS', copy: 'Più sicuro', icon: '◎' },
+                        { value: 'qr', title: 'Solo QR', copy: 'Più rapido', icon: '▦' },
+                        { value: 'geo', title: 'Solo GPS', copy: 'Automatico', icon: '⌖' }
+                      ].map((mode) => (
+                        <button
+                          key={mode.value}
+                          type="button"
+                          className={form.verification_mode === mode.value ? styles.verificationSelected : ''}
+                          aria-pressed={form.verification_mode === mode.value}
+                          onClick={() => setField('verification_mode', mode.value)}
+                        >
+                          <span aria-hidden="true">{mode.icon}</span>
+                          <strong>{mode.title}</strong>
+                          <small>{mode.copy}</small>
+                        </button>
+                      ))}
+                    </div>
+                    {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
+                  </div>
+
+                  {form.verification_mode !== 'qr' ? (
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Raggio area evento (metri)</span>
+                      <input
+                        type="number"
+                        min="50"
+                        max="1000"
+                        step="25"
+                        className={invalidClass('geofence_radius_m')}
+                        value={form.geofence_radius_m}
+                        onChange={(event) => setField('geofence_radius_m', event.target.value)}
+                      />
+                      <span className="input-helper">Organizer e partecipanti devono rimanere dentro quest’area.</span>
+                      {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
+                    </label>
+                  ) : null}
+
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>PX completamento</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        step="5"
+                        className={invalidClass('completion_xp')}
+                        value={form.completion_xp}
+                        onChange={(event) => setField('completion_xp', event.target.value)}
+                      />
+                      {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
+                    </label>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Bonus questionario (PX)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="5"
+                        className={invalidClass('review_bonus_xp')}
+                        value={form.review_bonus_xp}
+                        onChange={(event) => setField('review_bonus_xp', event.target.value)}
+                      />
+                      {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
+                    </label>
+                  </div>
+                </div>
+              </details>
+            ) : !form.is_personal ? (
+              <div className={styles.protectionOffNotice}>
+                <ShieldCheck size={22} aria-hidden="true" />
+                <span>Partecipazione semplice: nessun deposito e check-in rapido tramite QR.</span>
+              </div>
+            ) : null}
+
+            <label className={`${styles.field} ${styles.descriptionCard}`}>
               <span className={styles.descriptionLabel}>
                 <span className={styles.fieldLabel}>Descrizione</span>
                 <Button
@@ -1620,7 +1806,12 @@ function CreateEventPage() {
                 placeholder="Ritmo, attrezzatura, punto di incontro e obiettivo..."
                 maxLength="2000"
               />
-              {!aiEnabled ? <span className="input-helper">Attiva AI Locale (Beta) dalla sezione Account.</span> : null}
+              <span className={styles.descriptionMeta}>
+                <span>{!aiEnabled ? 'Attiva AI Locale (Beta) dalla sezione Account.' : 'Min. 20 caratteri'}</span>
+                <b className={form.description.trim().length >= 20 ? styles.descriptionReady : ''}>
+                  {Math.min(form.description.trim().length, 20)}/20
+                </b>
+              </span>
               {errors.description && <span className="error">{errors.description}</span>}
             </label>
 

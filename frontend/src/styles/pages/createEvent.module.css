@@ -530,6 +530,69 @@
 
 .locationActions > * { width: 100%; }
 
+.locationPicker {
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.locationPickerActive {
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--create-border));
+  box-shadow: 0 0 28px rgb(168 240 0 / 9%);
+}
+
+.locationMapHead,
+.locationMapHead > span {
+  display: flex;
+  align-items: center;
+}
+
+.locationMapHead {
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.locationMapHead > span {
+  gap: 0.4rem;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.locationMapHead > span svg { color: var(--primary); }
+
+.locationMapHead small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+.locationPicker .routeMapWrap { position: relative; }
+
+.locationMapLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  background: rgb(5 7 5 / 68%);
+  color: var(--primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  backdrop-filter: blur(2px);
+}
+
+.locationSelectionMessage {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
 .routeMapWrap {
   overflow: hidden;
   border: 1px solid var(--create-border);
@@ -814,6 +877,33 @@
   transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
+.primarySettingsCard {
+  overflow: hidden;
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.settingRowCompact {
+  min-height: 6rem;
+  border-radius: 0;
+  background: transparent;
+}
+
+.primarySettingsCard .settingRowCompact {
+  border: 0;
+}
+
+.primarySettingsCard .settingRowCompact + .settingRowCompact {
+  border-top: 1px solid var(--create-border);
+}
+
+.settingRow:has(input:disabled) {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .settingRowActive {
   border-color: color-mix(in srgb, var(--primary) 38%, var(--create-border));
   background: color-mix(in srgb, var(--primary) 4%, var(--create-panel-2));
@@ -868,6 +958,16 @@
 .settingRow input:checked + .switchTrack { background: var(--primary); }
 .settingRow input:checked + .switchTrack i { transform: translateX(1.55rem); }
 
+.optionCard,
+.extraSettings,
+.descriptionCard {
+  padding: var(--s-4);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
 .personalNotice,
 .settingHint,
 .rewardCallout {
@@ -917,9 +1017,9 @@
 .segmentedControl button:disabled { cursor: not-allowed; opacity: 0.42; }
 
 .segmentedControl .segmentSelected {
-  background: #fff;
-  color: #090b09;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 24%);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  box-shadow: 0 0 25px rgb(168 240 0 / 20%), 0 6px 20px rgb(0 0 0 / 24%);
   opacity: 1;
 }
 
@@ -943,7 +1043,14 @@
   box-shadow: 0 0 12px rgb(168 240 0 / 48%);
 }
 
-.extraSettings { display: grid; gap: var(--s-2); }
+.extraSettings { display: grid; gap: var(--s-3); }
+
+.extraSettings .settingRow {
+  min-height: 4.9rem;
+  padding: 0 0 var(--s-3);
+  border: 0;
+  border-bottom: 1px solid var(--create-border);
+}
 
 .rewardCallout {
   padding: var(--s-4);
@@ -976,12 +1083,89 @@
 
 .rewardCallout strong { line-height: 1.38; }
 
+.advancedRuleDetails {
+  overflow: hidden;
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+}
+
+.advancedRuleDetails summary {
+  min-height: 4.8rem;
+  padding: var(--s-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+
+.advancedRuleDetails summary::-webkit-details-marker { display: none; }
+
+.advancedRuleDetails summary svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.advancedRuleDetails[open] summary {
+  border-bottom: 1px solid var(--create-border);
+}
+
+.advancedRuleDetails[open] summary svg { transform: rotate(180deg); }
+
+.advancedRuleBody {
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-5);
+}
+
+.protectionOffNotice {
+  padding: var(--s-4);
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.protectionOffNotice svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
 .descriptionLabel {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
 }
+
+.descriptionMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.descriptionMeta b {
+  flex: 0 0 auto;
+  color: #7d837a;
+  font-variant-numeric: tabular-nums;
+}
+
+.descriptionMeta .descriptionReady { color: var(--primary); }
 
 .summaryCard {
   padding: var(--s-4);

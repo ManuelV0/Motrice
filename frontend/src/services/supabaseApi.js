@@ -316,6 +316,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
     status: rawEvent.status || 'scheduled',
     audience: rawEvent.audience || 'mixed',
+    participation_protection: rawEvent.participation_protection !== false,
     visibility: rawEvent.visibility || 'public',
     join_policy: rawEvent.join_policy || 'open',
     is_personal: Boolean(rawEvent.is_personal),
@@ -423,6 +424,7 @@ function createRemoteMethods(localApi) {
           completion_xp: Number(payload.completion_xp ?? 50),
           review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
           audience: payload.audience || 'mixed',
+          participation_protection: payload.participation_protection !== false,
           visibility: payload.visibility || 'public',
           join_policy: payload.join_policy || 'open',
           is_personal: Boolean(payload.is_personal)
