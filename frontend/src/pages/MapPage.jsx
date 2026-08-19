@@ -386,6 +386,7 @@ function MapPage() {
   const { entitlements } = useBilling();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const requestedEventId = searchParams.get('eventId');
 
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
@@ -789,6 +790,14 @@ function MapPage() {
       eventMarkersRef.current = [];
     };
   }, [eventsInRadius, focusEvent, selectedEventId, syncViewport]);
+
+  useEffect(() => {
+    if (!requestedEventId) return;
+    const requestedEvent = withCoords.find((event) => String(event.id) === String(requestedEventId));
+    if (!requestedEvent || !mapRef.current) return;
+    hasAutoFitEventsRef.current = true;
+    focusEvent(requestedEvent);
+  }, [focusEvent, requestedEventId, withCoords]);
 
   useEffect(() => {
     const map = mapRef.current;

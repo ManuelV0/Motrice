@@ -1,7 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
-import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bookmark,
+  BookmarkCheck,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  ClipboardCopy,
+  Clock3,
+  MapPin,
+  MessageCircle,
+  Navigation,
+  Route,
+  Send,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  UserMinus,
+  UserPlus,
+  Users,
+  X
+} from 'lucide-react';
 import { api } from '../services/api';
 import { chatApi } from '../services/chatApi';
 import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
@@ -26,6 +48,78 @@ import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import styles from '../styles/pages/eventDetail.module.css';
+
+const SPORT_DETAIL_VISUALS = [
+  {
+    pattern: /palestra|fitness|forza|functional|workout|hiit/i,
+    image: '/images/palestra.svg',
+    label: 'Forza'
+  },
+  {
+    pattern: /padel|tennis|racchetta/i,
+    image: '/images/padel.svg',
+    label: 'Racchetta'
+  },
+  {
+    pattern: /calcio|calcetto|football|futsal/i,
+    image: '/images/calcio.svg',
+    label: 'Squadra'
+  },
+  {
+    pattern: /running|corsa|jogging/i,
+    image: '/images/running.svg',
+    label: 'Running'
+  },
+  {
+    pattern: /bici|bike|cycling|ciclismo|mtb/i,
+    image: '/images/bici.svg',
+    label: 'Ciclismo'
+  },
+  {
+    pattern: /trekking|trail|hiking|camminata/i,
+    image: '/images/trekking.svg',
+    label: 'Outdoor'
+  }
+];
+
+function getSportDetailVisual(event) {
+  const source = `${event?.sport_name || ''} ${event?.title || ''}`;
+  return (
+    SPORT_DETAIL_VISUALS.find((item) => item.pattern.test(source)) || {
+      image: '/images/default-sport.svg',
+      label: String(event?.sport_name || 'Sport')
+    }
+  );
+}
+
+function formatEventDay(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Data da definire';
+  return new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short'
+  })
+    .format(date)
+    .replaceAll('.', '')
+    .toUpperCase();
+}
+
+function formatEventTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--:--';
+  return new Intl.DateTimeFormat('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function formatCurrencyFromCents(value) {
+  return (Number(value || 0) / 100).toLocaleString('it-IT', {
+    style: 'currency',
+    currency: 'EUR'
+  });
+}
 
 function EventDetailPage() {
   ensureLeafletIcons();
@@ -679,6 +773,31 @@ function EventDetailPage() {
         .map((pair) => [Number(pair[0]), Number(pair[1])])
         .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
     : [];
+  const sportVisual = getSportDetailVisual(event);
+  const eventTitle = String(event.title || event.sport_name || 'Evento');
+  const durationMinutes = Number(event.duration_minutes || 120);
+  const minimumPresenceMinutes = Number(event.minimum_presence_minutes || 45);
+  const completionXp = Number(event.completion_xp || (event.is_personal ? 5 : 50));
+  const reviewBonusXp = event.is_personal ? 0 : Number(event.review_bonus_xp || 0);
+  const totalAvailableXp = completionXp + reviewBonusXp;
+  const routeDistance = Number(event.route_info?.distance_km);
+  const hasRouteDistance = Number.isFinite(routeDistance) && routeDistance > 0;
+  const participantsCount = Number(event.participants_count || 0);
+  const maxParticipants = Number(event.max_participants || 0);
+  const isFull = maxParticipants > 0 && participantsCount >= maxParticipants;
+  const audienceLabel = event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto';
+  const mapParams = new URLSearchParams({
+    eventId: String(event.id),
+    focus: String(event.location_name || event.city || '')
+  });
+  if (event.lat != null) mapParams.set('lat', String(event.lat));
+  if (event.lng != null) mapParams.set('lng', String(event.lng));
+  const mapPath = `/map?${mapParams.toString()}`;
+  const directionsDestination =
+    event.lat != null && event.lng != null
+      ? `${event.lat},${event.lng}`
+      : String(event.location_name || event.city || '');
+  const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(directionsDestination)}`;
 
   return (
     <div className={styles.page}>
@@ -689,169 +808,274 @@ function EventDetailPage() {
         requesting={requesting}
         onRequest={requestLocation}
       />
-      <div className={styles.detailGrid}>
-        <Card as="article" className={styles.detailCard}>
-          <div className="row">
-            <h1>{event.sport_name}</h1>
-            <div className={styles.metaRow}>
-              <EventBadge label={event.level} type="level" />
-              <EventBadge label={`${event.participants_count}/${event.max_participants}`} type="status" />
-              {event.is_going && <EventBadge label="You're going" type="status" />}
-              {event.is_join_pending && <EventBadge label="Richiesta inviata" type="status" />}
-              {event.is_personal && <EventBadge label="Solo tu" type="premium" />}
-              {event.creator_plan === 'premium' && <EventBadge label="Premium" type="premium" />}
+      <main className={styles.eventShell}>
+        <article className={styles.detailCard}>
+          <header
+            className={styles.eventHero}
+            style={{ '--event-hero-image': `url("${sportVisual.image}")` }}
+          >
+            <div className={styles.heroControls}>
+              <button type="button" className={styles.heroIconButton} onClick={() => navigate(-1)} aria-label="Torna indietro">
+                <ArrowLeft size={22} aria-hidden="true" />
+              </button>
+              <div className={styles.heroControlsRight}>
+                <button
+                  type="button"
+                  className={`${styles.heroIconButton} ${event.is_saved ? styles.heroIconButtonActive : ''}`}
+                  onClick={toggleSaveAgenda}
+                  aria-label={event.is_saved ? 'Rimuovi dai tuoi eventi' : 'Salva nei tuoi eventi'}
+                >
+                  {event.is_saved ? <BookmarkCheck size={21} aria-hidden="true" /> : <Bookmark size={21} aria-hidden="true" />}
+                </button>
+                <button type="button" className={styles.heroIconButton} onClick={shareLink} aria-label="Condividi evento">
+                  <Share2 size={21} aria-hidden="true" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          <p>{event.description}</p>
-          <p>
-            <strong>Quando:</strong> {new Date(event.event_datetime).toLocaleString('it-IT')}
-          </p>
-          <p>
-            <strong>Durata:</strong> {Number(event.duration_minutes || 120)} min
-          </p>
-          <p>
-            <strong>Dove:</strong> {event.location_name}
-          </p>
-          <p>
-            <strong>Categoria:</strong>{' '}
-            {event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto'}
-            {' · '}
-            <strong>Visibilita:</strong> {event.visibility === 'private' ? 'Privato' : 'Pubblico'}
-            {!event.is_personal && event.visibility === 'public' ? (
-              <> {' · '}<strong>Accesso:</strong> {event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</>
-            ) : null}
-          </p>
-          {event.is_personal ? (
-            <p><strong>Promemoria personale:</strong> visibile soltanto a te.</p>
-          ) : (
-            <>
-              <p>
-                <strong>Deposito:</strong>{' '}
-                {(Number(event.deposit_cents || 0) / 100).toLocaleString('it-IT', {
-                  style: 'currency',
-                  currency: 'EUR'
-                })}
-                {' · '}
-                <strong>Cashback:</strong> 60% al check-in, 100% al completamento
-              </p>
-              <p>
-                <strong>Obiettivo:</strong> {Number(event.minimum_presence_minutes || 45)} min di presenza
-                {' · '}
-                <strong>Ricompensa:</strong> +{Number(event.completion_xp || 50)} PX
-              </p>
-            </>
-          )}
+            <div className={styles.heroContent}>
+              <div className={styles.heroBadges}>
+                <span><i aria-hidden="true" />{sportVisual.label}</span>
+                {!event.is_personal ? (
+                  <span>{participantsCount}/{maxParticipants || '∞'} {isFull ? '· Full' : '· Iscritti'}</span>
+                ) : null}
+                {isOrganizerForEvent ? <strong>Organizer</strong> : null}
+                {event.is_going ? <strong>Partecipo</strong> : null}
+                {event.is_join_pending ? <strong>Richiesta inviata</strong> : null}
+                {event.is_personal ? <strong>Solo tu</strong> : null}
+              </div>
+              <div className={styles.heroText}>
+                <p className={styles.heroSport}>{event.sport_name}</p>
+                <h1>{eventTitle}</h1>
+                <p className={styles.heroDescription}>{event.description}</p>
+                <div className={styles.heroDate}>
+                  <span>Data evento</span>
+                  <strong>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</strong>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <section className={styles.statGrid} aria-label="Riepilogo evento">
+            <div className={styles.statCard}>
+              <Clock3 size={22} aria-hidden="true" />
+              <strong>{durationMinutes} min</strong>
+              <span>Durata</span>
+            </div>
+            <div className={styles.statCard}>
+              {hasRouteDistance ? <Route size={22} aria-hidden="true" /> : <ShieldCheck size={22} aria-hidden="true" />}
+              <strong>{hasRouteDistance ? `${routeDistance.toLocaleString('it-IT')} km` : `${minimumPresenceMinutes} min`}</strong>
+              <span>{hasRouteDistance ? 'Percorso' : 'Presenza minima'}</span>
+            </div>
+            <div className={`${styles.statCard} ${styles.statCardAccent}`}>
+              <Trophy size={22} aria-hidden="true" />
+              <strong>{totalAvailableXp} PX</strong>
+              <span>Ricompensa massima</span>
+            </div>
+          </section>
+
+          <Card as="section" className={styles.locationCard}>
+            <div className={styles.mapStage}>
+              {routePoints.length >= 2 ? (
+                <MapContainer center={routePoints[0]} zoom={11} className={styles.mapFrame}>
+                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Polyline positions={routePoints} />
+                  <Marker position={routePoints[0]}>
+                    <Popup>Partenza: {event.route_info?.from_label || 'Punto di partenza'}</Popup>
+                  </Marker>
+                  <Marker position={routePoints[routePoints.length - 1]}>
+                    <Popup>Arrivo: {event.route_info?.to_label || 'Punto di arrivo'}</Popup>
+                  </Marker>
+                </MapContainer>
+              ) : event.lat != null && event.lng != null ? (
+                <MapContainer center={[event.lat, event.lng]} zoom={13} className={styles.mapFrame}>
+                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Marker position={[event.lat, event.lng]}>
+                    <Popup>{event.location_name}</Popup>
+                  </Marker>
+                </MapContainer>
+              ) : (
+                <div className={styles.mapFallback}>
+                  <MapPin size={34} aria-hidden="true" />
+                  <span>Coordinate non disponibili</span>
+                </div>
+              )}
+            </div>
+            <div className={styles.locationBody}>
+              <div className={styles.locationHeading}>
+                <span className={styles.locationIcon}><MapPin size={20} aria-hidden="true" /></span>
+                <div>
+                  <h2>{event.location_name || 'Luogo da definire'}</h2>
+                  <p>{event.distance_km != null ? `${Number(event.distance_km).toLocaleString('it-IT')} km da te` : event.city || 'Posizione evento'}</p>
+                </div>
+              </div>
+              <div className={styles.locationActions}>
+                <Link to={mapPath} className={styles.locationButton}>
+                  <MapPin size={18} aria-hidden="true" />
+                  Mostra sulla mappa
+                </Link>
+                <a href={directionsHref} target="_blank" rel="noreferrer" className={`${styles.locationButton} ${styles.locationButtonPrimary}`}>
+                  <Navigation size={18} aria-hidden="true" />
+                  Portami lì
+                </a>
+              </div>
+            </div>
+          </Card>
+
           {event.route_info ? (
-            <Card subtle>
-              <h2>Informazioni percorso</h2>
-              <p>
-                <strong>Nome:</strong> {event.route_info.name}
-              </p>
-              <p>
-                <strong>Tratta:</strong> {event.route_info.from_label || 'Via X'} → {event.route_info.to_label || 'Via Y'}
-              </p>
-              <p>
-                <strong>Distanza:</strong> {event.route_info.distance_km} km
-              </p>
-              {event.route_info.elevation_gain_m ? (
-                <p>
-                  <strong>Dislivello positivo:</strong> +{event.route_info.elevation_gain_m} m
-                </p>
-              ) : null}
-              {event.route_info.map_url ? (
-                <p>
-                  <a href={event.route_info.map_url} target="_blank" rel="noreferrer">
-                    Apri rotta su mappa
-                  </a>
-                </p>
-              ) : null}
+            <Card subtle className={styles.routeCard}>
+              <div className={styles.sectionTitleRow}>
+                <span className={styles.sectionIcon}><Route size={20} aria-hidden="true" /></span>
+                <div>
+                  <p>Percorso</p>
+                  <h2>{event.route_info.name || 'Tracciato evento'}</h2>
+                </div>
+              </div>
+              <div className={styles.routeFacts}>
+                <span><small>Partenza</small><strong>{event.route_info.from_label || event.location_name}</strong></span>
+                <span><small>Arrivo</small><strong>{event.route_info.to_label || event.location_name}</strong></span>
+                {hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
+                {event.route_info.elevation_gain_m ? <span><small>Dislivello</small><strong>+{event.route_info.elevation_gain_m} m</strong></span> : null}
+              </div>
             </Card>
           ) : null}
 
-          <div className={styles.actions}>
-            {isOrganizerForEvent && event.is_personal ? (
+          <Card as="section" className={styles.rewardCard}>
+            <div className={styles.rewardHeading}>
+              <span><Sparkles size={22} aria-hidden="true" /></span>
+              <div>
+                <p>Ricompensa</p>
+                <h2>Fino a {totalAvailableXp} PX</h2>
+              </div>
+              <strong>+{totalAvailableXp} PX</strong>
+            </div>
+            <p className={styles.rewardBreakdown}>
+              {event.is_personal
+                ? `+${completionXp} PX al completamento del promemoria personale.`
+                : reviewBonusXp > 0
+                  ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
+                  : `+${completionXp} PX al completamento della partecipazione.`}
+            </p>
+            <div className={styles.rewardDeposit}>
+              <span>Deposito</span>
+              <strong>
+                {event.is_personal || event.participation_protection === false
+                  ? 'Nessun deposito richiesto'
+                  : `${formatCurrencyFromCents(event.deposit_cents)} · protetto`}
+              </strong>
+            </div>
+          </Card>
+
+          <div className={styles.summaryGrid}>
+            <Card subtle className={styles.infoCard}>
+              <div className={styles.sectionTitleRow}>
+                <span className={styles.sectionIcon}><CalendarDays size={20} aria-hidden="true" /></span>
+                <div>
+                  <p>Informazioni</p>
+                  <h2>Dettagli evento</h2>
+                </div>
+              </div>
+              <dl className={styles.detailList}>
+                <div><dt>Livello</dt><dd>{event.level || 'Aperto'}</dd></div>
+                <div><dt>Categoria</dt><dd>{audienceLabel}</dd></div>
+                <div><dt>Visibilità</dt><dd>{event.visibility === 'private' ? 'Privato' : 'Pubblico'}</dd></div>
+                {!event.is_personal ? <div><dt>Accesso</dt><dd>{event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</dd></div> : null}
+                {!event.is_personal ? <div><dt>Verifica</dt><dd>{event.verification_mode === 'qr' ? 'QR Code' : event.verification_mode === 'gps' ? 'GPS' : 'QR + GPS'}</dd></div> : null}
+              </dl>
+            </Card>
+
+            <Card subtle className={styles.organizerCard}>
+              <div className={styles.sectionTitleRow}>
+                <span className={styles.sectionIcon}><Users size={20} aria-hidden="true" /></span>
+                <div>
+                  <p>Organizer</p>
+                  <h2>{event.organizer.name}</h2>
+                </div>
+              </div>
+              <div className={styles.organizerScore}>
+                <span>Affidabilità</span>
+                <strong>{event.organizer.reliability_score}%</strong>
+              </div>
+              <Link to={`/profile/${event.organizer.auth_user_id || event.organizer.id}`}>Vedi profilo pubblico</Link>
+            </Card>
+          </div>
+
+          <Card subtle className={styles.actionCard}>
+            <div className={styles.sectionTitleRow}>
+              <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
+              <div>
+                <p>Azioni</p>
+                <h2>Gestisci la partecipazione</h2>
+              </div>
+            </div>
+            <div className={styles.actions}>
+              {isOrganizerForEvent && event.is_personal ? (
+                <Button
+                  type="button"
+                  onClick={completePersonalEvent}
+                  icon={CheckCircle2}
+                  disabled={personalEventBusy || !event.has_passed || event.status === 'completed'}
+                >
+                  {event.status === 'completed'
+                    ? 'Allenamento completato'
+                    : personalEventBusy
+                      ? 'Registrazione...'
+                      : event.has_passed
+                        ? `Completa e ottieni +${event.completion_xp || 5} PX`
+                        : 'Disponibile al termine'}
+                </Button>
+              ) : null}
+              {!isOrganizerForEvent && !event.is_personal ? (
+                event.is_join_pending ? (
+                  <Button type="button" variant="secondary" disabled icon={UserPlus}>Richiesta inviata</Button>
+                ) : !event.is_going ? (
+                  <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
+                    {event.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa'}
+                  </Button>
+                ) : (
+                  <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
+                    Annulla partecipazione
+                  </Button>
+                )
+              ) : null}
               <Button
                 type="button"
-                onClick={completePersonalEvent}
-                icon={CheckCircle2}
-                disabled={personalEventBusy || !event.has_passed || event.status === 'completed'}
+                variant={event.is_saved ? 'secondary' : 'ghost'}
+                onClick={toggleSaveAgenda}
+                icon={event.is_saved ? BookmarkCheck : Bookmark}
               >
-                {event.status === 'completed'
-                  ? 'Allenamento completato'
-                  : personalEventBusy
-                    ? 'Registrazione...'
-                    : event.has_passed
-                      ? `Completa e ottieni +${event.completion_xp || 5} PX`
-                      : 'Disponibile al termine'}
+                {event.is_saved ? 'Salvato nei tuoi eventi' : 'Salva nei tuoi eventi'}
               </Button>
-            ) : null}
-            {!isOrganizerForEvent && !event.is_personal ? (
-              event.is_join_pending ? (
-                <Button type="button" variant="secondary" disabled icon={UserPlus}>
-                  Richiesta inviata
-                </Button>
-              ) : !event.is_going ? (
-                <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
-                  {event.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa'}
-                </Button>
-              ) : (
-                <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
-                  Annulla partecipazione
-                </Button>
-              )
-            ) : null}
-            <Button
-              type="button"
-              variant={event.is_saved ? 'secondary' : 'ghost'}
-              onClick={toggleSaveAgenda}
-              icon={event.is_saved ? BookmarkCheck : Bookmark}
-            >
-              {event.is_saved ? 'Salvato nei tuoi eventi' : 'Salva nei tuoi eventi'}
-            </Button>
-
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (!entitlements.canExportICS) {
-                  setPaywallOpen(true);
-                  return;
-                }
-                downloadEventIcs(event);
-              }}
-              icon={CalendarPlus}
-            >
-              Aggiungi a Calendario
-            </Button>
-            <Button type="button" variant="ghost" onClick={copyDetails} icon={ClipboardCopy}>
-              Copia dettagli
-            </Button>
-            <Button type="button" variant="ghost" onClick={shareLink} icon={Share2}>
-              Condividi link
-            </Button>
-            {canAccessGroupChat ? (
               <Button
                 type="button"
                 variant="secondary"
-                icon={MessageCircle}
-                onClick={() => navigate(`/chat/event_${event.id}`)}
+                onClick={() => {
+                  if (!entitlements.canExportICS) {
+                    setPaywallOpen(true);
+                    return;
+                  }
+                  downloadEventIcs(event);
+                }}
+                icon={CalendarPlus}
               >
-                Apri chat evento
+                Aggiungi a Calendario
               </Button>
-            ) : null}
-          </div>
+              <Button type="button" variant="ghost" onClick={copyDetails} icon={ClipboardCopy}>Copia dettagli</Button>
+              <Button type="button" variant="ghost" onClick={shareLink} icon={Share2}>Condividi link</Button>
+              {canAccessGroupChat ? (
+                <Button type="button" variant="secondary" icon={MessageCircle} onClick={() => navigate(`/chat/event_${event.id}`)}>
+                  Apri chat evento
+                </Button>
+              ) : null}
+            </div>
+          </Card>
 
           {event.can_confirm_attendance && (
             <Card subtle>
               <h2>Conferma presenza</h2>
               <div className="row">
-                <Button type="button" onClick={() => onAttendance('attended')}>
-                  Conferma presenza
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => onAttendance('no_show')}>
-                  Non mi sono presentato
-                </Button>
+                <Button type="button" onClick={() => onAttendance('attended')}>Conferma presenza</Button>
+                <Button type="button" variant="secondary" onClick={() => onAttendance('no_show')}>Non mi sono presentato</Button>
               </div>
             </Card>
           )}
@@ -872,13 +1096,9 @@ function EventDetailPage() {
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (
             <Card subtle className={styles.postWorkoutCard}>
               <h2>Allenamento completato ✅</h2>
-              <p className="muted">
-                Ora puoi aggiungere i compagni con cui hai completato l allenamento in questo evento.
-              </p>
+              <p className="muted">Ora puoi aggiungere i compagni con cui hai completato l allenamento in questo evento.</p>
               <div className="row">
-                <Button type="button" icon={UserPlus} onClick={() => navigate(`/chat/met-people/${event.id}`)}>
-                  Aggiungi compagni
-                </Button>
+                <Button type="button" icon={UserPlus} onClick={() => navigate(`/chat/met-people/${event.id}`)}>Aggiungi compagni</Button>
               </div>
             </Card>
           ) : null}
@@ -905,63 +1125,40 @@ function EventDetailPage() {
             )}
           </Card>
 
-          <Card subtle>
-            <h2>Organizer</h2>
-            <p>{event.organizer.name}</p>
-            <p className="muted">Affidabilita {event.organizer.reliability_score}%</p>
-            <Link to={`/profile/${event.organizer.auth_user_id || event.organizer.id}`}>Vedi profilo pubblico</Link>
-          </Card>
-
-          <Card subtle>
-            <h2>Regole della sessione</h2>
+          <Card subtle className={styles.rulesCard}>
+            <div className={styles.sectionTitleRow}>
+              <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
+              <div>
+                <p>Community</p>
+                <h2>Regole della sessione</h2>
+              </div>
+            </div>
             <ul>
-              {event.etiquette.map((rule) => (
-                <li key={rule}>{rule}</li>
-              ))}
+              {(event.etiquette || []).map((rule) => <li key={rule}>{rule}</li>)}
             </ul>
           </Card>
-        </Card>
+        </article>
 
-        <Card className={styles.mapCard}>
-          <h2>Mappa</h2>
-          {routePoints.length >= 2 ? (
-            <MapContainer center={routePoints[0]} zoom={11} className={styles.mapFrame}>
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Polyline positions={routePoints} />
-              <Marker position={routePoints[0]}>
-                <Popup>Partenza: {event.route_info?.from_label || 'Via X'}</Popup>
-              </Marker>
-              <Marker position={routePoints[routePoints.length - 1]}>
-                <Popup>Arrivo: {event.route_info?.to_label || 'Via Y'}</Popup>
-              </Marker>
-            </MapContainer>
-          ) : event.lat != null && event.lng != null ? (
-            <MapContainer center={[event.lat, event.lng]} zoom={12} className={styles.mapFrame}>
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker position={[event.lat, event.lng]}>
-                <Popup>{event.location_name}</Popup>
-              </Marker>
-            </MapContainer>
-          ) : (
-            <Card subtle>
-              <p className="muted">Coordinate non disponibili per questo evento.</p>
-            </Card>
-          )}
-        </Card>
-      </div>
-
-      <section className={styles.list}>
-        <h2>Eventi simili</h2>
-        <div className="grid2">
-          {similarEvents.map((item) => (
-            <Card key={item.id}>
-              <h3>{item.location_name}</h3>
-              <p className="muted">{new Date(item.event_datetime).toLocaleString('it-IT')}</p>
-              <Link to={`/events/${item.id}`}>Apri dettaglio</Link>
-            </Card>
-          ))}
-        </div>
-      </section>
+        {similarEvents.length > 0 ? (
+          <section className={styles.list}>
+            <div className={styles.listHeading}>
+              <p>Continua a muoverti</p>
+              <h2>Eventi simili</h2>
+            </div>
+            <div className={styles.similarGrid}>
+              {similarEvents.map((item) => (
+                <Card key={item.id} hover className={styles.similarCard}>
+                  <span>{item.sport_name}</span>
+                  <h3>{item.title || item.location_name}</h3>
+                  <p>{item.location_name}</p>
+                  <p className="muted">{new Date(item.event_datetime).toLocaleString('it-IT')}</p>
+                  <Link to={`/events/${item.id}`}>Apri dettaglio</Link>
+                </Card>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </main>
 
       <Modal
         open={modalOpen}
