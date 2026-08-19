@@ -19,7 +19,7 @@
 }
 
 .eventHero {
-  --event-hero-image: url('/images/default-sport.svg');
+  --event-hero-image: url('/images/hero-sport-default-v2.jpg');
   position: relative;
   isolation: isolate;
   min-height: clamp(31rem, 72vw, 39rem);

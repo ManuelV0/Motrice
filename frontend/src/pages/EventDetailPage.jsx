@@ -52,32 +52,32 @@ import styles from '../styles/pages/eventDetail.module.css';
 const SPORT_DETAIL_VISUALS = [
   {
     pattern: /palestra|fitness|forza|functional|workout|hiit/i,
-    image: '/images/palestra.svg',
+    image: '/images/hero-palestra-v2.jpg',
     label: 'Forza'
   },
   {
     pattern: /padel|tennis|racchetta/i,
-    image: '/images/padel.svg',
+    image: '/images/hero-padel-v2.jpg',
     label: 'Racchetta'
   },
   {
     pattern: /calcio|calcetto|football|futsal/i,
-    image: '/images/calcio.svg',
+    image: '/images/hero-calcio-v2.jpg',
     label: 'Squadra'
   },
   {
     pattern: /running|corsa|jogging/i,
-    image: '/images/running.svg',
+    image: '/images/hero-running-v2.jpg',
     label: 'Running'
   },
   {
     pattern: /bici|bike|cycling|ciclismo|mtb/i,
-    image: '/images/bici.svg',
+    image: '/images/hero-bici-v2.jpg',
     label: 'Ciclismo'
   },
   {
     pattern: /trekking|trail|hiking|camminata/i,
-    image: '/images/trekking.svg',
+    image: '/images/hero-trekking-v2.jpg',
     label: 'Outdoor'
   }
 ];
@@ -86,7 +86,7 @@ function getSportDetailVisual(event) {
   const source = `${event?.sport_name || ''} ${event?.title || ''}`;
   return (
     SPORT_DETAIL_VISUALS.find((item) => item.pattern.test(source)) || {
-      image: '/images/default-sport.svg',
+      image: '/images/hero-sport-default-v2.jpg',
       label: String(event?.sport_name || 'Sport')
     }
   );
