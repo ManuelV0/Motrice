@@ -108,7 +108,7 @@ function AgendaPage() {
   const { showToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState('created');
+  const [activeSection, setActiveSection] = useState('all');
   const now = useMemo(() => new Date(), []);
   const [calendarCursor, setCalendarCursor] = useState(() => ({
     year: now.getFullYear(),
@@ -165,15 +165,20 @@ function AgendaPage() {
     [...ownedEvents, ...participatingEvents].forEach((event) => byId.set(String(event.id), event));
     return Array.from(byId.values()).sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
   }, [ownedEvents, participatingEvents]);
+  const visibleCalendarEvents = useMemo(() => {
+    if (activeSection === 'created') return ownedEvents;
+    if (activeSection === 'participating') return participatingEvents;
+    return calendarEvents;
+  }, [activeSection, calendarEvents, ownedEvents, participatingEvents]);
   const eventsByDate = useMemo(() => {
     const byDate = new Map();
-    calendarEvents.forEach((event) => {
+    visibleCalendarEvents.forEach((event) => {
       const key = toDateKey(event.event_datetime);
       if (!key) return;
       byDate.set(key, [...(byDate.get(key) || []), event]);
     });
     return byDate;
-  }, [calendarEvents]);
+  }, [visibleCalendarEvents]);
   const calendarCells = useMemo(
     () => getCalendarCells(calendarCursor.year, calendarCursor.month),
     [calendarCursor]
@@ -193,6 +198,14 @@ function AgendaPage() {
     () => calendarMonthEvents.reduce((total, event) => total + Math.max(0, Number(event.duration_minutes || 0)), 0),
     [calendarMonthEvents]
   );
+  const calendarMonthCreatedCount = useMemo(
+    () => calendarMonthEvents.filter((event) => event.created_by === 'me').length,
+    [calendarMonthEvents]
+  );
+  const calendarMonthXp = useMemo(
+    () => calendarMonthEvents.reduce((total, event) => total + getEventXp(event), 0),
+    [calendarMonthEvents]
+  );
   const selectedDayEvents = useMemo(
     () => (selectedDateKey ? eventsByDate.get(selectedDateKey) || [] : []),
     [eventsByDate, selectedDateKey]
@@ -203,6 +216,11 @@ function AgendaPage() {
       const next = new Date(current.year, current.month + offset, 1);
       return { year: next.getFullYear(), month: next.getMonth() };
     });
+    setSelectedDateKey('');
+  }
+
+  function changeActiveSection(section) {
+    setActiveSection(section);
     setSelectedDateKey('');
   }
 
@@ -300,38 +318,74 @@ function AgendaPage() {
     <section className={styles.page}>
       <div className={styles.head}>
         <div>
-          <span className={styles.eyebrow}>Tutto in un unico posto</span>
           <h1>I miei eventi</h1>
-          <p>Eventi creati, partecipazioni e contenuti salvati senza filtri.</p>
+          <p>Tutto in un unico posto</p>
         </div>
-        <div className={styles.summary} aria-label="Riepilogo eventi">
-          <span><strong>{ownedEvents.length}</strong> creati</span>
-          <span><strong>{participatingCount}</strong> partecipo o salvati</span>
-        </div>
+      </div>
+
+      <div className={styles.monthSummary} aria-label={`Riepilogo di ${formatCalendarMonth(calendarCursor.year, calendarCursor.month)}`}>
+        <strong>{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</strong>
+        <i aria-hidden="true" />
+        <span>{calendarMonthCreatedCount} creati</span>
+        <i aria-hidden="true" />
+        <span>{calendarMonthMinutes} min</span>
+        <i aria-hidden="true" />
+        <b>{calendarMonthXp} PX <em aria-hidden="true">P</em></b>
+      </div>
+
+      <div className={styles.eventFilters} role="tablist" aria-label="Seleziona gli eventi da mostrare">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'all'}
+          className={activeSection === 'all' ? styles.filterActive : undefined}
+          onClick={() => changeActiveSection('all')}
+        >
+          Tutti
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'created'}
+          className={activeSection === 'created' ? styles.filterActive : undefined}
+          onClick={() => changeActiveSection('created')}
+        >
+          Creati <span>{ownedEvents.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'participating'}
+          className={activeSection === 'participating' ? styles.filterActive : undefined}
+          onClick={() => changeActiveSection('participating')}
+        >
+          Partecipo <span>{participatingCount}</span>
+        </button>
       </div>
 
       <section className={styles.calendarPanel} aria-labelledby="events-calendar-title">
         <div className={styles.calendarHeader}>
-          <button
-            type="button"
-            className={styles.calendarNavButton}
-            onClick={() => changeCalendarMonth(-1)}
-            aria-label="Mese precedente"
-          >
-            <ChevronLeft size={22} aria-hidden="true" />
-          </button>
           <div className={styles.calendarHeading}>
             <h2 id="events-calendar-title">{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</h2>
-            <p>{calendarMonthEvents.length} {calendarMonthEvents.length === 1 ? 'evento' : 'eventi'} · {calendarMonthMinutes} min</p>
           </div>
-          <button
-            type="button"
-            className={styles.calendarNavButton}
-            onClick={() => changeCalendarMonth(1)}
-            aria-label="Mese successivo"
-          >
-            <ChevronRight size={22} aria-hidden="true" />
-          </button>
+          <div className={styles.calendarNavGroup}>
+            <button
+              type="button"
+              className={styles.calendarNavButton}
+              onClick={() => changeCalendarMonth(-1)}
+              aria-label="Mese precedente"
+            >
+              <ChevronLeft size={22} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={styles.calendarNavButton}
+              onClick={() => changeCalendarMonth(1)}
+              aria-label="Mese successivo"
+            >
+              <ChevronRight size={22} aria-hidden="true" />
+            </button>
+          </div>
         </div>
 
         <div className={styles.calendarGrid} role="grid" aria-label={formatCalendarMonth(calendarCursor.year, calendarCursor.month)}>
@@ -346,7 +400,8 @@ function AgendaPage() {
             const hasEvents = dayEvents.length > 0;
             const isSelected = selectedDateKey === dateKey;
             const isToday = dateKey === toDateKey(now);
-            const isParticipating = dayEvents.some((event) => event.is_going);
+            const createdCount = dayEvents.filter((event) => event.created_by === 'me').length;
+            const participatingDayCount = dayEvents.filter((event) => event.created_by !== 'me').length;
             const label = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
 
             return (
@@ -357,25 +412,31 @@ function AgendaPage() {
                 className={[
                   styles.calendarDay,
                   hasEvents ? styles.calendarDayWithEvents : '',
-                  isParticipating ? styles.calendarDayParticipating : '',
                   isSelected ? styles.calendarDaySelected : '',
                   isToday ? styles.calendarDayToday : ''
                 ].filter(Boolean).join(' ')}
                 onClick={() => selectCalendarDay(day, dayEvents)}
-                aria-label={`${label}${hasEvents ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}` : ', nessun evento'}`}
+                aria-label={`${label}${hasEvents
+                  ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${createdCount} creati da te, ${participatingDayCount} a cui partecipi`
+                  : ', nessun evento'}`}
                 aria-expanded={hasEvents ? isSelected : undefined}
                 disabled={!hasEvents}
               >
-                <span>{day}</span>
-                {hasEvents ? <i aria-hidden="true" /> : null}
+                <span className={styles.calendarDayNumber}>{day}</span>
+                {hasEvents ? (
+                  <span className={styles.calendarDayBadges} aria-hidden="true">
+                    {createdCount > 0 ? <b className={styles.createdDayBadge}>{createdCount}</b> : null}
+                    {participatingDayCount > 0 ? <b className={styles.participatingDayBadge}>{participatingDayCount}</b> : null}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </div>
 
         <div className={styles.calendarLegend} aria-label="Legenda calendario">
-          <span><i className={styles.legendEvent} aria-hidden="true" /> Giorno con eventi</span>
-          <span><i className={styles.legendGoing} aria-hidden="true" /> Iscritto</span>
+          <span><i className={styles.legendCreated} aria-hidden="true" /> Creati da te <small>(numero = quanti)</small></span>
+          <span><i className={styles.legendParticipating} aria-hidden="true" /> Partecipi</span>
         </div>
 
         {selectedDateKey && selectedDayEvents.length > 0 ? (
@@ -426,27 +487,6 @@ function AgendaPage() {
         ) : null}
       </section>
 
-      <div className={styles.sectionSwitch} role="tablist" aria-label="Seleziona gli eventi da mostrare">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeSection === 'created'}
-          className={activeSection === 'created' ? styles.sectionActive : undefined}
-          onClick={() => setActiveSection('created')}
-        >
-          Creati <span>{ownedEvents.length}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeSection === 'participating'}
-          className={activeSection === 'participating' ? styles.sectionActive : undefined}
-          onClick={() => setActiveSection('participating')}
-        >
-          Partecipo <span>{participatingCount}</span>
-        </button>
-      </div>
-
       {loading ? (
         <LoadingSkeleton rows={3} variant="detail" />
       ) : !hasItems ? (
@@ -459,7 +499,7 @@ function AgendaPage() {
         />
       ) : (
         <>
-          {activeSection === 'created' && ownedEvents.length > 0 ? (
+          {(activeSection === 'all' || activeSection === 'created') && ownedEvents.length > 0 ? (
             <section className={styles.eventSection} aria-labelledby="owned-events-title">
               <div className={styles.sectionHeader}>
                 <div>
@@ -532,7 +572,7 @@ function AgendaPage() {
             />
           ) : null}
 
-          {activeSection === 'participating' && participatingCount > 0 ? (
+          {(activeSection === 'all' || activeSection === 'participating') && participatingCount > 0 ? (
             <section className={styles.eventSection} aria-labelledby="participating-events-title">
               <div className={styles.sectionHeader}>
                 <div>
