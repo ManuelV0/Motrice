@@ -237,10 +237,17 @@ function EventDetailPage() {
     api.getLocalProfile()
       .then((profile) => {
         if (!active) return;
+        const displayName = String(profile?.display_name || profile?.name || '').trim();
         setLocalProfile({
-          display_name: String(profile?.display_name || profile?.name || '').trim(),
+          display_name: displayName,
           avatar_url: String(profile?.avatar_url || '').trim()
         });
+        if (displayName.length >= 2) {
+          setRsvpForm((current) => ({
+            ...current,
+            name: displayName
+          }));
+        }
       })
       .catch(() => {
         if (!active) return;
@@ -430,13 +437,17 @@ function EventDetailPage() {
   }
 
   async function confirmRsvp() {
-    if (!rsvpForm.name || rsvpForm.name.length < 2) {
-      showToast('Inserisci un nome valido', 'error');
+    const participantName = String(rsvpForm.name || localProfile.display_name || '').trim();
+    if (participantName.length < 2) {
+      showToast('Completa il nome utente nel profilo prima di partecipare', 'error');
       return;
     }
 
     try {
-      const result = await api.joinEvent(id, rsvpForm);
+      const result = await api.joinEvent(id, {
+        ...rsvpForm,
+        name: participantName
+      });
       await reload();
       if (result?.pending) {
         showToast('Richiesta inviata all organizer', 'success');
@@ -1168,11 +1179,11 @@ function EventDetailPage() {
         confirmText={event?.join_policy === 'approval' ? 'Invia richiesta' : 'Blocca deposito e partecipa'}
       >
         <label>
-          Nome
+          Nome dal profilo
           <input
-            value={rsvpForm.name}
-            onChange={(event) => setRsvpForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder="Inserisci il tuo nome"
+            value={rsvpForm.name || localProfile.display_name}
+            readOnly
+            placeholder="Completa il nome nel profilo"
           />
         </label>
         <label>

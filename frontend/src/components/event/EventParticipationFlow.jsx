@@ -187,6 +187,7 @@ function EventParticipationFlow({
   const [progress, setProgress] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
+  const [requestDecisionBusy, setRequestDecisionBusy] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -217,17 +218,31 @@ function EventParticipationFlow({
     if (!canLoad) return;
     if (!silent) setLoading(true);
     try {
-      const [flow, validation, requests] = await Promise.all([
+      const [flowResult, validationResult, requestsResult] = await Promise.allSettled([
         api.getEventParticipationProgress(event.id),
         api.listEventValidationStatus(event.id),
         isOrganizer ? api.listEventJoinRequests(event.id) : Promise.resolve([])
       ]);
-      setProgress(flow);
-      setParticipants(Array.isArray(validation) ? validation : []);
-      setJoinRequests(Array.isArray(requests) ? requests : []);
-    } catch (error) {
+
+      if (flowResult.status === 'fulfilled') {
+        setProgress(flowResult.value);
+      }
+      if (validationResult.status === 'fulfilled') {
+        setParticipants(Array.isArray(validationResult.value) ? validationResult.value : []);
+      }
+      if (requestsResult.status === 'fulfilled') {
+        setJoinRequests(Array.isArray(requestsResult.value) ? requestsResult.value : []);
+      }
+
       if (!silent) {
-        showToast(error?.message || 'Flusso partecipazione non disponibile', 'error');
+        const failedResult = [flowResult, validationResult, requestsResult]
+          .find((result) => result.status === 'rejected');
+        if (failedResult) {
+          showToast(
+            failedResult.reason?.message || 'Alcuni dati della partecipazione non sono disponibili',
+            'error'
+          );
+        }
       }
     } finally {
       if (!silent) setLoading(false);
@@ -603,7 +618,9 @@ function EventParticipationFlow({
 
   async function decideJoinRequest(request, decision) {
     const requestUserId = request.auth_user_id || request.user_id;
-    setBusy(true);
+    const requestKey = String(requestUserId || '');
+    if (!requestKey || requestDecisionBusy) return;
+    setRequestDecisionBusy(requestKey);
     try {
       if (decision === 'approve') {
         await api.approveEventJoinRequest(event.id, requestUserId);
@@ -612,12 +629,15 @@ function EventParticipationFlow({
         await api.declineEventJoinRequest(event.id, requestUserId);
         showToast('Richiesta rifiutata', 'info');
       }
+      setJoinRequests((current) => current.filter((item) => (
+        String(item.auth_user_id || item.user_id) !== requestKey
+      )));
       await loadFlow({ silent: true });
       await onEventRefresh?.();
     } catch (error) {
       showToast(error?.message || 'Richiesta non aggiornata', 'error');
     } finally {
-      setBusy(false);
+      setRequestDecisionBusy('');
     }
   }
 
@@ -786,7 +806,7 @@ function EventParticipationFlow({
               </div>
             </section>
 
-            {joinRequests.length ? (
+            {event.join_policy === 'approval' ? (
               <section className={styles.requestSection} aria-label="Richieste di partecipazione">
                 <div className={styles.participantSectionTitle}>
                   <div>
@@ -796,7 +816,10 @@ function EventParticipationFlow({
                   <span>{joinRequests.length}</span>
                 </div>
                 <div className={styles.requestList} aria-live="polite">
-                  {joinRequests.map((request) => (
+                  {joinRequests.length ? joinRequests.map((request) => {
+                    const requestKey = String(request.auth_user_id || request.user_id || '');
+                    const isDeciding = requestDecisionBusy === requestKey;
+                    return (
                     <article key={request.auth_user_id || request.user_id} className={styles.requestRow}>
                       <span className={styles.avatar}>
                         {request.avatar_url
@@ -811,23 +834,32 @@ function EventParticipationFlow({
                         <Button
                           type="button"
                           size="sm"
+                          icon={Check}
+                          aria-label={`Approva ${request.display_name || 'partecipante'}`}
+                          title="Approva richiesta"
                           onClick={() => decideJoinRequest(request, 'approve')}
-                          disabled={busy}
+                          disabled={Boolean(requestDecisionBusy)}
                         >
-                          Approva
+                          {isDeciding ? 'Attendi' : 'Approva'}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
+                          icon={XCircle}
+                          aria-label={`Rifiuta ${request.display_name || 'partecipante'}`}
+                          title="Rifiuta richiesta"
                           onClick={() => decideJoinRequest(request, 'decline')}
-                          disabled={busy}
+                          disabled={Boolean(requestDecisionBusy)}
                         >
                           Rifiuta
                         </Button>
                       </div>
                     </article>
-                  ))}
+                    );
+                  }) : (
+                    <p className={styles.emptyRequests}>Nessuna richiesta in attesa.</p>
+                  )}
                 </div>
               </section>
             ) : null}

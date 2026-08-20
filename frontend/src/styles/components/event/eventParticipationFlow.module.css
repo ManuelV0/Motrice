@@ -375,6 +375,15 @@
   gap: var(--s-2);
 }
 
+.emptyRequests {
+  margin: 0;
+  padding: var(--s-4);
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
 .participantSectionTitle {
   display: flex;
   align-items: center;
