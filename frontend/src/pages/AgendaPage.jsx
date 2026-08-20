@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Activity,
   CalendarX2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   MapPin,
   QrCode,
@@ -21,7 +23,48 @@ import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import LocationPermissionAlert from '../components/LocationPermissionAlert';
+import { getSportHeroImage } from '../utils/sportImages';
 import styles from '../styles/pages/agenda.module.css';
+
+const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
+
+function toDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+}
+
+function getCalendarCells(year, month) {
+  const firstDay = new Date(year, month, 1);
+  const leadingEmptyCells = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: leadingEmptyCells }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1)
+  ];
+  const trailingEmptyCells = (7 - (cells.length % 7)) % 7;
+  return [...cells, ...Array.from({ length: trailingEmptyCells }, () => null)];
+}
+
+function formatCalendarMonth(year, month) {
+  const label = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1));
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+}
+
+function formatCalendarDateLabel(value) {
+  return new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short'
+  })
+    .format(new Date(value))
+    .replaceAll('.', '')
+    .toUpperCase();
+}
+
+function getEventXp(event) {
+  return Math.max(0, Number(event?.completion_xp || 0) + Number(event?.review_bonus_xp || 0));
+}
 
 function formatEventDay(value) {
   const date = new Date(value);
@@ -66,6 +109,12 @@ function AgendaPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('created');
+  const now = useMemo(() => new Date(), []);
+  const [calendarCursor, setCalendarCursor] = useState(() => ({
+    year: now.getFullYear(),
+    month: now.getMonth()
+  }));
+  const [selectedDateKey, setSelectedDateKey] = useState('');
   const [qrEvent, setQrEvent] = useState(null);
   const [organizerQrUrl, setOrganizerQrUrl] = useState('');
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation } = useUserLocation();
@@ -111,6 +160,57 @@ function AgendaPage() {
   );
   const participatingCount = participatingEvents.length;
   const hasItems = ownedEvents.length > 0 || participatingCount > 0;
+  const calendarEvents = useMemo(() => {
+    const byId = new Map();
+    [...ownedEvents, ...participatingEvents].forEach((event) => byId.set(String(event.id), event));
+    return Array.from(byId.values()).sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
+  }, [ownedEvents, participatingEvents]);
+  const eventsByDate = useMemo(() => {
+    const byDate = new Map();
+    calendarEvents.forEach((event) => {
+      const key = toDateKey(event.event_datetime);
+      if (!key) return;
+      byDate.set(key, [...(byDate.get(key) || []), event]);
+    });
+    return byDate;
+  }, [calendarEvents]);
+  const calendarCells = useMemo(
+    () => getCalendarCells(calendarCursor.year, calendarCursor.month),
+    [calendarCursor]
+  );
+  const calendarMonthEvents = useMemo(
+    () =>
+      calendarEvents.filter((event) => {
+        const eventDate = new Date(event.event_datetime);
+        return (
+          eventDate.getFullYear() === calendarCursor.year &&
+          eventDate.getMonth() === calendarCursor.month
+        );
+      }),
+    [calendarCursor, calendarEvents]
+  );
+  const calendarMonthMinutes = useMemo(
+    () => calendarMonthEvents.reduce((total, event) => total + Math.max(0, Number(event.duration_minutes || 0)), 0),
+    [calendarMonthEvents]
+  );
+  const selectedDayEvents = useMemo(
+    () => (selectedDateKey ? eventsByDate.get(selectedDateKey) || [] : []),
+    [eventsByDate, selectedDateKey]
+  );
+
+  function changeCalendarMonth(offset) {
+    setCalendarCursor((current) => {
+      const next = new Date(current.year, current.month + offset, 1);
+      return { year: next.getFullYear(), month: next.getMonth() };
+    });
+    setSelectedDateKey('');
+  }
+
+  function selectCalendarDay(day, dayEvents) {
+    if (!dayEvents.length) return;
+    const key = toDateKey(new Date(calendarCursor.year, calendarCursor.month, day));
+    setSelectedDateKey((current) => (current === key ? '' : key));
+  }
 
   useEffect(() => {
     let active = true;
@@ -209,6 +309,122 @@ function AgendaPage() {
           <span><strong>{participatingCount}</strong> partecipo o salvati</span>
         </div>
       </div>
+
+      <section className={styles.calendarPanel} aria-labelledby="events-calendar-title">
+        <div className={styles.calendarHeader}>
+          <button
+            type="button"
+            className={styles.calendarNavButton}
+            onClick={() => changeCalendarMonth(-1)}
+            aria-label="Mese precedente"
+          >
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+          <div className={styles.calendarHeading}>
+            <h2 id="events-calendar-title">{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</h2>
+            <p>{calendarMonthEvents.length} {calendarMonthEvents.length === 1 ? 'evento' : 'eventi'} · {calendarMonthMinutes} min</p>
+          </div>
+          <button
+            type="button"
+            className={styles.calendarNavButton}
+            onClick={() => changeCalendarMonth(1)}
+            aria-label="Mese successivo"
+          >
+            <ChevronRight size={22} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className={styles.calendarGrid} role="grid" aria-label={formatCalendarMonth(calendarCursor.year, calendarCursor.month)}>
+          {CALENDAR_WEEKDAYS.map((weekday, index) => (
+            <span key={`${weekday}-${index}`} className={styles.calendarWeekday} role="columnheader">{weekday}</span>
+          ))}
+          {calendarCells.map((day, index) => {
+            if (!day) return <span key={`empty-${index}`} className={styles.calendarEmpty} aria-hidden="true" />;
+            const date = new Date(calendarCursor.year, calendarCursor.month, day);
+            const dateKey = toDateKey(date);
+            const dayEvents = eventsByDate.get(dateKey) || [];
+            const hasEvents = dayEvents.length > 0;
+            const isSelected = selectedDateKey === dateKey;
+            const isToday = dateKey === toDateKey(now);
+            const isParticipating = dayEvents.some((event) => event.is_going);
+            const label = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+
+            return (
+              <button
+                key={dateKey}
+                type="button"
+                role="gridcell"
+                className={[
+                  styles.calendarDay,
+                  hasEvents ? styles.calendarDayWithEvents : '',
+                  isParticipating ? styles.calendarDayParticipating : '',
+                  isSelected ? styles.calendarDaySelected : '',
+                  isToday ? styles.calendarDayToday : ''
+                ].filter(Boolean).join(' ')}
+                onClick={() => selectCalendarDay(day, dayEvents)}
+                aria-label={`${label}${hasEvents ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}` : ', nessun evento'}`}
+                aria-expanded={hasEvents ? isSelected : undefined}
+                disabled={!hasEvents}
+              >
+                <span>{day}</span>
+                {hasEvents ? <i aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className={styles.calendarLegend} aria-label="Legenda calendario">
+          <span><i className={styles.legendEvent} aria-hidden="true" /> Giorno con eventi</span>
+          <span><i className={styles.legendGoing} aria-hidden="true" /> Iscritto</span>
+        </div>
+
+        {selectedDateKey && selectedDayEvents.length > 0 ? (
+          <div className={styles.calendarDetails} aria-live="polite">
+            <div className={styles.calendarDetailsHeader}>
+              <strong>{formatCalendarDateLabel(selectedDateKey)}</strong>
+              <span>{selectedDayEvents.length} {selectedDayEvents.length === 1 ? 'evento' : 'eventi'}</span>
+            </div>
+            <div className={styles.calendarEventList}>
+              {selectedDayEvents.map((event) => {
+                const participants = Math.max(0, Number(event.participants_count || 0));
+                const maxParticipants = Math.max(0, Number(event.max_participants || 0));
+                const xp = getEventXp(event);
+                const status = event.created_by === 'me' ? 'Creato da te' : event.is_going ? 'Iscritto' : 'Salvato';
+
+                return (
+                  <button
+                    key={event.id}
+                    type="button"
+                    className={styles.calendarEventCard}
+                    onClick={() => navigate(`/events/${event.id}`)}
+                    aria-label={`Apri ${event.title || event.sport_name}`}
+                  >
+                    <img
+                      src={getSportHeroImage(event.sport_name, event.title)}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <span className={styles.calendarEventContent}>
+                      <span className={styles.calendarEventTopline}>
+                        <strong>{formatEventTime(event.event_datetime)} <small>· {Number(event.duration_minutes || 0)} min</small></strong>
+                        {xp > 0 ? <b>+{xp} PX</b> : null}
+                      </span>
+                      <strong className={styles.calendarEventTitle}>{event.title || event.sport_name}</strong>
+                      <span className={styles.calendarEventLocation}><MapPin size={15} aria-hidden="true" /> {event.location_name || event.city}</span>
+                      <span className={styles.calendarEventBottomline}>
+                        <span><Users size={15} aria-hidden="true" /> {participants}/{maxParticipants || '∞'} partecipanti</span>
+                        <em>{status}</em>
+                      </span>
+                    </span>
+                    <ChevronRight className={styles.calendarEventArrow} size={20} aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       <div className={styles.sectionSwitch} role="tablist" aria-label="Seleziona gli eventi da mostrare">
         <button
