@@ -156,6 +156,7 @@ function EventDetailPage() {
   const [error, setError] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelCountdown, setCancelCountdown] = useState(3);
   const [cancelReady, setCancelReady] = useState(false);
@@ -437,27 +438,44 @@ function EventDetailPage() {
   }
 
   async function confirmRsvp() {
+    if (rsvpSubmitting) return;
     const participantName = String(rsvpForm.name || localProfile.display_name || '').trim();
     if (participantName.length < 2) {
       showToast('Completa il nome utente nel profilo prima di partecipare', 'error');
       return;
     }
 
+    setRsvpSubmitting(true);
     try {
       const result = await api.joinEvent(id, {
         ...rsvpForm,
         name: participantName
       });
-      await reload();
       if (result?.pending) {
+        setEvent((current) => current ? {
+          ...current,
+          is_join_pending: true,
+          join_request_status: 'pending'
+        } : current);
+        setModalOpen(false);
         showToast('Richiesta inviata all organizer', 'success');
       } else {
+        setEvent((current) => current ? {
+          ...current,
+          is_going: true,
+          user_rsvp: result?.rsvp || current.user_rsvp
+        } : current);
+        setModalOpen(false);
         showToast('RSVP confermato', 'success');
         markStepByAction('rsvp_confirmed');
       }
-      setModalOpen(false);
+      reload().catch(() => {
+        // La conferma ricevuta dal backend resta valida anche se il refresh tarda.
+      });
     } catch (err) {
       showToast(err.message, 'error');
+    } finally {
+      setRsvpSubmitting(false);
     }
   }
 
@@ -1174,9 +1192,16 @@ function EventDetailPage() {
       <Modal
         open={modalOpen}
         title={event?.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa alla sessione'}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          if (!rsvpSubmitting) setModalOpen(false);
+        }}
         onConfirm={confirmRsvp}
-        confirmText={event?.join_policy === 'approval' ? 'Invia richiesta' : 'Blocca deposito e partecipa'}
+        confirmText={rsvpSubmitting
+          ? 'Invio in corso...'
+          : event?.join_policy === 'approval'
+            ? 'Invia richiesta'
+            : 'Blocca deposito e partecipa'}
+        confirmDisabled={rsvpSubmitting}
       >
         <label>
           Nome dal profilo
