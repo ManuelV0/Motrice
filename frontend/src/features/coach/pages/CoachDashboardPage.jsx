@@ -839,7 +839,7 @@ function CoachDashboardPage() {
                     </span>
                   ) : null}
                   <Link to="/dashboard/plans" className={styles.linkAction}>
-                    Apri schede
+                    Schede personali
                   </Link>
                 </div>
               </li>

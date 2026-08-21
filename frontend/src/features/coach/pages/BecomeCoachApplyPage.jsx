@@ -686,7 +686,7 @@ function BecomeCoachApplyPage() {
 
                 <Card className={styles.requestAgendaBox}>
                   <h3>Lavoro per il coach</h3>
-                  <p className="muted">Lista schede clienti con risposta nota + allegati (visibili/scaricabili in Le mie schede).</p>
+                  <p className="muted">Lista richieste cliente con risposta, note e allegati gestiti direttamente nel flusso coach.</p>
                 </Card>
 
                 {pendingRequests.map((request) => {

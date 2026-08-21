@@ -8,6 +8,7 @@ La migration crea il backend condiviso iniziale di Motrice:
 - eventi salvati
 - chat evento
 - notifiche
+- schede di allenamento personali sincronizzate per utente
 - bucket pubblico `avatars` con scrittura limitata alla cartella dell'utente
 - RLS su tutte le tabelle esposte
 - Realtime per eventi, partecipanti, messaggi e notifiche
@@ -65,3 +66,11 @@ server-side della beta:
 Saldo, cashback e PX vengono aggiornati esclusivamente da funzioni RPC
 `security definer`; il client non può scrivere direttamente le tabelle
 operative.
+
+## Schede personali
+
+La migration `20260821210000_personal_workout_plans.sql` aggiunge la tabella
+`personal_workout_plans`. Ogni utente autenticato può leggere e modificare
+soltanto le proprie schede tramite policy RLS. Il frontend mantiene anche una
+copia locale, importa automaticamente le schede già presenti sul dispositivo e
+riallinea salvataggi o eliminazioni rimasti in attesa quando torna la rete.

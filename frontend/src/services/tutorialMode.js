@@ -218,10 +218,10 @@ const SITE_FUNCTIONS = [
   },
   {
     id: 'coach-plans',
-    title: 'Le mie schede',
-    description: 'Area dedicata alla gestione schede e piani coaching.',
+    title: 'Schede personali',
+    description: 'Crea, organizza e modifica le tue routine di allenamento.',
     to: '/dashboard/plans',
-    audience: ['coach']
+    audience: ['atleta', 'organizzatore', 'coach']
   }
 ];
 
@@ -232,6 +232,7 @@ const TUTORIAL_TRACKS = {
       { id: 'at-map-1', perspective: 'map', title: 'Mappa: valida distanza reale', description: 'Apri mappa live per capire quale opzione e piu comoda da raggiungere.', to: '/map' },
       { id: 'at-agenda-1', perspective: 'agenda', title: 'Eventi: pianifica la settimana', description: 'Usa la sezione Eventi per distribuire carico e continuita.', to: '/agenda' },
       { id: 'at-coach-1', perspective: 'coach', title: 'Trova Coach: valuta profili', description: 'Apri area coach e confronta profili in base ai tuoi obiettivi.', to: '/coach' },
+      { id: 'at-plans-1', perspective: 'plans', title: 'Schede personali: costruisci la routine', description: 'Scegli sport, obiettivo ed esercizi e salva la tua scheda.', to: '/dashboard/plans' },
       { id: 'at-convenzioni-1', perspective: 'convenzioni', title: 'Convenzioni: attiva vantaggi', description: 'Controlla convenzioni per sconti e opportunita utili alla routine.', to: '/convenzioni' },
       { id: 'at-pricing-1', perspective: 'pricing', title: 'Pricing: capisci limiti e upgrade', description: 'Apri pricing/salvadanaio per scegliere il modello piu adatto.', to: '/pricing' },
       { id: 'at-notifications-1', perspective: 'notifications', title: 'Notifiche: resta aggiornato', description: 'Apri notifiche per monitorare cambiamenti e reminder eventi.', to: '/notifications' },
@@ -255,7 +256,7 @@ const TUTORIAL_TRACKS = {
       { id: 'coach-become-1', perspective: 'become-coach', title: 'Diventa Coach: candidatura', description: 'Compila candidatura e verifica tempi/attese approvazione.', to: '/become-coach' },
       { id: 'coach-profile-1', perspective: 'coach', title: 'Profilo Coach: posizionamento', description: 'Controlla come appare il tuo profilo nel marketplace.', to: '/coach' },
       { id: 'coach-dashboard-1', perspective: 'dashboard', title: 'Dashboard: imposta offerta', description: 'Configura struttura servizi e gestione operativa.', to: '/dashboard/coach' },
-      { id: 'coach-plans-1', perspective: 'plans', title: 'Le mie schede: piani cliente', description: 'Costruisci percorsi progressivi concreti.', to: '/dashboard/plans' },
+      { id: 'coach-plans-1', perspective: 'plans', title: 'Schede personali: la tua routine', description: 'Crea e aggiorna i tuoi allenamenti personali.', to: '/dashboard/plans' },
       { id: 'coach-notifications-1', perspective: 'notifications', title: 'Notifiche: follow-up clienti', description: 'Gestisci richieste e feedback rapidamente.', to: '/notifications' },
       { id: 'coach-account-1', perspective: 'account', title: 'Account: identita professionale', description: 'Aggiorna bio, immagine e disponibilita.', to: '/account' },
       { id: 'coach-faq-1', perspective: 'faq', title: 'FAQ: casi comuni', description: 'Consulta risposte standard per ridurre attriti.', to: '/faq' },

@@ -33,7 +33,7 @@ const drawerSections = [
     title: 'La tua attività',
     items: [
       { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
+      { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays }
     ]
   },
   {
