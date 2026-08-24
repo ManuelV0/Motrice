@@ -13,7 +13,6 @@ import {
   MapPin,
   MapPinned,
   Minus,
-  Navigation,
   Plus,
   Route,
   ShieldCheck,
@@ -31,7 +30,6 @@ import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
 import { useBilling } from '../context/BillingContext';
-import { useUserLocation } from '../hooks/useUserLocation';
 import PaywallModal from '../components/PaywallModal';
 import Button from '../components/Button';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
@@ -190,11 +188,14 @@ function RouteMapTapHandler({ active, onAddPoint }) {
   return null;
 }
 
-function LocationMapTapHandler({ active, onSelect }) {
-  useMapEvents({
-    click(event) {
-      if (!active) return;
-      onSelect({ lat: event.latlng.lat, lng: event.latlng.lng });
+function LocationMapCenterHandler({ onMoveStart, onSelect }) {
+  const map = useMapEvents({
+    movestart() {
+      onMoveStart?.();
+    },
+    moveend() {
+      const center = map.getCenter();
+      onSelect({ lat: center.lat, lng: center.lng });
     }
   });
   return null;
@@ -215,7 +216,7 @@ function CreateEventPage() {
   const [routePicking, setRoutePicking] = useState(false);
   const [manualRouteSelection, setManualRouteSelection] = useState(false);
   const [locationResolving, setLocationResolving] = useState(false);
-  const [locationPicking, setLocationPicking] = useState(false);
+  const [locationMapRevision, setLocationMapRevision] = useState(0);
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
@@ -225,7 +226,6 @@ function CreateEventPage() {
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
-  const { requesting, requestLocation } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
   usePageMeta({
@@ -603,8 +603,9 @@ function CreateEventPage() {
     try {
       const result = await geocodeEventLocation(form);
       setForm((prev) => ({ ...prev, lat: String(result.lat), lng: String(result.lng) }));
+      setLocationMapRevision((revision) => revision + 1);
       setErrors((prev) => ({ ...prev, coordinates: undefined }));
-      setLocationSelectionMessage('Luogo trovato. Tocca la mappa per spostare il punto con precisione.');
+      setLocationSelectionMessage('Luogo trovato. Sposta la mappa per regolare il pin con precisione.');
       if (!silent) showToast('Luogo trovato e collegato alla mappa', 'success');
       return result;
     } catch (error) {
@@ -626,9 +627,8 @@ function CreateEventPage() {
     locationRequestRef.current?.abort();
     const controller = new AbortController();
     locationRequestRef.current = controller;
-    setLocationPicking(false);
     setLocationResolving(true);
-    setLocationSelectionMessage('Posizione selezionata. Sto recuperando l’indirizzo...');
+    setLocationSelectionMessage('Pin centrato. Sto recuperando l’indirizzo...');
     setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
     setErrors((prev) => {
       const next = { ...prev };
@@ -653,8 +653,8 @@ function CreateEventPage() {
         delete next.coordinates;
         return next;
       });
-      setLocationSelectionMessage('Indirizzo trovato e campi aggiornati. Puoi correggerli manualmente.');
-      showToast(source === 'device' ? 'Posizione e indirizzo compilati' : 'Punto e indirizzo aggiornati', 'success');
+      setLocationSelectionMessage('Punto d’incontro aggiornato automaticamente.');
+      if (source !== 'map') showToast('Punto e indirizzo aggiornati', 'success');
       return result;
     } catch (error) {
       if (error?.name === 'AbortError') return null;
@@ -669,12 +669,9 @@ function CreateEventPage() {
     }
   }
 
-  async function startLocationPicking() {
-    setLocationPicking(true);
-    setLocationSelectionMessage('Tocca un punto sulla mappa per inserire automaticamente via e città.');
-    if (!locationPreview && String(form.location_name || '').trim() && String(form.city || '').trim()) {
-      await resolveLocationOnline({ silent: true });
-    }
+  function handleLocationMapMoveStart() {
+    locationRequestRef.current?.abort();
+    setLocationSelectionMessage('Sposta la mappa: il pin resta fisso al centro.');
   }
 
   function collectValidationErrors() {
@@ -1156,77 +1153,53 @@ function CreateEventPage() {
               </label>
             </div>
 
-            <div className={styles.locationActions}>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                icon={Navigation}
-                disabled={locationResolving}
-                onClick={() => {
-                  if (locationPicking) {
-                    setLocationPicking(false);
-                    setLocationSelectionMessage('Selezione annullata. Il punto attuale resta salvato.');
-                    return;
-                  }
-                  startLocationPicking();
-                }}
-              >
-                {locationResolving ? 'Ricerca luogo...' : locationPicking ? 'Annulla selezione' : 'Trova sulla mappa'}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                icon={Navigation}
-                disabled={requesting || locationResolving}
-                onClick={async () => {
-                  const coords = await requestLocation();
-                  if (!coords) {
-                    showToast('Impossibile ottenere la posizione. Controlla i permessi browser.', 'error');
-                    return;
-                  }
-                  await resolveSelectedCoordinates(coords, { source: 'device' });
-                }}
-              >
-                {requesting ? 'Rilevazione...' : locationResolving ? 'Recupero indirizzo...' : 'Usa la mia posizione'}
-              </Button>
-            </div>
-
             {!(form.has_route && (routePicking || routePoints.length)) ? (
-              <div className={`${styles.locationPicker} ${locationPicking ? styles.locationPickerActive : ''}`}>
+              <div className={`${styles.locationPicker} ${styles.locationPickerActive}`}>
                 <div className={styles.locationMapHead}>
                   <span>
                     <MapPinned size={17} aria-hidden="true" />
-                    {locationPicking ? 'Seleziona il punto' : locationPreview ? 'Punto evento' : 'Mappa del luogo'}
+                    Punto d’incontro
                   </span>
-                  <small>{locationPicking ? 'Tocca la mappa' : 'Trascina e usa il pinch per esplorare'}</small>
+                  <small>Trascina la mappa sotto il pin</small>
                 </div>
-                <div className={`${styles.routeMapWrap} ${locationPicking ? styles.routeMapPicking : ''}`}>
+                <div className={`${styles.routeMapWrap} ${styles.locationMapWrap}`}>
                   <MapContainer
-                    key={`${locationMapCenter[0]}:${locationMapCenter[1]}:${locationPreview ? 'selected' : 'default'}`}
+                    key={`location-map-${locationMapRevision}`}
                     center={locationMapCenter}
-                    zoom={locationPreview ? 16 : 6}
+                    zoom={locationPreview ? 17 : 6}
                     className={styles.routeMap}
                     dragging
                     scrollWheelZoom={false}
                     touchZoom
+                    doubleClickZoom
                   >
                     <TileLayer
                       attribution='&copy; OpenStreetMap contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                    <LocationMapTapHandler active={locationPicking && !locationResolving} onSelect={resolveSelectedCoordinates} />
-                    {locationPreview ? (
-                      <Marker position={[locationPreview.lat, locationPreview.lng]}>
-                        <Popup>{form.location_name || 'Location evento'}</Popup>
-                      </Marker>
-                    ) : null}
+                    <LocationMapCenterHandler
+                      onMoveStart={handleLocationMapMoveStart}
+                      onSelect={(coords) => resolveSelectedCoordinates(coords, { source: 'map' })}
+                    />
                   </MapContainer>
+                  <div className={styles.locationCenterPin} aria-hidden="true">
+                    <span><MapPin size={27} strokeWidth={3} /></span>
+                    <i />
+                  </div>
                   {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
                 </div>
+                <div className={styles.locationResultCard}>
+                  <span><MapPin size={20} aria-hidden="true" /></span>
+                  <div>
+                    <strong>{form.location_name || 'Sposta la mappa per scegliere il punto'}</strong>
+                    <small>
+                      {form.city || (locationPreview ? `${locationPreview.lat.toFixed(5)}, ${locationPreview.lng.toFixed(5)}` : 'Via e città si compileranno automaticamente')}
+                    </small>
+                  </div>
+                  <b>PIN CENTRALE</b>
+                </div>
                 <p className={styles.locationSelectionMessage} role="status">
-                  {locationSelectionMessage || 'Inserisci un luogo oppure scegli direttamente un punto sulla mappa.'}
+                  {locationSelectionMessage || 'Sposta la mappa: il pin resta fisso e identifica sempre il punto centrale.'}
                 </p>
               </div>
             ) : null}

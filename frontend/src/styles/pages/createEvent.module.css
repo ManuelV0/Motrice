@@ -522,14 +522,6 @@
   line-height: 1.45;
 }
 
-.locationActions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
-}
-
-.locationActions > * { width: 100%; }
-
 .locationPicker {
   padding: var(--s-3);
   display: grid;
@@ -573,17 +565,132 @@
 
 .locationPicker .routeMapWrap { position: relative; }
 
-.locationMapLoading {
+.locationMapWrap {
+  min-height: clamp(18rem, 68vw, 25rem);
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--create-border));
+  box-shadow: inset 0 0 0 1px rgb(168 240 0 / 4%);
+}
+
+.locationMapWrap .routeMap {
+  height: clamp(18rem, 68vw, 25rem);
+  filter: saturate(0.72) brightness(0.82) contrast(1.08);
+}
+
+.locationMapWrap :global(.leaflet-top.leaflet-left) {
+  top: auto;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: auto;
+}
+
+.locationMapWrap :global(.leaflet-control-zoom) {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: var(--r-lg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+}
+
+.locationMapWrap :global(.leaflet-control-zoom a) {
+  border-color: rgb(255 255 255 / 9%);
+  background: rgb(12 15 12 / 92%);
+  color: var(--text);
+}
+
+.locationCenterPin {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
   z-index: 500;
   display: grid;
+  justify-items: center;
+  pointer-events: none;
+  transform: translate(-50%, -78%);
+  filter: drop-shadow(0 0 16px rgb(168 240 0 / 62%));
+}
+
+.locationCenterPin > span {
+  width: 3.55rem;
+  height: 3.55rem;
+  display: grid;
   place-items: center;
-  background: rgb(5 7 5 / 68%);
+  border: 4px solid #f7f8f5;
+  border-radius: 50% 50% 50% 12%;
+  background: var(--primary);
+  color: #080a07;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 38%);
+  transform: rotate(-45deg);
+}
+
+.locationCenterPin > span svg { transform: rotate(45deg); }
+
+.locationCenterPin > i {
+  width: 0.72rem;
+  height: 0.3rem;
+  margin-top: 0.32rem;
+  border-radius: 50%;
+  background: rgb(168 240 0 / 75%);
+  box-shadow: 0 0 18px var(--primary);
+}
+
+.locationMapLoading {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 500;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgb(168 240 0 / 25%);
+  border-radius: var(--r-pill);
+  background: rgb(5 7 5 / 88%);
   color: var(--primary);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.locationResultCard {
+  min-width: 0;
+  padding: var(--s-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--create-border));
+  border-radius: var(--r-lg);
+  background: #0b0e0b;
+}
+
+.locationResultCard > span {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgb(168 240 0 / 12%);
+  color: var(--primary);
+}
+
+.locationResultCard > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.locationResultCard strong,
+.locationResultCard small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locationResultCard strong { color: var(--text); font-size: var(--text-sm); }
+.locationResultCard small { color: var(--muted); font-size: var(--text-xs); }
+
+.locationResultCard b {
+  color: var(--primary);
+  font-size: 0.64rem;
+  letter-spacing: 0.09em;
+  white-space: nowrap;
 }
 
 .locationSelectionMessage {
@@ -1272,8 +1379,10 @@
   }
 
   .controlGrid,
-  .ruleCardGrid,
-  .locationActions { grid-template-columns: 1fr; }
+  .ruleCardGrid { grid-template-columns: 1fr; }
+
+  .locationResultCard { grid-template-columns: auto minmax(0, 1fr); }
+  .locationResultCard b { display: none; }
 
   .routePickerHead,
   .routePointMeta {
