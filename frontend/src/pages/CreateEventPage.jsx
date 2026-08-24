@@ -25,9 +25,10 @@ import {
   UsersRound,
   WalletCards
 } from 'lucide-react';
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
+import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { useUserLocation } from '../hooks/useUserLocation';
 import { useToast } from '../context/ToastContext';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
@@ -201,6 +202,38 @@ function LocationMapCenterHandler({ onMoveStart, onSelect }) {
   return null;
 }
 
+function LocationRadiusPreview({ radius }) {
+  const [center, setCenter] = useState(null);
+  const map = useMapEvents({
+    move() {
+      const nextCenter = map.getCenter();
+      setCenter([nextCenter.lat, nextCenter.lng]);
+    }
+  });
+
+  useEffect(() => {
+    const nextCenter = map.getCenter();
+    setCenter([nextCenter.lat, nextCenter.lng]);
+  }, [map]);
+
+  if (!center) return null;
+
+  return (
+    <Circle
+      center={center}
+      radius={radius}
+      interactive={false}
+      pathOptions={{
+        color: '#a8f000',
+        fillColor: '#a8f000',
+        fillOpacity: 0.16,
+        opacity: 0.9,
+        weight: 2.5
+      }}
+    />
+  );
+}
+
 function CreateEventPage() {
   ensureLeafletIcons();
   const { entitlements } = useBilling();
@@ -226,6 +259,14 @@ function CreateEventPage() {
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
+  const autoLocationAttemptedRef = useRef(false);
+  const {
+    coords: userLocationCoords,
+    permission: locationPermission,
+    error: userLocationError,
+    requesting: locationRequesting,
+    requestLocation
+  } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
   usePageMeta({
@@ -286,6 +327,35 @@ function CreateEventPage() {
     () => (locationPreview ? [locationPreview.lat, locationPreview.lng] : [41.8719, 12.5674]),
     [locationPreview]
   );
+
+  const geofenceRadius = useMemo(
+    () => Math.min(1000, Math.max(50, Number(form.geofence_radius_m) || 250)),
+    [form.geofence_radius_m]
+  );
+
+  const locationMapZoom = useMemo(() => {
+    if (!locationPreview) return 6;
+    if (geofenceRadius >= 750) return 13;
+    if (geofenceRadius >= 400) return 14;
+    if (geofenceRadius >= 200) return 15;
+    return 16;
+  }, [geofenceRadius, locationPreview]);
+
+  useEffect(() => {
+    if (activeStep !== 2 || locationPreview || autoLocationAttemptedRef.current) return;
+
+    autoLocationAttemptedRef.current = true;
+    setLocationSelectionMessage('Cerco la tua area e centro la mappa...');
+
+    void (async () => {
+      const coords = userLocationCoords || (await requestLocation());
+      if (!coords) {
+        setLocationSelectionMessage('Posizione non disponibile. Attiva il GPS per centrare la mappa nella tua area.');
+        return;
+      }
+      await resolveSelectedCoordinates(coords, { source: 'device' });
+    })();
+  }, [activeStep, locationPreview, requestLocation, userLocationCoords]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -630,6 +700,9 @@ function CreateEventPage() {
     setLocationResolving(true);
     setLocationSelectionMessage('Pin centrato. Sto recuperando l’indirizzo...');
     setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
+    if (source !== 'map') {
+      setLocationMapRevision((revision) => revision + 1);
+    }
     setErrors((prev) => {
       const next = { ...prev };
       delete next.coordinates;
@@ -1160,13 +1233,22 @@ function CreateEventPage() {
                     <MapPinned size={17} aria-hidden="true" />
                     Punto d’incontro
                   </span>
-                  <small>Trascina la mappa sotto il pin</small>
+                  <small className={styles.locationGpsStatus}>
+                    <i className={userLocationCoords ? styles.locationGpsActive : ''} />
+                    {locationRequesting
+                      ? 'Cerco la tua area'
+                      : userLocationCoords
+                        ? 'GPS attivo'
+                        : locationPermission === 'denied'
+                          ? 'GPS non autorizzato'
+                          : 'GPS in attesa'}
+                  </small>
                 </div>
                 <div className={`${styles.routeMapWrap} ${styles.locationMapWrap}`}>
                   <MapContainer
                     key={`location-map-${locationMapRevision}`}
                     center={locationMapCenter}
-                    zoom={locationPreview ? 17 : 6}
+                    zoom={locationMapZoom}
                     className={styles.routeMap}
                     dragging
                     scrollWheelZoom={false}
@@ -1177,6 +1259,22 @@ function CreateEventPage() {
                       attribution='&copy; OpenStreetMap contributors'
                       url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
+                    <LocationRadiusPreview radius={geofenceRadius} />
+                    {userLocationCoords ? (
+                      <CircleMarker
+                        center={[userLocationCoords.lat, userLocationCoords.lng]}
+                        radius={6}
+                        pathOptions={{
+                          color: '#ffffff',
+                          fillColor: '#218cff',
+                          fillOpacity: 1,
+                          opacity: 1,
+                          weight: 3
+                        }}
+                      >
+                        <Popup>La tua posizione GPS</Popup>
+                      </CircleMarker>
+                    ) : null}
                     <LocationMapCenterHandler
                       onMoveStart={handleLocationMapMoveStart}
                       onSelect={(coords) => resolveSelectedCoordinates(coords, { source: 'map' })}
@@ -1185,6 +1283,10 @@ function CreateEventPage() {
                   <div className={styles.locationCenterPin} aria-hidden="true">
                     <span><MapPin size={27} strokeWidth={3} /></span>
                     <i />
+                  </div>
+                  <div className={styles.locationRadiusBadge} aria-label={`Raggio area evento ${geofenceRadius} metri`}>
+                    <i />
+                    Raggio {geofenceRadius} m
                   </div>
                   {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
                 </div>
@@ -1199,7 +1301,7 @@ function CreateEventPage() {
                   <b>PIN CENTRALE</b>
                 </div>
                 <p className={styles.locationSelectionMessage} role="status">
-                  {locationSelectionMessage || 'Sposta la mappa: il pin resta fisso e identifica sempre il punto centrale.'}
+                  {locationSelectionMessage || userLocationError || 'Sposta la mappa: il pin resta fisso e il cerchio mostra l’area di verifica.'}
                 </p>
               </div>
             ) : null}

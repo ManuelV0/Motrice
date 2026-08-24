@@ -563,6 +563,27 @@
   text-align: right;
 }
 
+.locationGpsStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.locationGpsStatus > i {
+  width: 0.48rem;
+  height: 0.48rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #69706a;
+  box-shadow: 0 0 0 4px rgb(105 112 106 / 12%);
+}
+
+.locationGpsStatus > i.locationGpsActive {
+  background: var(--primary);
+  box-shadow: 0 0 12px rgb(168 240 0 / 70%);
+}
+
 .locationPicker .routeMapWrap { position: relative; }
 
 .locationMapWrap {
@@ -630,6 +651,35 @@
   border-radius: 50%;
   background: rgb(168 240 0 / 75%);
   box-shadow: 0 0 18px var(--primary);
+}
+
+.locationRadiusBadge {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  z-index: 500;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+  border: 1px solid rgb(168 240 0 / 34%);
+  border-radius: var(--r-pill);
+  background: rgb(5 7 5 / 88%);
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.locationRadiusBadge > i {
+  width: 0.58rem;
+  height: 0.58rem;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  background: rgb(168 240 0 / 15%);
+  box-shadow: 0 0 10px rgb(168 240 0 / 46%);
 }
 
 .locationMapLoading {
