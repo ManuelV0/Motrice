@@ -277,6 +277,20 @@
   letter-spacing: 0.16em;
 }
 
+.editorBrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.editorBrandLogo {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: block;
+  border-radius: 0.68rem;
+  object-fit: cover;
+}
+
 .closeEditorButton {
   width: 2.8rem;
   height: 2.8rem;

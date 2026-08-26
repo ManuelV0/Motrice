@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import Button from '../../../components/Button';
+import BrandLogo from '../../../components/BrandLogo';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { useToast } from '../../../context/ToastContext';
 import { getAuthSession } from '../../../services/authSession';
@@ -741,7 +742,7 @@ function MyPlansPage() {
     <section className={styles.editorPage}>
       <header className={styles.editorHeader}>
         <button type="button" className={styles.closeEditorButton} onClick={closeEditor} aria-label="Chiudi editor scheda"><X size={20} aria-hidden="true" /></button>
-        <strong>MOTRICE</strong>
+        <div className={styles.editorBrand}><BrandLogo className={styles.editorBrandLogo} decorative /><strong>MOTRICE</strong></div>
       </header>
       {renderProgress()}
       <div className={styles.editorContent}>

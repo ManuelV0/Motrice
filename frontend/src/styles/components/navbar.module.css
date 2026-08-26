@@ -816,16 +816,28 @@
 .brandMark {
   width: 1.9rem;
   height: 1.9rem;
-  display: grid;
-  place-items: center;
-  border-radius: 0.52rem 0.52rem 0.8rem 0.52rem;
-  background: var(--primary);
-  color: var(--primary-contrast);
-  font-size: 1.05rem;
-  font-weight: 800;
-  letter-spacing: -0.08em;
-  transform: skew(-7deg);
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 0.58rem;
+  object-fit: cover;
   box-shadow: 0 0 1.2rem rgb(168 240 0 / 18%);
+}
+
+.mobileBrandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+}
+
+.mobileBrandLogo {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: block;
+  flex: 0 0 auto;
+  border-radius: 0.66rem;
+  object-fit: cover;
+  box-shadow: 0 0 1.25rem rgb(216 255 53 / 18%);
 }
 
 .toggle,

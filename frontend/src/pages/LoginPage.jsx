@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Facebook, LockKeyhole, LogIn, LogOut, Mail, UserPlus, Zap, ArrowRight } from 'lucide-react';
+import { Facebook, LockKeyhole, LogIn, LogOut, Mail, UserPlus, ArrowRight } from 'lucide-react';
 import {
   continueWithProvider,
   consumeAuthLogoutReason,
@@ -15,6 +15,7 @@ import { isSupabaseConfigured, supabaseAuthCallbackError } from '../services/sup
 import { usePageMeta } from '../hooks/usePageMeta';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import BrandLogo from '../components/BrandLogo';
 import styles from '../styles/pages/login.module.css';
 
 function friendlyAuthError(message) {
@@ -193,8 +194,8 @@ function LoginPage({ startup = false }) {
 
       <div className={`${styles.content} ${startup ? styles.startupContent : ''}`}>
         <div className={styles.branding}>
+          <BrandLogo className={styles.brandLogo} />
           <p className={styles.kicker}>
-            <Zap size={14} aria-hidden="true" />
             Motrice Platform
           </p>
           <h1>Entra nel gioco.</h1>

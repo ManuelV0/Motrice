@@ -21,8 +21,11 @@ export default function PartnerPortalLayout({
     <main className={styles.shell}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <p className={styles.title}>Motrice Partner Portal</p>
-          <p className={styles.subtitle}>{partnerName || 'Partner'} · Area gestionale convenzioni</p>
+          <img className={styles.brandLogo} src="/motrice-logo.png" alt="" width="512" height="512" />
+          <div>
+            <p className={styles.title}>Motrice Partner Portal</p>
+            <p className={styles.subtitle}>{partnerName || 'Partner'} · Area gestionale convenzioni</p>
+          </div>
         </div>
         <div className={styles.quickActions}>
           <span className={`${styles.statusPill} ${styles[`status${String(activationStatus || 'inactive').toLowerCase()}`]}`}>

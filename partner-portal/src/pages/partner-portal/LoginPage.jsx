@@ -7,6 +7,10 @@ export default function LoginPage({ onLogin }) {
     <section className={`${styles.page} ${loginStyles.page}`}>
       <article className={loginStyles.hero}>
         <div className={loginStyles.heroContent}>
+          <div className={loginStyles.brandLockup}>
+            <img className={loginStyles.brandLogo} src="/motrice-logo.png" alt="Motrice" width="512" height="512" />
+            <strong>MOTRICE</strong>
+          </div>
           <p className={loginStyles.kicker}>Portale Gestionale Convenzioni</p>
           <h1>Attiva voucher, valida QR e monitora earnings in tempo reale</h1>
           <p className={styles.muted}>

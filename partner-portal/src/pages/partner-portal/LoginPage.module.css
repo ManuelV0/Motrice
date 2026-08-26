@@ -23,6 +23,24 @@
   z-index: 1;
 }
 
+.brandLockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: fit-content;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.brandLogo {
+  width: 3.75rem;
+  height: 3.75rem;
+  display: block;
+  border-radius: 1.1rem;
+  object-fit: cover;
+  box-shadow: 0 0 1.8rem rgb(216 255 53 / 20%);
+}
+
 .heroContent h1 {
   margin: 0;
   font-size: clamp(1.45rem, 4.2vw, 2.25rem);

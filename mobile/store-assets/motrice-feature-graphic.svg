@@ -37,11 +37,10 @@
     <text x="3" y="256" fill="#A8F000" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="3">ALLENATI  ·  CONNETTITI  ·  MIGLIORA</text>
   </g>
 
-  <g transform="translate(708 59)" filter="url(#shadow)">
-    <rect width="252" height="382" rx="58" fill="url(#lime)"/>
-    <rect x="12" y="12" width="228" height="358" rx="48" fill="none" stroke="#E6FF91" stroke-opacity="0.45" stroke-width="2"/>
-    <path d="M61 296 91 86h43l27 88 51-88h44l-2 210h-52l4-105-35 76h-38l-23-73-9 102H61Z" fill="#0B0E09"/>
-    <path d="m92 86-4 25h41l-8-25H92Zm120 0-14 25h57l1-25h-44Z" fill="#2A3322" opacity="0.55"/>
+  <g transform="translate(708 124)" filter="url(#shadow)">
+    <rect width="252" height="252" rx="58" fill="#101214"/>
+    <rect x="10" y="10" width="232" height="232" rx="50" fill="#1B1E1E" stroke="#303435" stroke-width="4"/>
+    <path d="M58 70 159 167 146 180 78 115v65H58V70Zm84 55 52-55v110h-20v-65l-21 22-11-12Z" fill="#D8FF35"/>
   </g>
 
   <path d="M0 468h574l32 32H0v-32Z" fill="#A8F000" opacity="0.92"/>

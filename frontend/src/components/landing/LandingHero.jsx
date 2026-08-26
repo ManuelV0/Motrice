@@ -1,5 +1,6 @@
-import { ArrowRight, Handshake, MapPin, QrCode, Zap } from 'lucide-react';
+import { ArrowRight, Handshake, MapPin, QrCode } from 'lucide-react';
 import CTAButton from '../CTAButton';
+import BrandLogo from '../BrandLogo';
 import styles from '../../styles/components/landingHero.module.css';
 
 function LandingHero({
@@ -25,7 +26,7 @@ function LandingHero({
       <div className={styles.content}>
         <div className={styles.copy}>
           <p className={styles.kicker}>
-            <Zap size={14} aria-hidden="true" />
+            <BrandLogo className={styles.kickerLogo} decorative />
             Motrice Platform
           </p>
           <h1 id="landing-hero-title">Lo sport locale,<br />finalmente organizzato.</h1>

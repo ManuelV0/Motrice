@@ -18,6 +18,7 @@ import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import IconButton from './IconButton';
+import BrandLogo from './BrandLogo';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
@@ -167,7 +168,7 @@ function Navbar({ forceMobile = false }) {
           />
 
           <NavLink className={styles.brand} to="/">
-            <span className={styles.brandMark}>M</span>
+            <BrandLogo className={styles.brandMark} decorative />
             <span>MOTRICE</span>
           </NavLink>
         </div>
@@ -241,7 +242,10 @@ function Navbar({ forceMobile = false }) {
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
           <div className={styles.mobileHeader}>
             <div className={styles.mobileHeaderCopy}>
-              <p className={styles.mobileKicker}>MOTRICE</p>
+              <div className={styles.mobileBrandRow}>
+                <BrandLogo className={styles.mobileBrandLogo} decorative />
+                <p className={styles.mobileKicker}>MOTRICE</p>
+              </div>
               <h2 className={styles.mobileTitle}>Tutto il resto, qui.</h2>
             </div>
             <button
