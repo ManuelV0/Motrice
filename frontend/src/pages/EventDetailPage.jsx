@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CalendarPlus,
   CheckCircle2,
+  ChevronDown,
   ClipboardCopy,
   Clock3,
   Dumbbell,
@@ -190,6 +191,7 @@ function EventDetailPage() {
   const [personalEventBusy, setPersonalEventBusy] = useState(false);
   const [workoutPlanSaving, setWorkoutPlanSaving] = useState(false);
   const [workoutPlanSaved, setWorkoutPlanSaved] = useState(false);
+  const [workoutPlanOpen, setWorkoutPlanOpen] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
@@ -207,6 +209,10 @@ function EventDetailPage() {
     originParams
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
+
+  useEffect(() => {
+    setWorkoutPlanOpen(false);
+  }, [event?.id]);
 
   async function openChatParticipantProfile(identity) {
     const fallback = {
@@ -916,45 +922,6 @@ function EventDetailPage() {
             </div>
           </header>
 
-          {event.workout_plan ? (
-            <Card as="section" className={styles.workoutPlanCard}>
-              <div className={styles.workoutPlanHeader}>
-                <span><Dumbbell size={23} aria-hidden="true" /></span>
-                <div>
-                  <p>Scheda allenamento</p>
-                  <h2>{event.workout_plan.title}</h2>
-                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
-                </div>
-              </div>
-              <div className={styles.workoutPlanExercises}>
-                {(event.workout_plan.exercises || []).map((exercise, index) => (
-                  <article key={exercise.instanceId || `${exercise.name}-${index}`}>
-                    <span>{String(index + 1).padStart(2, '0')}</span>
-                    <div>
-                      <strong>{exercise.name}</strong>
-                      <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              {!isOrganizerForEvent && event.is_going ? (
-                <Button
-                  type="button"
-                  fullWidth
-                  icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
-                  onClick={saveAttachedWorkoutPlan}
-                  disabled={workoutPlanSaving || workoutPlanSaved}
-                >
-                  {workoutPlanSaved
-                    ? 'Salvata nelle Schede personali'
-                    : workoutPlanSaving
-                      ? 'Salvataggio...'
-                      : 'Salva nelle mie schede'}
-                </Button>
-              ) : null}
-            </Card>
-          ) : null}
-
           <section className={styles.statGrid} aria-label="Riepilogo evento">
             <div className={styles.statCard}>
               <Clock3 size={22} aria-hidden="true" />
@@ -1020,6 +987,63 @@ function EventDetailPage() {
               </div>
             </div>
           </Card>
+
+          {event.workout_plan ? (
+            <Card as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
+              <button
+                type="button"
+                className={styles.workoutPlanToggle}
+                aria-expanded={workoutPlanOpen}
+                aria-controls={`event-workout-plan-${event.id}`}
+                onClick={() => setWorkoutPlanOpen((open) => !open)}
+              >
+                <span className={styles.workoutPlanIcon}><Dumbbell size={23} aria-hidden="true" /></span>
+                <span className={styles.workoutPlanHeading}>
+                  <span className={styles.workoutPlanEyebrow}>Scheda allenamento</span>
+                  <strong>{event.workout_plan.title}</strong>
+                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
+                </span>
+                <span className={styles.workoutPlanToggleAction}>
+                  <span>{workoutPlanOpen ? 'Nascondi dettagli' : 'Visualizza dettagli'}</span>
+                  <ChevronDown
+                    size={20}
+                    className={workoutPlanOpen ? styles.workoutPlanChevronOpen : ''}
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+              {workoutPlanOpen ? (
+                <div id={`event-workout-plan-${event.id}`} className={styles.workoutPlanDetails}>
+                  <div className={styles.workoutPlanExercises}>
+                    {(event.workout_plan.exercises || []).map((exercise, index) => (
+                      <article key={exercise.instanceId || `${exercise.name}-${index}`}>
+                        <span>{String(index + 1).padStart(2, '0')}</span>
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {!isOrganizerForEvent && event.is_going ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
+                      onClick={saveAttachedWorkoutPlan}
+                      disabled={workoutPlanSaving || workoutPlanSaved}
+                    >
+                      {workoutPlanSaved
+                        ? 'Salvata nelle Schede personali'
+                        : workoutPlanSaving
+                          ? 'Salvataggio...'
+                          : 'Salva nelle mie schede'}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
 
           {event.route_info ? (
             <Card subtle className={styles.routeCard}>
