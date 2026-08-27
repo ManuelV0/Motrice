@@ -12,11 +12,9 @@ import ProfilePage from './pages/ProfilePage';
 import NotFoundPage from './pages/NotFoundPage';
 import AgendaPage from './pages/AgendaPage';
 import NotificationsPage from './pages/NotificationsPage';
-import LocalProfilePage from './pages/LocalProfilePage';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import PricingPage from './pages/PricingPage';
 import AccountPage from './pages/AccountPage';
-import AccountXpPage from './pages/AccountXpPage';
 import AccountAiPage from './pages/AccountAiPage';
 import ConvenzioniPage from './pages/ConvenzioniPage';
 import ConvenzioneVoucherPage from './pages/ConvenzioneVoucherPage';
@@ -89,7 +87,7 @@ function App() {
           <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
-          <Route path="/account/xp" element={<AccountXpPage />} />
+          <Route path="/account/xp" element={<Navigate to="/account" replace />} />
           <Route path="/account/ai" element={<AccountAiPage />} />
           <Route path="/coach" element={<CoachPage />} />
           <Route path="/coach/:id" element={<CoachProfilePage />} />
@@ -102,7 +100,7 @@ function App() {
           <Route path="/admin/tutorial" element={<AdminTutorialPage />} />
           <Route path="/coach/plan" element={<CoachPlanPage />} />
           <Route path="/coach/check-in" element={<CoachCheckInPage />} />
-          <Route path="/profile/me" element={<LocalProfilePage />} />
+          <Route path="/profile/me" element={<Navigate to="/account" replace />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/404" element={<NotFoundPage />} />
           <Route path="*" element={<Navigate to="/404" replace />} />

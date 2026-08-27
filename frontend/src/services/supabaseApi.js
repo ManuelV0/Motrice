@@ -680,6 +680,41 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
+    async issueEventHostQr(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('issue_event_host_qr', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async scanEventHostQr({ eventId, token }) {
+      const client = requireSupabase();
+      const submittedToken = (() => {
+        const raw = normalizeText(token);
+        if (!raw) return '';
+        try {
+          const parsed = JSON.parse(raw);
+          return normalizeText(parsed?.token);
+        } catch {
+          try {
+            const decoded = decodeURIComponent(raw);
+            const parsed = JSON.parse(decoded);
+            return normalizeText(parsed?.token);
+          } catch {
+            return raw;
+          }
+        }
+      })();
+      const { data, error } = await client.rpc('scan_event_host_qr', {
+        target_event_id: String(eventId),
+        submitted_token: submittedToken
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async recordEventPresence({
       eventId,
       lat,
