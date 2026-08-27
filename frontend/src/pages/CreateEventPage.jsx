@@ -156,6 +156,99 @@ const STEP_ERROR_FIELDS = {
   ]
 };
 
+const NON_KEYBOARD_INPUT_TYPES = new Set([
+  'button',
+  'checkbox',
+  'color',
+  'date',
+  'datetime-local',
+  'file',
+  'hidden',
+  'month',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+  'time',
+  'week'
+]);
+
+function isKeyboardInput(target) {
+  const tagName = String(target?.tagName || '').toLowerCase();
+  if (tagName === 'textarea') return true;
+  if (target?.isContentEditable) return true;
+  if (tagName !== 'input') return false;
+  return !NON_KEYBOARD_INPUT_TYPES.has(String(target?.type || 'text').toLowerCase());
+}
+
+function useKeyboardVisibility() {
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const visualViewport = window.visualViewport;
+    const compactViewport = window.matchMedia('(max-width: 47.99rem), (pointer: coarse)');
+    let expandedViewportHeight = Math.max(window.innerHeight, visualViewport?.height || 0);
+    let focusTimer = null;
+
+    const isCompactViewport = () => compactViewport.matches || window.innerWidth < 768;
+
+    const syncKeyboardVisibility = () => {
+      const viewportHeight = visualViewport?.height || window.innerHeight;
+      const hasKeyboardInputFocus = isKeyboardInput(document.activeElement);
+
+      if (!hasKeyboardInputFocus) {
+        expandedViewportHeight = Math.max(expandedViewportHeight, viewportHeight, window.innerHeight);
+        setKeyboardVisible(false);
+        return;
+      }
+
+      const viewportReduction = expandedViewportHeight - viewportHeight;
+      setKeyboardVisible(isCompactViewport() && (viewportReduction > 120 || !visualViewport));
+    };
+
+    const queueSync = () => {
+      window.clearTimeout(focusTimer);
+      focusTimer = window.setTimeout(syncKeyboardVisibility, 100);
+    };
+
+    const handleFocusIn = (event) => {
+      if (!isCompactViewport() || !isKeyboardInput(event.target)) return;
+      if (!visualViewport) setKeyboardVisible(true);
+      queueSync();
+    };
+
+    const handleViewportChange = () => {
+      if (!isKeyboardInput(document.activeElement)) {
+        expandedViewportHeight = Math.max(
+          expandedViewportHeight,
+          visualViewport?.height || window.innerHeight,
+          window.innerHeight
+        );
+      }
+      syncKeyboardVisibility();
+    };
+
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', queueSync);
+    window.addEventListener('resize', handleViewportChange);
+    compactViewport.addEventListener?.('change', handleViewportChange);
+    visualViewport?.addEventListener('resize', handleViewportChange);
+    visualViewport?.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', queueSync);
+      window.removeEventListener('resize', handleViewportChange);
+      compactViewport.removeEventListener?.('change', handleViewportChange);
+      visualViewport?.removeEventListener('resize', handleViewportChange);
+      visualViewport?.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
+
+  return keyboardVisible;
+}
+
 function getSportVisual(sport) {
   const key = String(sport?.slug || sport?.name || '').trim().toLowerCase();
   return SPORT_VISUALS[key] || { emoji: '🏅', subtitle: 'Allenamento di gruppo' };
@@ -274,6 +367,7 @@ function CreateEventPage() {
   const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
   const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const keyboardVisible = useKeyboardVisibility();
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
@@ -2004,8 +2098,11 @@ function CreateEventPage() {
           </fieldset>
         ) : null}
 
-        <footer className={`${styles.wizardFooter} ${activeStep === 1 ? styles.wizardFooterSingle : ''}`}>
-          {activeStep > 1 ? (
+        <footer
+          className={`${styles.wizardFooter} ${activeStep < WIZARD_STEPS.length ? styles.wizardFooterSingle : ''}`}
+          hidden={keyboardVisible}
+        >
+          {activeStep === WIZARD_STEPS.length ? (
             <button type="button" className={styles.backButton} onClick={goToPreviousStep}>
               <ChevronLeft size={21} />Indietro
             </button>
@@ -2016,13 +2113,7 @@ function CreateEventPage() {
             </button>
           ) : (
             <button type="submit" className={styles.nextButton} disabled={submitting}>
-              {submitting
-                ? 'Pubblicazione...'
-                : form.is_personal
-                ? 'Crea promemoria'
-                : form.visibility === 'private'
-                  ? 'Crea evento privato'
-                  : 'Pubblica evento'}{' '}
+              {submitting ? 'Creazione...' : 'Crea evento'}{' '}
               <Check size={23} />
             </button>
           )}
