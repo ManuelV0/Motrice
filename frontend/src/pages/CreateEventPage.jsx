@@ -8,6 +8,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Dumbbell,
+  Eye,
   Globe2,
   LockKeyhole,
   MapPin,
@@ -15,6 +17,7 @@ import {
   Minus,
   Plus,
   Route,
+  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -23,7 +26,8 @@ import {
   UserRoundCheck,
   Users,
   UsersRound,
-  WalletCards
+  WalletCards,
+  X
 } from 'lucide-react';
 import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import { api } from '../services/api';
@@ -32,12 +36,17 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { useToast } from '../context/ToastContext';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
+import Modal from '../components/Modal';
 import Button from '../components/Button';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
 import { geocodeAddress, geocodeEventLocation, reverseGeocodeCoordinates } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
+import {
+  ensurePersonalWorkoutPlanRemote,
+  listAvailablePersonalWorkoutPlans
+} from '../features/coach/services/personalWorkoutPlansApi';
 import styles from '../styles/pages/createEvent.module.css';
 
 const initialState = {
@@ -64,6 +73,7 @@ const initialState = {
   lat: '',
   lng: '',
   description: '',
+  scheda_id: null,
   has_route: false,
   route_name: '',
   route_from: '',
@@ -256,6 +266,13 @@ function CreateEventPage() {
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [workoutPlans, setWorkoutPlans] = useState([]);
+  const [workoutPlansLoading, setWorkoutPlansLoading] = useState(false);
+  const [workoutPlanPickerOpen, setWorkoutPlanPickerOpen] = useState(false);
+  const [workoutPlanPreviewOpen, setWorkoutPlanPreviewOpen] = useState(false);
+  const [workoutPlanQuery, setWorkoutPlanQuery] = useState('');
+  const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
+  const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
@@ -269,6 +286,14 @@ function CreateEventPage() {
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
 
+  const filteredWorkoutPlans = useMemo(() => {
+    const query = String(workoutPlanQuery || '').trim().toLowerCase();
+    if (!query) return workoutPlans;
+    return workoutPlans.filter((plan) =>
+      `${plan.title || ''} ${plan.type || ''}`.toLowerCase().includes(query)
+    );
+  }, [workoutPlanQuery, workoutPlans]);
+
   usePageMeta({
     title: 'Crea Sessione | Motrice',
     description: 'Pubblica una nuova sessione sportiva e connetti atleti nella tua area.'
@@ -280,6 +305,36 @@ function CreateEventPage() {
   }, []);
 
   useEffect(() => () => locationRequestRef.current?.abort(), []);
+
+  async function openWorkoutPlanPicker() {
+    setWorkoutPlanPickerOpen(true);
+    setPendingWorkoutPlan(selectedWorkoutPlan);
+    setWorkoutPlansLoading(true);
+    try {
+      setWorkoutPlans(await listAvailablePersonalWorkoutPlans());
+    } catch (error) {
+      showToast(error.message || 'Schede personali non disponibili', 'error');
+    } finally {
+      setWorkoutPlansLoading(false);
+    }
+  }
+
+  function attachPendingWorkoutPlan() {
+    setSelectedWorkoutPlan(pendingWorkoutPlan);
+    setForm((current) => ({
+      ...current,
+      scheda_id: pendingWorkoutPlan?.remoteId || pendingWorkoutPlan?.id || null
+    }));
+    setWorkoutPlanPickerOpen(false);
+    if (pendingWorkoutPlan) showToast('Scheda allegata all’evento', 'success');
+  }
+
+  function removeWorkoutPlan() {
+    setSelectedWorkoutPlan(null);
+    setPendingWorkoutPlan(null);
+    setForm((current) => ({ ...current, scheda_id: null }));
+    setWorkoutPlanPreviewOpen(false);
+  }
 
   useEffect(() => {
     const eventDateTime = eventDate && eventTime ? `${eventDate}T${eventTime}` : '';
@@ -901,6 +956,17 @@ function CreateEventPage() {
       return;
     }
 
+    let attachedWorkoutPlan = selectedWorkoutPlan;
+    if (attachedWorkoutPlan && !attachedWorkoutPlan.remoteId) {
+      try {
+        attachedWorkoutPlan = await ensurePersonalWorkoutPlanRemote(attachedWorkoutPlan);
+        setSelectedWorkoutPlan(attachedWorkoutPlan);
+      } catch (planError) {
+        showToast(planError.message || 'Impossibile allegare la scheda', 'error');
+        return;
+      }
+    }
+
     let resolvedLat = form.lat === '' ? null : Number(form.lat);
     let resolvedLng = form.lng === '' ? null : Number(form.lng);
     if (resolvedLat == null || resolvedLng == null) {
@@ -931,6 +997,8 @@ function CreateEventPage() {
       is_personal: Boolean(form.is_personal),
       lat: resolvedLat,
       lng: resolvedLng,
+      scheda_id: attachedWorkoutPlan?.remoteId || null,
+      workout_plan: attachedWorkoutPlan || null,
       route_info: form.has_route
         ? {
             name: String(form.route_name || '').trim(),
@@ -1890,6 +1958,32 @@ function CreateEventPage() {
               {errors.description && <span className="error">{errors.description}</span>}
             </label>
 
+            <section className={`${styles.workoutAttachmentCard} ${selectedWorkoutPlan ? styles.workoutAttachmentSelected : ''}`}>
+              <div className={styles.workoutAttachmentHeading}>
+                <span className={styles.workoutAttachmentIcon}><Dumbbell size={23} aria-hidden="true" /></span>
+                <div>
+                  <span className={styles.fieldLabel}>Allega scheda</span>
+                  <small>Condividi una delle tue Schede personali con i partecipanti.</small>
+                </div>
+              </div>
+              {selectedWorkoutPlan ? (
+                <div className={styles.workoutAttachmentPreview}>
+                  <div>
+                    <strong>{selectedWorkoutPlan.title}</strong>
+                    <span>{selectedWorkoutPlan.exercises?.length || 0} esercizi · {selectedWorkoutPlan.duration || 60} min</span>
+                  </div>
+                  <button type="button" onClick={removeWorkoutPlan} aria-label={`Rimuovi ${selectedWorkoutPlan.title}`}><X size={18} /></button>
+                  <button type="button" className={styles.workoutPreviewLink} onClick={() => setWorkoutPlanPreviewOpen(true)}>
+                    <Eye size={17} aria-hidden="true" /> Vedi anteprima
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className={styles.workoutAttachButton} onClick={openWorkoutPlanPicker}>
+                  <Plus size={19} aria-hidden="true" /> Scegli una scheda
+                </button>
+              )}
+            </section>
+
             <div className={styles.summaryCard}>
               <span>{getSportVisual(selectedSport).emoji}</span>
               <div>
@@ -1932,6 +2026,60 @@ function CreateEventPage() {
         onClose={() => setPaywallOpen(false)}
         feature={`Limite creazione eventi (${entitlements.maxEventsPerMonth}/mese)`}
       />
+      <Modal
+        open={workoutPlanPickerOpen}
+        title="Allega scheda"
+        onClose={() => setWorkoutPlanPickerOpen(false)}
+        onConfirm={attachPendingWorkoutPlan}
+        confirmText="Allega scheda"
+        confirmDisabled={!pendingWorkoutPlan}
+      >
+        <div className={styles.workoutPicker}>
+          <label className={styles.workoutSearch}>
+            <Search size={19} aria-hidden="true" />
+            <input value={workoutPlanQuery} onChange={(event) => setWorkoutPlanQuery(event.target.value)} placeholder="Cerca nelle tue schede..." />
+          </label>
+          {workoutPlansLoading ? <p className={styles.workoutEmpty}>Caricamento schede...</p> : null}
+          {!workoutPlansLoading && !filteredWorkoutPlans.length ? (
+            <div className={styles.workoutEmpty}>
+              <Dumbbell size={28} aria-hidden="true" />
+              <strong>Nessuna scheda disponibile</strong>
+              <span>Crea prima una Scheda personale e poi torna qui.</span>
+              <Button type="button" size="sm" onClick={() => navigate('/dashboard/plans')}>Crea una scheda</Button>
+            </div>
+          ) : null}
+          <div className={styles.workoutPickerList}>
+            {filteredWorkoutPlans.map((plan) => (
+              <button
+                type="button"
+                key={plan.id}
+                className={String(pendingWorkoutPlan?.id) === String(plan.id) ? styles.workoutPickerItemActive : ''}
+                onClick={() => setPendingWorkoutPlan(plan)}
+              >
+                <span><Dumbbell size={20} aria-hidden="true" /></span>
+                <div><strong>{plan.title}</strong><small>{plan.exercises?.length || 0} esercizi · {plan.duration || 60} min</small></div>
+                <i aria-hidden="true">{String(pendingWorkoutPlan?.id) === String(plan.id) ? '✓' : ''}</i>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={workoutPlanPreviewOpen}
+        title={selectedWorkoutPlan?.title || 'Anteprima scheda'}
+        onClose={() => setWorkoutPlanPreviewOpen(false)}
+        showConfirm={false}
+        closeText="Chiudi"
+      >
+        <div className={styles.workoutExerciseList}>
+          {(selectedWorkoutPlan?.exercises || []).map((exercise, index) => (
+            <article key={exercise.instanceId || `${exercise.name}-${index}`}>
+              <span>{String(index + 1).padStart(2, '0')}</span>
+              <div><strong>{exercise.name}</strong><small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small></div>
+            </article>
+          ))}
+        </div>
+      </Modal>
     </section>
   );
 }

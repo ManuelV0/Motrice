@@ -23,7 +23,6 @@ import Button from '../../../components/Button';
 import BrandLogo from '../../../components/BrandLogo';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { useToast } from '../../../context/ToastContext';
-import { getAuthSession } from '../../../services/authSession';
 import { safeStorageGet, safeStorageSet } from '../../../utils/safeStorage';
 import {
   EXERCISE_CATEGORIES,
@@ -38,13 +37,14 @@ import {
 } from '../data/personalWorkoutCatalog';
 import {
   canSyncPersonalWorkoutPlans,
+  getPersonalWorkoutPlansStorageKey,
+  listCachedPersonalWorkoutPlans,
   deletePersonalWorkoutPlan,
   listPersonalWorkoutPlans,
   upsertPersonalWorkoutPlan
 } from '../services/personalWorkoutPlansApi';
 import styles from '../../../styles/pages/personalPlans.module.css';
 
-const STORAGE_PREFIX = 'motrice_personal_workout_plans_v1';
 const DELETED_STORAGE_SUFFIX = ':deleted';
 
 function uniqueId(prefix = 'item') {
@@ -92,15 +92,6 @@ function createStarterDraft() {
   };
 }
 
-function loadPersonalPlans(storageKey) {
-  try {
-    const value = JSON.parse(safeStorageGet(storageKey) || '[]');
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-}
-
 function loadPendingDeletions(storageKey) {
   try {
     const value = JSON.parse(safeStorageGet(`${storageKey}${DELETED_STORAGE_SUFFIX}`) || '[]');
@@ -136,12 +127,8 @@ function normalizeSearch(value) {
 
 function MyPlansPage() {
   const { showToast } = useToast();
-  const storageKey = useMemo(() => {
-    const session = getAuthSession();
-    const identity = session.authUserId || session.userId || session.email || 'guest';
-    return `${STORAGE_PREFIX}:${identity}`;
-  }, []);
-  const initialPlans = useMemo(() => loadPersonalPlans(storageKey), [storageKey]);
+  const storageKey = useMemo(() => getPersonalWorkoutPlansStorageKey(), []);
+  const initialPlans = useMemo(() => listCachedPersonalWorkoutPlans(), [storageKey]);
   const remoteSyncEnabled = useMemo(() => canSyncPersonalWorkoutPlans(), []);
 
   const [plans, setPlans] = useState(initialPlans);
@@ -187,7 +174,7 @@ function MyPlansPage() {
         }
         if (pendingDeletions.length) savePendingDeletions(storageKey, []);
 
-        const localPlans = loadPersonalPlans(storageKey);
+        const localPlans = listCachedPersonalWorkoutPlans();
         const remotePlans = await listPersonalWorkoutPlans();
         const mergedById = new Map(remotePlans.map((plan) => [String(plan.id), plan]));
 

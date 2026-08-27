@@ -198,21 +198,24 @@ async function ensureMyProfile(client) {
   return rememberProfile(data);
 }
 
-async function loadEventContext(client, rawEvents) {
+async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false } = {}) {
   const events = Array.isArray(rawEvents) ? rawEvents : [];
   const eventIds = events.map((event) => event.id);
   const creatorIds = [...new Set(events.map((event) => event.creator_id).filter(Boolean))];
+  const workoutPlanIds = includeWorkoutPlans
+    ? [...new Set(events.map((event) => event.scheda_id).filter(Boolean))]
+    : [];
   const authUserId = currentAuthUserId();
 
   if (!eventIds.length) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map() };
+    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map(), workoutPlans: new Map() };
   }
 
   if (!authUserId) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map() };
+    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map(), workoutPlans: new Map() };
   }
 
-  const [participantsResult, savedResult, organizersResult, joinRequestsResult] = await Promise.all([
+  const [participantsResult, savedResult, organizersResult, joinRequestsResult, workoutPlansResult] = await Promise.all([
     client
       .from('event_participants')
       .select(
@@ -234,13 +237,20 @@ async function loadEventContext(client, rawEvents) {
       .from('event_join_requests')
       .select('event_id,status,requested_at')
       .eq('user_id', authUserId)
-      .in('event_id', eventIds)
+      .in('event_id', eventIds),
+    workoutPlanIds.length
+      ? client
+          .from('personal_workout_plans')
+          .select('id,client_id,title,sport_id,workout_type,duration_minutes,level,equipment,exercises')
+          .in('id', workoutPlanIds)
+      : Promise.resolve({ data: [], error: null })
   ]);
 
   throwIfError(participantsResult.error);
   throwIfError(savedResult.error);
   throwIfError(organizersResult.error);
   throwIfError(joinRequestsResult.error);
+  throwIfError(workoutPlansResult.error);
 
   const participants = participantsResult.data || [];
   participants.forEach((participant) => rememberProfile(participant.profile));
@@ -253,6 +263,19 @@ async function loadEventContext(client, rawEvents) {
     organizers: new Map(organizerRows.map((profile) => [String(profile.id), profile])),
     joinRequests: new Map(
       (joinRequestsResult.data || []).map((request) => [String(request.event_id), request])
+    ),
+    workoutPlans: new Map(
+      (workoutPlansResult.data || []).map((plan) => [String(plan.id), {
+        id: plan.client_id || plan.id,
+        remoteId: plan.id,
+        title: plan.title,
+        sportId: plan.sport_id,
+        type: plan.workout_type,
+        duration: Number(plan.duration_minutes || 60),
+        level: plan.level,
+        equipment: Array.isArray(plan.equipment) ? plan.equipment : [],
+        exercises: Array.isArray(plan.exercises) ? plan.exercises : []
+      }])
     )
   };
 }
@@ -296,6 +319,10 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     participants_count: participants.length || 1,
     popularity: Math.max(20, participants.length * 14),
     description: rawEvent.description,
+    scheda_id: rawEvent.scheda_id || null,
+    workout_plan: rawEvent.scheda_id
+      ? context.workoutPlans.get(String(rawEvent.scheda_id)) || null
+      : null,
     organizer: {
       id: legacyProfileId(rawEvent.creator_id),
       auth_user_id: rawEvent.creator_id,
@@ -383,7 +410,7 @@ async function fetchEvent(id, filters = {}) {
     .eq('id', String(id))
     .single();
   throwIfError(error);
-  const context = await loadEventContext(client, [data]);
+  const context = await loadEventContext(client, [data], { includeWorkoutPlans: true });
   return normalizeEvent(data, context, filters);
 }
 
@@ -427,7 +454,8 @@ function createRemoteMethods(localApi) {
           participation_protection: payload.participation_protection !== false,
           visibility: payload.visibility || 'public',
           join_policy: payload.join_policy || 'open',
-          is_personal: Boolean(payload.is_personal)
+          is_personal: Boolean(payload.is_personal),
+          scheda_id: payload.scheda_id || null
         })
         .select('id')
         .single();

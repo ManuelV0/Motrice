@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ClipboardCopy,
   Clock3,
+  Dumbbell,
   MapPin,
   MessageCircle,
   Navigation,
@@ -48,6 +49,7 @@ import { markStepByAction } from '../services/tutorialMode';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
+import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const SPORT_DETAIL_VISUALS = [
@@ -186,6 +188,8 @@ function EventDetailPage() {
   const [checkedInParticipants, setCheckedInParticipants] = useState([]);
   const [friendRequestBusyById, setFriendRequestBusyById] = useState({});
   const [personalEventBusy, setPersonalEventBusy] = useState(false);
+  const [workoutPlanSaving, setWorkoutPlanSaving] = useState(false);
+  const [workoutPlanSaved, setWorkoutPlanSaved] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
@@ -783,6 +787,20 @@ function EventDetailPage() {
     setCancelKaboom(false);
   }
 
+  async function saveAttachedWorkoutPlan() {
+    if (!event?.workout_plan || workoutPlanSaving || workoutPlanSaved) return;
+    setWorkoutPlanSaving(true);
+    try {
+      await saveSharedWorkoutPlanToLibrary(event.workout_plan);
+      setWorkoutPlanSaved(true);
+      showToast('Scheda salvata nelle tue Schede personali', 'success');
+    } catch (saveError) {
+      showToast(saveError.message || 'Impossibile salvare la scheda', 'error');
+    } finally {
+      setWorkoutPlanSaving(false);
+    }
+  }
+
   if (loading) return <LoadingSkeleton rows={2} />;
   if (error)
     return (
@@ -897,6 +915,45 @@ function EventDetailPage() {
               </div>
             </div>
           </header>
+
+          {event.workout_plan ? (
+            <Card as="section" className={styles.workoutPlanCard}>
+              <div className={styles.workoutPlanHeader}>
+                <span><Dumbbell size={23} aria-hidden="true" /></span>
+                <div>
+                  <p>Scheda allenamento</p>
+                  <h2>{event.workout_plan.title}</h2>
+                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
+                </div>
+              </div>
+              <div className={styles.workoutPlanExercises}>
+                {(event.workout_plan.exercises || []).map((exercise, index) => (
+                  <article key={exercise.instanceId || `${exercise.name}-${index}`}>
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <strong>{exercise.name}</strong>
+                      <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              {!isOrganizerForEvent && event.is_going ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
+                  onClick={saveAttachedWorkoutPlan}
+                  disabled={workoutPlanSaving || workoutPlanSaved}
+                >
+                  {workoutPlanSaved
+                    ? 'Salvata nelle Schede personali'
+                    : workoutPlanSaving
+                      ? 'Salvataggio...'
+                      : 'Salva nelle mie schede'}
+                </Button>
+              ) : null}
+            </Card>
+          ) : null}
 
           <section className={styles.statGrid} aria-label="Riepilogo evento">
             <div className={styles.statCard}>

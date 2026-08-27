@@ -199,6 +199,90 @@
   gap: var(--s-3);
 }
 
+.workoutPlanCard {
+  padding: clamp(var(--s-4), 4vw, var(--s-5));
+  display: grid;
+  gap: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--glass-border));
+  border-radius: 24px;
+  background: #151515;
+  box-shadow: var(--sh-card), inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.workoutPlanHeader {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.workoutPlanHeader > span {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary-contrast);
+  background: var(--primary);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.workoutPlanHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.workoutPlanHeader p,
+.workoutPlanHeader h2,
+.workoutPlanHeader small { margin: 0; }
+
+.workoutPlanHeader p {
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.workoutPlanHeader h2 {
+  font-size: clamp(var(--text-lg), 4vw, var(--text-2xl));
+  overflow-wrap: anywhere;
+}
+
+.workoutPlanHeader small { color: var(--muted); }
+
+.workoutPlanExercises {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.workoutPlanExercises article {
+  padding: var(--s-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: #0f0f0f;
+}
+
+.workoutPlanExercises article > span {
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.workoutPlanExercises article > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.workoutPlanExercises strong { overflow-wrap: anywhere; }
+.workoutPlanExercises small { color: var(--muted); }
+
 .statCard {
   min-width: 0;
   min-height: 8.5rem;

@@ -1350,6 +1350,8 @@ const localApi = {
       participants_count: 1,
       popularity: 70,
       description: payload.description,
+      scheda_id: payload.scheda_id || null,
+      workout_plan: payload.workout_plan || null,
       organizer: {
         id: String(currentUserId),
         name: creatorDisplayName,
