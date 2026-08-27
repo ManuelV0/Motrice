@@ -21,6 +21,7 @@ import {
   Trophy,
   UserMinus,
   UserPlus,
+  UserRound,
   Users,
   X
 } from 'lucide-react';
@@ -814,6 +815,12 @@ function EventDetailPage() {
   const participantsCount = Number(event.participants_count || 0);
   const maxParticipants = Number(event.max_participants || 0);
   const isFull = maxParticipants > 0 && participantsCount >= maxParticipants;
+  const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
+  const rewardProgressCurrent = Math.min(rewardProgressTotal, Math.max(0, participantsCount));
+  const rewardProgressPercent = Math.min(100, (rewardProgressCurrent / rewardProgressTotal) * 100);
+  const organizerReliability = Number(event.organizer?.reliability_score || 100);
+  const organizerName = String(event.organizer?.name || 'Organizer');
+  const organizerInitial = organizerName.slice(0, 1).toUpperCase();
   const audienceLabel = event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto';
   const mapParams = new URLSearchParams({
     eventId: String(event.id),
@@ -844,7 +851,7 @@ function EventDetailPage() {
             style={{ '--event-hero-image': `url("${sportVisual.image}")` }}
           >
             <div className={styles.heroControls}>
-              <button type="button" className={styles.heroIconButton} onClick={() => navigate(-1)} aria-label="Torna indietro">
+              <button type="button" className={`${styles.heroIconButton} ${styles.heroBackButton}`} onClick={() => navigate(-1)} aria-label="Torna indietro">
                 <ArrowLeft size={22} aria-hidden="true" />
               </button>
               <div className={styles.heroControlsRight}>
@@ -856,7 +863,7 @@ function EventDetailPage() {
                 >
                   {event.is_saved ? <BookmarkCheck size={21} aria-hidden="true" /> : <Bookmark size={21} aria-hidden="true" />}
                 </button>
-                <button type="button" className={styles.heroIconButton} onClick={shareLink} aria-label="Condividi evento">
+                <button type="button" className={`${styles.heroIconButton} ${styles.heroShareButton}`} onClick={shareLink} aria-label="Condividi evento">
                   <Share2 size={21} aria-hidden="true" />
                 </button>
               </div>
@@ -864,22 +871,28 @@ function EventDetailPage() {
 
             <div className={styles.heroContent}>
               <div className={styles.heroBadges}>
-                <span><i aria-hidden="true" />{sportVisual.label}</span>
+                <span className={styles.heroCategory}>{sportVisual.label}</span>
                 {!event.is_personal ? (
-                  <span>{participantsCount}/{maxParticipants || '∞'} {isFull ? '· Full' : '· Iscritti'}</span>
+                  <span className={styles.heroAttendance}>
+                    <Users size={18} aria-hidden="true" />
+                    {participantsCount}/{maxParticipants || '∞'} {isFull ? 'FULL' : 'ISCRITTI'}
+                  </span>
                 ) : null}
-                {isOrganizerForEvent ? <strong>Organizer</strong> : null}
-                {event.is_going ? <strong>Partecipo</strong> : null}
-                {event.is_join_pending ? <strong>Richiesta inviata</strong> : null}
-                {event.is_personal ? <strong>Solo tu</strong> : null}
               </div>
               <div className={styles.heroText}>
-                <p className={styles.heroSport}>{event.sport_name}</p>
+                <div className={styles.heroOrganizer}>
+                  <span aria-hidden="true">{organizerInitial}</span>
+                  <p>Organizzato da <strong>{organizerName}</strong></p>
+                </div>
                 <h1>{eventTitle}</h1>
                 <p className={styles.heroDescription}>{event.description}</p>
                 <div className={styles.heroDate}>
-                  <span>Data evento</span>
-                  <strong>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</strong>
+                  <span className={styles.heroDateIcon}><CalendarDays size={21} aria-hidden="true" /></span>
+                  <span className={styles.heroDateCopy}>
+                    <small>Data evento</small>
+                    <strong>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</strong>
+                  </span>
+                  <small className={styles.heroDateSport}>• {event.sport_name}</small>
                 </div>
               </div>
             </div>
@@ -971,12 +984,10 @@ function EventDetailPage() {
 
           <Card as="section" className={styles.rewardCard}>
             <div className={styles.rewardHeading}>
-              <span><Sparkles size={22} aria-hidden="true" /></span>
               <div>
-                <p>Ricompensa</p>
                 <h2>Fino a {totalAvailableXp} PX</h2>
+                <p>Ricompensa massima</p>
               </div>
-              <strong>+{totalAvailableXp} PX</strong>
             </div>
             <p className={styles.rewardBreakdown}>
               {event.is_personal
@@ -985,6 +996,13 @@ function EventDetailPage() {
                   ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
                   : `+${completionXp} PX al completamento della partecipazione.`}
             </p>
+            <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} partecipanti registrati`}>
+              <span className={styles.rewardProgressTrack}>
+                <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
+              </span>
+              <strong>{rewardProgressCurrent} di {rewardProgressTotal} check-in</strong>
+              <span>+{completionXp} completamento{reviewBonusXp > 0 ? ` · +${reviewBonusXp} verifica` : ''}</span>
+            </div>
             <div className={styles.rewardDeposit}>
               <span>Deposito</span>
               <strong>
@@ -997,47 +1015,32 @@ function EventDetailPage() {
 
           <div className={styles.summaryGrid}>
             <Card subtle className={styles.infoCard}>
-              <div className={styles.sectionTitleRow}>
-                <span className={styles.sectionIcon}><CalendarDays size={20} aria-hidden="true" /></span>
-                <div>
-                  <p>Informazioni</p>
-                  <h2>Dettagli evento</h2>
-                </div>
-              </div>
               <dl className={styles.detailList}>
                 <div><dt>Livello</dt><dd>{event.level || 'Aperto'}</dd></div>
                 <div><dt>Categoria</dt><dd>{audienceLabel}</dd></div>
                 <div><dt>Visibilità</dt><dd>{event.visibility === 'private' ? 'Privato' : 'Pubblico'}</dd></div>
                 {!event.is_personal ? <div><dt>Accesso</dt><dd>{event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</dd></div> : null}
                 {!event.is_personal ? <div><dt>Verifica</dt><dd>{event.verification_mode === 'qr' ? 'QR Code' : event.verification_mode === 'gps' ? 'GPS' : 'QR + GPS'}</dd></div> : null}
+                <div><dt>Organizer</dt><dd>Affidabilità {organizerReliability}%</dd></div>
               </dl>
             </Card>
 
             <Card subtle className={styles.organizerCard}>
-              <div className={styles.sectionTitleRow}>
-                <span className={styles.sectionIcon}><Users size={20} aria-hidden="true" /></span>
+              <span className={styles.organizerAvatar} aria-hidden="true">{organizerInitial}</span>
+              <div className={styles.organizerIdentity}>
+                <h2>{organizerName}</h2>
                 <div>
-                  <p>Organizer</p>
-                  <h2>{event.organizer.name}</h2>
+                  <i aria-hidden="true" />
+                  <span>Affidabilità {organizerReliability}%</span>
                 </div>
               </div>
-              <div className={styles.organizerScore}>
-                <span>Affidabilità</span>
-                <strong>{event.organizer.reliability_score}%</strong>
-              </div>
-              <Link to={`/profile/${event.organizer.auth_user_id || event.organizer.id}`}>Vedi profilo pubblico</Link>
+              <Link to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}`}>Vedi profilo pubblico</Link>
             </Card>
           </div>
 
           <Card subtle className={styles.actionCard}>
-            <div className={styles.sectionTitleRow}>
-              <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
-              <div>
-                <p>Azioni</p>
-                <h2>Gestisci la partecipazione</h2>
-              </div>
-            </div>
-            <div className={styles.actions}>
+            <h2 className={styles.actionTitle}>Gestisci la partecipazione</h2>
+            <div className={styles.primaryParticipationAction}>
               {isOrganizerForEvent && event.is_personal ? (
                 <Button
                   type="button"
@@ -1067,6 +1070,8 @@ function EventDetailPage() {
                   </Button>
                 )
               ) : null}
+            </div>
+            <div className={styles.actions}>
               <Button
                 type="button"
                 variant={event.is_saved ? 'secondary' : 'ghost'}
@@ -1095,7 +1100,11 @@ function EventDetailPage() {
                 <Button type="button" variant="secondary" icon={MessageCircle} onClick={() => navigate(`/chat/event_${event.id}`)}>
                   Apri chat evento
                 </Button>
-              ) : null}
+              ) : <span className={styles.disabledAction}><MessageCircle size={23} aria-hidden="true" />Apri chat evento</span>}
+              <Link className={styles.actionProfileLink} to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}`}>
+                <UserRound size={23} aria-hidden="true" />
+                Vedi profilo pubblico
+              </Link>
             </div>
           </Card>
 
@@ -1132,25 +1141,23 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          <Card subtle>
-            <h2>Coach insight</h2>
+          <Card subtle className={styles.coachCtaCard}>
             {!coachProfile ? (
-              <EmptyState
-                title="Attiva Coach"
-                description="Ricevi una valutazione di compatibilita personalizzata per ogni sessione."
-                imageSrc="/images/palestra.svg"
-                imageAlt="Icona coach"
-                primaryActionLabel="Attiva Coach"
-                onPrimaryAction={() => navigate('/coach')}
-              />
-            ) : (
               <>
+                <div className={styles.coachCtaCopy}>
+                  <p>Ricevi una valutazione di compatibilità personalizzata per ogni sessione</p>
+                  <Button type="button" size="sm" onClick={() => navigate('/coach')}>Attiva Coach</Button>
+                </div>
+                <span className={styles.coachCtaIcon}><Sparkles size={35} aria-hidden="true" /></span>
+              </>
+            ) : (
+              <div className={styles.coachInsightActive}>
                 <div className={styles.metaRow}>
                   <EventBadge label={`${coachInsight.score}% compatibilita`} type="level" />
                   {coachInsight.recommended && <EventBadge label="Consigliato dal Coach" type="premium" />}
                 </div>
                 <p className="muted">{coachInsight.explanation}</p>
-              </>
+              </div>
             )}
           </Card>
 

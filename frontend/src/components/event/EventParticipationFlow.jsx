@@ -3,7 +3,6 @@ import { BrowserQRCodeReader } from '@zxing/browser';
 import QRCode from 'qrcode';
 import {
   AlertTriangle,
-  CalendarDays,
   Camera,
   Check,
   CheckCircle2,
@@ -11,7 +10,6 @@ import {
   Clock3,
   Crown,
   LocateFixed,
-  MapPin,
   QrCode,
   RefreshCw,
   ShieldCheck,
@@ -66,6 +64,13 @@ function formatEventTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--:--';
   return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatEventWeekday(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Da definire';
+  const label = date.toLocaleDateString('it-IT', { weekday: 'long' });
+  return `${label.slice(0, 1).toUpperCase()}${label.slice(1)}`;
 }
 
 function formatCountdown(milliseconds) {
@@ -645,7 +650,7 @@ function EventParticipationFlow({
 
   return (
     <>
-      <Card subtle className={styles.flowCard}>
+      <Card subtle className={`${styles.flowCard} ${isOrganizer ? styles.organizerFlowCard : ''}`}>
         {!isOrganizer ? (
           <>
             <div className={styles.flowHeader}>
@@ -782,17 +787,14 @@ function EventParticipationFlow({
           <>
             <section className={styles.organizerHero} aria-label="Dashboard organizer">
               <div className={styles.organizerHeroTitle}>
-                <span className={styles.organizerCrown}><Crown size={22} aria-hidden="true" /></span>
                 <div>
-                  <span className={styles.eyebrow}>Gestione evento</span>
-                  <h2>Sei l&apos;organizer</h2>
-                  <p>{validationSummary.total} / {event.max_participants} partecipanti registrati</p>
+                  <h2>Sei<br />l&apos;organizzatore</h2>
+                  <p>Stato: {event.status === 'completed' ? 'Completato' : 'Attivo'} • Evento {event.visibility === 'private' ? 'privato' : 'pubblico'}</p>
                 </div>
+                <strong className={styles.organizerCount}>{validationSummary.total}/{event.max_participants || '∞'} partecipanti<br />registrati</strong>
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
-                  icon={RefreshCw}
                   onClick={() => loadFlow()}
                   disabled={loading}
                 >
@@ -800,9 +802,10 @@ function EventParticipationFlow({
                 </Button>
               </div>
               <div className={styles.organizerEventMeta}>
-                <p><CalendarDays size={18} aria-hidden="true" /><span>Data</span><strong>{formatEventDate(event.event_datetime)}</strong></p>
-                <p><Clock3 size={18} aria-hidden="true" /><span>Orario</span><strong>{formatEventTime(event.event_datetime)}</strong></p>
-                <p><MapPin size={18} aria-hidden="true" /><span>Luogo</span><strong>{event.location_name}</strong></p>
+                <p><span>Data</span><strong>{formatEventDate(event.event_datetime)}</strong></p>
+                <p><span>Orario</span><strong>{formatEventTime(event.event_datetime)}</strong></p>
+                <p><span>Giorno</span><strong>{formatEventWeekday(event.event_datetime)}</strong></p>
+                <p><span>Luogo</span><strong>{event.location_name}</strong></p>
               </div>
             </section>
 
@@ -864,12 +867,6 @@ function EventParticipationFlow({
               </section>
             ) : null}
 
-            <div className={styles.organizerStats}>
-              <div><Users size={18} /><strong>{validationSummary.total}</strong><span>Iscritti</span></div>
-              <div><QrCode size={18} /><strong>{validationSummary.checked}</strong><span>Check-in</span></div>
-              <div><Check size={18} /><strong>{validationSummary.completed}</strong><span>Completati</span></div>
-            </div>
-
             {usesQr ? (
               <Button
                 type="button"
@@ -894,13 +891,30 @@ function EventParticipationFlow({
               </Button>
             )}
 
+            {usesQr ? (
+              <div className={styles.organizerQrActions}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setOrganizerQrOpen(true)}
+                >
+                  Mostra link QR organizer
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  icon={QrCode}
+                  onClick={openScanner}
+                >
+                  Scansiona QR
+                </Button>
+              </div>
+            ) : null}
+
             <section className={styles.participantSection}>
               <div className={styles.participantSectionTitle}>
-                <div>
-                  <span className={styles.eyebrow}>Presenze live</span>
-                  <h3>Lista partecipanti</h3>
-                </div>
-                <span>{validationSummary.checked}/{validationSummary.total}</span>
+                <h3>Presenze live {validationSummary.checked}/{validationSummary.total}</h3>
+                <span>Lista partecipanti {validationSummary.total}/{event.max_participants || '∞'}</span>
               </div>
               <div className={styles.participantList} aria-live="polite">
                 {registeredParticipants.length ? registeredParticipants.map((participant) => {
@@ -926,21 +940,22 @@ function EventParticipationFlow({
                     </div>
                   );
                 }) : (
-                  <p className={styles.emptyParticipants}>Nessun partecipante registrato.</p>
+                  <div className={styles.emptyParticipants}>
+                    <span><Users size={28} aria-hidden="true" /></span>
+                    <p>Nessun partecipante registrato</p>
+                  </div>
                 )}
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className={styles.organizerQrButton}
+                onClick={() => setOrganizerQrOpen(true)}
+                fullWidth
+              >
+                Mostra mio QR organizzatore
+              </Button>
             </section>
-
-            <Button
-              type="button"
-              variant="ghost"
-              icon={QrCode}
-              className={styles.organizerQrButton}
-              onClick={() => setOrganizerQrOpen(true)}
-              fullWidth
-            >
-              Mostra il mio QR organizer
-            </Button>
           </>
         )}
       </Card>

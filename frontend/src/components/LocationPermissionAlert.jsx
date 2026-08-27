@@ -1,4 +1,4 @@
-import { MapPinned, Navigation } from 'lucide-react';
+import { MapPinned } from 'lucide-react';
 import Card from './Card';
 import Button from './Button';
 import styles from '../styles/components/locationPermissionAlert.module.css';
@@ -23,8 +23,8 @@ function LocationPermissionAlert({ hasLocation, permission, error, requesting, o
         </div>
       </div>
 
-      <Button type="button" size="sm" icon={Navigation} onClick={onRequest} disabled={requesting}>
-        {requesting ? 'Richiesta posizione...' : 'Attiva posizione'}
+      <Button type="button" size="sm" onClick={onRequest} disabled={requesting}>
+        {requesting ? 'Attivazione...' : 'Attiva'}
       </Button>
     </Card>
   );

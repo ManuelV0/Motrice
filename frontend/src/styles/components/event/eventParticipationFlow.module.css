@@ -767,3 +767,245 @@
     transition: none;
   }
 }
+
+/* Organizer dashboard aligned with the Event Detail visual language. */
+.organizerFlowCard {
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border: 2px solid var(--primary);
+  border-radius: 1.85rem;
+  background: #191b19;
+  box-shadow:
+    0 0 0 1px rgb(184 255 0 / 0.08),
+    0 1.25rem 3rem rgb(0 0 0 / 0.28),
+    inset 0 1px rgb(255 255 255 / 0.05);
+}
+
+.organizerFlowCard .organizerHero {
+  gap: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.organizerFlowCard .organizerHeroTitle {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 0.8rem;
+}
+
+.organizerFlowCard .organizerHeroTitle h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.15rem, 3.4vw, 1.55rem);
+  line-height: 0.88;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .organizerHeroTitle p {
+  grid-column: 1 / -1;
+  margin-top: 0.65rem;
+  color: rgb(255 255 255 / 0.36);
+  font-size: 0.82rem;
+}
+
+.organizerCount {
+  min-width: 9rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 999px;
+  color: #fff;
+  background: #1d1f1d;
+  font-size: 0.78rem;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.organizerFlowCard .organizerHeroTitle > button {
+  min-height: 2.85rem;
+  padding-inline: 1.15rem;
+  border-radius: 999px;
+}
+
+.organizerFlowCard .organizerEventMeta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 1.2rem;
+  background: #0f110f;
+}
+
+.organizerFlowCard .organizerEventMeta p {
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.28rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.organizerFlowCard .organizerEventMeta span {
+  color: rgb(255 255 255 / 0.34);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .organizerEventMeta strong {
+  color: #fff;
+  font-size: 0.93rem;
+}
+
+.organizerFlowCard .requestSection {
+  border-color: color-mix(in srgb, var(--primary) 34%, rgb(255 255 255 / 0.08));
+  background: #121512;
+}
+
+.organizerFlowCard .organizerScanButton {
+  width: 100%;
+  min-height: 5.2rem !important;
+  border-radius: 1.15rem !important;
+  color: #080a08 !important;
+  font-size: clamp(0.96rem, 3.2vw, 1.25rem) !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0.75rem 2rem rgb(184 255 0 / 0.16) !important;
+}
+
+.organizerQrActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.organizerQrActions > button {
+  width: 100%;
+  min-height: 3.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  color: rgb(255 255 255 / 0.78) !important;
+  background: #1d1f1d !important;
+  font-size: 0.78rem !important;
+}
+
+.organizerFlowCard .participantSection {
+  gap: 1rem;
+  padding: 1rem;
+  border-color: rgb(255 255 255 / 0.08);
+  border-radius: 1.2rem;
+  background: #0d0f0d;
+}
+
+.organizerFlowCard .participantSectionTitle h3 {
+  color: #fff;
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .participantSectionTitle > span {
+  min-width: 0;
+  padding: 0;
+  color: rgb(255 255 255 / 0.3);
+  background: transparent;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.organizerFlowCard .emptyParticipants {
+  min-height: 9rem;
+  padding: 1rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  border: 0;
+  background: transparent;
+}
+
+.organizerFlowCard .emptyParticipants > span {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 50%;
+  color: rgb(255 255 255 / 0.18);
+  background: #151715;
+}
+
+.organizerFlowCard .emptyParticipants p {
+  margin: 0;
+  color: rgb(255 255 255 / 0.28);
+}
+
+.organizerFlowCard .organizerQrButton {
+  width: 100% !important;
+  min-height: 3.5rem;
+  color: rgb(255 255 255 / 0.78) !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 1rem !important;
+  background: #1d1f1d !important;
+}
+
+@media (max-width: 42rem) {
+  .organizerFlowCard {
+    padding: 1rem;
+    border-radius: 1.6rem;
+  }
+
+  .organizerFlowCard .organizerHeroTitle {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .organizerCount {
+    min-width: 0;
+    font-size: 0.68rem;
+  }
+
+  .organizerFlowCard .organizerHeroTitle > button {
+    grid-column: 2;
+    width: auto;
+  }
+
+  .organizerFlowCard .organizerHeroTitle > div {
+    grid-row: 1 / span 2;
+  }
+
+  .organizerFlowCard .organizerHeroTitle p {
+    font-size: 0.7rem;
+  }
+
+  .organizerFlowCard .organizerEventMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .organizerFlowCard .organizerScanButton {
+    min-height: 4.75rem !important;
+  }
+
+  .organizerQrActions > button {
+    min-height: 3.2rem;
+    font-size: 0.69rem !important;
+  }
+
+  .organizerFlowCard .participantSectionTitle {
+    align-items: flex-start;
+  }
+
+  .organizerFlowCard .participantSectionTitle > span {
+    max-width: 8rem;
+    text-align: right;
+  }
+}
+
+@media (max-width: 24rem) {
+  .organizerQrActions {
+    grid-template-columns: 1fr;
+  }
+}
