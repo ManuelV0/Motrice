@@ -63,6 +63,15 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
+.profileTab.tabActive {
+  color: #ff8a2b;
+}
+
+.profileTab.tabActive .iconWrap {
+  background: rgb(255 138 43 / 13%);
+  box-shadow: inset 0 0 0 1px rgb(255 138 43 / 20%);
+}
+
 .primaryTab {
   position: relative;
   color: var(--text);
@@ -100,6 +109,14 @@
 .tab:focus-visible {
   outline: none;
   box-shadow: var(--focus);
+}
+
+:global(html.profile-public-preview) .bottomNav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+:global(html.profile-public-preview) .walletTab {
+  display: none;
 }
 
 @media (min-width: 768px) {
