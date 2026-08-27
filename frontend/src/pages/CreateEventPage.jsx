@@ -273,6 +273,7 @@ function CreateEventPage() {
   const [workoutPlanQuery, setWorkoutPlanQuery] = useState('');
   const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
   const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
@@ -949,87 +950,92 @@ function CreateEventPage() {
 
   async function onSubmit(event) {
     event.preventDefault();
-    if (!validate()) return;
+    if (submitting || !validate()) return;
 
     if (creationStats.created_this_month >= entitlements.maxEventsPerMonth) {
       setPaywallOpen(true);
       return;
     }
 
-    let attachedWorkoutPlan = selectedWorkoutPlan;
-    if (attachedWorkoutPlan && !attachedWorkoutPlan.remoteId) {
-      try {
+    setSubmitting(true);
+    try {
+      let attachedWorkoutPlan = selectedWorkoutPlan;
+      if (attachedWorkoutPlan && !attachedWorkoutPlan.remoteId) {
         attachedWorkoutPlan = await ensurePersonalWorkoutPlanRemote(attachedWorkoutPlan);
         setSelectedWorkoutPlan(attachedWorkoutPlan);
-      } catch (planError) {
-        showToast(planError.message || 'Impossibile allegare la scheda', 'error');
-        return;
       }
-    }
 
-    let resolvedLat = form.lat === '' ? null : Number(form.lat);
-    let resolvedLng = form.lng === '' ? null : Number(form.lng);
-    if (resolvedLat == null || resolvedLng == null) {
-      const resolved = await resolveLocationOnline({ silent: true });
-      if (!resolved) {
-        showToast('Trova il luogo sulla mappa prima di pubblicare', 'error');
-        return;
+      let resolvedLat = form.lat === '' ? null : Number(form.lat);
+      let resolvedLng = form.lng === '' ? null : Number(form.lng);
+      if (resolvedLat == null || resolvedLng == null) {
+        const resolved = await resolveLocationOnline({ silent: true });
+        if (!resolved) {
+          showToast('Trova il luogo sulla mappa prima di pubblicare', 'error');
+          return;
+        }
+        resolvedLat = resolved.lat;
+        resolvedLng = resolved.lng;
       }
-      resolvedLat = resolved.lat;
-      resolvedLng = resolved.lng;
-    }
 
-    const created = await api.createEvent({
-      ...form,
-      sport_id: Number(form.sport_id),
-      duration_minutes: Number(form.duration_minutes),
-      deposit_cents: Number(form.deposit_cents),
-      minimum_presence_minutes: Number(form.minimum_presence_minutes),
-      verification_mode: form.verification_mode,
-      geofence_radius_m: Number(form.geofence_radius_m),
-      completion_xp: Number(form.completion_xp),
-      review_bonus_xp: Number(form.review_bonus_xp),
-      max_participants: Number(form.max_participants),
-      audience: form.audience,
-      participation_protection: Boolean(form.participation_protection),
-      visibility: form.visibility,
-      join_policy: form.join_policy,
-      is_personal: Boolean(form.is_personal),
-      lat: resolvedLat,
-      lng: resolvedLng,
-      scheda_id: attachedWorkoutPlan?.remoteId || null,
-      workout_plan: attachedWorkoutPlan || null,
-      route_info: form.has_route
-        ? {
-            name: String(form.route_name || '').trim(),
-            from_label: String(form.route_from || '').trim(),
-            to_label: String(form.route_to || '').trim(),
-            from_lat: form.route_from_lat === '' ? null : Number(form.route_from_lat),
-            from_lng: form.route_from_lng === '' ? null : Number(form.route_from_lng),
-            to_lat: form.route_to_lat === '' ? null : Number(form.route_to_lat),
-            to_lng: form.route_to_lng === '' ? null : Number(form.route_to_lng),
-            distance_km: Number(form.route_distance_km),
-            elevation_gain_m:
-              form.route_elevation_gain_m === '' ? null : Number(form.route_elevation_gain_m),
-            map_url: String(form.route_map_url || '').trim(),
-            route_points: Array.isArray(form.route_points) ? form.route_points : []
-          }
-        : null
-    });
+      const created = await api.createEvent({
+        ...form,
+        sport_id: Number(form.sport_id),
+        duration_minutes: Number(form.duration_minutes),
+        deposit_cents: Number(form.deposit_cents),
+        minimum_presence_minutes: Number(form.minimum_presence_minutes),
+        verification_mode: form.verification_mode,
+        geofence_radius_m: Number(form.geofence_radius_m),
+        completion_xp: Number(form.completion_xp),
+        review_bonus_xp: Number(form.review_bonus_xp),
+        max_participants: Number(form.max_participants),
+        audience: form.audience,
+        participation_protection: Boolean(form.participation_protection),
+        visibility: form.visibility,
+        join_policy: form.join_policy,
+        is_personal: Boolean(form.is_personal),
+        lat: resolvedLat,
+        lng: resolvedLng,
+        scheda_id: attachedWorkoutPlan?.remoteId || null,
+        workout_plan: attachedWorkoutPlan || null,
+        route_info: form.has_route
+          ? {
+              name: String(form.route_name || '').trim(),
+              from_label: String(form.route_from || '').trim(),
+              to_label: String(form.route_to || '').trim(),
+              from_lat: form.route_from_lat === '' ? null : Number(form.route_from_lat),
+              from_lng: form.route_from_lng === '' ? null : Number(form.route_from_lng),
+              to_lat: form.route_to_lat === '' ? null : Number(form.route_to_lat),
+              to_lng: form.route_to_lng === '' ? null : Number(form.route_to_lng),
+              distance_km: Number(form.route_distance_km),
+              elevation_gain_m:
+                form.route_elevation_gain_m === '' ? null : Number(form.route_elevation_gain_m),
+              map_url: String(form.route_map_url || '').trim(),
+              route_points: Array.isArray(form.route_points) ? form.route_points : []
+            }
+          : null
+      });
 
-    if (form.add_to_calendar) {
-      try {
-        downloadEventIcs(created);
-      } catch {
-        showToast('Evento creato, ma il calendario non e stato aperto', 'info');
+      if (form.add_to_calendar) {
+        try {
+          downloadEventIcs(created);
+        } catch {
+          showToast('Evento creato, ma il calendario non e stato aperto', 'info');
+        }
       }
-    }
 
-    showToast(form.is_personal ? 'Promemoria creato con successo' : 'Evento creato con successo', 'success');
-    markStepByAction('event_created');
-    const stats = await api.getEventCreationStats();
-    setCreationStats(stats);
-    navigate(`/events/${created.id}`);
+      showToast(form.is_personal ? 'Promemoria creato con successo' : 'Evento creato con successo', 'success');
+      markStepByAction('event_created');
+      api.getEventCreationStats().then(setCreationStats).catch(() => {});
+      navigate(`/events/${created.id}`);
+    } catch (submitError) {
+      const message = String(submitError?.message || '').trim();
+      showToast(
+        message || (selectedWorkoutPlan ? 'Impossibile pubblicare l’evento con la scheda allegata' : 'Impossibile pubblicare l’evento'),
+        'error'
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function suggestDescriptionWithAi() {
@@ -2009,8 +2015,10 @@ function CreateEventPage() {
               Avanti <ChevronRight size={23} />
             </button>
           ) : (
-            <button type="submit" className={styles.nextButton}>
-              {form.is_personal
+            <button type="submit" className={styles.nextButton} disabled={submitting}>
+              {submitting
+                ? 'Pubblicazione...'
+                : form.is_personal
                 ? 'Crea promemoria'
                 : form.visibility === 'private'
                   ? 'Crea evento privato'
