@@ -10,6 +10,8 @@ import {
   Menu,
   Target,
   LocateFixed,
+  LogIn,
+  LogOut,
   X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
@@ -17,6 +19,7 @@ import { api } from '../services/api';
 import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
+import { getAuthSession, signOutFromSupabase } from '../services/authSession';
 import IconButton from './IconButton';
 import BrandLogo from './BrandLogo';
 import styles from '../styles/components/navbar.module.css';
@@ -54,8 +57,23 @@ function Navbar({ forceMobile = false }) {
 
   const [query, setQuery] = useState('');
   const [unread, setUnread] = useState(0);
+  const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const [authActionBusy, setAuthActionBusy] = useState(false);
   const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
+
+  useEffect(() => {
+    function refreshAuthSession() {
+      setAuthSession(getAuthSession());
+    }
+
+    window.addEventListener('motrice-auth-changed', refreshAuthSession);
+    window.addEventListener('storage', refreshAuthSession);
+    return () => {
+      window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+      window.removeEventListener('storage', refreshAuthSession);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -147,6 +165,27 @@ function Navbar({ forceMobile = false }) {
     event.preventDefault();
     navigate(`/map?q=${encodeURIComponent(query)}`);
     setIsOpen(false);
+  }
+
+  async function onAuthAction() {
+    if (!authSession.isAuthenticated) {
+      setIsOpen(false);
+      navigate('/login');
+      return;
+    }
+
+    setAuthActionBusy(true);
+    try {
+      await signOutFromSupabase();
+      setAuthSession(getAuthSession());
+      setIsOpen(false);
+      showToast('Sei uscito da Motrice', 'success');
+      navigate('/login');
+    } catch (error) {
+      showToast(error?.message || 'Impossibile uscire dall’app', 'error');
+    } finally {
+      setAuthActionBusy(false);
+    }
   }
 
   return (
@@ -289,6 +328,27 @@ function Navbar({ forceMobile = false }) {
                     </NavLink>
                   );
                 })}
+                {section.title === 'Altro' ? (
+                  <button
+                    type="button"
+                    className={`${styles.link} ${styles.drawerLink} ${styles.authLink}`}
+                    onClick={onAuthAction}
+                    disabled={authActionBusy}
+                  >
+                    {authSession.isAuthenticated ? (
+                      <LogOut size={18} aria-hidden="true" />
+                    ) : (
+                      <LogIn size={18} aria-hidden="true" />
+                    )}
+                    <span>
+                      {authActionBusy
+                        ? 'Uscita in corso…'
+                        : authSession.isAuthenticated
+                          ? 'Esci dall’app'
+                          : 'Accedi all’app'}
+                    </span>
+                  </button>
+                ) : null}
               </div>
             </section>
           ))}

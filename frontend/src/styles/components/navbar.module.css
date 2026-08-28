@@ -523,6 +523,16 @@
   width: 100%;
 }
 
+.authLink {
+  font: inherit;
+  cursor: pointer;
+}
+
+.authLink:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .toggle::before,
 .link::before,
 .locationPill::before,
