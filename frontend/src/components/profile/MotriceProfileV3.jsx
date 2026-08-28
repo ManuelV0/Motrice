@@ -32,7 +32,8 @@ function MotriceProfileV3({
   onModeChange,
   onSaveProfile,
   onSimulateCheckIn,
-  onInvite
+  onInvite,
+  publicActionLabel = 'INVITA AD EVENTO'
 }) {
   const [identityOpen, setIdentityOpen] = useState(false);
   const [ratingsOpen, setRatingsOpen] = useState(false);
@@ -296,7 +297,7 @@ function MotriceProfileV3({
         </button>
       ) : (
         <div className={styles.publicSticky}>
-          <button type="button" onClick={onInvite}><UserRoundPlus size={20} /> INVITA AD EVENTO</button>
+          <button type="button" onClick={onInvite}><UserRoundPlus size={20} /> {publicActionLabel}</button>
         </div>
       )}
     </main>

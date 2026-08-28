@@ -149,9 +149,9 @@ function simulateLocal(profile) {
   return writeLocal(next);
 }
 
-function isMissingProfileV3Rpc(error) {
+function isMissingProfileV3Rpc(error, functionName = 'get_my_profile_v3') {
   const message = String(error?.message || '').toLowerCase();
-  return error?.code === '42883' || error?.code === 'PGRST202' || message.includes('get_my_profile_v3');
+  return error?.code === '42883' || error?.code === 'PGRST202' || message.includes(functionName);
 }
 
 export async function getProfileV3State(profile = {}) {
@@ -162,6 +162,33 @@ export async function getProfileV3State(profile = {}) {
   if (error) {
     if (isMissingProfileV3Rpc(error)) return readLocal(profile);
     throw new Error(error.message || 'Impossibile caricare il profilo Motrice');
+  }
+  return normalizeState(data, profile);
+}
+
+export async function getPublicProfileV3State(targetUserId, profile = {}) {
+  const session = getAuthSession();
+  const targetId = String(targetUserId || '').trim();
+  if (!targetId) throw new Error('Profilo non disponibile');
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(targetId);
+
+  if (targetId === String(session?.authUserId || '')) {
+    return getProfileV3State(profile);
+  }
+
+  if (!isSupabaseConfigured || !session?.authUserId || !isUuid) {
+    return createEmptyProfileV3(profile);
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('get_public_profile_v3', {
+    target_user_id: targetId
+  });
+  if (error) {
+    if (isMissingProfileV3Rpc(error, 'get_public_profile_v3')) {
+      return createEmptyProfileV3(profile);
+    }
+    throw new Error(error.message || 'Impossibile caricare il profilo pubblico Motrice');
   }
   return normalizeState(data, profile);
 }

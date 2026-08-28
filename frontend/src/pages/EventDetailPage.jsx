@@ -1115,7 +1115,20 @@ function EventDetailPage() {
                   <span>Affidabilità {organizerReliability}%</span>
                 </div>
               </div>
-              <Link to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}`}>Vedi profilo pubblico</Link>
+              <Link
+                to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
+                state={{
+                  publicProfile: {
+                    id: event.organizer?.auth_user_id || event.organizer?.id,
+                    display_name: organizerName,
+                    name: organizerName,
+                    city: event.city || '',
+                    reliability_score: organizerReliability
+                  }
+                }}
+              >
+                Vedi profilo pubblico
+              </Link>
             </Card>
           </div>
 
@@ -1182,7 +1195,19 @@ function EventDetailPage() {
                   Apri chat evento
                 </Button>
               ) : <span className={styles.disabledAction}><MessageCircle size={23} aria-hidden="true" />Apri chat evento</span>}
-              <Link className={styles.actionProfileLink} to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}`}>
+              <Link
+                className={styles.actionProfileLink}
+                to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
+                state={{
+                  publicProfile: {
+                    id: event.organizer?.auth_user_id || event.organizer?.id,
+                    display_name: organizerName,
+                    name: organizerName,
+                    city: event.city || '',
+                    reliability_score: organizerReliability
+                  }
+                }}
+              >
                 <UserRound size={23} aria-hidden="true" />
                 Vedi profilo pubblico
               </Link>
