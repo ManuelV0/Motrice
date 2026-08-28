@@ -51,6 +51,7 @@ import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
+import { resolveEventParticipationState } from '../utils/eventParticipationState';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const SPORT_DETAIL_VISUALS = [
@@ -199,6 +200,8 @@ function EventDetailPage() {
   const [pendingNewCount, setPendingNewCount] = useState(0);
   const [groupChatAiLoading, setGroupChatAiLoading] = useState(false);
   const groupChatBodyRef = useRef(null);
+  const participationFlowRef = useRef(null);
+  const lastParticipationStateRef = useRef('');
   const {
     coords,
     hasLocation,
@@ -687,7 +690,14 @@ function EventDetailPage() {
       normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
     )
   );
-  const canAccessGroupChat = Boolean(event?.is_going || isOrganizerForEvent);
+  const participationIsFull = Number(event?.max_participants || 0) > 0 &&
+    Number(event?.participants_count || 0) >= Number(event?.max_participants || 0);
+  const participationState = resolveEventParticipationState({
+    event,
+    isOrganizer: isOrganizerForEvent,
+    isFull: participationIsFull
+  });
+  const canAccessGroupChat = Boolean(participationState.canAccessChat || isOrganizerForEvent);
   const eventStartsMs = Date.parse(event?.event_datetime || '');
   const eventDurationMinutes = Number.isFinite(Number(event?.duration_minutes))
     ? Math.max(30, Number(event.duration_minutes))
@@ -721,6 +731,47 @@ function EventDetailPage() {
     if (!canAccessGroupChat) return;
     navigate(`/chat/event_${event.id}`, { replace: true });
   }, [event, canAccessGroupChat, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!event?.id || !participationState.shouldPoll || isOrganizerForEvent) return undefined;
+    let active = true;
+
+    async function refreshParticipationState() {
+      try {
+        const fresh = await api.getEvent(id, originParams);
+        if (!active) return;
+        const nextIsFull = Number(fresh?.max_participants || 0) > 0 &&
+          Number(fresh?.participants_count || 0) >= Number(fresh?.max_participants || 0);
+        const nextState = resolveEventParticipationState({ event: fresh, isFull: nextIsFull });
+        const previousStateId = lastParticipationStateRef.current || participationState.id;
+
+        setEvent(fresh);
+        lastParticipationStateRef.current = nextState.id;
+
+        if (previousStateId === 'pending' && nextState.id === 'confirmed') {
+          showToast('Richiesta approvata: il posto è confermato e il QR è pronto.', 'success');
+          markStepByAction('rsvp_confirmed');
+        } else if (previousStateId === 'pending' && nextState.id === 'declined') {
+          showToast('La richiesta non è stata approvata.', 'info');
+        } else if (previousStateId === 'confirmed' && nextState.id === 'checked_in') {
+          showToast('Check-in verificato: presenza registrata.', 'success');
+        } else if (previousStateId === 'checked_in' && nextState.id === 'completed') {
+          showToast('Partecipazione completata: deposito e ricompense aggiornati.', 'success');
+        }
+      } catch {
+        // Il polling è silenzioso: la richiesta resta valida e verrà ritentata.
+      }
+    }
+
+    lastParticipationStateRef.current = participationState.id;
+    const firstRefreshId = window.setTimeout(refreshParticipationState, 1500);
+    const intervalId = window.setInterval(refreshParticipationState, 5000);
+    return () => {
+      active = false;
+      window.clearTimeout(firstRefreshId);
+      window.clearInterval(intervalId);
+    };
+  }, [event?.id, id, isOrganizerForEvent, originParams, participationState.id, participationState.shouldPoll, showToast]);
 
   useEffect(() => {
     if (!groupChatOpen) return undefined;
@@ -1134,6 +1185,49 @@ function EventDetailPage() {
 
           <Card subtle className={styles.actionCard}>
             <h2 className={styles.actionTitle}>Gestisci la partecipazione</h2>
+            {!event.is_personal ? (
+              <section
+                className={`${styles.participationStateBox} ${styles[`participationState_${participationState.tone}`] || ''}`}
+                aria-live="polite"
+              >
+                <div className={styles.participationStateHeader}>
+                  <span className={styles.participationStateIcon} aria-hidden="true">
+                    {participationState.id === 'pending' ? <Clock3 size={21} /> :
+                      participationState.tone === 'danger' ? <X size={21} /> :
+                        participationState.id === 'joinable' ? <UserPlus size={21} /> :
+                          <CheckCircle2 size={21} />}
+                  </span>
+                  <div>
+                    <strong>{participationState.title}</strong>
+                    <p>{participationState.description}</p>
+                  </div>
+                  <span className={styles.participationStateBadge}>{participationState.badge}</span>
+                </div>
+
+                <ol className={styles.participationSteps} aria-label="Avanzamento partecipazione">
+                  {[
+                    event.join_policy === 'approval' ? 'Richiesta' : 'Iscrizione',
+                    'Confermata',
+                    'Check-in',
+                    'Completata'
+                  ].map((label, index) => {
+                    const stepNumber = index + 1;
+                    const isReached = stepNumber <= participationState.stepIndex;
+                    const isCurrent = stepNumber === participationState.stepIndex;
+                    return (
+                      <li
+                        key={label}
+                        className={`${isReached ? styles.participationStepReached : ''} ${isCurrent ? styles.participationStepCurrent : ''}`}
+                        aria-current={isCurrent ? 'step' : undefined}
+                      >
+                        <i aria-hidden="true">{isReached ? '✓' : stepNumber}</i>
+                        <span>{label}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            ) : null}
             <div className={styles.primaryParticipationAction}>
               {isOrganizerForEvent && event.is_personal ? (
                 <Button
@@ -1151,18 +1245,25 @@ function EventDetailPage() {
                         : 'Disponibile al termine'}
                 </Button>
               ) : null}
-              {!isOrganizerForEvent && !event.is_personal ? (
-                event.is_join_pending ? (
-                  <Button type="button" variant="secondary" disabled icon={UserPlus}>Richiesta inviata</Button>
-                ) : !event.is_going ? (
-                  <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
-                    {event.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa'}
-                  </Button>
-                ) : (
-                  <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
-                    Annulla partecipazione
-                  </Button>
-                )
+              {!event.is_personal ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant={participationState.action === 'cancel' || participationState.action === 'none' ? 'secondary' : 'primary'}
+                  icon={participationState.action === 'join' ? UserPlus : participationState.action === 'cancel' ? UserMinus : participationState.id === 'pending' ? Clock3 : ShieldCheck}
+                  disabled={participationState.action === 'none'}
+                  onClick={() => {
+                    if (participationState.action === 'join') {
+                      setModalOpen(true);
+                    } else if (participationState.action === 'cancel') {
+                      openCancelDialog();
+                    } else if (participationState.action === 'progress') {
+                      participationFlowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                >
+                  {participationState.actionLabel || participationState.badge}
+                </Button>
               ) : null}
             </div>
             <div className={styles.actions}>
@@ -1225,16 +1326,18 @@ function EventDetailPage() {
           )}
 
           {!event.is_personal ? (
-            <EventParticipationFlow
-              event={event}
-              isOrganizer={isOrganizerForEvent}
-              currentUser={currentUser}
-              coords={coords}
-              requestingLocation={requesting}
-              requestLocation={requestLocation}
-              showToast={showToast}
-              onEventRefresh={reload}
-            />
+            <div ref={participationFlowRef} className={styles.participationFlowAnchor}>
+              <EventParticipationFlow
+                event={event}
+                isOrganizer={isOrganizerForEvent}
+                currentUser={currentUser}
+                coords={coords}
+                requestingLocation={requesting}
+                requestLocation={requestLocation}
+                showToast={showToast}
+                onEventRefresh={reload}
+              />
+            </div>
           ) : null}
 
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (

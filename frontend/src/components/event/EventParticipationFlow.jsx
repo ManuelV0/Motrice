@@ -265,8 +265,11 @@ function EventParticipationFlow({
   }, [canLoad]);
 
   useEffect(() => {
-    if (!isOrganizer || !canLoad) return undefined;
-    const timer = window.setInterval(() => loadFlow({ silent: true }), 5000);
+    if (!canLoad) return undefined;
+    const timer = window.setInterval(
+      () => loadFlow({ silent: true }),
+      isOrganizer ? 5000 : 10000
+    );
     return () => window.clearInterval(timer);
   }, [canLoad, isOrganizer, loadFlow]);
 

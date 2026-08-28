@@ -1415,6 +1415,152 @@
   text-transform: uppercase;
 }
 
+.participationStateBox {
+  --participation-state-color: var(--primary);
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--participation-state-color) 34%, rgb(255 255 255 / 0.08));
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--participation-state-color) 12%, transparent), transparent 44%),
+    #111311;
+}
+
+.participationState_waiting {
+  --participation-state-color: var(--warning);
+}
+
+.participationState_success,
+.participationState_ready {
+  --participation-state-color: var(--primary);
+}
+
+.participationState_danger {
+  --participation-state-color: var(--danger);
+}
+
+.participationState_neutral {
+  --participation-state-color: rgb(255 255 255 / 0.42);
+}
+
+.participationState_organizer {
+  --participation-state-color: #ff8a2b;
+}
+
+.participationStateHeader {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.participationStateIcon {
+  width: 2.7rem;
+  height: 2.7rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--participation-state-color) 42%, transparent);
+  border-radius: 50%;
+  color: var(--participation-state-color);
+  background: color-mix(in srgb, var(--participation-state-color) 12%, #151715);
+}
+
+.participationStateHeader > div {
+  min-width: 0;
+}
+
+.participationStateHeader strong {
+  display: block;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.participationStateHeader p {
+  margin: 0.25rem 0 0;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.participationStateBadge {
+  max-width: 8.5rem;
+  padding: 0.42rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--participation-state-color) 38%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--participation-state-color) 78%, white);
+  background: color-mix(in srgb, var(--participation-state-color) 10%, #111311);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.participationSteps {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  list-style: none;
+}
+
+.participationSteps::before {
+  content: '';
+  position: absolute;
+  top: 0.78rem;
+  left: 12.5%;
+  right: 12.5%;
+  height: 1px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.participationSteps li {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.38rem;
+  color: rgb(255 255 255 / 0.3);
+  font-size: 0.64rem;
+  text-align: center;
+}
+
+.participationSteps i {
+  width: 1.55rem;
+  height: 1.55rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 50%;
+  background: #171917;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.participationStepReached {
+  color: color-mix(in srgb, var(--participation-state-color) 72%, white) !important;
+}
+
+.participationStepReached i {
+  color: #0b0d0b;
+  border-color: var(--participation-state-color);
+  background: var(--participation-state-color);
+}
+
+.participationStepCurrent i {
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--participation-state-color) 48%, transparent);
+}
+
+.participationFlowAnchor {
+  scroll-margin-top: 1rem;
+}
+
 .primaryParticipationAction:empty {
   display: none;
 }
@@ -1700,6 +1846,16 @@
 
   .actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .participationStateHeader {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .participationStateBadge {
+    grid-column: 1 / -1;
+    max-width: none;
+    justify-self: start;
   }
 
   .organizerCard {
