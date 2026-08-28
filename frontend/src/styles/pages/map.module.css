@@ -812,9 +812,9 @@
   position: relative;
   z-index: 1;
   display: grid;
-  width: 1.16rem;
-  height: 1.16rem;
-  margin-top: 0.66rem;
+  width: 1.28rem;
+  height: 1.28rem;
+  margin-top: 0.59rem;
   color: #050705;
   pointer-events: none;
   place-items: center;

@@ -54,23 +54,23 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 const EVENT_ACTIVITY_ICON_NODES = {
   running: [
-    ['circle', { cx: 15, cy: 5, r: 2, fill: 'currentColor', stroke: 'none' }],
-    ['path', { d: 'm13.5 8-2.8 4.8 4.2 2.4 2.6 4.8' }],
-    ['path', { d: 'm13 9 4 2.4 3-1.2' }],
-    ['path', { d: 'm10.8 12.8-5.3 3.1' }],
-    ['path', { d: 'm14.8 15.2-4.2 4.8' }]
+    ['circle', { cx: 15.7, cy: 4.2, r: 2.25, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm13.6 8.1-2.9 4.7 4.3 2.5 2.8 5', 'stroke-width': 3.15 }],
+    ['path', { d: 'm13.8 8.7 3.5 2.3 3.1-1.2', 'stroke-width': 3.15 }],
+    ['path', { d: 'm10.8 12.8-5.8 3.1', 'stroke-width': 3.15 }],
+    ['path', { d: 'm14.9 15.2-4.5 5.2', 'stroke-width': 3.15 }]
   ],
   gym: [
-    ['path', { d: 'M17.6 12.8a2 2 0 1 0 2.8-2.9l-1.7-1.7a2 2 0 1 0 2.8-2.9l-2.8-2.8a2 2 0 1 0-2.9 2.8l-1.7-1.7a2 2 0 1 0-2.9 2.8z' }],
-    ['path', { d: 'M5.3 21.5a2 2 0 1 0 2.9-2.8l1.7 1.7a2 2 0 1 0 2.9-2.8l-6.4-6.4a2 2 0 1 0-2.8 2.9l1.7 1.7a2 2 0 1 0-2.8 2.9z' }],
-    ['path', { d: 'm9.6 14.4 4.8-4.8' }]
+    ['rect', { x: 1.7, y: 8, width: 3.8, height: 8, rx: 1.9, fill: 'currentColor', stroke: 'none' }],
+    ['rect', { x: 5, y: 6.2, width: 3.3, height: 11.6, rx: 1.65, fill: 'currentColor', stroke: 'none' }],
+    ['rect', { x: 7.7, y: 10.35, width: 8.6, height: 3.3, rx: 1.65, fill: 'currentColor', stroke: 'none' }],
+    ['rect', { x: 15.7, y: 6.2, width: 3.3, height: 11.6, rx: 1.65, fill: 'currentColor', stroke: 'none' }],
+    ['rect', { x: 18.5, y: 8, width: 3.8, height: 8, rx: 1.9, fill: 'currentColor', stroke: 'none' }]
   ],
   tennis: [
-    ['ellipse', { cx: 9, cy: 8.5, rx: 5.2, ry: 7.2, transform: 'rotate(-38 9 8.5)' }],
-    ['path', { d: 'm12.7 13.7 7.1 7.1' }],
-    ['path', { d: 'm16.1 17.1-3.1 3.1' }],
-    ['path', { d: 'm4.8 5.1 7.7 6.8' }],
-    ['path', { d: 'm3.6 9.1 7.2-5.6' }]
+    ['ellipse', { cx: 8.8, cy: 8.1, rx: 5.1, ry: 6.8, transform: 'rotate(-38 8.8 8.1)', fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm12.6 13.5 6.8 7', 'stroke-width': 3.25 }],
+    ['circle', { cx: 18.8, cy: 6.4, r: 2.45, fill: 'currentColor', stroke: 'none' }]
   ],
   football: [
     ['circle', { cx: 12, cy: 12, r: 9.2 }],
@@ -81,8 +81,16 @@ const EVENT_ACTIVITY_ICON_NODES = {
     ['path', { d: 'm9.8 14.6-3 4.2' }],
     ['path', { d: 'm8.4 10.4-4.8-1.5' }]
   ],
+  basketball: [
+    ['circle', { cx: 12, cy: 12, r: 9.3, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'M3.1 12h17.8M12 2.7v18.6M5.3 5.5c4.7 2.1 8.7 8.9 13.4 13M18.7 5.5c-4.7 2.1-8.7 8.9-13.4 13', stroke: 'var(--event-pin-fill)', 'stroke-width': 1.45 }]
+  ],
+  yoga: [
+    ['circle', { cx: 12, cy: 4.6, r: 2.7, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'M12 8.4v6.2M12 10.6 7.2 14M12 10.6l4.8 3.4M4 17.2c3.5 0 5.6-1 8-2.6 2.4 1.6 4.5 2.6 8 2.6M5.1 20.2c2.8-2 4.8-2.4 6.9-2.4s4.1.4 6.9 2.4', 'stroke-width': 3.15 }]
+  ],
   activity: [
-    ['path', { d: 'M3 12h4l2.2-5.2 4.1 10.4 2.2-5.2H21' }]
+    ['path', { d: 'M3 12h4l2.2-5.2 4.1 10.4 2.2-5.2H21', 'stroke-width': 3.1 }]
   ]
 };
 
@@ -91,6 +99,8 @@ function getEventActivityType(event) {
 
   if (/(calcio|calcetto|football|soccer|futsal)/.test(activity)) return 'football';
   if (/(tennis|padel|racchett|pickleball)/.test(activity)) return 'tennis';
+  if (/(basket|pallacanestro)/.test(activity)) return 'basketball';
+  if (/(yoga|pilates|meditazione|mindfulness)/.test(activity)) return 'yoga';
   if (/(palestra|gym|fitness|forza|functional|workout|crossfit|hiit|calisthenics|bodybuild)/.test(activity)) return 'gym';
   if (/(corsa|running|jogging|trail|maratona)/.test(activity)) return 'running';
   return 'activity';
