@@ -282,13 +282,18 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
 
 function normalizeEvent(rawEvent, context, filters = {}) {
   const authUserId = currentAuthUserId();
-  const participants = context.participants.filter(
-    (participant) =>
-      String(participant.event_id) === String(rawEvent.id) &&
-      ['going', 'completed'].includes(String(participant.status || ''))
+  const eventParticipants = context.participants.filter(
+    (participant) => String(participant.event_id) === String(rawEvent.id)
+  );
+  const participants = eventParticipants.filter((participant) =>
+    ['going', 'completed'].includes(String(participant.status || ''))
   );
   const ownParticipation =
-    participants.find((participant) => String(participant.user_id) === authUserId) || null;
+    eventParticipants.find((participant) => String(participant.user_id) === authUserId) || null;
+  const presentParticipants = eventParticipants.filter((participant) => participant.status === 'completed');
+  const concludedParticipants = eventParticipants.filter((participant) =>
+    ['completed', 'no_show'].includes(String(participant.status || ''))
+  );
   const ownJoinRequest = context.joinRequests.get(String(rawEvent.id)) || null;
   const organizer = context.organizers.get(String(rawEvent.creator_id)) || null;
   if (organizer) rememberProfile(organizer);
@@ -317,6 +322,12 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     max_participants: Number(rawEvent.max_participants),
     duration_minutes: durationMinutes,
     participants_count: participants.length || 1,
+    participants_present_count: presentParticipants.length,
+    participants_total_count: concludedParticipants.length || participants.length,
+    participant_stats: {
+      present: presentParticipants.length,
+      total: concludedParticipants.length || participants.length
+    },
     popularity: Math.max(20, participants.length * 14),
     description: rawEvent.description,
     scheda_id: rawEvent.scheda_id || null,
@@ -361,7 +372,16 @@ function normalizeEvent(rawEvent, context, filters = {}) {
           participation_fee_cents: Number(ownParticipation.stake_cents ?? rawEvent.deposit_cents ?? 500),
           participation_fee_status: ownParticipation.stake_status || 'locked',
           cashback_percent: Number(ownParticipation.cashback_percent || 0),
-          attendance: ownParticipation.status === 'completed' ? 'attended' : null
+          attendance:
+            ownParticipation.status === 'completed'
+              ? 'attended'
+              : ownParticipation.status === 'no_show'
+                ? 'no_show'
+                : null,
+          earned_xp:
+            ownParticipation.status === 'completed'
+              ? Number(rawEvent.completion_xp ?? 50) + (ownParticipation.review_bonus_awarded ? Number(rawEvent.review_bonus_xp ?? 25) : 0)
+              : 0
         }
       : null,
     group_chat_unread_count: 0,

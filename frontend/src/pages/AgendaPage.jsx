@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  MessageCircle,
+  Settings2,
+  ShieldCheck,
+  Users,
+  X,
+  XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -13,6 +22,12 @@ function toDateKey(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+}
+
+function fromDateKey(value) {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
 }
 
 function getCalendarCells(year, month) {
@@ -32,16 +47,107 @@ function formatCalendarMonth(year, month) {
   return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
 }
 
+function formatSelectedRange(range) {
+  if (!range) return '';
+  const start = fromDateKey(range.start);
+  const end = fromDateKey(range.end);
+  if (!start || !end) return '';
+
+  if (range.start === range.end) {
+    const label = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }).format(start);
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+  }
+
+  const sameMonth = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth();
+  if (sameMonth) {
+    const monthYear = new Intl.DateTimeFormat('it-IT', { month: 'short', year: 'numeric' }).format(end);
+    return `${start.getDate()}–${end.getDate()} ${monthYear}`;
+  }
+
+  const startLabel = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' }).format(start);
+  const endLabel = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }).format(end);
+  return `${startLabel}–${endLabel}`;
+}
+
+function formatEventTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--:--';
+  return new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
 function getEventXp(event) {
   return Math.max(0, Number(event?.completion_xp || 0) + Number(event?.review_bonus_xp || 0));
 }
 
+function getAttendanceState(event) {
+  const attendance = String(event?.user_rsvp?.attendance || '').toLowerCase();
+  const participantStatus = String(event?.user_rsvp?.status || '').toLowerCase();
+
+  if (event?.created_by === 'me') {
+    return { key: 'host', label: 'Svolto · Organizer', tone: 'neutral' };
+  }
+  if (attendance === 'attended' || participantStatus === 'completed' || event?.user_rsvp?.checked_in_at) {
+    return { key: 'present', label: 'Presente', tone: 'success' };
+  }
+  if (attendance === 'no_show' || participantStatus === 'no_show') {
+    return { key: 'no-show', label: 'No-Show', tone: 'danger' };
+  }
+  if (attendance === 'cancelled_late') {
+    return { key: 'late-cancel', label: 'Cancellazione tardiva', tone: 'danger' };
+  }
+  return { key: 'no-show', label: 'No-Show', tone: 'danger' };
+}
+
+function getClosedEventStats(event) {
+  const attendance = getAttendanceState(event);
+  const isVerifiedPresence = attendance.key === 'present';
+  const isHost = attendance.key === 'host';
+  const explicitXp = Number(event?.earned_xp ?? event?.xp_earned ?? event?.user_rsvp?.earned_xp);
+  const earnedXp = Number.isFinite(explicitXp)
+    ? Math.max(0, explicitXp)
+    : isVerifiedPresence
+      ? Math.max(0, Number(event?.completion_xp || 0) + (event?.user_rsvp?.review_bonus_awarded ? Number(event?.review_bonus_xp || 0) : 0))
+      : 0;
+  const explicitMinutes = Number(event?.trained_minutes ?? event?.minutes_trained);
+  const trainedMinutes = Number.isFinite(explicitMinutes)
+    ? Math.max(0, explicitMinutes)
+    : isVerifiedPresence || isHost
+      ? Math.max(0, Number(event?.duration_minutes || 0))
+      : 0;
+  const presentCount = Math.max(0, Number(
+    event?.participants_present_count
+    ?? event?.participant_stats?.present
+    ?? (isVerifiedPresence ? 1 : 0)
+  ));
+  const totalCount = Math.max(
+    presentCount,
+    Number(event?.participants_total_count ?? event?.participant_stats?.total ?? event?.participants_count ?? 0)
+  );
+
+  let reliability = 'Nessun impatto';
+  if (attendance.key === 'present') reliability = '+ Presenza verificata';
+  if (attendance.key === 'no-show') reliability = '− No-show registrato';
+  if (attendance.key === 'late-cancel') reliability = '− Cancellazione tardiva';
+  if (attendance.key === 'host') reliability = 'Evento completato';
+
+  return { attendance, earnedXp, trainedMinutes, presentCount, totalCount, reliability };
+}
+
+function getSummaryXp(event, todayKey) {
+  const eventKey = toDateKey(event?.event_datetime);
+  if (eventKey && eventKey < todayKey) return getClosedEventStats(event).earnedXp;
+  return getEventXp(event);
+}
+
 function AgendaPage() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('all');
+  const [selectedRange, setSelectedRange] = useState(null);
   const now = useMemo(() => new Date(), []);
+  const todayKey = useMemo(() => toDateKey(now), [now]);
   const [calendarCursor, setCalendarCursor] = useState(() => ({
     year: now.getFullYear(),
     month: now.getMonth()
@@ -49,14 +155,14 @@ function AgendaPage() {
 
   usePageMeta({
     title: 'Eventi | Motrice',
-    description: 'Tutti gli eventi che organizzi, salvi o a cui partecipi in un unica vista.'
+    description: 'Tutti gli eventi che organizzi o a cui partecipi in un unica vista.'
   });
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     api
-      .listEvents({ dateRange: 'all', sortBy: 'soonest' })
+      .listEvents({ dateRange: 'all', includePast: true, sortBy: 'soonest' })
       .then((nextEvents) => {
         if (!active) return;
         setEvents(Array.isArray(nextEvents) ? nextEvents : []);
@@ -78,7 +184,7 @@ function AgendaPage() {
     [events]
   );
   const participatingEvents = useMemo(
-    () => events.filter((event) => event.created_by !== 'me' && (event.is_going || event.is_saved)),
+    () => events.filter((event) => event.created_by !== 'me' && (event.is_going || event.user_rsvp)),
     [events]
   );
 
@@ -109,28 +215,44 @@ function AgendaPage() {
   );
   const calendarMonthEvents = useMemo(
     () =>
-      calendarEvents.filter((event) => {
+      visibleCalendarEvents.filter((event) => {
         const eventDate = new Date(event.event_datetime);
         return (
           eventDate.getFullYear() === calendarCursor.year &&
           eventDate.getMonth() === calendarCursor.month
         );
       }),
-    [calendarCursor, calendarEvents]
+    [calendarCursor, visibleCalendarEvents]
   );
-  const calendarMonthMinutes = useMemo(
-    () => calendarMonthEvents.reduce((total, event) => total + Math.max(0, Number(event.duration_minutes || 0)), 0),
-    [calendarMonthEvents]
+  const selectedEvents = useMemo(() => {
+    if (!selectedRange) return [];
+    return visibleCalendarEvents
+      .filter((event) => {
+        const key = toDateKey(event.event_datetime);
+        return key && key >= selectedRange.start && key <= selectedRange.end;
+      })
+      .sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
+  }, [selectedRange, visibleCalendarEvents]);
+  const summaryEvents = selectedRange ? selectedEvents : calendarMonthEvents;
+  const summaryMinutes = useMemo(
+    () => summaryEvents.reduce((total, event) => total + Math.max(0, Number(event.duration_minutes || 0)), 0),
+    [summaryEvents]
   );
-  const calendarMonthCreatedCount = useMemo(
-    () => calendarMonthEvents.filter((event) => event.created_by === 'me').length,
-    [calendarMonthEvents]
+  const summaryXp = useMemo(
+    () => summaryEvents.reduce((total, event) => total + getSummaryXp(event, todayKey), 0),
+    [summaryEvents, todayKey]
   );
-  const calendarMonthXp = useMemo(
-    () => calendarMonthEvents.reduce((total, event) => total + getEventXp(event), 0),
-    [calendarMonthEvents]
-  );
+  const summaryLabel = selectedRange
+    ? formatSelectedRange(selectedRange)
+    : formatCalendarMonth(calendarCursor.year, calendarCursor.month);
+  const summaryCountLabel = activeSection === 'created'
+    ? `${summaryEvents.length} creati`
+    : activeSection === 'participating'
+      ? `${summaryEvents.length} partecipati`
+      : `${summaryEvents.length} eventi`;
+
   function changeCalendarMonth(offset) {
+    setSelectedRange(null);
     setCalendarCursor((current) => {
       const next = new Date(current.year, current.month + offset, 1);
       return { year: next.getFullYear(), month: next.getMonth() };
@@ -139,6 +261,30 @@ function AgendaPage() {
 
   function changeActiveSection(section) {
     setActiveSection(section);
+    setSelectedRange(null);
+  }
+
+  function selectCalendarDay(dateKey) {
+    if (!eventsByDate.has(dateKey)) return;
+    setSelectedRange((current) => {
+      if (!current || current.start !== current.end) return { start: dateKey, end: dateKey };
+      if (current.start === dateKey) return current;
+      return dateKey < current.start
+        ? { start: dateKey, end: current.start }
+        : { start: current.start, end: dateKey };
+    });
+  }
+
+  function openEvent(event) {
+    navigate(`/events/${event.id}`);
+  }
+
+  function openFutureAction(event) {
+    if (event.created_by === 'me') {
+      openEvent(event);
+      return;
+    }
+    navigate(`/chat/event_${event.id}`);
   }
 
   return (
@@ -146,18 +292,18 @@ function AgendaPage() {
       <div className={styles.head}>
         <div>
           <h1>I miei eventi</h1>
-          <p>Tutto in un unico posto</p>
+          <p>Il calendario filtra attività future e storico</p>
         </div>
       </div>
 
-      <div className={styles.monthSummary} aria-label={`Riepilogo di ${formatCalendarMonth(calendarCursor.year, calendarCursor.month)}`}>
-        <strong>{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</strong>
+      <div className={styles.monthSummary} aria-label={`Riepilogo di ${summaryLabel}`}>
+        <strong>{summaryLabel}</strong>
         <i aria-hidden="true" />
-        <span>{calendarMonthCreatedCount} creati</span>
+        <span>{summaryCountLabel}</span>
         <i aria-hidden="true" />
-        <span>{calendarMonthMinutes} min</span>
+        <span>{summaryMinutes} min</span>
         <i aria-hidden="true" />
-        <b>{calendarMonthXp} PX <em aria-hidden="true">P</em></b>
+        <b>{summaryXp} PX <em aria-hidden="true">P</em></b>
       </div>
 
       <div className={styles.eventFilters} role="tablist" aria-label="Seleziona gli eventi da mostrare">
@@ -173,20 +319,20 @@ function AgendaPage() {
         <button
           type="button"
           role="tab"
-          aria-selected={activeSection === 'created'}
-          className={activeSection === 'created' ? styles.filterActive : undefined}
-          onClick={() => changeActiveSection('created')}
-        >
-          Creati <span>{ownedEvents.length}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
           aria-selected={activeSection === 'participating'}
           className={activeSection === 'participating' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('participating')}
         >
           Partecipo <span>{participatingCount}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeSection === 'created'}
+          className={activeSection === 'created' ? styles.filterActive : undefined}
+          onClick={() => changeActiveSection('created')}
+        >
+          Creati da te <span>{ownedEvents.length}</span>
         </button>
       </div>
 
@@ -202,6 +348,7 @@ function AgendaPage() {
           </button>
           <div className={styles.calendarHeading}>
             <h2 id="events-calendar-title">{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</h2>
+            {selectedRange ? <small>{formatSelectedRange(selectedRange)}</small> : <small>Tocca un giorno con eventi</small>}
           </div>
           <button
             type="button"
@@ -223,45 +370,129 @@ function AgendaPage() {
             const dateKey = toDateKey(date);
             const dayEvents = eventsByDate.get(dateKey) || [];
             const hasEvents = dayEvents.length > 0;
-            const isToday = dateKey === toDateKey(now);
-            const createdCount = dayEvents.filter((event) => event.created_by === 'me').length;
-            const participatingDayCount = dayEvents.filter((event) => event.created_by !== 'me').length;
+            const isToday = dateKey === todayKey;
+            const isSelected = Boolean(selectedRange && (dateKey === selectedRange.start || dateKey === selectedRange.end));
+            const isInRange = Boolean(selectedRange && dateKey >= selectedRange.start && dateKey <= selectedRange.end);
+            const isPast = dateKey < todayKey;
             const label = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
 
             return (
-              <div
+              <button
                 key={dateKey}
+                type="button"
                 role="gridcell"
+                disabled={!hasEvents}
+                onClick={() => selectCalendarDay(dateKey)}
+                aria-pressed={isInRange}
+                aria-label={`${label}${hasEvents
+                  ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${isPast ? 'svolto' : 'da svolgere'}`
+                  : ', nessun evento'}`}
                 className={[
                   styles.calendarDay,
                   hasEvents ? styles.calendarDayWithEvents : '',
-                  isToday ? styles.calendarDayToday : ''
+                  isToday ? styles.calendarDayToday : '',
+                  isInRange ? styles.calendarDayInRange : '',
+                  isSelected ? styles.calendarDaySelected : ''
                 ].filter(Boolean).join(' ')}
-                aria-label={`${label}${hasEvents
-                  ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${createdCount} creati da te, ${participatingDayCount} a cui partecipi`
-                  : ', nessun evento'}`}
               >
                 <span className={styles.calendarDayNumber}>{day}</span>
                 {hasEvents ? (
-                  <span className={styles.calendarDayBadges} aria-hidden="true">
-                    {createdCount > 0 ? <b className={styles.createdDayBadge}>{createdCount}</b> : null}
-                    {participatingDayCount > 0 ? <b className={styles.participatingDayBadge}>{participatingDayCount}</b> : null}
+                  <span className={styles.calendarEventDots} aria-hidden="true">
+                    {Array.from({ length: Math.min(2, dayEvents.length) }, (_, dotIndex) => (
+                      <i key={dotIndex} className={isPast ? styles.eventDotPast : styles.eventDotFuture} />
+                    ))}
                   </span>
                 ) : null}
-              </div>
+              </button>
             );
           })}
         </div>
 
         <div className={styles.calendarLegend} aria-label="Legenda calendario">
-          <span><i className={styles.legendCreated} aria-hidden="true" /> Creati da te <small>(numero = quanti)</small></span>
-          <span><i className={styles.legendParticipating} aria-hidden="true" /> Partecipi</span>
+          <span><i className={styles.legendFuture} aria-hidden="true" /> Da svolgere</span>
+          <span><i className={styles.legendPast} aria-hidden="true" /> Svolto</span>
+          <small>Due dot = più eventi</small>
         </div>
 
         {loading ? (
           <p className={styles.calendarState}><CalendarDays size={17} aria-hidden="true" /> Aggiornamento eventi…</p>
         ) : !hasItems ? (
           <p className={styles.calendarState}><CalendarDays size={17} aria-hidden="true" /> Nessun evento presente</p>
+        ) : null}
+
+        {selectedRange ? (
+          <section className={styles.calendarDetails} aria-label={`Eventi dal ${formatSelectedRange(selectedRange)}`}>
+            <i className={styles.sheetHandle} aria-hidden="true" />
+            <header className={styles.calendarDetailsHeader}>
+              <div>
+                <small>{selectedRange.start === selectedRange.end ? 'GIORNO SELEZIONATO' : 'INTERVALLO SELEZIONATO'}</small>
+                <strong>{formatSelectedRange(selectedRange)}</strong>
+                <span>{selectedEvents.length} {selectedEvents.length === 1 ? 'evento' : 'eventi'}</span>
+              </div>
+              <button type="button" onClick={() => setSelectedRange(null)} aria-label="Chiudi dettagli calendario">
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className={styles.calendarEventList}>
+              {selectedEvents.map((event) => {
+                const eventKey = toDateKey(event.event_datetime);
+                const isPast = eventKey < todayKey;
+                const participants = Math.max(0, Number(event.participants_count || 0));
+                const capacity = Math.max(participants, Number(event.max_participants || 0));
+
+                if (isPast) {
+                  const stats = getClosedEventStats(event);
+                  const StatusIcon = stats.attendance.tone === 'danger' ? XCircle : CheckCircle2;
+                  return (
+                    <article key={event.id} className={`${styles.sheetEventCard} ${styles.closedEventCard}`}>
+                      <div className={styles.sheetEventTopline}>
+                        <span className={`${styles.eventState} ${styles[`eventState_${stats.attendance.tone}`]}`}>
+                          <StatusIcon size={15} aria-hidden="true" /> {stats.attendance.label}
+                        </span>
+                        <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
+                      </div>
+                      <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
+                      <p>{event.location_name || event.city || 'Luogo da definire'}</p>
+                      <div className={styles.closedStatsGrid}>
+                        <span><b>+{stats.earnedXp} XP</b><small>guadagnati</small></span>
+                        <span><b>{stats.trainedMinutes} min</b><small>allenati</small></span>
+                        <span><b>{stats.reliability}</b><small>Affidabilità</small></span>
+                        <span><b>{stats.presentCount}/{stats.totalCount}</b><small>presenti</small></span>
+                      </div>
+                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>
+                        Apri riepilogo evento
+                      </button>
+                    </article>
+                  );
+                }
+
+                const isOrganizer = event.created_by === 'me';
+                const ActionIcon = isOrganizer ? Settings2 : MessageCircle;
+                return (
+                  <article key={event.id} className={`${styles.sheetEventCard} ${styles.futureEventCard}`}>
+                    <div className={styles.sheetEventTopline}>
+                      <span className={`${styles.eventState} ${styles.eventState_success}`}>Da svolgere</span>
+                      <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
+                    </div>
+                    <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
+                    <p>{event.location_name || event.city || 'Luogo da definire'}</p>
+                    <div className={styles.futureEventMeta}>
+                      <span><Clock3 size={16} aria-hidden="true" /> {Number(event.duration_minutes || 0)} min</span>
+                      <span><Users size={16} aria-hidden="true" /> {participants}/{capacity || '—'}</span>
+                      {isOrganizer ? <span><ShieldCheck size={16} aria-hidden="true" /> Organizer</span> : null}
+                    </div>
+                    <div className={styles.eventActionRow}>
+                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>Dettagli</button>
+                      <button type="button" className={styles.eventPrimaryAction} onClick={() => openFutureAction(event)}>
+                        <ActionIcon size={17} aria-hidden="true" /> {isOrganizer ? 'Gestisci' : 'Chat'}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         ) : null}
       </section>
     </section>
