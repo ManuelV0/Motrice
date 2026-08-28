@@ -54,11 +54,14 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 const EVENT_ACTIVITY_ICON_NODES = {
   running: [
-    ['circle', { cx: 15.7, cy: 4.2, r: 2.25, fill: 'currentColor', stroke: 'none' }],
-    ['path', { d: 'm13.6 8.1-2.9 4.7 4.3 2.5 2.8 5', 'stroke-width': 3.15 }],
-    ['path', { d: 'm13.8 8.7 3.5 2.3 3.1-1.2', 'stroke-width': 3.15 }],
-    ['path', { d: 'm10.8 12.8-5.8 3.1', 'stroke-width': 3.15 }],
-    ['path', { d: 'm14.9 15.2-4.5 5.2', 'stroke-width': 3.15 }]
+    [
+      'path',
+      {
+        d: 'M13.5 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm-3.7 12.4 1-4.4 2.1 2v6h2V14l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.6 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.2L6 6.8v4.7h2V8.2l1.8-.7-1.6 8.1-4.9-1-.4 2 6.9 1.3Z',
+        fill: 'currentColor',
+        stroke: 'none'
+      }
+    ]
   ],
   gym: [
     ['rect', { x: 1.7, y: 8, width: 3.8, height: 8, rx: 1.9, fill: 'currentColor', stroke: 'none' }],
