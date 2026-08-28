@@ -656,24 +656,6 @@ function MapPage() {
     );
   }, [filters]);
 
-  const build3DPath = useCallback((event) => {
-    const params = new URLSearchParams();
-    params.set('eventId', String(event.id));
-    params.set('lat', String(event.lat));
-    params.set('lng', String(event.lng));
-    if (event.location_name) params.set('focus', event.location_name);
-    params.set('radiusKm', '2');
-    return `/game?${params.toString()}`;
-  }, []);
-
-  const open3D = useCallback(
-    (event) => {
-      if (!event || event.lat == null || event.lng == null) return;
-      navigate(build3DPath(event));
-    },
-    [build3DPath, navigate]
-  );
-
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
     if (!map || !event) return;
@@ -1093,9 +1075,6 @@ function MapPage() {
                       </button>
 
                       <div className={styles.eventCardActions}>
-                        <button type="button" className={styles.inlineAction} onClick={() => open3D(event)}>
-                          3D
-                        </button>
                         <button
                           type="button"
                           className={`${styles.inlineAction} ${event.is_saved ? styles.inlineActionActive : ''}`}
