@@ -824,13 +824,13 @@
 }
 
 .brandMark {
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 2.12rem;
+  height: 2.12rem;
   display: block;
   flex: 0 0 auto;
   border-radius: 0.58rem;
   object-fit: cover;
-  box-shadow: 0 0 1.2rem rgb(168 240 0 / 18%);
+  box-shadow: none;
 }
 
 .mobileBrandRow {
