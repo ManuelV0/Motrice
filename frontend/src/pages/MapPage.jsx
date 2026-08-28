@@ -50,6 +50,76 @@ const USER_RADIUS_SOURCE = 'user-radius-src';
 const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
 const USER_VIEW_RADIUS_KM = 8;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+
+const EVENT_ACTIVITY_ICON_NODES = {
+  running: [
+    ['circle', { cx: 15, cy: 5, r: 2, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm13.5 8-2.8 4.8 4.2 2.4 2.6 4.8' }],
+    ['path', { d: 'm13 9 4 2.4 3-1.2' }],
+    ['path', { d: 'm10.8 12.8-5.3 3.1' }],
+    ['path', { d: 'm14.8 15.2-4.2 4.8' }]
+  ],
+  gym: [
+    ['path', { d: 'M17.6 12.8a2 2 0 1 0 2.8-2.9l-1.7-1.7a2 2 0 1 0 2.8-2.9l-2.8-2.8a2 2 0 1 0-2.9 2.8l-1.7-1.7a2 2 0 1 0-2.9 2.8z' }],
+    ['path', { d: 'M5.3 21.5a2 2 0 1 0 2.9-2.8l1.7 1.7a2 2 0 1 0 2.9-2.8l-6.4-6.4a2 2 0 1 0-2.8 2.9l1.7 1.7a2 2 0 1 0-2.8 2.9z' }],
+    ['path', { d: 'm9.6 14.4 4.8-4.8' }]
+  ],
+  tennis: [
+    ['ellipse', { cx: 9, cy: 8.5, rx: 5.2, ry: 7.2, transform: 'rotate(-38 9 8.5)' }],
+    ['path', { d: 'm12.7 13.7 7.1 7.1' }],
+    ['path', { d: 'm16.1 17.1-3.1 3.1' }],
+    ['path', { d: 'm4.8 5.1 7.7 6.8' }],
+    ['path', { d: 'm3.6 9.1 7.2-5.6' }]
+  ],
+  football: [
+    ['circle', { cx: 12, cy: 12, r: 9.2 }],
+    ['path', { d: 'm12 7.8 3.6 2.6-1.4 4.2H9.8l-1.4-4.2z', fill: 'currentColor' }],
+    ['path', { d: 'm12 7.8.1-5' }],
+    ['path', { d: 'm15.6 10.4 4.8-1.5' }],
+    ['path', { d: 'm14.2 14.6 3 4.2' }],
+    ['path', { d: 'm9.8 14.6-3 4.2' }],
+    ['path', { d: 'm8.4 10.4-4.8-1.5' }]
+  ],
+  activity: [
+    ['path', { d: 'M3 12h4l2.2-5.2 4.1 10.4 2.2-5.2H21' }]
+  ]
+};
+
+function getEventActivityType(event) {
+  const activity = `${event?.sport_name || ''} ${event?.title || ''}`.toLocaleLowerCase('it-IT');
+
+  if (/(calcio|calcetto|football|soccer|futsal)/.test(activity)) return 'football';
+  if (/(tennis|padel|racchett|pickleball)/.test(activity)) return 'tennis';
+  if (/(palestra|gym|fitness|forza|functional|workout|crossfit|hiit|calisthenics|bodybuild)/.test(activity)) return 'gym';
+  if (/(corsa|running|jogging|trail|maratona)/.test(activity)) return 'running';
+  return 'activity';
+}
+
+function createEventActivityIcon(event) {
+  const activityType = getEventActivityType(event);
+  const icon = document.createElement('span');
+  icon.className = styles.eventPinIcon;
+  icon.dataset.activity = activityType;
+  icon.setAttribute('aria-hidden', 'true');
+
+  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2.15');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+
+  EVENT_ACTIVITY_ICON_NODES[activityType].forEach(([tagName, attributes]) => {
+    const node = document.createElementNS(SVG_NAMESPACE, tagName);
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, String(value)));
+    svg.appendChild(node);
+  });
+
+  icon.appendChild(svg);
+  return icon;
+}
 
 function hasValidCoordinates(lat, lng) {
   if (lat === null || lat === undefined || lng === null || lng === undefined) return false;
@@ -774,6 +844,7 @@ function MapPage() {
       element.className = `${styles.eventPin} ${isSaved ? styles.eventPinSaved : styles.eventPinDefault} ${isSelected ? styles.eventPinSelected : ''}`;
       element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;
       element.setAttribute('aria-label', element.title);
+      element.appendChild(createEventActivityIcon(event));
       element.addEventListener('click', () => {
         focusEvent(event);
         eventsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
