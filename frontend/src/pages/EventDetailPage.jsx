@@ -197,7 +197,7 @@ function EventDetailPage() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
-  const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
+  const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '', avatar_url: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
@@ -305,7 +305,11 @@ function EventDetailPage() {
       ? Number(currentUserId)
       : Number(organizerRawId);
     if (!Number.isFinite(organizerId)) {
-      setOrganizerIntro({ name: fallbackName, bio: '' });
+      setOrganizerIntro({
+        name: fallbackName,
+        bio: String(event.organizer?.bio || '').trim(),
+        avatar_url: String(event.organizer?.avatar_url || '').trim()
+      });
       return undefined;
     }
 
@@ -314,12 +318,17 @@ function EventDetailPage() {
         if (!active) return;
         setOrganizerIntro({
           name: String(profile?.display_name || fallbackName || 'Organizzatore').trim(),
-          bio: String(profile?.bio || '').trim()
+          bio: String(profile?.bio || event.organizer?.bio || '').trim(),
+          avatar_url: String(profile?.avatar_url || event.organizer?.avatar_url || '').trim()
         });
       })
       .catch(() => {
         if (!active) return;
-        setOrganizerIntro({ name: fallbackName, bio: '' });
+        setOrganizerIntro({
+          name: fallbackName,
+          bio: String(event.organizer?.bio || '').trim(),
+          avatar_url: String(event.organizer?.avatar_url || '').trim()
+        });
       });
 
     return () => {
@@ -906,8 +915,22 @@ function EventDetailPage() {
   );
   const rewardProgressPercent = Math.min(100, (rewardProgressCurrent / rewardProgressTotal) * 100);
   const organizerReliability = Number(event.organizer?.reliability_score || 100);
-  const organizerName = String(event.organizer?.name || 'Organizer');
+  const organizerName = String(organizerIntro.name || event.organizer?.name || 'Organizer');
   const organizerInitial = organizerName.slice(0, 1).toUpperCase();
+  const organizerAvatarUrl = String(organizerIntro.avatar_url || event.organizer?.avatar_url || '').trim();
+  const organizerBio = String(organizerIntro.bio || event.organizer?.bio || '').trim();
+  const organizerProfileId = event.organizer?.auth_user_id || event.organizer?.id;
+  const organizerProfileState = {
+    publicProfile: {
+      id: organizerProfileId,
+      display_name: organizerName,
+      name: organizerName,
+      bio: organizerBio,
+      avatar_url: organizerAvatarUrl,
+      city: event.city || '',
+      reliability_score: organizerReliability
+    }
+  };
   const audienceLabel = event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto';
   const mapParams = new URLSearchParams({
     eventId: String(event.id),
@@ -1109,6 +1132,41 @@ function EventDetailPage() {
               <span>Ricompensa</span>
             </div>
           </section>
+
+          {!event.is_personal && !isOrganizerForEvent ? (
+            <Card as="section" className={styles.organizerProfileCard}>
+              <div className={styles.organizerProfileTopline}>
+                <span>Profilo organizzatore</span>
+                <strong><i aria-hidden="true" /> Verificato</strong>
+              </div>
+              <div className={styles.organizerProfileMain}>
+                <span className={styles.organizerProfileAvatar} aria-hidden="true">
+                  {organizerAvatarUrl ? <img src={organizerAvatarUrl} alt="" /> : organizerInitial}
+                </span>
+                <div className={styles.organizerProfileIdentity}>
+                  <h2>{organizerName}</h2>
+                  <div className={styles.organizerProfileMeta}>
+                    <span><MapPin size={15} aria-hidden="true" /> {event.city || event.location_name || 'Località evento'}</span>
+                    <span className={styles.organizerProfileReliability}>
+                      <i aria-hidden="true" /> Affidabilità {organizerReliability}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className={styles.organizerProfileBio}>
+                {organizerBio || 'Apri il profilo pubblico per conoscere esperienza, attività e reputazione verificata dell’organizzatore.'}
+              </p>
+              <Link
+                className={styles.organizerProfileLink}
+                to={`/profile/${organizerProfileId}?event=${event.id}`}
+                state={organizerProfileState}
+              >
+                <UserRound size={19} aria-hidden="true" />
+                Vedi profilo pubblico
+                <span aria-hidden="true">→</span>
+              </Link>
+            </Card>
+          ) : null}
 
           {!event.is_personal && !isOrganizerForEvent ? (
             <section className={styles.participantPreviewCard} aria-label="Partecipanti iscritti">
@@ -1316,32 +1374,6 @@ function EventDetailPage() {
               ) : null}
             </Card>
 
-            {!isOrganizerForEvent ? (
-              <Card subtle className={styles.organizerCard}>
-                <span className={styles.organizerAvatar} aria-hidden="true">{organizerInitial}</span>
-                <div className={styles.organizerIdentity}>
-                  <h2>{organizerName}</h2>
-                  <div>
-                    <i aria-hidden="true" />
-                    <span>Affidabilità {organizerReliability}%</span>
-                  </div>
-                </div>
-                <Link
-                  to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
-                  state={{
-                    publicProfile: {
-                      id: event.organizer?.auth_user_id || event.organizer?.id,
-                      display_name: organizerName,
-                      name: organizerName,
-                      city: event.city || '',
-                      reliability_score: organizerReliability
-                    }
-                  }}
-                >
-                  Vedi profilo pubblico
-                </Link>
-              </Card>
-            ) : null}
           </div>
 
           <Card subtle className={styles.actionCard}>
@@ -1471,24 +1503,6 @@ function EventDetailPage() {
                   Apri chat evento
                 </Button>
               ) : <span className={styles.disabledAction}><MessageCircle size={23} aria-hidden="true" />Apri chat evento</span>}
-              {!isOrganizerForEvent ? (
-                <Link
-                  className={styles.actionProfileLink}
-                  to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
-                  state={{
-                    publicProfile: {
-                      id: event.organizer?.auth_user_id || event.organizer?.id,
-                      display_name: organizerName,
-                      name: organizerName,
-                      city: event.city || '',
-                      reliability_score: organizerReliability
-                    }
-                  }}
-                >
-                  <UserRound size={23} aria-hidden="true" />
-                  Vedi profilo pubblico
-                </Link>
-              ) : null}
             </div>
             ) : null}
           </Card>
