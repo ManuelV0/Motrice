@@ -29,7 +29,7 @@ import {
   WalletCards,
   X
 } from 'lucide-react';
-import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
+import { Circle, CircleMarker, MapContainer, Polyline, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -347,11 +347,10 @@ function CreateEventPage() {
   const [errors, setErrors] = useState({});
   const [creationStats, setCreationStats] = useState({ created_this_month: 0, month: '' });
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [routeResolving, setRouteResolving] = useState(false);
-  const [routeResolveError, setRouteResolveError] = useState('');
   const [routePicking, setRoutePicking] = useState(false);
   const [manualRouteSelection, setManualRouteSelection] = useState(false);
   const [locationResolving, setLocationResolving] = useState(false);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [locationMapRevision, setLocationMapRevision] = useState(0);
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -473,6 +472,14 @@ function CreateEventPage() {
     return [41.8719, 12.5674];
   }, [locationPreview, routePoints]);
 
+  const routeEstimatedMinutes = useMemo(() => {
+    const distance = Number(form.route_distance_km);
+    if (!Number.isFinite(distance) || distance <= 0) return 0;
+    const slug = String(selectedSport?.slug || '').toLowerCase();
+    const minutesPerKm = ['trekking', 'trail'].includes(slug) ? 15 : ['bici', 'ciclismo', 'cycling'].includes(slug) ? 4 : 7;
+    return Math.max(1, Math.round(distance * minutesPerKm));
+  }, [form.route_distance_km, selectedSport]);
+
   const locationMapCenter = useMemo(
     () => (locationPreview ? [locationPreview.lat, locationPreview.lng] : [41.8719, 12.5674]),
     [locationPreview]
@@ -506,6 +513,12 @@ function CreateEventPage() {
       await resolveSelectedCoordinates(coords, { source: 'device' });
     })();
   }, [activeStep, locationPreview, requestLocation, userLocationCoords]);
+
+  useEffect(() => {
+    if (activeStep !== 2 || !form.has_route || routePoints.length >= 2) return;
+    setManualRouteSelection(true);
+    setRoutePicking(true);
+  }, [activeStep, form.has_route, routePoints.length]);
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -652,7 +665,7 @@ function CreateEventPage() {
     });
   }
 
-  function addRoutePoint(point) {
+  async function addRoutePoint(point) {
     if (!isValidRoutePoint(point)) return;
     if (routePoints.length >= 30) {
       showToast('Puoi inserire al massimo 30 punti per percorso', 'error');
@@ -660,6 +673,7 @@ function CreateEventPage() {
     }
 
     const normalizedPoint = [Number(point[0]), Number(point[1])];
+    const pointIndex = routePoints.length;
     setForm((prev) => {
       const currentPoints = Array.isArray(prev.route_points) ? prev.route_points.filter(isValidRoutePoint) : [];
       const nextPoints = [...currentPoints, normalizedPoint];
@@ -670,8 +684,8 @@ function CreateEventPage() {
       return {
         ...prev,
         has_route: true,
-        lat: prev.lat || String(firstPoint[0]),
-        lng: prev.lng || String(firstPoint[1]),
+        lat: nextPoints.length === 1 ? String(firstPoint[0]) : prev.lat || String(firstPoint[0]),
+        lng: nextPoints.length === 1 ? String(firstPoint[1]) : prev.lng || String(firstPoint[1]),
         route_name: prev.route_name || 'Percorso selezionato sulla mappa',
         route_from: prev.route_from || 'Partenza selezionata',
         route_to: nextPoints.length >= 2 ? prev.route_to || 'Arrivo selezionato' : prev.route_to,
@@ -684,6 +698,107 @@ function CreateEventPage() {
       };
     });
     clearRouteFieldErrors();
+
+    try {
+      const result = await reverseGeocodeCoordinates(normalizedPoint[0], normalizedPoint[1]);
+      const pointLabel = result.locationName || result.label || `${normalizedPoint[0].toFixed(5)}, ${normalizedPoint[1].toFixed(5)}`;
+      setForm((prev) => ({
+        ...prev,
+        city: pointIndex === 0 ? result.city || prev.city : prev.city,
+        location_name: pointIndex === 0 ? pointLabel : prev.location_name,
+        route_name:
+          prev.route_name === 'Percorso selezionato sulla mappa' || !prev.route_name
+            ? `${selectedSport?.name || 'Percorso'} ${result.city || pointLabel}`
+            : prev.route_name,
+        route_from: pointIndex === 0 ? pointLabel : prev.route_from,
+        route_to: pointIndex > 0 ? pointLabel : prev.route_to
+      }));
+      setErrors((prev) => {
+        const next = { ...prev };
+        ['city', 'location_name', 'route_name', 'route_from', 'route_to'].forEach((field) => delete next[field]);
+        return next;
+      });
+    } catch {
+      // Le coordinate restano valide anche quando il servizio indirizzi non risponde.
+    }
+  }
+
+  function setLocationMode(hasRoute) {
+    setForm((prev) => ({ ...prev, has_route: hasRoute }));
+    clearRouteFieldErrors();
+    if (hasRoute) {
+      setManualRouteSelection(true);
+      setRoutePicking(routePoints.length < 2);
+      return;
+    }
+    setRoutePicking(false);
+    setManualRouteSelection(false);
+  }
+
+  async function useCurrentLocationForMode() {
+    const coords = userLocationCoords || (await requestLocation());
+    if (!coords) {
+      showToast('Attiva la geolocalizzazione per usare la tua posizione', 'error');
+      return;
+    }
+    if (form.has_route) {
+      await addRoutePoint([coords.lat, coords.lng]);
+      setRoutePicking(true);
+      return;
+    }
+    await resolveSelectedCoordinates(coords, { source: 'device' });
+  }
+
+  async function searchLocationForMode() {
+    const query = String(locationSearchQuery || '').trim();
+    if (!query) {
+      showToast('Inserisci un luogo da cercare', 'error');
+      return;
+    }
+
+    setLocationResolving(true);
+    setLocationSelectionMessage('Cerco il luogo e centro la mappa...');
+    try {
+      const result = await geocodeAddress(query);
+      if (form.has_route) {
+        let resolvedAddress = null;
+        try {
+          resolvedAddress = await reverseGeocodeCoordinates(result.lat, result.lng);
+        } catch {
+          resolvedAddress = null;
+        }
+        const startLabel = resolvedAddress?.locationName || query;
+        setForm((prev) => ({
+          ...prev,
+          has_route: true,
+          lat: String(result.lat),
+          lng: String(result.lng),
+          city: resolvedAddress?.city || prev.city,
+          location_name: startLabel,
+          route_name: prev.route_name || `${selectedSport?.name || 'Percorso'} ${resolvedAddress?.city || query}`,
+          route_from: startLabel,
+          route_to: '',
+          route_from_lat: String(result.lat),
+          route_from_lng: String(result.lng),
+          route_to_lat: '',
+          route_to_lng: '',
+          route_distance_km: '',
+          route_points: [[result.lat, result.lng]]
+        }));
+        setManualRouteSelection(true);
+        setRoutePicking(true);
+        setLocationSelectionMessage('Partenza impostata. Tocca la mappa per scegliere l’arrivo.');
+      } else {
+        await resolveSelectedCoordinates(result, { source: 'search' });
+      }
+      setLocationMapRevision((revision) => revision + 1);
+    } catch (error) {
+      const message = error.message || 'Luogo non trovato';
+      setLocationSelectionMessage(message);
+      showToast(message, 'error');
+    } finally {
+      setLocationResolving(false);
+    }
   }
 
   function startRoutePointSelection() {
@@ -733,6 +848,7 @@ function CreateEventPage() {
         route_points: nextPoints
       };
     });
+    setRoutePicking(true);
   }
 
   function clearRoutePoints() {
@@ -748,66 +864,36 @@ function CreateEventPage() {
       route_distance_km: '',
       route_points: []
     }));
+    setRoutePicking(true);
     showToast('Punti del percorso cancellati', 'info');
+  }
+
+  function closeRouteLoop() {
+    if (!routePoints.length) {
+      showToast('Imposta prima il punto di partenza', 'error');
+      return;
+    }
+    if (routePoints.length === 1) {
+      showToast('Aggiungi almeno una tappa prima di chiudere l’anello', 'error');
+      return;
+    }
+    const firstPoint = routePoints[0];
+    const nextPoints = [...routePoints, firstPoint];
+    setForm((prev) => ({
+      ...prev,
+      route_to: prev.route_from || 'Ritorno alla partenza',
+      route_to_lat: String(firstPoint[0]),
+      route_to_lng: String(firstPoint[1]),
+      route_distance_km: calculateRouteDistanceKm(nextPoints).toFixed(1),
+      route_points: nextPoints
+    }));
+    setRoutePicking(false);
+    clearRouteFieldErrors();
+    showToast('Percorso ad anello pronto', 'success');
   }
 
   function invalidClass(name) {
     return errors[name] ? styles.invalid : '';
-  }
-
-  async function resolveRouteOnline() {
-    const from = String(form.route_from || '').trim();
-    const to = String(form.route_to || '').trim();
-    if (!from || !to) {
-      setRouteResolveError('Inserisci Via X e Via Y prima di cercare');
-      return;
-    }
-
-    setRouteResolving(true);
-    setRouteResolveError('');
-    try {
-      const [fromGeo, toGeo] = await Promise.all([geocodeAddress(from), geocodeAddress(to)]);
-      const osrmUrl =
-        `https://router.project-osrm.org/route/v1/driving/` +
-        `${fromGeo.lng},${fromGeo.lat};${toGeo.lng},${toGeo.lat}` +
-        '?overview=full&geometries=geojson&steps=false';
-      const routeResponse = await fetch(osrmUrl);
-      if (!routeResponse.ok) {
-        throw new Error('Servizio routing non disponibile');
-      }
-      const routePayload = await routeResponse.json();
-      const route = Array.isArray(routePayload?.routes) ? routePayload.routes[0] : null;
-      if (!route || !route.geometry || !Array.isArray(route.geometry.coordinates) || route.geometry.coordinates.length < 2) {
-        throw new Error('Percorso non trovato tra Via X e Via Y');
-      }
-
-      const routePoints = route.geometry.coordinates
-        .map((pair) => [Number(pair[1]), Number(pair[0])])
-        .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
-      const routeDistanceKm = Number(route.distance || 0) / 1000;
-
-      setForm((prev) => ({
-        ...prev,
-        lat: prev.lat || String(fromGeo.lat),
-        lng: prev.lng || String(fromGeo.lng),
-        route_name: prev.route_name || `Da ${from} a ${to}`,
-        route_from_lat: String(fromGeo.lat),
-        route_from_lng: String(fromGeo.lng),
-        route_to_lat: String(toGeo.lat),
-        route_to_lng: String(toGeo.lng),
-        route_distance_km: Number.isFinite(routeDistanceKm) && routeDistanceKm > 0 ? routeDistanceKm.toFixed(1) : prev.route_distance_km,
-        route_points: routePoints
-      }));
-      setRoutePicking(false);
-      setManualRouteSelection(false);
-      showToast('Percorso tracciato su mappa', 'success');
-    } catch (error) {
-      const message = error.message || 'Impossibile trovare percorso online';
-      setRouteResolveError(message);
-      showToast(message, 'error');
-    } finally {
-      setRouteResolving(false);
-    }
   }
 
   async function resolveLocationOnline({ silent = false } = {}) {
@@ -1362,102 +1448,226 @@ function CreateEventPage() {
 
         {activeStep === 2 ? (
           <fieldset className={styles.wizardStep} aria-label="Luogo e percorso">
-
             <div className={styles.sectionHero}>
               <span><MapPin size={22} /></span>
               <div>
-                <strong>Dove vi allenate?</strong>
-                <small>Inserisci luogo e città: penseremo noi alle coordinate.</small>
+                <strong>Dove si svolge l’attività?</strong>
+                <small>Scegli un punto fisso oppure costruisci il percorso direttamente sulla mappa.</small>
               </div>
             </div>
 
-            <div className={styles.inlineGrid}>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Città</span>
-                <input
-                  className={invalidClass('city')}
-                  value={form.city}
-                  onChange={(e) => setField('city', e.target.value)}
-                  placeholder="Es. Milano"
-                />
-                {errors.city && <span className="error">{errors.city}</span>}
-              </label>
-              <label className={styles.field}>
-                <span className={styles.fieldLabel}>Nome location</span>
-                <input
-                  className={invalidClass('location_name')}
-                  value={form.location_name}
-                  onChange={(e) => setField('location_name', e.target.value)}
-                  placeholder="Es. Parco di Porta Romana"
-                />
-                {errors.location_name && <span className="error">{errors.location_name}</span>}
-              </label>
+            <div className={styles.locationModeSelector} role="group" aria-label="Tipo di luogo">
+              <button
+                type="button"
+                className={!form.has_route ? styles.locationModeSelected : ''}
+                aria-pressed={!form.has_route}
+                onClick={() => setLocationMode(false)}
+              >
+                <MapPin size={22} aria-hidden="true" />
+                <span>
+                  <strong>Punto d’incontro</strong>
+                  <small>Un solo luogo</small>
+                </span>
+                {!form.has_route ? <Check size={18} aria-hidden="true" /> : null}
+              </button>
+              <button
+                type="button"
+                className={form.has_route ? styles.locationModeSelected : ''}
+                aria-pressed={Boolean(form.has_route)}
+                onClick={() => setLocationMode(true)}
+              >
+                <Route size={22} aria-hidden="true" />
+                <span>
+                  <strong>Percorso</strong>
+                  <small>{selectedSportHasRoute ? 'Consigliato per questo sport' : 'Partenza, tappe e arrivo'}</small>
+                </span>
+                {form.has_route ? <Check size={18} aria-hidden="true" /> : null}
+              </button>
             </div>
 
-            {!(form.has_route && (routePicking || routePoints.length)) ? (
-              <div className={`${styles.locationPicker} ${styles.locationPickerActive}`}>
-                <div className={styles.locationMapHead}>
-                  <span>
-                    <MapPinned size={17} aria-hidden="true" />
-                    Punto d’incontro
-                  </span>
-                  <small className={styles.locationGpsStatus}>
-                    <i className={userLocationCoords ? styles.locationGpsActive : ''} />
-                    {locationRequesting
-                      ? 'Cerco la tua area'
-                      : userLocationCoords
-                        ? 'GPS attivo'
-                        : locationPermission === 'denied'
-                          ? 'GPS non autorizzato'
-                          : 'GPS in attesa'}
-                  </small>
-                </div>
-                <div className={`${styles.routeMapWrap} ${styles.locationMapWrap}`}>
-                  <MapContainer
-                    key={`location-map-${locationMapRevision}`}
-                    center={locationMapCenter}
-                    zoom={locationMapZoom}
-                    className={styles.routeMap}
-                    dragging
-                    scrollWheelZoom={false}
-                    touchZoom
-                    doubleClickZoom
-                  >
-                    <TileLayer
-                      attribution='&copy; OpenStreetMap contributors'
-                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                    />
-                    <LocationRadiusPreview radius={geofenceRadius} />
-                    {userLocationCoords ? (
-                      <CircleMarker
-                        center={[userLocationCoords.lat, userLocationCoords.lng]}
-                        radius={6}
-                        pathOptions={{
-                          color: '#ffffff',
-                          fillColor: '#218cff',
-                          fillOpacity: 1,
-                          opacity: 1,
-                          weight: 3
-                        }}
-                      >
-                        <Popup>La tua posizione GPS</Popup>
-                      </CircleMarker>
-                    ) : null}
+            <div className={styles.locationSearchBar}>
+              <Search size={19} aria-hidden="true" />
+              <input
+                value={locationSearchQuery}
+                onChange={(event) => setLocationSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void searchLocationForMode();
+                  }
+                }}
+                placeholder={form.has_route ? 'Cerca il luogo di partenza' : 'Cerca parco, palestra o indirizzo'}
+                aria-label={form.has_route ? 'Cerca il luogo di partenza' : 'Cerca il punto d’incontro'}
+              />
+              <button type="button" disabled={locationResolving} onClick={() => void searchLocationForMode()}>
+                Cerca
+              </button>
+            </div>
+
+            <section className={`${styles.locationPicker} ${styles.locationPickerActive}`}>
+              <div className={styles.locationMapHead}>
+                <span>
+                  {form.has_route ? <Route size={17} aria-hidden="true" /> : <MapPinned size={17} aria-hidden="true" />}
+                  {form.has_route ? 'Costruisci il percorso' : 'Scegli il punto d’incontro'}
+                </span>
+                <small className={styles.locationGpsStatus}>
+                  <i className={userLocationCoords ? styles.locationGpsActive : ''} />
+                  {locationRequesting
+                    ? 'Cerco la tua area'
+                    : userLocationCoords
+                      ? 'GPS attivo'
+                      : locationPermission === 'denied'
+                        ? 'GPS non autorizzato'
+                        : 'GPS in attesa'}
+                </small>
+              </div>
+
+              <div className={`${styles.routeMapWrap} ${styles.locationMapWrap} ${form.has_route && routePicking ? styles.routeMapPicking : ''}`}>
+                <MapContainer
+                  key={`place-map-${form.has_route ? 'route' : 'point'}-${locationMapRevision}`}
+                  center={form.has_route ? routeMapCenter : locationMapCenter}
+                  zoom={form.has_route ? (routePoints.length || locationPreview ? 14 : 6) : locationMapZoom}
+                  className={styles.routeMap}
+                  dragging
+                  scrollWheelZoom={false}
+                  touchZoom
+                  doubleClickZoom={!form.has_route || !routePicking}
+                >
+                  <TileLayer
+                    attribution='&copy; OpenStreetMap contributors'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+
+                  {!form.has_route ? <LocationRadiusPreview radius={geofenceRadius} /> : null}
+                  {userLocationCoords ? (
+                    <CircleMarker
+                      center={[userLocationCoords.lat, userLocationCoords.lng]}
+                      radius={6}
+                      pathOptions={{
+                        color: '#ffffff',
+                        fillColor: '#218cff',
+                        fillOpacity: 1,
+                        opacity: 1,
+                        weight: 3
+                      }}
+                    >
+                      <Popup>La tua posizione GPS</Popup>
+                    </CircleMarker>
+                  ) : null}
+
+                  {form.has_route ? (
+                    <>
+                      <RouteMapTapHandler active={routePicking} onAddPoint={addRoutePoint} />
+                      {routePoints.length >= 2 ? (
+                        <Polyline positions={routePoints} pathOptions={{ color: '#a8f000', weight: 5, opacity: 0.92 }} />
+                      ) : null}
+                      {routePoints.map((point, index) => {
+                        const isFirst = index === 0;
+                        const isLast = routePoints.length > 1 && index === routePoints.length - 1;
+                        const label = isFirst ? 'Partenza' : isLast ? 'Arrivo' : `Tappa ${index}`;
+                        return (
+                          <CircleMarker
+                            key={`${point[0]}:${point[1]}:${index}`}
+                            center={point}
+                            radius={isFirst || isLast ? 10 : 6}
+                            className={styles.routePingMarker}
+                            pathOptions={{
+                              color: '#111511',
+                              fillColor: isLast ? '#ff8a2b' : isFirst ? '#a8f000' : '#f2f4ef',
+                              fillOpacity: 1,
+                              weight: 4
+                            }}
+                          >
+                            <Popup>{label}</Popup>
+                          </CircleMarker>
+                        );
+                      })}
+                    </>
+                  ) : (
                     <LocationMapCenterHandler
                       onMoveStart={handleLocationMapMoveStart}
                       onSelect={(coords) => resolveSelectedCoordinates(coords, { source: 'map' })}
                     />
-                  </MapContainer>
+                  )}
+                </MapContainer>
+
+                {!form.has_route ? (
                   <div className={styles.locationCenterPin} aria-hidden="true">
                     <span><MapPin size={27} strokeWidth={3} /></span>
                     <i />
                   </div>
+                ) : (
+                  <div className={styles.routeGuideBadge} role="status">
+                    <b>{routePoints.length ? (routePoints.length === 1 ? '2' : '✓') : '1'}</b>
+                    <span>
+                      {routePoints.length === 0
+                        ? 'Tocca la mappa per impostare la partenza'
+                        : routePoints.length === 1
+                          ? 'Ora tocca il punto di arrivo'
+                          : routePicking
+                            ? 'Aggiungi tappe oppure conferma il percorso'
+                            : 'Percorso confermato'}
+                    </span>
+                  </div>
+                )}
+
+                {!form.has_route ? (
                   <div className={styles.locationRadiusBadge} aria-label={`Raggio area evento ${geofenceRadius} metri`}>
                     <i />
-                    Raggio {geofenceRadius} m
+                    Area check-in {geofenceRadius} m
                   </div>
-                  {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
+                ) : null}
+                {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
+              </div>
+
+              <div className={`${styles.mapQuickActions} ${form.has_route ? styles.mapQuickActionsRoute : ''}`}>
+                <button type="button" onClick={() => void useCurrentLocationForMode()}>
+                  <MapPinned size={17} aria-hidden="true" />
+                  Usa posizione attuale
+                </button>
+                {form.has_route ? (
+                  <>
+                    <button type="button" disabled={routePoints.length < 2} onClick={closeRouteLoop}>
+                      <Route size={17} aria-hidden="true" />
+                      Percorso ad anello
+                    </button>
+                    <button type="button" disabled={!routePoints.length} onClick={undoLastRoutePoint}>
+                      <Undo2 size={17} aria-hidden="true" />
+                      Annulla punto
+                    </button>
+                  </>
+                ) : null}
+              </div>
+
+              {form.has_route ? (
+                <div className={`${styles.routeSummaryCard} ${routePoints.length >= 2 ? styles.routeSummaryReady : ''}`}>
+                  <div className={styles.routeSummaryHead}>
+                    <span><Route size={21} aria-hidden="true" /></span>
+                    <div>
+                      <small>{routePoints.length >= 2 ? 'PERCORSO PRONTO' : 'PERCORSO DA COMPLETARE'}</small>
+                      <strong>{form.route_name || 'Scegli partenza e arrivo'}</strong>
+                    </div>
+                  </div>
+                  <div className={styles.routeSummaryPlaces}>
+                    <span><i className={styles.routeStartDot} /> {form.route_from || 'Partenza non impostata'}</span>
+                    <span><i className={styles.routeEndDot} /> {form.route_to || 'Arrivo non impostato'}</span>
+                  </div>
+                  <div className={styles.routeSummaryMetrics}>
+                    <b>{form.route_distance_km || '0'} km</b>
+                    <span>{routeEstimatedMinutes ? `circa ${routeEstimatedMinutes} min` : 'durata da calcolare'}</span>
+                    {form.route_elevation_gain_m !== '' ? <span>+{form.route_elevation_gain_m} m</span> : null}
+                  </div>
+                  <button
+                    type="button"
+                    className={routePoints.length >= 2 ? styles.routeConfirmButton : styles.routeConfirmButtonDisabled}
+                    disabled={routePoints.length < 2}
+                    onClick={startRoutePointSelection}
+                  >
+                    {routePicking ? <Check size={19} aria-hidden="true" /> : <MapPinned size={19} aria-hidden="true" />}
+                    {routePicking ? 'Conferma percorso' : 'Modifica percorso'}
+                  </button>
                 </div>
+              ) : (
                 <div className={styles.locationResultCard}>
                   <span><MapPin size={20} aria-hidden="true" /></span>
                   <div>
@@ -1466,16 +1676,116 @@ function CreateEventPage() {
                       {form.city || (locationPreview ? `${locationPreview.lat.toFixed(5)}, ${locationPreview.lng.toFixed(5)}` : 'Via e città si compileranno automaticamente')}
                     </small>
                   </div>
-                  <b>PIN CENTRALE</b>
+                  <b>{locationPreview ? 'PUNTO PRONTO' : 'DA IMPOSTARE'}</b>
                 </div>
-                <p className={styles.locationSelectionMessage} role="status">
-                  {locationSelectionMessage || userLocationError || 'Sposta la mappa: il pin resta fisso e il cerchio mostra l’area di verifica.'}
-                </p>
-              </div>
-            ) : null}
+              )}
+
+              <p className={styles.locationSelectionMessage} role="status">
+                {locationSelectionMessage || userLocationError || (form.has_route
+                  ? 'Il primo punto è la partenza; ogni nuovo tocco aggiunge una tappa e aggiorna l’arrivo.'
+                  : 'Sposta la mappa: il pin resta fisso al centro e l’indirizzo si aggiorna automaticamente.')}
+              </p>
+            </section>
+
+            {errors.coordinates ? <span className={`error ${styles.coordError}`}>{errors.coordinates}</span> : null}
+            {form.has_route && errors.route_distance_km ? <span className={`error ${styles.coordError}`}>{errors.route_distance_km}</span> : null}
 
             <details className={styles.advancedDetails}>
-              <summary>Coordinate avanzate</summary>
+              <summary>{form.has_route ? 'Modifica nomi e dati del percorso' : 'Modifica indirizzo e coordinate'}</summary>
+              <div className={styles.inlineGrid}>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>Città</span>
+                  <input
+                    className={invalidClass('city')}
+                    value={form.city}
+                    onChange={(event) => setField('city', event.target.value)}
+                    placeholder="Es. Milano"
+                  />
+                  {errors.city ? <span className="error">{errors.city}</span> : null}
+                </label>
+                <label className={styles.field}>
+                  <span className={styles.fieldLabel}>{form.has_route ? 'Punto di ritrovo' : 'Nome location'}</span>
+                  <input
+                    className={invalidClass('location_name')}
+                    value={form.location_name}
+                    onChange={(event) => setField('location_name', event.target.value)}
+                    placeholder="Es. Parco di Porta Romana"
+                  />
+                  {errors.location_name ? <span className="error">{errors.location_name}</span> : null}
+                </label>
+              </div>
+
+              {form.has_route ? (
+                <div className={styles.routeAdvancedFields}>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>Nome percorso</span>
+                    <input
+                      className={invalidClass('route_name')}
+                      value={form.route_name}
+                      onChange={(event) => setField('route_name', event.target.value)}
+                      placeholder="Es. Anello Parco Nord"
+                    />
+                    {errors.route_name ? <span className="error">{errors.route_name}</span> : null}
+                  </label>
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Partenza</span>
+                      <input
+                        className={invalidClass('route_from')}
+                        value={form.route_from}
+                        onChange={(event) => setField('route_from', event.target.value)}
+                      />
+                      {errors.route_from ? <span className="error">{errors.route_from}</span> : null}
+                    </label>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Arrivo</span>
+                      <input
+                        className={invalidClass('route_to')}
+                        value={form.route_to}
+                        onChange={(event) => setField('route_to', event.target.value)}
+                      />
+                      {errors.route_to ? <span className="error">{errors.route_to}</span> : null}
+                    </label>
+                  </div>
+                  <div className={styles.inlineGrid}>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Distanza (km)</span>
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        className={invalidClass('route_distance_km')}
+                        value={form.route_distance_km}
+                        onChange={(event) => setField('route_distance_km', event.target.value)}
+                      />
+                    </label>
+                    <label className={styles.field}>
+                      <span className={styles.fieldLabel}>Dislivello (m)</span>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        className={invalidClass('route_elevation_gain_m')}
+                        value={form.route_elevation_gain_m}
+                        onChange={(event) => setField('route_elevation_gain_m', event.target.value)}
+                        placeholder="Opzionale"
+                      />
+                      {errors.route_elevation_gain_m ? <span className="error">{errors.route_elevation_gain_m}</span> : null}
+                    </label>
+                  </div>
+                  <label className={styles.field}>
+                    <span className={styles.fieldLabel}>URL percorso opzionale</span>
+                    <input
+                      className={invalidClass('route_map_url')}
+                      value={form.route_map_url}
+                      onChange={(event) => setField('route_map_url', event.target.value)}
+                      placeholder="https://..."
+                    />
+                    {errors.route_map_url ? <span className="error">{errors.route_map_url}</span> : null}
+                  </label>
+                </div>
+              ) : null}
+
               <div className={styles.inlineGrid}>
                 <label className={styles.field}>
                   <span className={styles.fieldLabel}>Latitudine</span>
@@ -1484,7 +1794,7 @@ function CreateEventPage() {
                     step="any"
                     className={invalidClass('coordinates')}
                     value={form.lat}
-                    onChange={(e) => setField('lat', e.target.value)}
+                    onChange={(event) => setField('lat', event.target.value)}
                   />
                 </label>
                 <label className={styles.field}>
@@ -1494,245 +1804,11 @@ function CreateEventPage() {
                     step="any"
                     className={invalidClass('coordinates')}
                     value={form.lng}
-                    onChange={(e) => setField('lng', e.target.value)}
+                    onChange={(event) => setField('lng', event.target.value)}
                   />
                 </label>
               </div>
-              <span className="input-helper">Compilate automaticamente dalla ricerca del luogo.</span>
             </details>
-            {errors.coordinates && <span className={`error ${styles.coordError}`}>{errors.coordinates}</span>}
-
-            <label className={`${styles.routeSwitch} ${form.has_route ? styles.routeSwitchActive : ''}`}>
-              <input
-                type="checkbox"
-                checked={Boolean(form.has_route)}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  setField('has_route', checked);
-                  if (!checked) setRoutePicking(false);
-                }}
-              />
-              <span><Route size={22} /></span>
-              <div>
-                <strong>Questo evento ha un percorso</strong>
-                <small>
-                  {selectedSportHasRoute
-                    ? 'Consigliato per questo sport: aggiungi partenza e arrivo.'
-                    : 'Attivalo per itinerari, giri o sentieri.'}
-                </small>
-              </div>
-              <b>{form.has_route ? 'Sì' : 'No'}</b>
-            </label>
-
-            {form.has_route ? (
-              <div className={styles.routeFields}>
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Nome percorso</span>
-                  <input
-                    className={invalidClass('route_name')}
-                    value={form.route_name}
-                    onChange={(e) => setField('route_name', e.target.value)}
-                    placeholder="Es. Anello Parco Nord"
-                  />
-                  {errors.route_name && <span className="error">{errors.route_name}</span>}
-                </label>
-
-                <div className={styles.inlineGrid}>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Partenza</span>
-                    <input
-                      className={invalidClass('route_from')}
-                      value={form.route_from}
-                      onChange={(e) => setField('route_from', e.target.value)}
-                      placeholder="Via o punto di partenza"
-                    />
-                    {errors.route_from && <span className="error">{errors.route_from}</span>}
-                  </label>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Arrivo</span>
-                    <input
-                      className={invalidClass('route_to')}
-                      value={form.route_to}
-                      onChange={(e) => setField('route_to', e.target.value)}
-                      placeholder="Via o punto di arrivo"
-                    />
-                    {errors.route_to && <span className="error">{errors.route_to}</span>}
-                  </label>
-                </div>
-
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  icon={Route}
-                  disabled={routeResolving}
-                  onClick={resolveRouteOnline}
-                  fullWidth
-                >
-                  {routeResolving ? 'Tracciamento...' : 'Cerca e traccia percorso'}
-                </Button>
-                {routeResolveError ? <span className={`error ${styles.coordError}`}>{routeResolveError}</span> : null}
-
-                <section className={`${styles.routePicker} ${routePicking ? styles.routePickerActive : ''}`}>
-                  <div className={styles.routePickerHead}>
-                    <div>
-                      <span className={styles.routePickerEyebrow}>Percorso personalizzato</span>
-                      <strong>Seleziona i punti sulla mappa</strong>
-                      <small>
-                        {routePicking
-                          ? 'Tocca la mappa: il primo punto è la partenza, l’ultimo è l’arrivo.'
-                          : manualRouteSelection && routePoints.length
-                            ? `${routePoints.length} punti selezionati · ${form.route_distance_km || '0'} km`
-                            : 'In alternativa alla ricerca, disegna liberamente il tuo itinerario.'}
-                      </small>
-                    </div>
-                    <button
-                      type="button"
-                      className={`${styles.routePickerButton} ${routePicking ? styles.routePickerButtonActive : ''}`}
-                      aria-pressed={routePicking}
-                      onClick={startRoutePointSelection}
-                    >
-                      {routePicking ? <Check size={19} /> : <MapPinned size={19} />}
-                      {routePicking ? 'Concludi' : 'Seleziona punti'}
-                    </button>
-                  </div>
-
-                  {routePicking || routePoints.length ? (
-                    <>
-                      <div className={`${styles.routeMapWrap} ${routePicking ? styles.routeMapPicking : ''}`}>
-                        <MapContainer
-                          key={`route-${manualRouteSelection ? 'manual' : 'automatic'}-${routeMapCenter.join(':')}`}
-                          center={routeMapCenter}
-                          zoom={routePoints.length || locationPreview ? 13 : 6}
-                          className={styles.routeMap}
-                          scrollWheelZoom={false}
-                          doubleClickZoom={!routePicking}
-                        >
-                          <TileLayer
-                            attribution='&copy; OpenStreetMap contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          />
-                          <RouteMapTapHandler active={routePicking} onAddPoint={addRoutePoint} />
-                          {routePoints.length >= 2 ? (
-                            <Polyline
-                              positions={routePoints}
-                              pathOptions={{ color: '#a8f000', weight: 5, opacity: 0.9 }}
-                            />
-                          ) : null}
-
-                          {manualRouteSelection
-                            ? routePoints.map((point, index) => {
-                                const isFirst = index === 0;
-                                const isLast = index === routePoints.length - 1;
-                                const label = routePoints.length === 1
-                                  ? 'Punto 1'
-                                  : isFirst
-                                    ? 'Partenza'
-                                    : isLast
-                                      ? 'Arrivo'
-                                      : `Tappa ${index}`;
-                                return (
-                                  <CircleMarker
-                                    key={`${point[0]}:${point[1]}:${index}`}
-                                    center={point}
-                                    radius={isFirst || isLast ? 9 : 7}
-                                    className={styles.routePingMarker}
-                                    pathOptions={{
-                                      color: '#111511',
-                                      fillColor: '#a8f000',
-                                      fillOpacity: 1,
-                                      weight: 4
-                                    }}
-                                  >
-                                    <Popup>{label}</Popup>
-                                  </CircleMarker>
-                                );
-                              })
-                            : routePoints.length >= 2
-                              ? (
-                                  <>
-                                    <Marker position={routePoints[0]}>
-                                      <Popup>Partenza: {form.route_from}</Popup>
-                                    </Marker>
-                                    <Marker position={routePoints[routePoints.length - 1]}>
-                                      <Popup>Arrivo: {form.route_to}</Popup>
-                                    </Marker>
-                                  </>
-                                )
-                              : null}
-                        </MapContainer>
-                      </div>
-
-                      {manualRouteSelection ? (
-                        <div className={styles.routePointMeta}>
-                          <span>
-                            <MapPin size={16} />
-                            <b>{routePoints.length}/30</b> punti
-                          </span>
-                          <div className={styles.routePointActions}>
-                            <button type="button" disabled={!routePoints.length} onClick={undoLastRoutePoint}>
-                              <Undo2 size={17} />
-                              Annulla ultimo
-                            </button>
-                            <button
-                              type="button"
-                              className={styles.routePointDanger}
-                              disabled={!routePoints.length}
-                              onClick={clearRoutePoints}
-                            >
-                              <Trash2 size={17} />
-                              Cancella
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
-                </section>
-
-                <div className={styles.inlineGrid}>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Distanza (km)</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      className={invalidClass('route_distance_km')}
-                      value={form.route_distance_km}
-                      onChange={(e) => setField('route_distance_km', e.target.value)}
-                    />
-                    {errors.route_distance_km && <span className="error">{errors.route_distance_km}</span>}
-                  </label>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>Dislivello (m)</span>
-                    <input
-                      type="number"
-                      step="1"
-                      min="0"
-                      className={invalidClass('route_elevation_gain_m')}
-                      value={form.route_elevation_gain_m}
-                      onChange={(e) => setField('route_elevation_gain_m', e.target.value)}
-                      placeholder="Opzionale"
-                    />
-                    {errors.route_elevation_gain_m && <span className="error">{errors.route_elevation_gain_m}</span>}
-                  </label>
-                </div>
-
-                <details className={styles.advancedDetails}>
-                  <summary>Link mappa opzionale</summary>
-                  <label className={styles.field}>
-                    <span className={styles.fieldLabel}>URL percorso</span>
-                    <input
-                      className={invalidClass('route_map_url')}
-                      value={form.route_map_url}
-                      onChange={(e) => setField('route_map_url', e.target.value)}
-                      placeholder="https://..."
-                    />
-                    {errors.route_map_url && <span className="error">{errors.route_map_url}</span>}
-                  </label>
-                </details>
-              </div>
-            ) : null}
           </fieldset>
         ) : null}
 
