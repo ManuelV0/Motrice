@@ -840,9 +840,14 @@ function MapPage() {
       element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;
       element.setAttribute('aria-label', element.title);
       element.appendChild(createEventActivityIcon(event));
+
+      const label = document.createElement('span');
+      label.className = styles.eventPinLabel;
+      label.textContent = event.sport_name || event.title || 'Evento';
+      element.appendChild(label);
+
       element.addEventListener('click', () => {
         focusEvent(event);
-        eventsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
 
       const marker = new maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat([event.lng, event.lat]).addTo(map);
@@ -1006,6 +1011,11 @@ function MapPage() {
           <div className={styles.mapViewport}>
             <div ref={mapNodeRef} className={styles.mapCanvas} />
             <div className={styles.mapShade} aria-hidden="true" />
+            <div className={styles.mapLegend} aria-label="Legenda della mappa">
+              <span><i className={`${styles.legendDot} ${styles.legendEvent}`} aria-hidden="true" />Evento</span>
+              <span><i className={`${styles.legendDot} ${styles.legendSaved}`} aria-hidden="true" />Salvato</span>
+              <span><i className={`${styles.legendDot} ${styles.legendUser}`} aria-hidden="true" />Tu</span>
+            </div>
             <MapFloatingControls
               onZoomIn={() => zoomMap('in')}
               onZoomOut={() => zoomMap('out')}
