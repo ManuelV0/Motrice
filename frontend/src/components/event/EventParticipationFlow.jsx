@@ -6,13 +6,11 @@ import {
   Camera,
   Check,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
   Crown,
   LocateFixed,
   QrCode,
   RefreshCw,
-  ShieldCheck,
   Sparkles,
   Star,
   Users,
@@ -32,13 +30,6 @@ const EMPTY_REVIEW = {
   note: ''
 };
 
-function money(cents) {
-  return (Number(cents || 0) / 100).toLocaleString('it-IT', {
-    style: 'currency',
-    currency: 'EUR'
-  });
-}
-
 function getCheckInWindow(event) {
   const startsAtMs = Date.parse(event?.event_datetime || '');
   if (!Number.isFinite(startsAtMs)) return null;
@@ -49,28 +40,10 @@ function getCheckInWindow(event) {
   };
 }
 
-function formatEventDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Data da definire';
-  return date.toLocaleDateString('it-IT', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-}
-
 function formatEventTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--:--';
   return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatEventWeekday(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Da definire';
-  const label = date.toLocaleDateString('it-IT', { weekday: 'long' });
-  return `${label.slice(0, 1).toUpperCase()}${label.slice(1)}`;
 }
 
 function formatCountdown(milliseconds) {
@@ -673,13 +646,6 @@ function EventParticipationFlow({
               </Button>
             </div>
 
-            <div className={styles.ruleGrid}>
-              <div><CircleDollarSign size={18} /><span>Deposito</span><strong>{money(event.deposit_cents)}</strong></div>
-              <div><Clock3 size={18} /><span>Presenza minima</span><strong>{event.minimum_presence_minutes || 45} min</strong></div>
-              <div><ShieldCheck size={18} /><span>Verifica</span><strong>{verificationMode === 'both' ? 'QR + GPS' : verificationMode === 'geo' ? 'GPS' : 'QR'}</strong></div>
-              <div><Sparkles size={18} /><span>Ricompensa</span><strong>+{event.completion_xp || 50} PX</strong></div>
-            </div>
-
             <div className={styles.progressBlock}>
               <div className={styles.progressCopy}>
                 <strong>{progressPercent >= 100 ? 'Partecipazione completata' : progressPercent >= 60 ? 'Presenza verificata' : 'Iscrizione confermata'}</strong>
@@ -803,12 +769,6 @@ function EventParticipationFlow({
                 >
                   Aggiorna
                 </Button>
-              </div>
-              <div className={styles.organizerEventMeta}>
-                <p><span>Data</span><strong>{formatEventDate(event.event_datetime)}</strong></p>
-                <p><span>Orario</span><strong>{formatEventTime(event.event_datetime)}</strong></p>
-                <p><span>Giorno</span><strong>{formatEventWeekday(event.event_datetime)}</strong></p>
-                <p><span>Luogo</span><strong>{event.location_name}</strong></p>
               </div>
             </section>
 

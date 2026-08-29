@@ -9,13 +9,13 @@ import {
   CalendarPlus,
   CheckCircle2,
   ChevronDown,
+  CircleDollarSign,
   ClipboardCopy,
   Clock3,
   Dumbbell,
   MapPin,
   MessageCircle,
   Navigation,
-  Route,
   Send,
   Share2,
   ShieldCheck,
@@ -193,6 +193,9 @@ function EventDetailPage() {
   const [workoutPlanSaving, setWorkoutPlanSaving] = useState(false);
   const [workoutPlanSaved, setWorkoutPlanSaved] = useState(false);
   const [workoutPlanOpen, setWorkoutPlanOpen] = useState(false);
+  const [participantListOpen, setParticipantListOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
@@ -215,6 +218,9 @@ function EventDetailPage() {
 
   useEffect(() => {
     setWorkoutPlanOpen(false);
+    setParticipantListOpen(false);
+    setActionsOpen(false);
+    setRulesOpen(false);
   }, [event?.id]);
 
   async function openChatParticipantProfile(identity) {
@@ -893,7 +899,6 @@ function EventDetailPage() {
   const hasRouteDistance = Number.isFinite(routeDistance) && routeDistance > 0;
   const participantsCount = Number(event.participants_count || 0);
   const maxParticipants = Number(event.max_participants || 0);
-  const isFull = maxParticipants > 0 && participantsCount >= maxParticipants;
   const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
   const rewardProgressCurrent = Math.min(
     rewardProgressTotal,
@@ -916,6 +921,54 @@ function EventDetailPage() {
       ? `${event.lat},${event.lng}`
       : String(event.location_name || event.city || '');
   const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(directionsDestination)}`;
+  const participantPreview = Array.from(
+    new Set(
+      (Array.isArray(event.participants_preview) ? event.participants_preview : [])
+        .map((name) => String(name || '').trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
+  const isClosedEvent = Boolean(event.status === 'completed' || event.has_passed || eventHasEnded);
+  const participantAttendance = String(event.user_rsvp?.attendance || '').toLowerCase();
+  const participantWasPresent = Boolean(
+    participantAttendance === 'attended' || Number(event.user_rsvp?.cashback_percent || 0) >= 60
+  );
+  const participantWasNoShow = participantAttendance === 'no_show';
+  const recordedPresenceMinutes = Number(
+    event.user_rsvp?.elapsed_minutes ?? event.user_rsvp?.presence_minutes
+  );
+  const closedPresenceMinutes = Number.isFinite(recordedPresenceMinutes)
+    ? Math.max(0, Math.min(durationMinutes, Math.round(recordedPresenceMinutes)))
+    : participantWasPresent
+      ? minimumPresenceMinutes
+      : 0;
+  const closedEarnedXp = Number(
+    event.user_rsvp?.xp_earned ??
+      event.user_rsvp?.awarded_xp ??
+      (participantWasPresent
+        ? completionXp + (event.user_rsvp?.review_submitted ? reviewBonusXp : 0)
+        : 0)
+  );
+  const closedPresentCount = Number(
+    event.participant_stats?.present ??
+      event.participants_present_count ??
+      event.participants_checked_in_count ??
+      0
+  );
+  const closedTotalCount = Math.max(
+    closedPresentCount,
+    Number(event.participant_stats?.total ?? event.participants_total_count ?? participantsCount ?? 0)
+  );
+  const closedAttendanceLabel = participantWasPresent
+    ? 'Presente'
+    : participantWasNoShow
+      ? 'No-show'
+      : 'Da verificare';
+  const reliabilityImpactLabel = participantWasPresent
+    ? 'Positivo'
+    : participantWasNoShow
+      ? 'Negativo'
+      : 'Neutro';
 
   return (
     <div className={styles.page}>
@@ -954,12 +1007,6 @@ function EventDetailPage() {
             <div className={styles.heroContent}>
               <div className={styles.heroBadges}>
                 <span className={styles.heroCategory}>{sportVisual.label}</span>
-                {!event.is_personal ? (
-                  <span className={styles.heroAttendance}>
-                    <Users size={18} aria-hidden="true" />
-                    {participantsCount}/{maxParticipants || '∞'} {isFull ? 'FULL' : 'ISCRITTI'}
-                  </span>
-                ) : null}
               </div>
               <div className={styles.heroText}>
                 <div className={styles.heroOrganizer}>
@@ -979,24 +1026,6 @@ function EventDetailPage() {
               </div>
             </div>
           </header>
-
-          <section className={styles.statGrid} aria-label="Riepilogo evento">
-            <div className={styles.statCard}>
-              <Clock3 size={22} aria-hidden="true" />
-              <strong>{durationMinutes} min</strong>
-              <span>Durata</span>
-            </div>
-            <div className={styles.statCard}>
-              {hasRouteDistance ? <Route size={22} aria-hidden="true" /> : <ShieldCheck size={22} aria-hidden="true" />}
-              <strong>{hasRouteDistance ? `${routeDistance.toLocaleString('it-IT')} km` : `${minimumPresenceMinutes} min`}</strong>
-              <span>{hasRouteDistance ? 'Percorso' : 'Presenza minima'}</span>
-            </div>
-            <div className={`${styles.statCard} ${styles.statCardAccent}`}>
-              <Trophy size={22} aria-hidden="true" />
-              <strong>{totalAvailableXp} PX</strong>
-              <span>Ricompensa massima</span>
-            </div>
-          </section>
 
           <Card as="section" className={styles.locationCard}>
             <div className={styles.mapStage}>
@@ -1043,8 +1072,125 @@ function EventDetailPage() {
                   Portami lì
                 </a>
               </div>
+              {event.route_info ? (
+                <div className={styles.routeInlineFacts} aria-label="Riepilogo percorso">
+                  <span><small>Partenza</small><strong>{event.route_info.from_label || event.location_name}</strong></span>
+                  <span><small>Arrivo</small><strong>{event.route_info.to_label || event.location_name}</strong></span>
+                  {hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
+                  {event.route_info.elevation_gain_m ? <span><small>Dislivello</small><strong>+{event.route_info.elevation_gain_m} m</strong></span> : null}
+                </div>
+              ) : null}
             </div>
           </Card>
+
+          <section className={styles.statGrid} aria-label="Riepilogo evento">
+            <div className={styles.statCard}>
+              <Clock3 size={22} aria-hidden="true" />
+              <strong>{durationMinutes} min</strong>
+              <span>Durata</span>
+            </div>
+            <div className={styles.statCard}>
+              <ShieldCheck size={22} aria-hidden="true" />
+              <strong>{minimumPresenceMinutes} min</strong>
+              <span>Presenza minima</span>
+            </div>
+            <div className={styles.statCard}>
+              <CircleDollarSign size={22} aria-hidden="true" />
+              <strong>
+                {event.is_personal || event.participation_protection === false
+                  ? '0 €'
+                  : formatCurrencyFromCents(event.deposit_cents)}
+              </strong>
+              <span>Deposito</span>
+            </div>
+            <div className={`${styles.statCard} ${styles.statCardAccent}`}>
+              <Trophy size={22} aria-hidden="true" />
+              <strong>{totalAvailableXp} PX</strong>
+              <span>Ricompensa</span>
+            </div>
+          </section>
+
+          {!event.is_personal && !isOrganizerForEvent ? (
+            <section className={styles.participantPreviewCard} aria-label="Partecipanti iscritti">
+              <div className={styles.participantPreviewCopy}>
+                <span>Partecipanti</span>
+                <strong>{participantsCount}/{maxParticipants || '∞'} iscritti</strong>
+              </div>
+              <div className={styles.participantAvatarStack} aria-label={participantPreview.length ? participantPreview.join(', ') : 'Nessun iscritto'}>
+                {participantPreview.length ? participantPreview.map((name, index) => (
+                  <span key={`${name}-${index}`} title={name}>
+                    {name.slice(0, 1).toUpperCase()}
+                  </span>
+                )) : <span className={styles.participantAvatarEmpty}><Users size={17} aria-hidden="true" /></span>}
+              </div>
+              <button
+                type="button"
+                className={styles.participantPreviewAction}
+                aria-expanded={participantListOpen}
+                aria-controls={`event-participant-preview-${event.id}`}
+                onClick={() => setParticipantListOpen((open) => !open)}
+              >
+                {participantListOpen ? 'Nascondi' : 'Vedi tutti'}
+                <ChevronDown className={participantListOpen ? styles.participantPreviewChevronOpen : ''} size={17} aria-hidden="true" />
+              </button>
+              {participantListOpen ? (
+                <div id={`event-participant-preview-${event.id}`} className={styles.participantPreviewList}>
+                  {participantPreview.length ? participantPreview.map((name, index) => (
+                    <div key={`${name}-detail-${index}`}>
+                      <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                      <strong>{name}</strong>
+                      <small>{normalizeName(name) === normalizeName(organizerName) ? 'Organizer' : 'Iscritto'}</small>
+                    </div>
+                  )) : <p>Nessun partecipante registrato.</p>}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isClosedEvent && !event.is_personal ? (
+            <Card as="section" className={styles.closedSummaryCard}>
+              <div className={styles.closedSummaryHeading}>
+                <span><CheckCircle2 size={19} aria-hidden="true" /></span>
+                <div>
+                  <p>Evento concluso</p>
+                  <h2>Riepilogo verificato</h2>
+                </div>
+                <strong>{closedPresentCount}/{closedTotalCount || participantsCount || 0} presenti</strong>
+              </div>
+              <div className={styles.closedSummaryGrid}>
+                {isOrganizerForEvent ? (
+                  <>
+                    <div><span>Stato</span><strong>Svolto</strong></div>
+                    <div><span>Presenti</span><strong>{closedPresentCount}</strong></div>
+                    <div><span>Assenti</span><strong>{Math.max(0, closedTotalCount - closedPresentCount)}</strong></div>
+                    <div><span>Durata</span><strong>{durationMinutes} min</strong></div>
+                  </>
+                ) : (
+                  <>
+                    <div><span>Stato</span><strong>{closedAttendanceLabel}</strong></div>
+                    <div><span>PX ottenuti</span><strong>{closedEarnedXp}</strong></div>
+                    <div><span>Allenamento</span><strong>{closedPresenceMinutes} min</strong></div>
+                    <div><span>Affidabilità</span><strong>{reliabilityImpactLabel}</strong></div>
+                  </>
+                )}
+              </div>
+            </Card>
+          ) : null}
+
+          {!event.is_personal && isOrganizerForEvent ? (
+            <div ref={participationFlowRef} className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
+              <EventParticipationFlow
+                event={event}
+                isOrganizer
+                currentUser={currentUser}
+                coords={coords}
+                requestingLocation={requesting}
+                requestLocation={requestLocation}
+                showToast={showToast}
+                onEventRefresh={reload}
+              />
+            </div>
+          ) : null}
 
           {event.workout_plan ? (
             <Card as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
@@ -1103,96 +1249,104 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          {event.route_info ? (
-            <Card subtle className={styles.routeCard}>
-              <div className={styles.sectionTitleRow}>
-                <span className={styles.sectionIcon}><Route size={20} aria-hidden="true" /></span>
+          {!isOrganizerForEvent || event.is_personal ? (
+            <Card as="section" className={styles.rewardCard}>
+              <div className={styles.rewardHeading}>
                 <div>
-                  <p>Percorso</p>
-                  <h2>{event.route_info.name || 'Tracciato evento'}</h2>
+                  <h2>Come ottieni fino a {totalAvailableXp} PX</h2>
+                  <p>Ricompensa verificata</p>
                 </div>
               </div>
-              <div className={styles.routeFacts}>
-                <span><small>Partenza</small><strong>{event.route_info.from_label || event.location_name}</strong></span>
-                <span><small>Arrivo</small><strong>{event.route_info.to_label || event.location_name}</strong></span>
-                {hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
-                {event.route_info.elevation_gain_m ? <span><small>Dislivello</small><strong>+{event.route_info.elevation_gain_m} m</strong></span> : null}
+              <p className={styles.rewardBreakdown}>
+                {event.is_personal
+                  ? `+${completionXp} PX al completamento del promemoria personale.`
+                  : reviewBonusXp > 0
+                    ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
+                    : `+${completionXp} PX al completamento della partecipazione.`}
+              </p>
+              <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} check-in verificati`}>
+                <span className={styles.rewardProgressTrack}>
+                  <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
+                </span>
+                <strong>{rewardProgressCurrent} di {rewardProgressTotal} check-in</strong>
+                <span>+{completionXp} completamento{reviewBonusXp > 0 ? ` · +${reviewBonusXp} verifica` : ''}</span>
               </div>
             </Card>
           ) : null}
 
-          <Card as="section" className={styles.rewardCard}>
-            <div className={styles.rewardHeading}>
-              <div>
-                <h2>Fino a {totalAvailableXp} PX</h2>
-                <p>Ricompensa massima</p>
-              </div>
-            </div>
-            <p className={styles.rewardBreakdown}>
-              {event.is_personal
-                ? `+${completionXp} PX al completamento del promemoria personale.`
-                : reviewBonusXp > 0
-                  ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
-                  : `+${completionXp} PX al completamento della partecipazione.`}
-            </p>
-            <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} check-in verificati`}>
-              <span className={styles.rewardProgressTrack}>
-                <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
-              </span>
-              <strong>{rewardProgressCurrent} di {rewardProgressTotal} check-in</strong>
-              <span>+{completionXp} completamento{reviewBonusXp > 0 ? ` · +${reviewBonusXp} verifica` : ''}</span>
-            </div>
-            <div className={styles.rewardDeposit}>
-              <span>Deposito</span>
-              <strong>
-                {event.is_personal || event.participation_protection === false
-                  ? 'Nessun deposito richiesto'
-                  : `${formatCurrencyFromCents(event.deposit_cents)} · protetto`}
-              </strong>
-            </div>
-          </Card>
-
           <div className={styles.summaryGrid}>
-            <Card subtle className={styles.infoCard}>
-              <dl className={styles.detailList}>
-                <div><dt>Livello</dt><dd>{event.level || 'Aperto'}</dd></div>
-                <div><dt>Categoria</dt><dd>{audienceLabel}</dd></div>
-                <div><dt>Visibilità</dt><dd>{event.visibility === 'private' ? 'Privato' : 'Pubblico'}</dd></div>
-                {!event.is_personal ? <div><dt>Accesso</dt><dd>{event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</dd></div> : null}
-                {!event.is_personal ? <div><dt>Verifica</dt><dd>{event.verification_mode === 'qr' ? 'QR Code' : event.verification_mode === 'gps' ? 'GPS' : 'QR + GPS'}</dd></div> : null}
-                <div><dt>Organizer</dt><dd>Affidabilità {organizerReliability}%</dd></div>
-              </dl>
+            <Card subtle className={`${styles.infoCard} ${styles.compactDetailsCard}`}>
+              <button
+                type="button"
+                className={styles.compactDetailsToggle}
+                aria-expanded={rulesOpen}
+                aria-controls={`event-details-${event.id}`}
+                onClick={() => setRulesOpen((open) => !open)}
+              >
+                <span className={styles.sectionTitleRow}>
+                  <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
+                  <span>
+                    <small>Informazioni</small>
+                    <strong>Dettagli e regole</strong>
+                  </span>
+                </span>
+                <span className={styles.rulesToggleAction}>
+                  {rulesOpen ? 'Nascondi' : 'Visualizza'}
+                  <ChevronDown className={rulesOpen ? styles.rulesChevronOpen : ''} size={20} aria-hidden="true" />
+                </span>
+              </button>
+              {rulesOpen ? (
+                <div id={`event-details-${event.id}`} className={styles.compactDetailsBody}>
+                  <dl className={styles.detailList}>
+                    <div><dt>Livello</dt><dd>{event.level || 'Aperto'}</dd></div>
+                    <div><dt>Categoria</dt><dd>{audienceLabel}</dd></div>
+                    <div><dt>Visibilità</dt><dd>{event.visibility === 'private' ? 'Privato' : 'Pubblico'}</dd></div>
+                    {!event.is_personal ? <div><dt>Accesso</dt><dd>{event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</dd></div> : null}
+                    {!event.is_personal ? <div><dt>Verifica</dt><dd>{event.verification_mode === 'qr' ? 'QR Code' : event.verification_mode === 'gps' ? 'GPS' : 'QR + GPS'}</dd></div> : null}
+                  </dl>
+                  {(event.etiquette || []).length ? (
+                    <div className={styles.inlineRules}>
+                      <span>Regole della sessione</span>
+                      <ul>
+                        {(event.etiquette || []).map((rule) => <li key={rule}>{rule}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </Card>
 
-            <Card subtle className={styles.organizerCard}>
-              <span className={styles.organizerAvatar} aria-hidden="true">{organizerInitial}</span>
-              <div className={styles.organizerIdentity}>
-                <h2>{organizerName}</h2>
-                <div>
-                  <i aria-hidden="true" />
-                  <span>Affidabilità {organizerReliability}%</span>
+            {!isOrganizerForEvent ? (
+              <Card subtle className={styles.organizerCard}>
+                <span className={styles.organizerAvatar} aria-hidden="true">{organizerInitial}</span>
+                <div className={styles.organizerIdentity}>
+                  <h2>{organizerName}</h2>
+                  <div>
+                    <i aria-hidden="true" />
+                    <span>Affidabilità {organizerReliability}%</span>
+                  </div>
                 </div>
-              </div>
-              <Link
-                to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
-                state={{
-                  publicProfile: {
-                    id: event.organizer?.auth_user_id || event.organizer?.id,
-                    display_name: organizerName,
-                    name: organizerName,
-                    city: event.city || '',
-                    reliability_score: organizerReliability
-                  }
-                }}
-              >
-                Vedi profilo pubblico
-              </Link>
-            </Card>
+                <Link
+                  to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
+                  state={{
+                    publicProfile: {
+                      id: event.organizer?.auth_user_id || event.organizer?.id,
+                      display_name: organizerName,
+                      name: organizerName,
+                      city: event.city || '',
+                      reliability_score: organizerReliability
+                    }
+                  }}
+                >
+                  Vedi profilo pubblico
+                </Link>
+              </Card>
+            ) : null}
           </div>
 
           <Card subtle className={styles.actionCard}>
-            <h2 className={styles.actionTitle}>Gestisci la partecipazione</h2>
-            {!event.is_personal ? (
+            <h2 className={styles.actionTitle}>{isOrganizerForEvent ? 'Azioni evento' : 'Gestisci la partecipazione'}</h2>
+            {!event.is_personal && !isOrganizerForEvent ? (
               <section
                 className={`${styles.participationStateBox} ${styles[`participationState_${participationState.tone}`] || ''}`}
                 aria-live="polite"
@@ -1252,7 +1406,7 @@ function EventDetailPage() {
                         : 'Disponibile al termine'}
                 </Button>
               ) : null}
-              {!event.is_personal ? (
+              {!event.is_personal && !isOrganizerForEvent ? (
                 <Button
                   type="button"
                   fullWidth
@@ -1273,7 +1427,21 @@ function EventDetailPage() {
                 </Button>
               ) : null}
             </div>
-            <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondaryActionsToggle}
+              aria-expanded={actionsOpen}
+              aria-controls={`event-secondary-actions-${event.id}`}
+              onClick={() => setActionsOpen((open) => !open)}
+            >
+              <span>
+                <strong>Altre azioni</strong>
+                <small>Salva, calendario, copia, condividi e chat</small>
+              </span>
+              <ChevronDown className={actionsOpen ? styles.secondaryActionsChevronOpen : ''} size={20} aria-hidden="true" />
+            </button>
+            {actionsOpen ? (
+            <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
               <Button
                 type="button"
                 variant={event.is_saved ? 'secondary' : 'ghost'}
@@ -1303,23 +1471,26 @@ function EventDetailPage() {
                   Apri chat evento
                 </Button>
               ) : <span className={styles.disabledAction}><MessageCircle size={23} aria-hidden="true" />Apri chat evento</span>}
-              <Link
-                className={styles.actionProfileLink}
-                to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
-                state={{
-                  publicProfile: {
-                    id: event.organizer?.auth_user_id || event.organizer?.id,
-                    display_name: organizerName,
-                    name: organizerName,
-                    city: event.city || '',
-                    reliability_score: organizerReliability
-                  }
-                }}
-              >
-                <UserRound size={23} aria-hidden="true" />
-                Vedi profilo pubblico
-              </Link>
+              {!isOrganizerForEvent ? (
+                <Link
+                  className={styles.actionProfileLink}
+                  to={`/profile/${event.organizer?.auth_user_id || event.organizer?.id}?event=${event.id}`}
+                  state={{
+                    publicProfile: {
+                      id: event.organizer?.auth_user_id || event.organizer?.id,
+                      display_name: organizerName,
+                      name: organizerName,
+                      city: event.city || '',
+                      reliability_score: organizerReliability
+                    }
+                  }}
+                >
+                  <UserRound size={23} aria-hidden="true" />
+                  Vedi profilo pubblico
+                </Link>
+              ) : null}
             </div>
+            ) : null}
           </Card>
 
           {event.can_confirm_attendance && (
@@ -1332,7 +1503,7 @@ function EventDetailPage() {
             </Card>
           )}
 
-          {!event.is_personal ? (
+          {!event.is_personal && !isOrganizerForEvent ? (
             <div ref={participationFlowRef} className={styles.participationFlowAnchor}>
               <EventParticipationFlow
                 event={event}
@@ -1377,18 +1548,6 @@ function EventDetailPage() {
             )}
           </Card>
 
-          <Card subtle className={styles.rulesCard}>
-            <div className={styles.sectionTitleRow}>
-              <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
-              <div>
-                <p>Community</p>
-                <h2>Regole della sessione</h2>
-              </div>
-            </div>
-            <ul>
-              {(event.etiquette || []).map((rule) => <li key={rule}>{rule}</li>)}
-            </ul>
-          </Card>
         </article>
 
         {similarEvents.length > 0 ? (
