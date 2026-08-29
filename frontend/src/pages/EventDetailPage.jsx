@@ -496,9 +496,13 @@ function EventDetailPage() {
   async function cancelRsvp() {
     if (!cancelReady) return;
     try {
+      const stakeCents = Number(event?.user_rsvp?.stake_cents ?? event?.deposit_cents ?? 0);
+      const hasDeposit = event?.participation_protection !== false && stakeCents > 0;
       const result = await api.leaveEvent(id);
       await reload();
-      if (result?.penalty_applied) {
+      if (!hasDeposit) {
+        showToast('Partecipazione annullata. Nessun deposito previsto.', 'success');
+      } else if (result?.penalty_applied) {
         showToast(
           result?.penalty_note || 'Penale applicata: quota congelata fino alla prossima partecipazione.',
           'info'
@@ -891,7 +895,10 @@ function EventDetailPage() {
   const maxParticipants = Number(event.max_participants || 0);
   const isFull = maxParticipants > 0 && participantsCount >= maxParticipants;
   const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
-  const rewardProgressCurrent = Math.min(rewardProgressTotal, Math.max(0, participantsCount));
+  const rewardProgressCurrent = Math.min(
+    rewardProgressTotal,
+    Math.max(0, Number(event.participants_checked_in_count || 0))
+  );
   const rewardProgressPercent = Math.min(100, (rewardProgressCurrent / rewardProgressTotal) * 100);
   const organizerReliability = Number(event.organizer?.reliability_score || 100);
   const organizerName = String(event.organizer?.name || 'Organizer');
@@ -1128,7 +1135,7 @@ function EventDetailPage() {
                   ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
                   : `+${completionXp} PX al completamento della partecipazione.`}
             </p>
-            <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} partecipanti registrati`}>
+            <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} check-in verificati`}>
               <span className={styles.rewardProgressTrack}>
                 <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
               </span>

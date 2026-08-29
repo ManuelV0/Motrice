@@ -288,6 +288,9 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const participants = eventParticipants.filter((participant) =>
     ['going', 'completed'].includes(String(participant.status || ''))
   );
+  const checkedInParticipants = eventParticipants.filter((participant) =>
+    Boolean(participant.checked_in_at)
+  );
   const ownParticipation =
     eventParticipants.find((participant) => String(participant.user_id) === authUserId) || null;
   const presentParticipants = eventParticipants.filter((participant) => participant.status === 'completed');
@@ -322,6 +325,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     max_participants: Number(rawEvent.max_participants),
     duration_minutes: durationMinutes,
     participants_count: participants.length || 1,
+    participants_checked_in_count: checkedInParticipants.length,
     participants_present_count: presentParticipants.length,
     participants_total_count: concludedParticipants.length || participants.length,
     participant_stats: {
