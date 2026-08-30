@@ -48,6 +48,7 @@ const USER_RADIUS_SOURCE = 'user-radius-src';
 const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
 const USER_VIEW_RADIUS_KM = 8;
+const EVENT_CLUSTER_OVERLAP_PX = 12;
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 const EVENT_ACTIVITY_ICON_NODES = {
@@ -250,20 +251,23 @@ function distanceKm(aLat, aLng, bLat, bLng) {
   return 2 * earthKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function clusterEventsByScreenPosition(map, events, radiusPx = 48) {
+function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVERLAP_PX) {
   if (!map) return [];
 
   return events.reduce((clusters, event) => {
     const point = map.project([event.lng, event.lat]);
-    const nearbyCluster = clusters.find((cluster) => {
-      const dx = point.x - cluster.screenX;
-      const dy = point.y - cluster.screenY;
-      return Math.sqrt(dx * dx + dy * dy) <= radiusPx;
-    });
+    const nearbyCluster = clusters.find((cluster) =>
+      cluster.screenPoints.every((clusterPoint) => {
+        const dx = point.x - clusterPoint.x;
+        const dy = point.y - clusterPoint.y;
+        return Math.sqrt(dx * dx + dy * dy) <= radiusPx;
+      })
+    );
 
     if (!nearbyCluster) {
       clusters.push({
         events: [event],
+        screenPoints: [point],
         screenX: point.x,
         screenY: point.y,
         lng: event.lng,
@@ -275,6 +279,7 @@ function clusterEventsByScreenPosition(map, events, radiusPx = 48) {
     const previousCount = nearbyCluster.events.length;
     const nextCount = previousCount + 1;
     nearbyCluster.events.push(event);
+    nearbyCluster.screenPoints.push(point);
     nearbyCluster.screenX = (nearbyCluster.screenX * previousCount + point.x) / nextCount;
     nearbyCluster.screenY = (nearbyCluster.screenY * previousCount + point.y) / nextCount;
     nearbyCluster.lng = (nearbyCluster.lng * previousCount + event.lng) / nextCount;
@@ -978,8 +983,7 @@ function MapPage() {
     eventMarkersRef.current = [];
 
     const markerEvents = eventsInRadius.filter((event) => isEventInViewport(event, viewportBounds));
-    const clusterRadius = map.getZoom() >= 14 ? 34 : 48;
-    const clusters = clusterEventsByScreenPosition(map, markerEvents, clusterRadius);
+    const clusters = clusterEventsByScreenPosition(map, markerEvents, EVENT_CLUSTER_OVERLAP_PX);
 
     clusters.forEach((cluster) => {
       if (cluster.events.length > 1) {
