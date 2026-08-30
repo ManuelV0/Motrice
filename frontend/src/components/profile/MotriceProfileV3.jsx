@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import BrandLogo from '../BrandLogo';
 import {
   ArrowRight,
   ChevronDown,
@@ -227,7 +228,14 @@ function MotriceProfileV3({
 
       <section className={`${styles.card} ${styles.heroCard}`}>
         <div className={`${styles.coverMedia} ${form.cover_url ? styles.coverWithImage : ''}`}>
-          {form.cover_url ? <img src={form.cover_url} alt="Copertina del profilo" /> : <strong aria-hidden="true">M</strong>}
+          {form.cover_url ? (
+            <img src={form.cover_url} alt="Copertina del profilo" />
+          ) : (
+            <span className={styles.coverFallback} aria-hidden="true">
+              <BrandLogo className={styles.coverFallbackLogo} decorative />
+              <small>MOTRICE</small>
+            </span>
+          )}
           {isPrivate ? (
             <>
               <button
