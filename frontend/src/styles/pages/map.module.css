@@ -1082,16 +1082,8 @@
 }
 
 .eventCluster strong {
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   line-height: 1;
-}
-
-.eventCluster span {
-  margin-top: 0.12rem;
-  font-size: 0.48rem;
-  font-weight: var(--weight-bold);
-  line-height: 1;
-  letter-spacing: 0.08em;
 }
 
 .eventCluster:hover,

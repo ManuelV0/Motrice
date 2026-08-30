@@ -998,10 +998,6 @@ function MapPage() {
         count.textContent = String(cluster.events.length);
         element.appendChild(count);
 
-        const caption = document.createElement('span');
-        caption.textContent = 'EVENTI';
-        element.appendChild(caption);
-
         element.addEventListener('click', () => zoomToEventCluster(map, cluster));
 
         const marker = new maplibregl.Marker({ element, anchor: 'center' })
