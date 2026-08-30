@@ -20,6 +20,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import BrandLogo from '../components/BrandLogo';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
@@ -274,7 +275,7 @@ function ProfileVerificationPage() {
       <section className={styles.phone} aria-label="Verifica profilo Motrice">
         <header className={styles.topbar}>
           <div className={styles.brand}>
-            <span className={styles.mark}>M</span>
+            <BrandLogo className={styles.mark} decorative />
             <span><strong>MOTRICE</strong><small>Verifica profilo beta</small></span>
           </div>
           <span className={styles.stepCount}>{step + 1} / 6</span>

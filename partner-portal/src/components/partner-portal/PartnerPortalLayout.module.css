@@ -34,12 +34,10 @@
 
 .brandLogo {
   width: 2.75rem;
-  height: 2.75rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
   flex: 0 0 auto;
-  border-radius: 0.8rem;
-  object-fit: cover;
-  box-shadow: 0 0 1.5rem rgb(216 255 53 / 20%);
 }
 
 .title {

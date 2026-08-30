@@ -1,15 +1,17 @@
-function BrandLogo({ className = '', decorative = false, loading = 'eager' }) {
+function BrandLogo({ className = '', decorative = false }) {
   return (
-    <img
+    <svg
       className={className}
-      src="/images/motrice-logo.png"
-      alt={decorative ? '' : 'Motrice'}
+      viewBox="0 0 320 230"
+      role={decorative ? undefined : 'img'}
       aria-hidden={decorative ? 'true' : undefined}
-      width="512"
-      height="512"
-      loading={loading}
-      decoding="async"
-    />
+      aria-label={decorative ? undefined : 'Motrice'}
+      focusable="false"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <path fill="#c6ff00" d="M44 28 207 176l-23 25L77 103v94H44V28Z" />
+      <path fill="#c6ff00" d="M276 28v169h-33v-94l-42 39-23-25 98-89Z" />
+    </svg>
   );
 }
 

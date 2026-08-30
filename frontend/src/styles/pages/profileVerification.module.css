@@ -41,15 +41,11 @@
 
 .mark {
   width: 2.65rem;
-  height: 2.65rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border: 1px solid #313131;
-  border-radius: 0.8rem;
-  color: #c6ff00;
-  background: #171717;
-  font-weight: 900;
+  display: block;
+  overflow: visible;
 }
 
 .brand > span:last-child {

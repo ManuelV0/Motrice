@@ -181,12 +181,11 @@
 
 .footerLogo {
   width: 2.6rem;
-  height: 2.6rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
   flex: 0 0 auto;
-  border-radius: 0.78rem;
-  object-fit: cover;
-  box-shadow: 0 0 1.5rem rgb(216 255 53 / 16%);
+  overflow: visible;
 }
 
 .navBlock h4 {

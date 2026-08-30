@@ -72,11 +72,11 @@
 
 .kickerLogo {
   width: 1.35rem;
-  height: 1.35rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
   flex: 0 0 auto;
-  border-radius: 0.38rem;
-  object-fit: cover;
+  overflow: visible;
 }
 
 .subtitle {

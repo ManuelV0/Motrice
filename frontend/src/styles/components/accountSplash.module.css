@@ -18,11 +18,10 @@
 
 .logoImage {
   width: 6rem;
-  height: 6rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
-  border-radius: 1.7rem;
-  object-fit: cover;
-  box-shadow: 0 0 2.4rem rgb(216 255 53 / 22%);
+  overflow: visible;
   animation: splashPulse 1.5s ease-in-out infinite;
 }
 

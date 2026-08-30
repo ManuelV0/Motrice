@@ -285,10 +285,11 @@
 
 .editorBrandLogo {
   width: 2.25rem;
-  height: 2.25rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
-  border-radius: 0.68rem;
-  object-fit: cover;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .closeEditorButton {

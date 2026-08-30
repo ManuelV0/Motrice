@@ -21,7 +21,7 @@ export default function PartnerPortalLayout({
     <main className={styles.shell}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <img className={styles.brandLogo} src="/motrice-logo.png" alt="" width="512" height="512" />
+          <img className={styles.brandLogo} src="/motrice-mark.svg" alt="" width="320" height="230" />
           <div>
             <p className={styles.title}>Motrice Partner Portal</p>
             <p className={styles.subtitle}>{partnerName || 'Partner'} · Area gestionale convenzioni</p>

@@ -8,7 +8,7 @@ export default function LoginPage({ onLogin }) {
       <article className={loginStyles.hero}>
         <div className={loginStyles.heroContent}>
           <div className={loginStyles.brandLockup}>
-            <img className={loginStyles.brandLogo} src="/motrice-logo.png" alt="Motrice" width="512" height="512" />
+            <img className={loginStyles.brandLogo} src="/motrice-mark.svg" alt="Motrice" width="320" height="230" />
             <strong>MOTRICE</strong>
           </div>
           <p className={loginStyles.kicker}>Portale Gestionale Convenzioni</p>

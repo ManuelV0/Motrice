@@ -825,12 +825,11 @@
 
 .brandMark {
   width: 2.12rem;
-  height: 2.12rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
   flex: 0 0 auto;
-  border-radius: 0.58rem;
-  object-fit: cover;
-  box-shadow: none;
+  overflow: visible;
 }
 
 .mobileBrandRow {
@@ -842,12 +841,11 @@
 
 .mobileBrandLogo {
   width: 2.15rem;
-  height: 2.15rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
   display: block;
   flex: 0 0 auto;
-  border-radius: 0.66rem;
-  object-fit: cover;
-  box-shadow: 0 0 1.25rem rgb(216 255 53 / 18%);
+  overflow: visible;
 }
 
 .toggle,
