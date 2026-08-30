@@ -1155,7 +1155,6 @@ function MapPage() {
             <div className={styles.mapShade} aria-hidden="true" />
             <div className={styles.mapLegend} aria-label="Legenda della mappa">
               <span><i className={`${styles.legendDot} ${styles.legendEvent}`} aria-hidden="true" />Evento</span>
-              <span><i className={`${styles.legendDot} ${styles.legendCluster}`} aria-hidden="true" />Gruppo</span>
               <span><i className={`${styles.legendDot} ${styles.legendSaved}`} aria-hidden="true" />Salvato</span>
               <span><i className={`${styles.legendDot} ${styles.legendUser}`} aria-hidden="true" />Tu</span>
             </div>
