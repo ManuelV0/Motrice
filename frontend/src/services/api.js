@@ -16,7 +16,7 @@ import { createSupabaseApi } from './supabaseApi';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const EVENT_DURATION_HOURS = 2;
-const DEFAULT_ACCOUNT_PROFILE = { display_name: '', bio: '', avatar_url: '', chat_slots: [] };
+const DEFAULT_ACCOUNT_PROFILE = { display_name: '', bio: '', avatar_url: '', cover_url: '', chat_slots: [] };
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -2809,6 +2809,7 @@ const localApi = {
         display_name: normalizeDisplayName(accountProfile.display_name || store.localUser?.name || '', 'Me'),
         bio: accountProfile.bio || '',
         avatar_url: accountProfile.avatar_url || '',
+        cover_url: accountProfile.cover_url || '',
         chat_slots: Array.isArray(accountProfile.chat_slots) ? accountProfile.chat_slots : []
       })
     );
@@ -2826,6 +2827,7 @@ const localApi = {
         : String(payload.display_name).trim().slice(0, 40);
     const nextBio = payload.bio == null ? current.bio : String(payload.bio).trim().slice(0, 600);
     const nextAvatar = payload.avatar_url == null ? current.avatar_url : String(payload.avatar_url);
+    const nextCover = payload.cover_url == null ? current.cover_url : String(payload.cover_url);
     const nextCity =
       payload.city == null ? String(store.localUser?.city || '') : String(payload.city).trim().slice(0, 80);
     const nextLevel =
@@ -2847,6 +2849,7 @@ const localApi = {
         display_name: nextDisplayName,
         bio: nextBio,
         avatar_url: nextAvatar,
+        cover_url: nextCover,
         chat_slots: nextSlots
       }
     };

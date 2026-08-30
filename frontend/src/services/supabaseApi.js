@@ -937,6 +937,7 @@ function createRemoteMethods(localApi) {
       }
       if (payload.bio != null) updates.bio = normalizeText(payload.bio).slice(0, 600);
       if (payload.avatar_url != null) updates.avatar_url = normalizeText(payload.avatar_url);
+      if (payload.cover_url != null) updates.cover_url = normalizeText(payload.cover_url);
       if (payload.city != null) updates.city = normalizeText(payload.city).slice(0, 80);
       if (payload.level != null) updates.level = payload.level;
       const { data, error } = await client

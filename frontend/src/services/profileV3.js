@@ -17,6 +17,7 @@ function identityFrom(profile = {}) {
   return {
     display_name: String(profile.display_name || profile.name || 'Alessandro').trim() || 'Alessandro',
     avatar_url: String(profile.avatar_url || ''),
+    cover_url: String(profile.cover_url || ''),
     bio: String(profile.bio || ''),
     city: String(profile.city || 'Ascoli Piceno').trim() || 'Ascoli Piceno',
     sports: ['Calisthenics', 'Running'],

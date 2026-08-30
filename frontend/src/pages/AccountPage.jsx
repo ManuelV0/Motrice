@@ -9,6 +9,7 @@ import {
   createEmptyProfileV3,
   getProfileV3State
 } from '../services/profileV3';
+import { uploadProfileMedia } from '../services/profileMedia';
 
 function AccountPage() {
   const navigate = useNavigate();
@@ -51,6 +52,7 @@ function AccountPage() {
           ...current.identity,
           display_name: identity.display_name,
           avatar_url: identity.avatar_url,
+          cover_url: identity.cover_url,
           bio: identity.bio,
           city: identity.city
         }
@@ -74,6 +76,7 @@ function AccountPage() {
       mode={mode}
       onModeChange={setMode}
       onSaveProfile={saveProfile}
+      onUploadMedia={uploadProfileMedia}
       onVerify={() => navigate('/verify-profile')}
       onInvite={() => {
         showToast('Scegli un evento per invitare questo profilo', 'info');
