@@ -492,15 +492,11 @@
 }
 
 .eventCard {
-  --activity-color: var(--map-neon);
-  --activity-glow: rgb(199 255 0 / 12%);
-
   position: relative;
   overflow: hidden;
   border: 1px solid var(--map-ui-border);
   border-radius: 1.35rem;
   background:
-    radial-gradient(22rem 10rem at 105% -15%, var(--activity-glow), transparent 64%),
     linear-gradient(145deg, rgb(255 255 255 / 3.5%), transparent 48%),
     var(--map-ui-surface);
   box-shadow: 0 16px 34px rgb(0 0 0 / 22%);
@@ -508,42 +504,6 @@
     border-color var(--dur-fast) var(--ease),
     transform var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease);
-}
-
-.eventCard[data-activity='gym'],
-.eventCard[data-activity='basketball'] {
-  --activity-color: #ff8a2b;
-  --activity-glow: rgb(255 138 43 / 14%);
-}
-
-.eventCard[data-activity='football'] {
-  --activity-color: #63d4ff;
-  --activity-glow: rgb(99 212 255 / 13%);
-}
-
-.eventCard[data-activity='tennis'] {
-  --activity-color: #f5e45c;
-  --activity-glow: rgb(245 228 92 / 13%);
-}
-
-.eventCard[data-activity='yoga'] {
-  --activity-color: #c894ff;
-  --activity-glow: rgb(200 148 255 / 13%);
-}
-
-.eventCard[data-activity='trekking'] {
-  --activity-color: #79dc7a;
-  --activity-glow: rgb(121 220 122 / 13%);
-}
-
-.eventCard[data-activity='cycling'] {
-  --activity-color: #ffd34f;
-  --activity-glow: rgb(255 211 79 / 13%);
-}
-
-.eventCard[data-activity='swimming'] {
-  --activity-color: #57bfff;
-  --activity-glow: rgb(87 191 255 / 13%);
 }
 
 .eventCardSelected {
@@ -579,62 +539,7 @@
   bottom: var(--s-3);
   width: 0.22rem;
   border-radius: 999px;
-  background: var(--activity-color);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--activity-color) 38%, transparent);
-}
-
-.eventIdentity {
-  min-width: 0;
-  min-height: 3.15rem;
-  margin-left: var(--s-2);
-  padding: 0.4rem 0.65rem 0.4rem 0.42rem;
-  border: 1px solid color-mix(in srgb, var(--activity-color) 22%, var(--map-ui-border));
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--activity-color) 8%, transparent);
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-}
-
-.eventIdentity > span:last-child {
-  min-width: 0;
-  display: grid;
-  gap: 0.06rem;
-}
-
-.eventIdentity small {
-  color: var(--map-ui-muted);
-  font-size: 0.58rem;
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.14em;
-}
-
-.eventIdentity b {
-  overflow: hidden;
-  color: var(--map-ui-text);
-  font-size: var(--text-xs);
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eventCardIcon {
-  --event-pin-fill: var(--activity-color);
-
-  flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.78rem;
-  background: var(--activity-color);
-  color: #050705;
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--activity-color) 22%, transparent);
-  display: grid;
-  place-items: center;
-}
-
-.eventCardIcon svg {
-  width: 1.3rem;
-  height: 1.3rem;
+  background: color-mix(in srgb, var(--map-neon) 44%, #4d5548);
 }
 
 .eventMeta {

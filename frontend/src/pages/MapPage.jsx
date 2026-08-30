@@ -127,43 +127,6 @@ function getEventActivityType(event) {
   return 'activity';
 }
 
-const EVENT_ACTIVITY_LABELS = {
-  running: 'Corsa',
-  gym: 'Palestra',
-  tennis: 'Tennis / Padel',
-  football: 'Calcio',
-  basketball: 'Basket',
-  yoga: 'Yoga',
-  trekking: 'Trekking',
-  cycling: 'Ciclismo',
-  swimming: 'Nuoto',
-  activity: 'Attività sportiva'
-};
-
-const SVG_ATTRIBUTE_TO_REACT = {
-  'stroke-width': 'strokeWidth',
-  'stroke-linecap': 'strokeLinecap',
-  'stroke-linejoin': 'strokeLinejoin'
-};
-
-function EventActivityGlyph({ event, className = '' }) {
-  const activityType = getEventActivityType(event);
-
-  return (
-    <span className={className} data-activity={activityType} aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round">
-        {EVENT_ACTIVITY_ICON_NODES[activityType].map(([tagName, attributes], index) => {
-          const SvgNode = tagName;
-          const reactAttributes = Object.fromEntries(
-            Object.entries(attributes).map(([name, value]) => [SVG_ATTRIBUTE_TO_REACT[name] || name, value])
-          );
-          return <SvgNode key={`${activityType}-${tagName}-${index}`} {...reactAttributes} />;
-        })}
-      </svg>
-    </span>
-  );
-}
-
 function createEventActivityIcon(event) {
   const activityType = getEventActivityType(event);
   const icon = document.createElement('span');
@@ -1240,7 +1203,6 @@ function MapPage() {
             <ul className={styles.eventList}>
               {visibleEvents.map((event) => {
                 const isSelected = String(event.id) === String(selectedEventId);
-                const activityType = getEventActivityType(event);
                 return (
                   <li key={event.id}>
                     <article
@@ -1248,18 +1210,10 @@ function MapPage() {
                         if (node) eventCardRefs.current.set(String(event.id), node);
                         else eventCardRefs.current.delete(String(event.id));
                       }}
-                      data-activity={activityType}
                       className={`${styles.eventCard} ${isSelected ? styles.eventCardSelected : ''}`}
                     >
                       <button type="button" className={styles.eventCardMain} onClick={() => focusEvent(event)}>
                         <span className={styles.eventAccent} aria-hidden="true" />
-                        <span className={styles.eventIdentity}>
-                          <EventActivityGlyph event={event} className={styles.eventCardIcon} />
-                          <span>
-                            <small>ATTIVITÀ</small>
-                            <b>{EVENT_ACTIVITY_LABELS[activityType]}</b>
-                          </span>
-                        </span>
                         <span className={styles.eventMeta}>
                           <span className={styles.eventDay}>{formatEventDay(event.event_datetime)}</span>
                           <span>
