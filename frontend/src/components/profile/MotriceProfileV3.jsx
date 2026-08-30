@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import BrandLogo from '../BrandLogo';
 import {
   ArrowRight,
   ChevronDown,
@@ -232,7 +231,10 @@ function MotriceProfileV3({
             <img src={form.cover_url} alt="Copertina del profilo" />
           ) : (
             <span className={styles.coverFallback} aria-hidden="true">
-              <BrandLogo className={styles.coverFallbackLogo} decorative />
+              <svg className={styles.coverFallbackLogo} viewBox="0 0 320 230" focusable="false">
+                <path d="M44 28 207 176l-23 25L77 103v94H44V28Z" />
+                <path d="M276 28v169h-33v-94l-42 39-23-25 98-89Z" />
+              </svg>
               <small>MOTRICE</small>
             </span>
           )}

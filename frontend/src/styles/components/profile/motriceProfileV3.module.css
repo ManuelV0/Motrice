@@ -174,22 +174,25 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  gap: 0.12rem;
+  gap: 0;
 }
 .coverFallbackLogo {
-  width: 4.65rem;
-  height: 4.65rem;
+  width: 6.5rem;
+  height: 4.55rem;
   display: block;
-  border-radius: 1.08rem;
-  object-fit: contain;
+  margin: 0 0 -0.12rem;
+  overflow: visible;
+  color: var(--v3-lime);
+  fill: currentColor;
   box-shadow: none;
   filter: none;
 }
 .coverFallback small {
-  color: rgb(255 255 255 / 34%);
-  font-size: 0.52rem;
+  color: rgb(198 255 0 / 46%);
+  font-size: 0.62rem;
   font-weight: 850;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.31em;
+  text-shadow: 0 0 0.72rem rgb(198 255 0 / 58%);
 }
 
 .coverButton {
