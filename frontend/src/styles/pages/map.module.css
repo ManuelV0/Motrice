@@ -743,24 +743,45 @@
   box-shadow: 0 0 24px rgb(199 255 0 / 16%);
 }
 
+.filtersBackdrop {
+  position: fixed;
+  z-index: calc(var(--z-overlay-mid) - 1);
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 58%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.filtersBackdropOpen {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .filtersDrawer {
   position: fixed;
   z-index: var(--z-overlay-mid);
   left: var(--s-3);
   right: var(--s-3);
   bottom: var(--map-safe-bottom);
-  max-height: min(70dvh, 34rem);
+  max-height: min(76dvh, 39rem);
   overflow: auto;
-  padding: 0 var(--s-3) var(--s-3);
-  border: 1px solid var(--map-ui-border);
+  padding: 0 var(--s-4) var(--s-3);
+  border: 1px solid rgb(255 255 255 / 13%);
   border-radius: 1.5rem;
-  background: color-mix(in srgb, var(--map-ui-surface-strong) 94%, transparent);
-  box-shadow: 0 28px 72px rgb(0 0 0 / 52%);
+  background: color-mix(in srgb, var(--map-ui-surface-strong) 98%, #080a08);
+  box-shadow:
+    0 28px 72px rgb(0 0 0 / 62%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
   backdrop-filter: blur(18px) saturate(1.05);
   -webkit-backdrop-filter: blur(18px) saturate(1.05);
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-4);
   transition: transform var(--dur-med) var(--ease), opacity var(--dur-fast) var(--ease);
+  overscroll-behavior: contain;
 }
 
 .filtersDrawerClosed {
@@ -775,43 +796,75 @@
 }
 
 .sheetHandle {
-  width: 2.8rem;
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  width: 3rem;
   height: 0.24rem;
-  margin: var(--s-2) auto var(--s-1);
+  margin: var(--s-2) auto 0;
   border-radius: 999px;
-  background: var(--map-ui-muted);
+  background: rgb(255 255 255 / 42%);
 }
 
 .sheetHeaderRow {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--s-2);
 }
 
-.sheetHeaderRow > h2 {
+.sheetTitleGroup {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.sheetTitleIcon {
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  flex: 0 0 2.65rem;
+  border: 1px solid rgb(199 255 0 / 28%);
+  border-radius: 0.9rem;
+  background: rgb(199 255 0 / 9%);
+  color: var(--map-neon);
+  place-items: center;
+}
+
+.sheetTitleGroup h2 {
   margin: 0;
   color: var(--map-ui-text);
-  font-size: var(--text-base);
+  font-size: 1.08rem;
+  line-height: 1.15;
+}
+
+.sheetTitleGroup p {
+  margin: 0.28rem 0 0;
+  color: var(--map-ui-muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .sheetToggle {
-  min-height: 2.35rem;
-  padding: 0 var(--s-3);
+  display: grid;
+  width: 2.65rem;
+  height: 2.65rem;
+  min-width: 2.65rem;
+  min-height: 2.65rem;
+  padding: 0;
   border: 1px solid var(--map-ui-border);
-  border-radius: 999px;
+  border-radius: 50%;
   background: rgb(255 255 255 / 5%);
   color: var(--map-ui-text);
   box-shadow: none;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-1);
+  place-items: center;
 }
 
 .sheetFiltersGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
+  gap: var(--s-3) var(--s-2);
 }
 
 .mapField {
@@ -819,52 +872,136 @@
   gap: var(--s-1);
 }
 
-.mapField > span {
+.fieldLabel {
+  min-height: 1.15rem;
   color: var(--map-ui-muted);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
+  font-size: 0.68rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-1);
+}
+
+.premiumLabel {
+  color: var(--map-neon);
+  font-size: 0.56rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
 }
 
 .mapField > select {
   min-width: 0;
-  min-height: 2.75rem;
-  padding: 0 var(--s-2);
+  min-height: 3.15rem;
+  padding: 0 2rem 0 var(--s-3);
   border: 1px solid var(--map-ui-border);
-  border-radius: var(--r-md);
-  background: var(--map-ui-surface);
+  border-radius: 0.9rem;
+  background-color: var(--map-ui-surface);
   color: var(--map-ui-text);
-  font-size: var(--text-xs);
+  font-size: 0.76rem;
+  font-weight: var(--weight-semibold);
+  outline: none;
+}
+
+.mapField > select:focus-visible {
+  border-color: rgb(199 255 0 / 72%);
+  box-shadow: 0 0 0 3px rgb(199 255 0 / 10%);
 }
 
 .mapField > select:disabled {
-  opacity: 0.56;
+  border-style: dashed;
+  color: rgb(255 255 255 / 40%);
+  opacity: 0.72;
+}
+
+.mapAppearanceField {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  grid-column: 1 / -1;
+}
+
+.mapAppearanceField > legend {
+  min-height: 1.15rem;
+  margin-bottom: var(--s-1);
+  color: var(--map-ui-muted);
+  font-size: 0.68rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mapThemeSwitch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.22rem;
+  border: 1px solid var(--map-ui-border);
+  border-radius: 1rem;
+  background: rgb(0 0 0 / 26%);
+}
+
+.mapThemeSwitch > button {
+  min-height: 2.7rem;
+  padding: 0 var(--s-3);
+  border: 0;
+  border-radius: 0.78rem;
+  background: transparent;
+  color: var(--map-ui-muted);
+  box-shadow: none;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.mapThemeSwitch > button.mapThemeActive {
+  background: var(--map-neon);
+  color: var(--map-neon-ink);
+  box-shadow: 0 0 18px rgb(199 255 0 / 14%);
 }
 
 .drawerActions {
+  position: sticky;
+  z-index: 2;
+  bottom: calc(-1 * var(--s-3));
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: var(--s-2);
+  margin: 0 calc(-1 * var(--s-1));
+  padding: var(--s-2) var(--s-1) var(--s-3);
+  background: linear-gradient(180deg, transparent 0%, var(--map-ui-surface-strong) 22%);
 }
 
 .drawerGhost,
 .drawerApply {
-  min-height: 2.55rem;
-  padding: 0 var(--s-4);
+  min-height: 3.25rem;
+  padding: 0 var(--s-3);
   border-radius: 999px;
   font-weight: var(--weight-semibold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
 }
 
 .drawerGhost {
+  flex: 0.8;
   border: 1px solid var(--map-ui-border);
-  background: transparent;
+  background: rgb(255 255 255 / 4%);
   color: var(--map-ui-text);
 }
 
 .drawerApply {
+  flex: 1.25;
   border: 1px solid var(--map-neon);
   background: var(--map-neon);
   color: var(--map-neon-ink);
+  box-shadow: 0 0 22px rgb(199 255 0 / 17%);
 }
 
 .eventPin {

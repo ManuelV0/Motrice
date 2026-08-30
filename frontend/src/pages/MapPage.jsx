@@ -5,13 +5,17 @@ import {
   ArrowRight,
   Bookmark,
   BookmarkCheck,
-  ChevronDown,
+  Check,
+  LockKeyhole,
   LocateFixed,
   MapPin,
   MapPinOff,
   Minus,
   Plus,
+  RotateCcw,
   Search,
+  SlidersHorizontal,
+  X,
   Users
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -486,90 +490,146 @@ function MapFiltersDrawer({
   mapTheme,
   onClose,
   onApply,
+  onReset,
   onPaywall,
   onMapThemeChange
 }) {
+  const selectedOptionsCount = [
+    filters.sport !== baseFilters.sport,
+    filters.dateRange !== baseFilters.dateRange,
+    filters.distance !== baseFilters.distance,
+    filters.sortBy !== baseFilters.sortBy,
+    mapTheme !== 'dark'
+  ].filter(Boolean).length;
+
   return (
-    <div className={`${styles.filtersDrawer} ${open ? styles.filtersDrawerOpen : styles.filtersDrawerClosed}`} aria-hidden={!open}>
-      <div className={styles.sheetHandle} aria-hidden="true" />
-      <div className={styles.sheetHeaderRow}>
-        <h2>Filtri personalizzati</h2>
-        <button type="button" className={styles.sheetToggle} onClick={onClose}>
-          <span>Chiudi</span>
-          <ChevronDown size={16} />
-        </button>
+    <>
+      <button
+        type="button"
+        className={`${styles.filtersBackdrop} ${open ? styles.filtersBackdropOpen : ''}`}
+        aria-label="Chiudi filtri"
+        tabIndex={open ? 0 : -1}
+        onClick={onClose}
+      />
+      <div
+        className={`${styles.filtersDrawer} ${open ? styles.filtersDrawerOpen : styles.filtersDrawerClosed}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="map-filters-title"
+        aria-hidden={!open}
+      >
+        <div className={styles.sheetHandle} aria-hidden="true" />
+        <div className={styles.sheetHeaderRow}>
+          <div className={styles.sheetTitleGroup}>
+            <span className={styles.sheetTitleIcon} aria-hidden="true">
+              <SlidersHorizontal size={19} />
+            </span>
+            <div>
+              <h2 id="map-filters-title">Filtra gli eventi</h2>
+              <p>
+                {selectedOptionsCount > 0
+                  ? `${selectedOptionsCount} ${selectedOptionsCount === 1 ? 'preferenza attiva' : 'preferenze attive'}`
+                  : 'Personalizza ciò che appare sulla mappa'}
+              </p>
+            </div>
+          </div>
+          <button type="button" className={styles.sheetToggle} onClick={onClose} aria-label="Chiudi filtri">
+            <X size={19} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className={styles.sheetFiltersGrid}>
+          <label className={styles.mapField}>
+            <span className={styles.fieldLabel}>Sport</span>
+            <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
+              <option value="all">Tutti gli sport</option>
+              {sports.map((sport) => (
+                <option key={sport.id} value={sport.id}>
+                  {sport.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.mapField}>
+            <span className={styles.fieldLabel}>Periodo</span>
+            <select value={filters.dateRange} onChange={(event) => setFilters((prev) => ({ ...prev, dateRange: event.target.value }))}>
+              <option value="all">Qualsiasi data</option>
+              <option value="today">Oggi</option>
+              <option value="week">Questa settimana</option>
+              <option value="month">Questo mese</option>
+            </select>
+          </label>
+
+          <label className={styles.mapField}>
+            <span className={styles.fieldLabel}>
+              Distanza
+              {!entitlements.canUseAdvancedFilters ? (
+                <small className={styles.premiumLabel}><LockKeyhole size={10} aria-hidden="true" /> Premium</small>
+              ) : null}
+            </span>
+            <select
+              value={filters.distance}
+              onChange={(event) => {
+                if (!entitlements.canUseAdvancedFilters) {
+                  onPaywall();
+                  return;
+                }
+                setFilters((prev) => ({ ...prev, distance: event.target.value }));
+              }}
+              disabled={!entitlements.canUseAdvancedFilters}
+            >
+              <option value="all">Qualsiasi distanza</option>
+              <option value="5">Entro 5 km</option>
+              <option value="15">Entro 15 km</option>
+              <option value="30">Entro 30 km</option>
+            </select>
+          </label>
+
+          <label className={styles.mapField}>
+            <span className={styles.fieldLabel}>Ordina per</span>
+            <select value={filters.sortBy} onChange={(event) => setFilters((prev) => ({ ...prev, sortBy: event.target.value }))}>
+              <option value="soonest">Prima disponibilità</option>
+              <option value="closest">Più vicini a te</option>
+              <option value="popular">Più popolari</option>
+            </select>
+          </label>
+
+          <fieldset className={styles.mapAppearanceField}>
+            <legend>Aspetto mappa</legend>
+            <div className={styles.mapThemeSwitch}>
+              <button
+                type="button"
+                className={mapTheme === 'dark' ? styles.mapThemeActive : ''}
+                aria-pressed={mapTheme === 'dark'}
+                onClick={() => onMapThemeChange('dark')}
+              >
+                Scura
+              </button>
+              <button
+                type="button"
+                className={mapTheme === 'light' ? styles.mapThemeActive : ''}
+                aria-pressed={mapTheme === 'light'}
+                onClick={() => onMapThemeChange('light')}
+              >
+                Chiara
+              </button>
+            </div>
+          </fieldset>
+        </div>
+
+        <div className={styles.drawerActions}>
+          <button type="button" className={styles.drawerGhost} onClick={onReset}>
+            <RotateCcw size={16} aria-hidden="true" />
+            Ripristina
+          </button>
+          <button type="button" className={styles.drawerApply} onClick={onApply}>
+            <Check size={17} aria-hidden="true" />
+            Applica filtri
+          </button>
+        </div>
       </div>
-
-      <div className={styles.sheetFiltersGrid}>
-        <label className={styles.mapField}>
-          <span>Sport</span>
-          <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
-            <option value="all">Tutti</option>
-            {sports.map((sport) => (
-              <option key={sport.id} value={sport.id}>
-                {sport.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className={styles.mapField}>
-          <span>Periodo</span>
-          <select value={filters.dateRange} onChange={(event) => setFilters((prev) => ({ ...prev, dateRange: event.target.value }))}>
-            <option value="all">Qualsiasi</option>
-            <option value="today">Oggi</option>
-            <option value="week">Questa settimana</option>
-            <option value="month">Questo mese</option>
-          </select>
-        </label>
-
-        <label className={styles.mapField}>
-          <span>Distanza</span>
-          <select
-            value={filters.distance}
-            onChange={(event) => {
-              if (!entitlements.canUseAdvancedFilters) {
-                onPaywall();
-                return;
-              }
-              setFilters((prev) => ({ ...prev, distance: event.target.value }));
-            }}
-            disabled={!entitlements.canUseAdvancedFilters}
-          >
-            <option value="all">0-350+ km</option>
-            <option value="5">Entro 5 km</option>
-            <option value="15">Entro 15 km</option>
-            <option value="30">Entro 30 km</option>
-          </select>
-        </label>
-
-        <label className={styles.mapField}>
-          <span>Ordina</span>
-          <select value={filters.sortBy} onChange={(event) => setFilters((prev) => ({ ...prev, sortBy: event.target.value }))}>
-            <option value="soonest">Più vicini nel tempo</option>
-            <option value="closest">Più vicini a te</option>
-            <option value="popular">Più popolari</option>
-          </select>
-        </label>
-
-        <label className={styles.mapField}>
-          <span>Aspetto mappa</span>
-          <select value={mapTheme} onChange={(event) => onMapThemeChange(event.target.value)}>
-            <option value="dark">Scura</option>
-            <option value="light">Chiara</option>
-          </select>
-        </label>
-      </div>
-
-      <div className={styles.drawerActions}>
-        <button type="button" className={styles.drawerGhost} onClick={() => setFilters(baseFilters)}>
-          Reset
-        </button>
-        <button type="button" className={styles.drawerApply} onClick={onApply}>
-          Applica
-        </button>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -589,6 +649,8 @@ function MapPage() {
   const shouldRecenterRef = useRef(true);
   const gpsTapRef = useRef(0);
   const mapStyleThemeRef = useRef(null);
+  const chipBeforeDrawerRef = useRef('all');
+  const mapThemeBeforeDrawerRef = useRef('dark');
   const eventsSectionRef = useRef(null);
   const eventCardRefs = useRef(new Map());
 
@@ -806,9 +868,18 @@ function MapPage() {
   }
 
   function handleCustomChip() {
+    chipBeforeDrawerRef.current = selectedChip;
+    mapThemeBeforeDrawerRef.current = mapTheme;
     setSelectedChip('custom');
     setDraftFilters(filters);
     setFiltersDrawerOpen(true);
+  }
+
+  function closeCustomFilters() {
+    setDraftFilters(filters);
+    setMapTheme(mapThemeBeforeDrawerRef.current);
+    setSelectedChip(chipBeforeDrawerRef.current);
+    setFiltersDrawerOpen(false);
   }
 
   function onGpsAction() {
@@ -1103,7 +1174,15 @@ function MapPage() {
 
   function applyCustomFilters() {
     setFilters(draftFilters);
-    setSelectedChip('custom');
+    const hasNonDateCustomFilter =
+      String(draftFilters.q || '').trim().length > 0 ||
+      String(draftFilters.sport) !== 'all' ||
+      String(draftFilters.distance) !== 'all' ||
+      String(draftFilters.level) !== 'all' ||
+      String(draftFilters.timeOfDay) !== 'all' ||
+      String(draftFilters.sortBy) !== 'soonest';
+    const quickDateChip = ['all', 'today', 'week'].includes(draftFilters.dateRange) ? draftFilters.dateRange : null;
+    setSelectedChip(!hasNonDateCustomFilter && quickDateChip ? quickDateChip : 'custom');
     setFiltersDrawerOpen(false);
   }
 
@@ -1275,8 +1354,12 @@ function MapPage() {
         sports={sports}
         entitlements={entitlements}
         mapTheme={mapTheme}
-        onClose={() => setFiltersDrawerOpen(false)}
+        onClose={closeCustomFilters}
         onApply={applyCustomFilters}
+        onReset={() => {
+          setDraftFilters(baseFilters);
+          setMapTheme('dark');
+        }}
         onPaywall={() => setPaywallOpen(true)}
         onMapThemeChange={setMapTheme}
       />
