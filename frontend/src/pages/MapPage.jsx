@@ -444,27 +444,29 @@ function MapFilterChips({
 function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
   return (
     <div className={styles.fabStack} aria-label="Controlli mappa">
+      <div className={styles.zoomControlGroup}>
+        <button
+          type="button"
+          className={`${styles.fab} ${styles.fabNeutral}`}
+          onClick={onZoomIn}
+          aria-label="Aumenta zoom"
+        >
+          <Plus size={18} aria-hidden="true" />
+          <span>Zoom avanti</span>
+        </button>
+        <button
+          type="button"
+          className={`${styles.fab} ${styles.fabNeutral}`}
+          onClick={onZoomOut}
+          aria-label="Riduci zoom"
+        >
+          <Minus size={18} aria-hidden="true" />
+          <span>Zoom indietro</span>
+        </button>
+      </div>
       <button
         type="button"
-        className={`${styles.fab} ${styles.fabNeutral}`}
-        onClick={onZoomIn}
-        aria-label="Aumenta zoom"
-      >
-        <Plus size={18} aria-hidden="true" />
-        <span>Zoom avanti</span>
-      </button>
-      <button
-        type="button"
-        className={`${styles.fab} ${styles.fabNeutral}`}
-        onClick={onZoomOut}
-        aria-label="Riduci zoom"
-      >
-        <Minus size={18} aria-hidden="true" />
-        <span>Zoom indietro</span>
-      </button>
-      <button
-        type="button"
-        className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
+        className={`${styles.fab} ${styles.fabNeutral} ${styles.locationFab} ${onGps.active ? styles.fabPrimary : ''}`}
         onClick={onGps.onClick}
         aria-label="Centra sulla mia posizione"
       >
