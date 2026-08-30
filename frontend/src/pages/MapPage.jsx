@@ -254,9 +254,9 @@ function distanceKm(aLat, aLng, bLat, bLng) {
 function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVERLAP_PX) {
   if (!map) return [];
 
-  return events.reduce((clusters, event) => {
+  const clusters = events.reduce((result, event) => {
     const point = map.project([event.lng, event.lat]);
-    const nearbyCluster = clusters.find((cluster) =>
+    const nearbyCluster = result.find((cluster) =>
       cluster.screenPoints.every((clusterPoint) => {
         const dx = point.x - clusterPoint.x;
         const dy = point.y - clusterPoint.y;
@@ -265,7 +265,7 @@ function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVE
     );
 
     if (!nearbyCluster) {
-      clusters.push({
+      result.push({
         events: [event],
         screenPoints: [point],
         screenX: point.x,
@@ -273,7 +273,7 @@ function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVE
         lng: event.lng,
         lat: event.lat
       });
-      return clusters;
+      return result;
     }
 
     const previousCount = nearbyCluster.events.length;
@@ -284,8 +284,13 @@ function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVE
     nearbyCluster.screenY = (nearbyCluster.screenY * previousCount + point.y) / nextCount;
     nearbyCluster.lng = (nearbyCluster.lng * previousCount + event.lng) / nextCount;
     nearbyCluster.lat = (nearbyCluster.lat * previousCount + event.lat) / nextCount;
-    return clusters;
+    return result;
   }, []);
+
+  return clusters.map((cluster) => {
+    const visualCenter = map.unproject([cluster.screenX, cluster.screenY]);
+    return { ...cluster, lng: visualCenter.lng, lat: visualCenter.lat };
+  });
 }
 
 function zoomToEventCluster(map, cluster) {
@@ -1000,7 +1005,7 @@ function MapPage() {
 
         element.addEventListener('click', () => zoomToEventCluster(map, cluster));
 
-        const marker = new maplibregl.Marker({ element, anchor: 'center' })
+        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
           .setLngLat([cluster.lng, cluster.lat])
           .addTo(map);
         eventMarkersRef.current.push(marker);
