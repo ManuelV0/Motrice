@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import ChatTabs from '../components/chat/ChatTabs';
 import ChatTopActions from '../components/chat/ChatTopActions';
 import ThreadRow from '../components/chat/ThreadRow';
-import MetPeoplePill from '../components/chat/MetPeoplePill';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Modal from '../components/Modal';
 import { useToast } from '../context/ToastContext';
@@ -102,14 +101,10 @@ function ChatInboxPage() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={activeTab === 'event' ? 'Cerca chat evento' : 'Cerca chat DM'}
+          placeholder="Cerca chat, evento o persona"
           aria-label="Cerca nella tab corrente"
         />
       </label>
-
-      <div className={styles.metPillWrap}>
-        <MetPeoplePill onClick={() => navigate('/chat/met')} />
-      </div>
 
       {activeTab === 'event' ? (
         <div className={styles.statusTabs} role="group" aria-label="Stato chat evento">
@@ -133,16 +128,6 @@ function ChatInboxPage() {
       ) : null}
 
       <div className={styles.list}>
-        <div className={styles.listHead}>
-          <span>
-            {activeTab === 'event'
-              ? eventView === 'archived'
-                ? 'Eventi conclusi'
-                : 'Eventi attivi'
-              : 'Messaggi diretti'}
-          </span>
-          <small>{filtered.length}</small>
-        </div>
         {threadsLoading ? (
           <LoadingSkeleton rows={4} variant="list" />
         ) : filtered.length === 0 ? (

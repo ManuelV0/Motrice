@@ -1,4 +1,6 @@
 .page {
+  width: min(100%, 27.5rem);
+  margin-inline: auto;
   height: calc(
     100dvh
     - var(--nav-h)

@@ -123,6 +123,12 @@
   z-index: 0;
 }
 
+.avatar .sportGlyph {
+  font-size: 1.38rem;
+  line-height: 1;
+  filter: saturate(0.88);
+}
+
 .copy {
   min-width: 0;
   display: grid;

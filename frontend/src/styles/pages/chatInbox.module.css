@@ -2,7 +2,7 @@
   display: grid;
   align-content: start;
   gap: var(--s-3);
-  width: min(100%, 46rem);
+  width: min(100%, 27.5rem);
   margin-inline: auto;
   padding: var(--s-4);
   min-height: calc(
@@ -103,11 +103,6 @@
   box-shadow: var(--focus);
 }
 
-.metPillWrap {
-  display: flex;
-  min-width: 0;
-}
-
 .tabsWrap {
   min-width: 0;
 }
@@ -117,6 +112,7 @@
   align-items: center;
   gap: 0.5rem;
   width: fit-content;
+  margin-top: 0.05rem;
 }
 
 .statusTabs button {
@@ -155,32 +151,6 @@
   overflow: visible;
   min-height: 0;
   box-shadow: none;
-}
-
-.listHead {
-  min-height: 2.6rem;
-  padding: 0.45rem 0.15rem 0.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 0;
-  color: color-mix(in srgb, var(--text) 88%, var(--muted));
-  font-size: 0.72rem;
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.045em;
-  text-transform: uppercase;
-}
-
-.listHead small {
-  min-width: 1.45rem;
-  height: 1.45rem;
-  border-radius: var(--r-pill);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
-  color: var(--accent);
-  font-size: 0.7rem;
 }
 
 .empty {
@@ -302,7 +272,6 @@
   }
 
   .searchWrap,
-  .metPillWrap,
   .tabsWrap,
   .statusTabs,
   .list {
@@ -321,8 +290,8 @@
 
 @media (min-width: 980px) {
   .page {
-    width: min(42rem, 100%);
-    padding-inline: var(--s-5);
+    width: min(27.5rem, 100%);
+    padding-inline: var(--s-4);
   }
 }
 

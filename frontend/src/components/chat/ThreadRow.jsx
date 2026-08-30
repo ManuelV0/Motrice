@@ -1,6 +1,7 @@
 import { Archive, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import styles from '../../styles/components/chat/threadRow.module.css';
+import { getChatSportGlyph } from '../../utils/chatSport';
 
 const DELETE_REVEAL_PX = 96;
 const SWIPE_THRESHOLD_PX = 44;
@@ -23,22 +24,6 @@ function formatThreadTime(iso) {
   return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
 }
 
-function resolveSportAsset(thread) {
-  const explicit = String(thread?.avatarUrl || '').trim();
-  if (explicit) return explicit;
-  const value = `${thread?.meta?.sportSlug || ''} ${thread?.meta?.sportName || ''} ${thread?.title || ''}`.toLowerCase();
-  const matches = [
-    { terms: ['calcetto', 'calcio', 'football'], asset: 'calcio' },
-    { terms: ['palestra', 'gym', 'fitness', 'forza'], asset: 'palestra' },
-    { terms: ['running', 'corsa', 'jogging'], asset: 'running' },
-    { terms: ['trekking', 'escursione', 'hiking'], asset: 'trekking' },
-    { terms: ['padel', 'tennis'], asset: 'padel' },
-    { terms: ['bici', 'bike', 'ciclismo', 'mtb'], asset: 'bici' }
-  ];
-  const match = matches.find((item) => item.terms.some((term) => value.includes(term)));
-  return match ? `/images/${match.asset}.svg` : '';
-}
-
 function ThreadRow({ thread, archived = false, onOpen, onDeleteRequest }) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -52,7 +37,8 @@ function ThreadRow({ thread, archived = false, onOpen, onDeleteRequest }) {
     : 'Chat pronta · Scrivi il primo messaggio';
   const preview = String(thread?.lastMessage || '').trim() || fallbackPreview;
   const title = String(thread?.title || 'Chat').trim() || 'Chat';
-  const sportAsset = resolveSportAsset(thread);
+  const avatarUrl = String(thread?.avatarUrl || '').trim();
+  const isEvent = String(thread?.type || '') === 'event';
   const formattedTime = formatThreadTime(thread?.lastTs);
   const unreadCount = Number(thread?.unreadCount || 0);
   const senderPrefix = String(thread?.lastMessageSenderName || '').trim();
@@ -170,16 +156,18 @@ function ThreadRow({ thread, archived = false, onOpen, onDeleteRequest }) {
         aria-label={`Apri chat ${title}. Scorri verso destra per eliminarla`}
       >
         <span className={styles.avatar} aria-hidden="true">
-          {sportAsset ? (
+          {!isEvent && avatarUrl ? (
             <img
-              src={sportAsset}
+              src={avatarUrl}
               alt=""
               onError={(event) => {
                 event.currentTarget.hidden = true;
               }}
             />
           ) : null}
-          <span>{initialsFromTitle(title)}</span>
+          <span className={isEvent ? styles.sportGlyph : ''}>
+            {isEvent ? getChatSportGlyph(thread) : initialsFromTitle(title)}
+          </span>
         </span>
 
         <span className={styles.copy}>

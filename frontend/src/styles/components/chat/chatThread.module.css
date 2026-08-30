@@ -108,6 +108,11 @@
   z-index: 0;
 }
 
+.avatar .sportGlyph {
+  font-size: 1.18rem;
+  line-height: 1;
+}
+
 .headMeta {
   min-width: 0;
 }
@@ -335,16 +340,6 @@
 .newIndicator:focus-visible {
   outline: none;
   box-shadow: var(--focus);
-}
-
-@media (min-width: 980px) {
-  .head {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-  }
-
-  .backBtn {
-    display: none;
-  }
 }
 
 @media (max-width: 767px) {

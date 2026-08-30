@@ -5,6 +5,7 @@ import DayDivider from './DayDivider';
 import MessageBubble from './MessageBubble';
 import LoadingSkeleton from '../LoadingSkeleton';
 import styles from '../../styles/components/chat/chatThread.module.css';
+import { getChatSportGlyph } from '../../utils/chatSport';
 
 function initialsFromTitle(title = '') {
   const clean = String(title || '').trim();
@@ -72,7 +73,6 @@ function ChatThread({
   onBack,
   onOpenProfile,
   onOpenEvent,
-  mobile = false,
   fullScreenMobile = false
 }) {
   const bodyRef = useRef(null);
@@ -153,14 +153,14 @@ function ChatThread({
   return (
     <section className={`${styles.threadPane} ${fullScreenMobile ? styles.threadFullscreen : ''}`} aria-label={`Conversazione ${thread.title}`}>
       <header className={styles.head}>
-        {mobile ? (
+        {typeof onBack === 'function' ? (
           <button type="button" className={styles.backBtn} onClick={onBack} aria-label="Torna alla lista chat">
             <ChevronLeft size={18} aria-hidden="true" />
           </button>
         ) : null}
 
         <span className={styles.avatar} aria-hidden="true">
-          {thread.avatarUrl ? (
+          {thread.type !== 'event' && thread.avatarUrl ? (
             <img
               src={thread.avatarUrl}
               alt=""
@@ -169,7 +169,9 @@ function ChatThread({
               }}
             />
           ) : null}
-          <span>{initialsFromTitle(thread.title)}</span>
+          <span className={thread.type === 'event' ? styles.sportGlyph : ''}>
+            {thread.type === 'event' ? getChatSportGlyph(thread) : initialsFromTitle(thread.title)}
+          </span>
         </span>
 
         <div className={styles.headMeta}>
@@ -199,7 +201,7 @@ function ChatThread({
           {thread.type === 'event' ? (
             <p>
               {Number(thread?.meta?.participantsCount || 0)} partecipanti
-              {thread?.meta?.city ? ` · ${thread.meta.city}` : ''}
+              {eventStartLabel ? ` · ${eventStartLabel}` : thread?.meta?.city ? ` · ${thread.meta.city}` : ''}
             </p>
           ) : (
             <p>{String(thread?.meta?.status || 'online')}</p>
