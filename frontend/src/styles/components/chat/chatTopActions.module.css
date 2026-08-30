@@ -1,43 +1,55 @@
 .actions {
   display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
+  align-items: flex-start;
+  gap: 0.2rem;
   flex: 0 0 auto;
 }
 
 .iconBtn {
-  width: 2.55rem;
-  min-width: 2.55rem;
-  min-height: 2.55rem;
-  padding: 0;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--glass-border-strong);
-  background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
-  color: var(--text);
-  display: inline-flex;
+  width: 3.15rem;
+  min-width: 3.15rem;
+  min-height: 3.1rem;
+  padding: 0.28rem 0.12rem;
+  border-radius: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
   align-items: center;
   justify-content: center;
+  justify-items: center;
+  align-content: center;
+  gap: 0.18rem;
   flex: 0 0 auto;
   box-shadow: none;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   transition:
     background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
     transform var(--dur-fast) var(--ease);
   -webkit-tap-highlight-color: transparent;
 }
 
+.iconBtn span {
+  font-size: 0.62rem;
+  line-height: 1;
+}
+
 .iconBtn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-2) 92%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--text);
   transform: translateY(-1px);
 }
 
 .iconBtn:active:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-2) 98%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--glass-border));
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
   transform: scale(0.97);
+}
+
+@media (max-width: 360px) {
+  .iconBtn {
+    width: 2.75rem;
+    min-width: 2.75rem;
+  }
 }
 
 .iconBtn:focus-visible {

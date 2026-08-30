@@ -12,11 +12,22 @@ import { usePageMeta } from '../hooks/usePageMeta';
 import { useChatStore } from '../hooks/useChatStore';
 import styles from '../styles/pages/chatInbox.module.css';
 
+const ARCHIVED_EVENT_STATUSES = new Set(['completed', 'cancelled', 'closed', 'archived']);
+
+function isArchivedEventThread(thread) {
+  if (String(thread?.type || '') !== 'event') return false;
+  const status = String(thread?.meta?.eventStatus || '').trim().toLowerCase();
+  if (ARCHIVED_EVENT_STATUSES.has(status)) return true;
+  const startsAtMs = Date.parse(String(thread?.meta?.startsAt || ''));
+  return Number.isFinite(startsAtMs) && startsAtMs < Date.now() - 24 * 60 * 60 * 1000;
+}
+
 function ChatInboxPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { threadsLoading, threads, deleteThread } = useChatStore(null);
   const [activeTab, setActiveTab] = useState('event');
+  const [eventView, setEventView] = useState('active');
   const [query, setQuery] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -27,7 +38,12 @@ function ChatInboxPage() {
   });
 
   const filtered = useMemo(() => {
-    const base = (Array.isArray(threads) ? threads : []).filter((item) => String(item?.type || '') === activeTab);
+    const base = (Array.isArray(threads) ? threads : []).filter((item) => {
+      if (String(item?.type || '') !== activeTab) return false;
+      if (activeTab !== 'event') return true;
+      const archived = isArchivedEventThread(item);
+      return eventView === 'archived' ? archived : !archived;
+    });
     const q = String(query || '').trim().toLowerCase();
     if (!q) return base;
     return base.filter((item) => {
@@ -35,7 +51,18 @@ function ChatInboxPage() {
       const preview = String(item?.lastMessage || '').toLowerCase();
       return title.includes(q) || preview.includes(q);
     });
-  }, [threads, activeTab, query]);
+  }, [threads, activeTab, eventView, query]);
+
+  const counts = useMemo(() => {
+    const items = Array.isArray(threads) ? threads : [];
+    const eventItems = items.filter((item) => String(item?.type || '') === 'event');
+    return {
+      event: eventItems.length,
+      dm: items.filter((item) => String(item?.type || '') === 'dm').length,
+      active: eventItems.filter((item) => !isArchivedEventThread(item)).length,
+      archived: eventItems.filter(isArchivedEventThread).length
+    };
+  }, [threads]);
 
   async function confirmDeleteThread() {
     if (!deleteTarget?.id || deleting) return;
@@ -67,7 +94,7 @@ function ChatInboxPage() {
       </header>
 
       <div className={styles.tabsWrap}>
-        <ChatTabs value={activeTab} onChange={setActiveTab} />
+        <ChatTabs value={activeTab} counts={counts} onChange={setActiveTab} />
       </div>
 
       <label className={styles.searchWrap}>
@@ -84,9 +111,36 @@ function ChatInboxPage() {
         <MetPeoplePill onClick={() => navigate('/chat/met')} />
       </div>
 
+      {activeTab === 'event' ? (
+        <div className={styles.statusTabs} role="group" aria-label="Stato chat evento">
+          <button
+            type="button"
+            className={eventView === 'active' ? styles.statusTabActive : ''}
+            aria-pressed={eventView === 'active'}
+            onClick={() => setEventView('active')}
+          >
+            Attive <span>{counts.active}</span>
+          </button>
+          <button
+            type="button"
+            className={eventView === 'archived' ? styles.statusTabActive : ''}
+            aria-pressed={eventView === 'archived'}
+            onClick={() => setEventView('archived')}
+          >
+            Archiviate <span>{counts.archived}</span>
+          </button>
+        </div>
+      ) : null}
+
       <div className={styles.list}>
         <div className={styles.listHead}>
-          <span>{activeTab === 'event' ? 'Chat degli eventi' : 'Messaggi diretti'}</span>
+          <span>
+            {activeTab === 'event'
+              ? eventView === 'archived'
+                ? 'Eventi conclusi'
+                : 'Eventi attivi'
+              : 'Messaggi diretti'}
+          </span>
           <small>{filtered.length}</small>
         </div>
         {threadsLoading ? (
@@ -115,6 +169,7 @@ function ChatInboxPage() {
             <ThreadRow
               key={thread.id}
               thread={thread}
+              archived={isArchivedEventThread(thread)}
               onOpen={() => navigate(`/chat/${thread.id}`)}
               onDeleteRequest={setDeleteTarget}
             />

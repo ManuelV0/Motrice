@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react';
+import { Archive, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import styles from '../../styles/components/chat/threadRow.module.css';
 
@@ -23,13 +23,36 @@ function formatThreadTime(iso) {
   return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' });
 }
 
-function ThreadRow({ thread, onOpen, onDeleteRequest }) {
+function resolveSportAsset(thread) {
+  const explicit = String(thread?.avatarUrl || '').trim();
+  if (explicit) return explicit;
+  const value = `${thread?.meta?.sportSlug || ''} ${thread?.meta?.sportName || ''} ${thread?.title || ''}`.toLowerCase();
+  const matches = [
+    { terms: ['calcetto', 'calcio', 'football'], asset: 'calcio' },
+    { terms: ['palestra', 'gym', 'fitness', 'forza'], asset: 'palestra' },
+    { terms: ['running', 'corsa', 'jogging'], asset: 'running' },
+    { terms: ['trekking', 'escursione', 'hiking'], asset: 'trekking' },
+    { terms: ['padel', 'tennis'], asset: 'padel' },
+    { terms: ['bici', 'bike', 'ciclismo', 'mtb'], asset: 'bici' }
+  ];
+  const match = matches.find((item) => item.terms.some((term) => value.includes(term)));
+  return match ? `/images/${match.asset}.svg` : '';
+}
+
+function ThreadRow({ thread, archived = false, onOpen, onDeleteRequest }) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [dragging, setDragging] = useState(false);
   const gestureRef = useRef(null);
   const didDragRef = useRef(false);
-  const preview = String(thread?.lastMessage || '').trim() || 'Apri la conversazione';
+  const eventStatus = String(thread?.meta?.eventStatus || '').trim().toLowerCase();
+  const fallbackPreview = archived
+    ? eventStatus === 'cancelled'
+      ? 'Evento annullato · Chat archiviata'
+      : 'Evento concluso · Chat in sola lettura'
+    : 'Chat pronta · Scrivi il primo messaggio';
+  const preview = String(thread?.lastMessage || '').trim() || fallbackPreview;
   const title = String(thread?.title || 'Chat').trim() || 'Chat';
+  const sportAsset = resolveSportAsset(thread);
   const formattedTime = formatThreadTime(thread?.lastTs);
   const unreadCount = Number(thread?.unreadCount || 0);
   const senderPrefix = String(thread?.lastMessageSenderName || '').trim();
@@ -135,7 +158,7 @@ function ThreadRow({ thread, onOpen, onDeleteRequest }) {
 
       <button
         type="button"
-        className={`${styles.row} ${dragging ? styles.rowDragging : ''}`}
+        className={`${styles.row} ${dragging ? styles.rowDragging : ''} ${unreadCount > 0 ? styles.rowUnread : ''} ${archived ? styles.rowArchived : ''}`}
         style={{ transform: `translate3d(${swipeOffset}px, 0, 0)` }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -147,9 +170,9 @@ function ThreadRow({ thread, onOpen, onDeleteRequest }) {
         aria-label={`Apri chat ${title}. Scorri verso destra per eliminarla`}
       >
         <span className={styles.avatar} aria-hidden="true">
-          {thread?.avatarUrl ? (
+          {sportAsset ? (
             <img
-              src={thread.avatarUrl}
+              src={sportAsset}
               alt=""
               onError={(event) => {
                 event.currentTarget.hidden = true;
@@ -166,7 +189,11 @@ function ThreadRow({ thread, onOpen, onDeleteRequest }) {
           </span>
           <span className={styles.bottom}>
             <span className={styles.preview}>{previewText}</span>
-            {unreadCount > 0 ? <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
+            {unreadCount > 0 ? (
+              <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+            ) : archived ? (
+              <span className={styles.archiveFlag} aria-label="Chat archiviata"><Archive size={14} aria-hidden="true" /></span>
+            ) : null}
           </span>
         </span>
       </button>

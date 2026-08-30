@@ -112,22 +112,58 @@
   min-width: 0;
 }
 
+.statusTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+}
+
+.statusTabs button {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-2) 84%, var(--surface));
+  color: var(--muted);
+  font-size: var(--text-xs);
+  box-shadow: none;
+}
+
+.statusTabs button span {
+  margin-left: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusTabs button.statusTabActive {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-border));
+  background: var(--accent);
+  color: #0a0d07;
+}
+
+.statusTabs button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
 .list {
-  border: 1px solid color-mix(in srgb, var(--glass-border-strong) 82%, transparent);
-  border-radius: 1rem;
-  background: color-mix(in srgb, var(--surface) 98%, #070a07);
-  overflow: hidden;
+  display: grid;
+  gap: 0.55rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
   min-height: 0;
-  box-shadow: 0 10px 30px rgb(0 0 0 / 16%);
+  box-shadow: none;
 }
 
 .listHead {
   min-height: 2.6rem;
-  padding: 0.75rem var(--s-4) 0.55rem;
+  padding: 0.45rem 0.15rem 0.1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 0;
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
   font-size: 0.72rem;
   font-weight: var(--weight-bold);
@@ -149,6 +185,8 @@
 
 .empty {
   min-height: 18rem;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 1rem;
   display: grid;
   place-items: center;
   text-align: center;
@@ -156,6 +194,7 @@
   gap: var(--s-2);
   color: var(--muted);
   padding: var(--s-6) var(--s-5);
+  background: color-mix(in srgb, var(--surface) 98%, #070a07);
 }
 
 .emptyIcon {
@@ -264,7 +303,9 @@
 
   .searchWrap,
   .metPillWrap,
-  .tabsWrap {
+  .tabsWrap,
+  .statusTabs,
+  .list {
     margin-inline: var(--s-3);
   }
 

@@ -52,6 +52,20 @@
   transition: color var(--dur-fast) var(--ease);
 }
 
+.tab span {
+  display: inline-flex;
+  min-width: 1.2rem;
+  min-height: 1.2rem;
+  margin-left: 0.28rem;
+  border-radius: var(--r-pill);
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  color: inherit;
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .active {
   color: #0a0d07;
 }

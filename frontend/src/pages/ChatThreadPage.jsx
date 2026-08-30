@@ -62,6 +62,7 @@ function ChatThreadPage() {
 
   useEffect(() => {
     if (!threadId) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     selectThread(String(threadId), { showLoader: true }).catch((error) => {
       showToast(error.message || 'Impossibile aprire la chat', 'error');
       navigate('/chat', { replace: true });

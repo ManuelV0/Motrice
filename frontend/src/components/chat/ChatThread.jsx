@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { Archive, CalendarDays, ChevronLeft, MapPin, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatComposer from './ChatComposer';
 import DayDivider from './DayDivider';
@@ -38,6 +38,26 @@ function isNearBottom(node) {
   return node.scrollHeight - node.scrollTop - node.clientHeight < threshold;
 }
 
+function formatEventStart(value) {
+  const ms = parseMs(value);
+  if (!ms) return '';
+  return new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(ms));
+}
+
+function isArchivedThread(thread) {
+  if (String(thread?.type || '') !== 'event') return false;
+  const status = String(thread?.meta?.eventStatus || '').trim().toLowerCase();
+  if (['completed', 'cancelled', 'closed', 'archived'].includes(status)) return true;
+  const startsAtMs = parseMs(thread?.meta?.startsAt);
+  return Boolean(startsAtMs && startsAtMs < Date.now() - 24 * 60 * 60 * 1000);
+}
+
 function ChatThread({
   thread,
   messages,
@@ -60,6 +80,9 @@ function ChatThread({
   const prevLengthRef = useRef(0);
   const wasNearBottomRef = useRef(true);
   const [showNewIndicator, setShowNewIndicator] = useState(false);
+  const archived = isArchivedThread(thread);
+  const eventStartLabel = formatEventStart(thread?.meta?.startsAt);
+  const eventLocation = String(thread?.meta?.locationName || thread?.meta?.city || '').trim();
 
   const timeline = useMemo(() => {
     const rows = [];
@@ -191,6 +214,7 @@ function ChatThread({
             aria-label="Apri dettagli evento"
           >
             <CalendarDays size={18} aria-hidden="true" />
+            <span>Evento</span>
           </button>
         ) : (
           <span className={styles.headSpacer} aria-hidden="true" />
@@ -222,9 +246,22 @@ function ChatThread({
 
             {thread.type === 'event' ? (
               <div className={styles.securityNote}>
-                <ShieldCheck size={15} aria-hidden="true" />
-                <span>Chat riservata ai partecipanti attivi dell’evento.</span>
+                {archived ? <Archive size={15} aria-hidden="true" /> : <ShieldCheck size={15} aria-hidden="true" />}
+                <span>{archived ? 'Evento concluso · Chat in sola lettura' : 'Solo partecipanti confermati'}</span>
               </div>
+            ) : null}
+
+            {thread.type === 'event' && (eventLocation || eventStartLabel) ? (
+              <article className={styles.eventContext}>
+                <span className={styles.eventContextIcon} aria-hidden="true"><MapPin size={17} /></span>
+                <span className={styles.eventContextCopy}>
+                  <strong>{eventLocation || thread.title}</strong>
+                  {eventStartLabel ? <small>{eventStartLabel}</small> : null}
+                </span>
+                {typeof onOpenEvent === 'function' ? (
+                  <button type="button" onClick={() => onOpenEvent(thread.eventId)}>Dettagli</button>
+                ) : null}
+              </article>
             ) : null}
 
             {timeline.map((row) => {
@@ -271,7 +308,14 @@ function ChatThread({
             </button>
           ) : null}
 
-          <ChatComposer value={draft} onChange={onDraftChange} onSend={onSend} disabled={false} sending={sending} />
+          {archived ? (
+            <div className={styles.readOnlyBar}>
+              <Archive size={17} aria-hidden="true" />
+              <span>Evento concluso · messaggi conservati in sola lettura</span>
+            </div>
+          ) : (
+            <ChatComposer value={draft} onChange={onDraftChange} onSend={onSend} disabled={false} sending={sending} />
+          )}
         </>
       )}
     </section>
