@@ -229,8 +229,15 @@ function MotriceProfileV3({
           {form.cover_url ? <img src={form.cover_url} alt="Copertina del profilo" /> : <strong aria-hidden="true">M</strong>}
           {isPrivate ? (
             <>
-              <button type="button" className={styles.coverButton} onClick={() => coverInputRef.current?.click()} disabled={uploadingKind === 'cover'}>
-                <ImagePlus size={15} aria-hidden="true" /> {uploadingKind === 'cover' ? 'Caricamento…' : 'Copertina'}
+              <button
+                type="button"
+                className={styles.coverButton}
+                onClick={() => coverInputRef.current?.click()}
+                disabled={uploadingKind === 'cover'}
+                aria-label="Scegli l’immagine di copertina dalla galleria"
+                title="Scegli copertina dalla galleria"
+              >
+                {uploadingKind === 'cover' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={15} strokeWidth={2.4} aria-hidden="true" />}
               </button>
               <input ref={coverInputRef} className={styles.mediaInput} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(event, 'cover')} />
             </>
