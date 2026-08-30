@@ -44,6 +44,7 @@ function MotriceProfileV3({
   onUploadMedia,
   onVerify,
   onInvite,
+  isPremium = false,
   publicActionLabel = 'INVITA AD EVENTO'
 }) {
   const [identityOpen, setIdentityOpen] = useState(false);
@@ -274,7 +275,7 @@ function MotriceProfileV3({
           </div>
 
           <div className={styles.heroIdentity}>
-            <span className={styles.nameLine}><strong>{displayName}</strong><em>PREMIUM</em></span>
+            <span className={styles.nameLine}><strong>{displayName}</strong>{isPremium ? <em>PREMIUM</em> : null}</span>
             <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city} · Lv {state.xp.level}</span>
             <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
             <span className={styles.sportPills}>{identity.sports.map((sport) => <small key={sport}>{sport}</small>)}</span>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import MotriceProfileV3 from '../components/profile/MotriceProfileV3';
+import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
@@ -13,6 +14,7 @@ import { uploadProfileMedia } from '../services/profileMedia';
 
 function AccountPage() {
   const navigate = useNavigate();
+  const { isPremium } = useBilling();
   const { showToast } = useToast();
   const [profile, setProfile] = useState(null);
   const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
@@ -77,6 +79,7 @@ function AccountPage() {
       onModeChange={setMode}
       onSaveProfile={saveProfile}
       onUploadMedia={uploadProfileMedia}
+      isPremium={isPremium}
       onVerify={() => navigate('/verify-profile')}
       onInvite={() => {
         showToast('Scegli un evento per invitare questo profilo', 'info');
