@@ -8,7 +8,6 @@ import {
   Settings2,
   ShieldCheck,
   Users,
-  X,
   XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -245,11 +244,11 @@ function AgendaPage() {
   const summaryLabel = selectedRange
     ? formatSelectedRange(selectedRange)
     : formatCalendarMonth(calendarCursor.year, calendarCursor.month);
-  const summaryCountLabel = activeSection === 'created'
-    ? `${summaryEvents.length} creati`
+  const summaryTypeLabel = activeSection === 'created'
+    ? 'creati'
     : activeSection === 'participating'
-      ? `${summaryEvents.length} partecipati`
-      : `${summaryEvents.length} eventi`;
+      ? 'partecipati'
+      : 'eventi';
 
   function changeCalendarMonth(offset) {
     setSelectedRange(null);
@@ -297,13 +296,24 @@ function AgendaPage() {
       </div>
 
       <div className={styles.monthSummary} aria-label={`Riepilogo di ${summaryLabel}`}>
-        <strong>{summaryLabel}</strong>
-        <i aria-hidden="true" />
-        <span>{summaryCountLabel}</span>
-        <i aria-hidden="true" />
-        <span>{summaryMinutes} min</span>
-        <i aria-hidden="true" />
-        <b>{summaryXp} PX <em aria-hidden="true">P</em></b>
+        <div className={styles.summaryContext}>
+          <small>RIEPILOGO</small>
+          <strong>{summaryLabel}</strong>
+        </div>
+        <div className={styles.summaryStats}>
+          <span>
+            <b>{summaryEvents.length}</b>
+            <small>{summaryTypeLabel}</small>
+          </span>
+          <span>
+            <b>{summaryMinutes}</b>
+            <small>minuti</small>
+          </span>
+          <span className={styles.summaryXp}>
+            <b>{summaryXp}</b>
+            <small>PX <em aria-hidden="true">P</em></small>
+          </span>
+        </div>
       </div>
 
       <div className={styles.eventFilters} role="tablist" aria-label="Seleziona gli eventi da mostrare">
@@ -314,7 +324,7 @@ function AgendaPage() {
           className={activeSection === 'all' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('all')}
         >
-          Tutti
+          Tutti <span>{calendarEvents.length}</span>
         </button>
         <button
           type="button"
@@ -332,7 +342,7 @@ function AgendaPage() {
           className={activeSection === 'created' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('created')}
         >
-          Creati da te <span>{ownedEvents.length}</span>
+          Creati <span>{ownedEvents.length}</span>
         </button>
       </div>
 
@@ -344,7 +354,7 @@ function AgendaPage() {
             onClick={() => changeCalendarMonth(-1)}
             aria-label="Mese precedente"
           >
-            <span aria-hidden="true">{'<'}</span>
+            <span className={styles.calendarNavGlyph} aria-hidden="true">‹</span>
           </button>
           <div className={styles.calendarHeading}>
             <h2 id="events-calendar-title">{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</h2>
@@ -356,7 +366,7 @@ function AgendaPage() {
             onClick={() => changeCalendarMonth(1)}
             aria-label="Mese successivo"
           >
-            <span aria-hidden="true">{'>'}</span>
+            <span className={styles.calendarNavGlyph} aria-hidden="true">›</span>
           </button>
         </div>
 
@@ -384,6 +394,7 @@ function AgendaPage() {
                 disabled={!hasEvents}
                 onClick={() => selectCalendarDay(dateKey)}
                 aria-pressed={isInRange}
+                aria-current={isToday ? 'date' : undefined}
                 aria-label={`${label}${hasEvents
                   ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${isPast ? 'svolto' : 'da svolgere'}`
                   : ', nessun evento'}`}
@@ -396,6 +407,7 @@ function AgendaPage() {
                 ].filter(Boolean).join(' ')}
               >
                 <span className={styles.calendarDayNumber}>{day}</span>
+                {isToday && !hasEvents ? <small className={styles.calendarTodayLabel}>OGGI</small> : null}
                 {hasEvents ? (
                   <span className={styles.calendarEventDots} aria-hidden="true">
                     {Array.from({ length: Math.min(2, dayEvents.length) }, (_, dotIndex) => (
@@ -436,7 +448,7 @@ function AgendaPage() {
                 <span>{selectedEvents.length} {selectedEvents.length === 1 ? 'evento' : 'eventi'}</span>
               </div>
               <button type="button" onClick={() => setSelectedRange(null)} aria-label="Chiudi dettagli calendario">
-                <X size={20} aria-hidden="true" />
+                <span className={styles.closeGlyph} aria-hidden="true">×</span>
               </button>
             </header>
 

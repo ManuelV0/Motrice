@@ -31,56 +31,104 @@
 
 .monthSummary {
   width: min(100%, 48rem);
-  min-height: 4.1rem;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: clamp(0.45rem, 2.5vw, 0.9rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.9fr);
+  align-items: stretch;
+  gap: var(--s-3);
   justify-self: center;
   overflow: hidden;
-  padding: var(--s-3) var(--s-4);
+  padding: 0.55rem;
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--r-xl);
-  background: color-mix(in srgb, var(--surface-2) 90%, black);
+  background: #090a09;
   color: var(--text);
   box-shadow: var(--sh-card), var(--glass-highlight);
-  font-size: var(--text-sm);
+}
+
+.summaryContext {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.2rem;
+  padding: 0.65rem 0.7rem;
+}
+
+.summaryContext small {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+}
+
+.summaryContext strong {
+  overflow: hidden;
+  font-size: clamp(0.8rem, 3.6vw, 0.98rem);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.monthSummary > strong {
+.summaryStats {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
+  border: 1px solid #272a27;
+  border-radius: calc(var(--r-xl) - 0.35rem);
+  background: #111311;
+}
+
+.summaryStats > span {
+  min-width: 0;
+  min-height: 3.5rem;
+  display: grid;
+  place-content: center;
+  gap: 0.12rem;
+  padding: 0.45rem 0.2rem;
+  text-align: center;
+}
+
+.summaryStats > span + span {
+  border-left: 1px solid #292c29;
+}
+
+.summaryStats b {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(0.9rem, 4vw, 1.1rem);
+  line-height: 1;
   text-overflow: ellipsis;
 }
 
-.monthSummary > i {
-  width: 0.27rem;
-  height: 0.27rem;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--muted) 65%, transparent);
+.summaryStats small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: clamp(0.55rem, 2.5vw, 0.66rem);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.monthSummary > span {
-  color: color-mix(in srgb, var(--text) 83%, var(--muted));
-}
-
-.monthSummary > b {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
+.summaryStats .summaryXp b,
+.summaryStats .summaryXp small {
   color: var(--accent);
 }
 
-.monthSummary > b em {
-  width: 1.08rem;
-  height: 1.08rem;
+.summaryStats .summaryXp small {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.summaryXp em {
+  width: 0.9rem;
+  height: 0.9rem;
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
   background: var(--accent);
   color: var(--primary-contrast);
-  font-size: 0.65rem;
+  font-size: 0.54rem;
   font-style: normal;
   line-height: 1;
 }
@@ -116,7 +164,19 @@
 }
 
 .eventFilters button span {
-  margin-left: 0.15rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  display: inline-grid;
+  place-items: center;
+  margin-left: 0.28rem;
+  padding-inline: 0.28rem;
+  border: 1px solid #303330;
+  border-radius: var(--r-pill);
+  background: #151715;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 0.63rem;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 .eventFilters button:hover,
@@ -129,6 +189,12 @@
   background: var(--accent);
   color: var(--primary-contrast);
   box-shadow: 0 0 1.15rem color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.eventFilters .filterActive span {
+  border-color: rgb(0 0 0 / 18%);
+  background: rgb(0 0 0 / 16%);
+  color: var(--primary-contrast);
 }
 
 .eventFilters .filterActive:hover,
@@ -145,8 +211,8 @@
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--r-2xl);
   background:
-    radial-gradient(circle at 95% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 30%),
-    color-mix(in srgb, var(--surface-2) 88%, black);
+    radial-gradient(circle at 95% 0%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 27%),
+    #111311;
   box-shadow: var(--sh-card), var(--glass-highlight);
 }
 
@@ -187,27 +253,26 @@
 }
 
 .calendarNavButton {
-  width: 2.85rem;
-  height: 2.85rem;
+  width: 2.55rem;
+  height: 2.55rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid #363a36;
   border-radius: 50%;
-  background: #050605;
+  background: #101210;
   color: #ffffff;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 
-.calendarNavButton span {
+.calendarNavGlyph {
   display: block;
-  font-family: var(--font-sans);
-  font-size: 1.65rem;
-  font-weight: 800;
-  line-height: 1;
-  transform: translateY(-0.06rem);
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 0.8;
+  transform: translateY(-0.08rem);
 }
 
 .calendarNavButton:hover,
@@ -255,7 +320,7 @@
   border-radius: var(--r-lg);
   background: transparent;
   box-shadow: none;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
   font: inherit;
   font-size: clamp(0.78rem, 3.8vw, 1rem);
   cursor: default;
@@ -268,6 +333,7 @@
 
 .calendarDayWithEvents {
   color: var(--text);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 
@@ -306,15 +372,26 @@
 .calendarDaySelected .calendarDayNumber {
   background: var(--accent);
   color: var(--primary-contrast);
-  box-shadow: 0 0 1.15rem color-mix(in srgb, var(--accent) 45%, transparent);
+  font-weight: var(--weight-bold);
+  box-shadow: 0 0 0 0.22rem color-mix(in srgb, var(--accent) 10%, transparent), 0 0 0.95rem color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .calendarDayToday:not(.calendarDaySelected) .calendarDayNumber {
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+.calendarTodayLabel {
+  position: absolute;
+  top: 2.23rem;
+  color: color-mix(in srgb, var(--accent) 78%, var(--muted));
+  font-size: 0.42rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
 }
 
 .calendarEventDots {
-  min-height: 0.85rem;
+  min-height: 0.8rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -322,8 +399,8 @@
 }
 
 .calendarEventDots i {
-  width: 0.4rem;
-  height: 0.4rem;
+  width: 0.45rem;
+  height: 0.45rem;
   border-radius: 50%;
 }
 
@@ -348,7 +425,11 @@
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: var(--s-3);
-  margin-top: var(--s-2);
+  margin-top: var(--s-3);
+  padding: 0.72rem 0.78rem;
+  border: 1px solid #292c29;
+  border-radius: var(--r-lg);
+  background: #090a09;
   color: var(--muted);
   font-size: var(--text-xs);
 }
@@ -408,7 +489,7 @@
   margin: var(--s-4) calc(var(--s-4) * -1) calc(var(--s-4) * -1);
   padding: var(--s-4);
   border-top: 1px solid var(--glass-border-strong);
-  background: color-mix(in srgb, var(--surface) 58%, transparent);
+  background: #090a09;
   animation: calendarDetailsIn var(--dur-med) var(--ease-out);
 }
 
@@ -576,7 +657,7 @@
   margin-top: var(--s-4);
   border-top: 1px solid color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
   background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 35%),
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 32%),
     #090a09;
   box-shadow: 0 -1.25rem 3rem rgb(0 0 0 / 28%);
 }
@@ -642,6 +723,14 @@
   border-color: color-mix(in srgb, var(--accent) 42%, var(--glass-border));
   color: var(--accent);
   outline: none;
+}
+
+.closeGlyph {
+  display: block;
+  font-size: 1.65rem;
+  font-weight: 400;
+  line-height: 0.8;
+  transform: translateY(-0.04rem);
 }
 
 .sheetEventCard {
@@ -821,6 +910,8 @@
 
 .eventDetailAction,
 .eventPrimaryAction {
+  width: 100%;
+  min-width: 0;
   min-height: 2.85rem;
   display: inline-flex;
   align-items: center;
@@ -831,6 +922,8 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
+  line-height: 1.15;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -1261,6 +1354,21 @@
 
   .calendarLegend {
     gap: var(--s-2) var(--s-3);
+  }
+
+  .cancelledEventMeta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cancelledEventMeta span {
+    width: 100%;
+  }
+
+  .cancelledEventCard > .eventDetailAction {
+    padding-inline: var(--s-2);
+    font-size: 0.78rem;
+    white-space: normal;
   }
 
   .calendarDetails {
