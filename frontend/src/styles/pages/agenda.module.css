@@ -337,6 +337,11 @@
   background: color-mix(in srgb, var(--muted) 78%, #202220);
 }
 
+.eventDotCancelled {
+  background: color-mix(in srgb, var(--danger) 82%, white);
+  box-shadow: 0 0 0.48rem color-mix(in srgb, var(--danger) 50%, transparent);
+}
+
 .calendarLegend {
   display: flex;
   align-items: center;
@@ -390,6 +395,11 @@
 .legendPast {
   border: 1px solid color-mix(in srgb, white 28%, var(--glass-border));
   background: color-mix(in srgb, var(--muted) 75%, #202220);
+}
+
+.legendCancelled {
+  background: color-mix(in srgb, var(--danger) 82%, white);
+  box-shadow: 0 0 0.45rem color-mix(in srgb, var(--danger) 38%, transparent);
 }
 
 .calendarDetails {
@@ -655,6 +665,39 @@
 
 .closedEventCard {
   background: color-mix(in srgb, #151715 92%, black);
+}
+
+.cancelledEventCard {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--glass-border-strong));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--danger) 8%, transparent), transparent 42%),
+    #151515;
+}
+
+.cancelledEventMeta {
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--danger) 6%, #0b0c0b);
+}
+
+.cancelledEventMeta span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cancelledEventMeta strong {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--accent) 74%, white);
+  font-size: 0.68rem;
 }
 
 .sheetEventTopline {

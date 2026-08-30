@@ -299,6 +299,11 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const concludedParticipants = eventParticipants.filter((participant) =>
     ['completed', 'no_show'].includes(String(participant.status || ''))
   );
+  const refundableParticipants = eventParticipants.filter((participant) =>
+    ['going', 'completed'].includes(String(participant.status || '')) &&
+    Number(participant.stake_cents || 0) > 0 &&
+    ['locked', 'verified'].includes(String(participant.stake_status || ''))
+  );
   const ownJoinRequest = context.joinRequests.get(String(rawEvent.id)) || null;
   const organizer = context.organizers.get(String(rawEvent.creator_id)) || null;
   if (organizer) rememberProfile(organizer);
@@ -359,6 +364,16 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
     status: rawEvent.status || 'scheduled',
+    cancelled_at: rawEvent.cancelled_at || null,
+    cancelled_by: rawEvent.cancelled_by || null,
+    cancellation_reason: rawEvent.cancellation_reason || null,
+    cancellation_note: rawEvent.cancellation_note || '',
+    cancellation_is_late: Boolean(rawEvent.cancellation_is_late),
+    refundable_participants_count: refundableParticipants.length,
+    refundable_deposit_cents: refundableParticipants.reduce(
+      (total, participant) => total + Math.max(0, Number(participant.stake_cents || 0)),
+      0
+    ),
     audience: rawEvent.audience || 'mixed',
     participation_protection: rawEvent.participation_protection !== false,
     visibility: rawEvent.visibility || 'public',
@@ -404,8 +419,11 @@ async function fetchEvents(filters = {}) {
   let query = client
     .from('events')
     .select('*,sport:sports(id,slug,name)')
-    .neq('status', 'cancelled')
     .order('starts_at', { ascending: true });
+
+  if (filters.includeCancelled !== true) {
+    query = query.neq('status', 'cancelled');
+  }
 
   if (filters.includePast !== true) {
     query = query.gte('starts_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString());
@@ -599,6 +617,17 @@ function createRemoteMethods(localApi) {
       const client = requireSupabase();
       const { data, error } = await client.rpc('leave_event', {
         target_event_id: String(id)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async cancelEvent(id, { reasonCode, note = '' } = {}) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('cancel_event', {
+        target_event_id: String(id),
+        reason_code: normalizeText(reasonCode),
+        organizer_note: normalizeText(note)
       });
       throwIfError(error);
       return data;
@@ -963,15 +992,24 @@ function createRemoteMethods(localApi) {
     async listEventGroupMessages(eventId) {
       const client = requireSupabase();
       requireAuthUserId();
-      const { data, error } = await client
-        .from('event_messages')
-        .select(
-          'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
-        )
-        .eq('event_id', String(eventId))
-        .order('created_at', { ascending: true })
-        .limit(400);
-      throwIfError(error);
+      const [messagesResult, eventResult] = await Promise.all([
+        client
+          .from('event_messages')
+          .select(
+            'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
+          )
+          .eq('event_id', String(eventId))
+          .order('created_at', { ascending: true })
+          .limit(400),
+        client
+          .from('events')
+          .select('status')
+          .eq('id', String(eventId))
+          .single()
+      ]);
+      throwIfError(messagesResult.error);
+      throwIfError(eventResult.error);
+      const data = messagesResult.data;
       const items = (data || []).map((message) => {
         rememberProfile(message.sender);
         return {
@@ -985,7 +1023,7 @@ function createRemoteMethods(localApi) {
           created_at: message.created_at
         };
       });
-      return { event_id: eventId, can_send: true, items };
+      return { event_id: eventId, can_send: eventResult.data?.status !== 'cancelled', items };
     },
 
     async sendEventGroupMessage({ eventId, text }) {
@@ -994,6 +1032,15 @@ function createRemoteMethods(localApi) {
       await assertProfileVerified('scrivere nella chat evento.');
       const body = normalizeText(text);
       if (!body) throw new Error('Scrivi un messaggio prima di inviare');
+      const eventResult = await client
+        .from('events')
+        .select('status')
+        .eq('id', String(eventId))
+        .single();
+      throwIfError(eventResult.error);
+      if (eventResult.data?.status === 'cancelled') {
+        throw new Error('La chat di questo evento e in sola lettura');
+      }
       const { data, error } = await client
         .from('event_messages')
         .insert({ event_id: String(eventId), sender_id: senderId, body })
@@ -1102,6 +1149,7 @@ export function createSupabaseApi(localApi) {
       joinEvent: requireSecureBackend,
       approveEventJoinRequest: requireSecureBackend,
       declineEventJoinRequest: requireSecureBackend,
+      cancelEvent: requireSecureBackend,
       completePersonalEvent: requireSecureBackend,
       startEventCheckInSession: requireSecureBackend,
       checkInToEvent: requireSecureBackend,

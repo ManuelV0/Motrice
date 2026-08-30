@@ -162,7 +162,7 @@ function AgendaPage() {
     let active = true;
     setLoading(true);
     api
-      .listEvents({ dateRange: 'all', includePast: true, sortBy: 'soonest' })
+      .listEvents({ dateRange: 'all', includePast: true, includeCancelled: true, sortBy: 'soonest' })
       .then((nextEvents) => {
         if (!active) return;
         setEvents(Array.isArray(nextEvents) ? nextEvents : []);
@@ -399,7 +399,12 @@ function AgendaPage() {
                 {hasEvents ? (
                   <span className={styles.calendarEventDots} aria-hidden="true">
                     {Array.from({ length: Math.min(2, dayEvents.length) }, (_, dotIndex) => (
-                      <i key={dotIndex} className={isPast ? styles.eventDotPast : styles.eventDotFuture} />
+                      <i
+                        key={dotIndex}
+                        className={dayEvents[dotIndex]?.status === 'cancelled'
+                          ? styles.eventDotCancelled
+                          : isPast ? styles.eventDotPast : styles.eventDotFuture}
+                      />
                     ))}
                   </span>
                 ) : null}
@@ -411,6 +416,7 @@ function AgendaPage() {
         <div className={styles.calendarLegend} aria-label="Legenda calendario">
           <span><i className={styles.legendFuture} aria-hidden="true" /> Da svolgere</span>
           <span><i className={styles.legendPast} aria-hidden="true" /> Svolto</span>
+          <span><i className={styles.legendCancelled} aria-hidden="true" /> Annullato</span>
           <small>Due dot = più eventi</small>
         </div>
 
@@ -438,8 +444,31 @@ function AgendaPage() {
               {selectedEvents.map((event) => {
                 const eventKey = toDateKey(event.event_datetime);
                 const isPast = eventKey < todayKey;
+                const isCancelled = event.status === 'cancelled';
                 const participants = Math.max(0, Number(event.participants_count || 0));
                 const capacity = Math.max(participants, Number(event.max_participants || 0));
+
+                if (isCancelled) {
+                  return (
+                    <article key={event.id} className={`${styles.sheetEventCard} ${styles.cancelledEventCard}`}>
+                      <div className={styles.sheetEventTopline}>
+                        <span className={`${styles.eventState} ${styles.eventState_danger}`}>
+                          <XCircle size={15} aria-hidden="true" /> Annullato
+                        </span>
+                        <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
+                      </div>
+                      <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
+                      <p>{event.location_name || event.city || 'Luogo da definire'}</p>
+                      <div className={styles.cancelledEventMeta}>
+                        <span>{event.cancellation_note || 'Evento cancellato dall organizer'}</span>
+                        <strong>Depositi restituiti</strong>
+                      </div>
+                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>
+                        Apri riepilogo annullamento
+                      </button>
+                    </article>
+                  );
+                }
 
                 if (isPast) {
                   const stats = getClosedEventStats(event);

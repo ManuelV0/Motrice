@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import {
+  AlertTriangle,
   ArrowLeft,
+  Ban,
   Bookmark,
   BookmarkCheck,
   CalendarDays,
@@ -87,6 +89,19 @@ const SPORT_DETAIL_VISUALS = [
   }
 ];
 
+const EVENT_CANCELLATION_REASONS = [
+  { value: 'personal', label: 'Motivi personali' },
+  { value: 'weather', label: 'Condizioni meteo' },
+  { value: 'venue_unavailable', label: 'Luogo non disponibile' },
+  { value: 'insufficient_participants', label: 'Partecipanti insufficienti' },
+  { value: 'emergency', label: 'Emergenza' },
+  { value: 'other', label: 'Altro motivo' }
+];
+
+function getCancellationReasonLabel(value) {
+  return EVENT_CANCELLATION_REASONS.find((reason) => reason.value === value)?.label || 'Motivo non specificato';
+}
+
 function getSportDetailVisual(event) {
   const source = `${event?.sport_name || ''} ${event?.title || ''}`;
   return (
@@ -166,6 +181,9 @@ function EventDetailPage() {
   const [cancelCountdown, setCancelCountdown] = useState(3);
   const [cancelReady, setCancelReady] = useState(false);
   const [cancelKaboom, setCancelKaboom] = useState(false);
+  const [organizerCancelOpen, setOrganizerCancelOpen] = useState(false);
+  const [organizerCancelSubmitting, setOrganizerCancelSubmitting] = useState(false);
+  const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '' });
   const [rsvpForm, setRsvpForm] = useState({
     name: '',
     skill_level: 'beginner',
@@ -221,6 +239,8 @@ function EventDetailPage() {
     setParticipantListOpen(false);
     setActionsOpen(false);
     setRulesOpen(false);
+    setOrganizerCancelOpen(false);
+    setOrganizerCancelForm({ reasonCode: '', note: '' });
   }, [event?.id]);
 
   async function openChatParticipantProfile(identity) {
@@ -539,6 +559,30 @@ function EventDetailPage() {
       setCancelConfirmOpen(false);
     } catch (err) {
       showToast(err.message, 'error');
+    }
+  }
+
+  async function cancelOrganizedEvent() {
+    if (!organizerCancelForm.reasonCode || organizerCancelSubmitting) return;
+    setOrganizerCancelSubmitting(true);
+    try {
+      const result = await api.cancelEvent(id, organizerCancelForm);
+      await reload();
+      setOrganizerCancelOpen(false);
+      setActionsOpen(false);
+      setGroupChatCanSend(false);
+      const refundedCents = Number(result?.refunded_cents || 0);
+      const refundedParticipants = Number(result?.refunded_participants || 0);
+      showToast(
+        refundedCents > 0
+          ? `Evento annullato · ${refundedParticipants} ${refundedParticipants === 1 ? 'rimborso eseguito' : 'rimborsi eseguiti'}`
+          : 'Evento annullato. I partecipanti sono stati avvisati.',
+        'success'
+      );
+    } catch (cancelError) {
+      showToast(cancelError.message || 'Impossibile annullare l evento', 'error');
+    } finally {
+      setOrganizerCancelSubmitting(false);
     }
   }
 
@@ -957,7 +1001,20 @@ function EventDetailPage() {
         .filter(Boolean)
     )
   ).slice(0, 5);
-  const isClosedEvent = Boolean(event.status === 'completed' || event.has_passed || eventHasEnded);
+  const eventIsCancelled = event.status === 'cancelled';
+  const isClosedEvent = Boolean(!eventIsCancelled && (event.status === 'completed' || event.has_passed || eventHasEnded));
+  const canCancelOrganizedEvent = Boolean(
+    isOrganizerForEvent &&
+    !event.is_personal &&
+    event.status === 'scheduled' &&
+    Number.isFinite(eventStartsMs) &&
+    eventStartsMs > Date.now()
+  );
+  const cancellationIsLatePreview = Boolean(
+    Number.isFinite(eventStartsMs) && eventStartsMs < Date.now() + 24 * 60 * 60 * 1000
+  );
+  const refundableParticipantsCount = Math.max(0, Number(event.refundable_participants_count || 0));
+  const refundableDepositCents = Math.max(0, Number(event.refundable_deposit_cents || 0));
   const participantAttendance = String(event.user_rsvp?.attendance || '').toLowerCase();
   const participantWasPresent = Boolean(
     participantAttendance === 'attended' || Number(event.user_rsvp?.cashback_percent || 0) >= 60
@@ -1055,6 +1112,20 @@ function EventDetailPage() {
               </div>
             </div>
           </header>
+
+          {eventIsCancelled ? (
+            <Card as="section" className={styles.cancelledEventBanner}>
+              <span className={styles.cancelledEventIcon}><Ban size={23} aria-hidden="true" /></span>
+              <div>
+                <p>Evento annullato</p>
+                <h2>{getCancellationReasonLabel(event.cancellation_reason)}</h2>
+                <span>
+                  {event.cancellation_note || 'Le iscrizioni sono chiuse, i QR sono stati disattivati e la chat resta in sola lettura.'}
+                </span>
+              </div>
+              <strong>{event.cancelled_at ? new Date(event.cancelled_at).toLocaleDateString('it-IT') : 'Annullato'}</strong>
+            </Card>
+          ) : null}
 
           <Card as="section" className={styles.locationCard}>
             <div className={styles.mapStage}>
@@ -1241,7 +1312,7 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          {!event.is_personal && isOrganizerForEvent ? (
+          {!event.is_personal && isOrganizerForEvent && !eventIsCancelled ? (
             <div ref={participationFlowRef} className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
               <EventParticipationFlow
                 event={event}
@@ -1383,7 +1454,9 @@ function EventDetailPage() {
           </div>
 
           <Card subtle className={styles.actionCard}>
-            <h2 className={styles.actionTitle}>{isOrganizerForEvent ? 'Azioni evento' : 'Gestisci la partecipazione'}</h2>
+            <h2 className={styles.actionTitle}>
+              {eventIsCancelled ? 'Evento annullato' : isOrganizerForEvent ? 'Azioni evento' : 'Gestisci la partecipazione'}
+            </h2>
             {!event.is_personal && !isOrganizerForEvent ? (
               <section
                 className={`${styles.participationStateBox} ${styles[`participationState_${participationState.tone}`] || ''}`}
@@ -1464,8 +1537,20 @@ function EventDetailPage() {
                   {participationState.actionLabel || participationState.badge}
                 </Button>
               ) : null}
+              {canCancelOrganizedEvent ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant="secondary"
+                  className={styles.organizerCancelButton}
+                  icon={Ban}
+                  onClick={() => setOrganizerCancelOpen(true)}
+                >
+                  Cancella evento
+                </Button>
+              ) : null}
             </div>
-            <button
+            {!eventIsCancelled ? <button
               type="button"
               className={styles.secondaryActionsToggle}
               aria-expanded={actionsOpen}
@@ -1477,7 +1562,7 @@ function EventDetailPage() {
                 <small>Salva, calendario, copia, condividi e chat</small>
               </span>
               <ChevronDown className={actionsOpen ? styles.secondaryActionsChevronOpen : ''} size={20} aria-hidden="true" />
-            </button>
+            </button> : null}
             {actionsOpen ? (
             <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
               <Button
@@ -1523,7 +1608,7 @@ function EventDetailPage() {
             </Card>
           )}
 
-          {!event.is_personal && !isOrganizerForEvent ? (
+          {!event.is_personal && !isOrganizerForEvent && !eventIsCancelled ? (
             <div ref={participationFlowRef} className={styles.participationFlowAnchor}>
               <EventParticipationFlow
                 event={event}
@@ -1669,6 +1754,74 @@ function EventDetailPage() {
                 : 'Countdown di sicurezza in corso...'}
             </small>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={organizerCancelOpen}
+        title="Cancella definitivamente l evento"
+        onClose={() => {
+          if (!organizerCancelSubmitting) setOrganizerCancelOpen(false);
+        }}
+        onConfirm={cancelOrganizedEvent}
+        confirmText={organizerCancelSubmitting ? 'Annullamento in corso...' : 'Conferma cancellazione'}
+        confirmDisabled={!organizerCancelForm.reasonCode || organizerCancelSubmitting}
+        confirmClassName={styles.organizerCancelConfirm}
+        closeText="Mantieni evento"
+      >
+        <div className={styles.organizerCancelModal}>
+          <div className={styles.organizerCancelWarning}>
+            <AlertTriangle size={22} aria-hidden="true" />
+            <div>
+              <strong>Azione permanente</strong>
+              <p>Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.</p>
+            </div>
+          </div>
+
+          <div className={styles.organizerCancelSummary}>
+            <div><span>Evento</span><strong>{event?.title || event?.sport_name}</strong></div>
+            <div><span>Partecipanti da rimborsare</span><strong>{refundableParticipantsCount}</strong></div>
+            <div><span>Depositi restituiti</span><strong>{formatCurrencyFromCents(refundableDepositCents)}</strong></div>
+          </div>
+
+          {cancellationIsLatePreview ? (
+            <p className={styles.organizerLateWarning}>
+              <AlertTriangle size={17} aria-hidden="true" /> Mancano meno di 24 ore: la cancellazione sarà registrata come tardiva.
+            </p>
+          ) : null}
+
+          <label className={styles.organizerCancelField}>
+            Motivo <span>obbligatorio</span>
+            <select
+              value={organizerCancelForm.reasonCode}
+              onChange={(changeEvent) => setOrganizerCancelForm((current) => ({
+                ...current,
+                reasonCode: changeEvent.target.value
+              }))}
+              disabled={organizerCancelSubmitting}
+            >
+              <option value="">Seleziona un motivo</option>
+              {EVENT_CANCELLATION_REASONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>{reason.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.organizerCancelField}>
+            Messaggio ai partecipanti <span>facoltativo</span>
+            <textarea
+              rows="3"
+              maxLength="500"
+              value={organizerCancelForm.note}
+              onChange={(changeEvent) => setOrganizerCancelForm((current) => ({
+                ...current,
+                note: changeEvent.target.value
+              }))}
+              placeholder="Aggiungi una breve spiegazione..."
+              disabled={organizerCancelSubmitting}
+            />
+            <small>{organizerCancelForm.note.length}/500</small>
+          </label>
         </div>
       </Modal>
 

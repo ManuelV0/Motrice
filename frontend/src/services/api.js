@@ -1118,6 +1118,13 @@ function enrichEvent(event, store, origin) {
     group_chat_unread_count: groupChatUnreadCount,
     has_new_group_messages: groupChatUnreadCount > 0,
     has_passed: hasPassed,
+    refundable_participants_count: Number(
+      event.refundable_participants_count ?? Math.max(0, Number(event.participants_count || 0) - 1)
+    ),
+    refundable_deposit_cents: Number(
+      event.refundable_deposit_cents ??
+      Math.max(0, Number(event.participants_count || 0) - 1) * Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS)
+    ),
     can_confirm_attendance: Boolean(rsvp && rsvp.status === 'going' && hasPassed && !rsvp.attendance)
   };
 }
@@ -1286,6 +1293,7 @@ const localApi = {
     const currentUserId = resolveAuthUserId();
     const enriched = store.events
       .filter((event) => {
+        if (event.status === 'cancelled' && filters.includeCancelled !== true) return false;
         if (String(event.visibility || 'public') !== 'private') return true;
         if (event.created_by === 'me' || isEventOrganizerForUser(store, event, currentUserId)) return true;
         if (store.rsvps?.[String(event.id)]?.status === 'going') return true;
@@ -1407,6 +1415,9 @@ const localApi = {
     const accountProfile = store.accountProfiles?.[String(currentUserId)] || DEFAULT_ACCOUNT_PROFILE;
     if (event.is_personal) {
       throw new Error('Questo evento e un promemoria personale');
+    }
+    if (event.status === 'cancelled') {
+      throw new Error('Questo evento e stato annullato');
     }
     if (!isProfileCompleteForGroup(accountProfile)) {
       throw new Error('Completa profilo (nome utente, bio e immagine) prima di prenotare un gruppo');
@@ -1752,6 +1763,90 @@ const localApi = {
       penalty_note: penaltyNote,
       stake_released: stakeReleased,
       stake_release_note: stakeReleaseNote
+    });
+  },
+
+  async cancelEvent(id, { reasonCode, note = '' } = {}) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, id);
+    const allowedReasons = new Set([
+      'personal',
+      'weather',
+      'venue_unavailable',
+      'insufficient_participants',
+      'emergency',
+      'other'
+    ]);
+    const reason = String(reasonCode || '').trim().toLowerCase();
+    if (!isEventOrganizerForUser(store, event, currentUserId)) {
+      throw new Error('Solo l organizzatore puo annullare questo evento');
+    }
+    if (!allowedReasons.has(reason)) {
+      throw new Error('Seleziona un motivo valido per annullare l evento');
+    }
+    if (event.status === 'cancelled') {
+      return withDelay({ success: true, already_cancelled: true, refunded_cents: 0 });
+    }
+    if (event.status !== 'scheduled') {
+      throw new Error('Puoi annullare soltanto un evento programmato');
+    }
+    const eventStartMs = Date.parse(event.event_datetime || '');
+    if (!Number.isFinite(eventStartMs) || eventStartMs <= nowMs()) {
+      throw new Error('L evento e gia iniziato: chiudilo dalla gestione presenze');
+    }
+
+    const eventKey = String(event.id);
+    const participantCount = Math.max(0, Number(event.participants_count || 0) - 1);
+    const refundedCents = participantCount * Math.max(0, Number(event.deposit_cents || 0));
+    const cancellationTimestamp = nowIso();
+    const systemMessage = {
+      id: `egm_${Date.now()}_cancelled`,
+      event_id: Number(event.id),
+      sender_user_id: 0,
+      sender_name: 'Motrice',
+      sender_avatar_url: '',
+      text: `Evento annullato dall organizer. La chat resta disponibile in sola lettura.`,
+      created_at: cancellationTimestamp
+    };
+    const previousMessages = Array.isArray(store.eventGroupMessagesByEvent?.[eventKey])
+      ? store.eventGroupMessagesByEvent[eventKey]
+      : [];
+    store.eventGroupMessagesByEvent = {
+      ...(store.eventGroupMessagesByEvent || {}),
+      [eventKey]: [...previousMessages, systemMessage].slice(-400)
+    };
+
+    Object.values(store.eventJoinRequests?.[eventKey] || {}).forEach((request) => {
+      if (request?.status === 'pending') {
+        request.status = 'cancelled';
+        request.decided_at = cancellationTimestamp;
+      }
+    });
+
+    event.status = 'cancelled';
+    event.cancelled_at = cancellationTimestamp;
+    event.cancelled_by = String(currentUserId);
+    event.cancellation_reason = reason;
+    event.cancellation_note = String(note || '').trim().slice(0, 500);
+    event.cancellation_is_late = eventStartMs < nowMs() + 24 * 60 * 60 * 1000;
+    event.refundable_participants_count = participantCount;
+    event.refundable_deposit_cents = refundedCents;
+
+    addNotification(store, {
+      type: 'event_cancelled',
+      title: 'Evento annullato',
+      message: `${event.title || event.sport_name} e stato annullato.`,
+      event_id: event.id
+    });
+    saveStore(store);
+    return withDelay({
+      success: true,
+      already_cancelled: false,
+      cancelled_at: cancellationTimestamp,
+      refunded_participants: participantCount,
+      refunded_cents: refundedCents,
+      is_late: event.cancellation_is_late
     });
   },
 
@@ -2877,7 +2972,7 @@ const localApi = {
     return withDelay(
       clone({
         event_id: event.id,
-        can_send: true,
+        can_send: event.status !== 'cancelled',
         items
       })
     );
@@ -2891,6 +2986,9 @@ const localApi = {
     const messageText = String(text || '').trim();
     if (!messageText) throw new Error('Scrivi un messaggio prima di inviare');
     if (messageText.length > 1000) throw new Error('Messaggio troppo lungo (max 1000 caratteri)');
+    if (event.status === 'cancelled') {
+      throw new Error('La chat di questo evento e in sola lettura');
+    }
 
     const rsvp = store.rsvps[key];
     const subscription = getSubscriptionWithEntitlements(loadSubscription());
