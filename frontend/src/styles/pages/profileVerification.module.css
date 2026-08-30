@@ -10,7 +10,8 @@
 
 .phone {
   width: min(100%, 26.875rem);
-  min-height: calc(100dvh - 1.5rem);
+  height: calc(100dvh - 1.5rem);
+  min-height: 38rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -93,7 +94,12 @@
 
 .content {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.75rem 1.2rem 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
 }
 
 .eyebrow {
@@ -267,6 +273,17 @@
   padding: 0 0.75rem;
 }
 
+.dateSelectors {
+  display: grid;
+  grid-template-columns: 0.8fr 1.45fr 1fr;
+  gap: 0.45rem;
+}
+
+.dateSelectors select {
+  min-width: 0;
+  padding: 0 0.5rem;
+}
+
 .form textarea {
   min-height: 5.8rem;
   padding: 0.75rem;
@@ -402,6 +419,18 @@
   background: #ff8a2b;
 }
 
+.continueHint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.75rem 0 0;
+  color: #c6ff00;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.continueHint svg { flex: 0 0 auto; }
+
 .gesture {
   display: flex;
   align-items: center;
@@ -501,14 +530,15 @@
 .unlockGrid span { color: #c6ff00; border-color: rgb(198 255 0 / 18%); background: rgb(198 255 0 / 6%); }
 
 .actions {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 5;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.6rem;
   padding: 0.85rem 1.2rem max(1.2rem, env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgb(14 14 14 / 0%), #0e0e0e 18%);
+  border-top: 1px solid #202020;
+  background: #0e0e0e;
 }
 
 .actions > button {
@@ -557,7 +587,7 @@
 
 @media (max-width: 30rem) {
   .viewport { padding: 0; }
-  .phone { min-height: 100dvh; border-right: 0; border-left: 0; border-radius: 0; }
+  .phone { height: 100dvh; min-height: 0; border-right: 0; border-left: 0; border-radius: 0; }
 }
 
 @media (max-width: 22.5rem) {

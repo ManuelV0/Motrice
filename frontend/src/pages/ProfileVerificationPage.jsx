@@ -38,6 +38,42 @@ const CHALLENGES = [
 ];
 
 const SPORTS = ['Calisthenics', 'Running', 'Palestra', 'Calcio', 'Padel', 'Tennis', 'Trekking', 'Basket', 'Yoga'];
+const MONTHS = [
+  'Gennaio',
+  'Febbraio',
+  'Marzo',
+  'Aprile',
+  'Maggio',
+  'Giugno',
+  'Luglio',
+  'Agosto',
+  'Settembre',
+  'Ottobre',
+  'Novembre',
+  'Dicembre'
+];
+const CURRENT_YEAR = new Date().getFullYear();
+const BIRTH_YEARS = Array.from({ length: CURRENT_YEAR - 1899 }, (_, index) => CURRENT_YEAR - index);
+
+function splitBirthDate(value) {
+  const [year = '', month = '', day = ''] = String(value || '').slice(0, 10).split('-');
+  return { day, month, year };
+}
+
+function getMonthDays(year, month) {
+  if (!year || !month) return 31;
+  return new Date(Number(year), Number(month), 0).getDate();
+}
+
+function isValidBirthDate(value) {
+  const { day, month, year } = splitBirthDate(value);
+  if (!day || !month || !year) return false;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.getFullYear() === Number(year)
+    && date.getMonth() === Number(month) - 1
+    && date.getDate() === Number(day)
+    && date <= new Date();
+}
 
 function splitDisplayName(value) {
   const words = String(value || '').trim().split(/\s+/).filter(Boolean);
@@ -85,6 +121,7 @@ function ProfileVerificationPage() {
   const [challengePreview, setChallengePreview] = useState('');
   const [consent, setConsent] = useState(false);
   const [challengeIndex, setChallengeIndex] = useState(() => Math.floor(Math.random() * CHALLENGES.length));
+  const [birthDateParts, setBirthDateParts] = useState({ day: '', month: '', year: '' });
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -115,15 +152,18 @@ function ProfileVerificationPage() {
       .then(([profile, verification]) => {
         if (!active) return;
         const name = splitDisplayName(profile?.display_name || profile?.name);
+        const birthDate = String(profile?.birth_date || '').slice(0, 10);
         setForm((current) => ({
           ...current,
           ...name,
+          birthDate,
           city: profile?.city || '',
           sportLevel: ['beginner', 'intermediate', 'advanced'].includes(profile?.level)
             ? profile.level
             : 'beginner',
           bio: profile?.bio || ''
         }));
+        setBirthDateParts(splitBirthDate(birthDate));
         setSummary(verification);
         if (['pending', 'verified', 'suspended'].includes(verification.status)) {
           markProfileVerificationOnboardingSeen();
@@ -152,7 +192,7 @@ function ProfileVerificationPage() {
     if (step === 1) {
       return form.firstName.trim().length >= 2
         && form.lastName.trim().length >= 2
-        && Boolean(form.birthDate)
+        && isValidBirthDate(form.birthDate)
         && form.city.trim().length >= 2
         && Boolean(form.primarySport);
     }
@@ -164,6 +204,17 @@ function ProfileVerificationPage() {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateBirthDatePart(field, value) {
+    const next = { ...birthDateParts, [field]: value };
+    const maxDay = getMonthDays(next.year, next.month);
+    if (Number(next.day) > maxDay) next.day = String(maxDay).padStart(2, '0');
+    const birthDate = next.day && next.month && next.year
+      ? `${next.year}-${next.month}-${next.day}`
+      : '';
+    setBirthDateParts(next);
+    setForm((currentForm) => ({ ...currentForm, birthDate }));
   }
 
   function choosePhoto(kind, file) {
@@ -274,10 +325,29 @@ function ProfileVerificationPage() {
                   <label>Nome<input value={form.firstName} maxLength={40} autoComplete="given-name" onChange={(event) => updateField('firstName', event.target.value)} /></label>
                   <label>Cognome<input value={form.lastName} maxLength={40} autoComplete="family-name" onChange={(event) => updateField('lastName', event.target.value)} /></label>
                 </div>
-                <div className={styles.twoColumns}>
-                  <label>Data di nascita<input type="date" max={new Date().toISOString().slice(0, 10)} value={form.birthDate} onChange={(event) => updateField('birthDate', event.target.value)} /></label>
-                  <label>Città<input value={form.city} maxLength={80} autoComplete="address-level2" onChange={(event) => updateField('city', event.target.value)} /></label>
-                </div>
+                <label>Data di nascita
+                  <div className={styles.dateSelectors}>
+                    <select aria-label="Giorno di nascita" value={birthDateParts.day} onChange={(event) => updateBirthDatePart('day', event.target.value)}>
+                      <option value="">Giorno</option>
+                      {Array.from({ length: getMonthDays(birthDateParts.year, birthDateParts.month) }, (_, index) => {
+                        const day = String(index + 1).padStart(2, '0');
+                        return <option key={day} value={day}>{index + 1}</option>;
+                      })}
+                    </select>
+                    <select aria-label="Mese di nascita" value={birthDateParts.month} onChange={(event) => updateBirthDatePart('month', event.target.value)}>
+                      <option value="">Mese</option>
+                      {MONTHS.map((month, index) => {
+                        const value = String(index + 1).padStart(2, '0');
+                        return <option key={month} value={value}>{month}</option>;
+                      })}
+                    </select>
+                    <select aria-label="Anno di nascita" value={birthDateParts.year} onChange={(event) => updateBirthDatePart('year', event.target.value)}>
+                      <option value="">Anno</option>
+                      {BIRTH_YEARS.map((year) => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                  </div>
+                </label>
+                <label>Città<input value={form.city} maxLength={80} autoComplete="address-level2" onChange={(event) => updateField('city', event.target.value)} /></label>
                 <div className={styles.twoColumns}>
                   <label>Sport principale<select value={form.primarySport} onChange={(event) => updateField('primarySport', event.target.value)}>{SPORTS.map((sport) => <option key={sport}>{sport}</option>)}</select></label>
                   <label>Livello<select value={form.sportLevel} onChange={(event) => updateField('sportLevel', event.target.value)}><option value="beginner">Principiante</option><option value="intermediate">Intermedio</option><option value="advanced">Avanzato</option></select></label>
@@ -308,8 +378,8 @@ function ProfileVerificationPage() {
           {step === 3 ? (
             <>
               <p className={styles.eyebrow}>Passaggio 3</p>
-              <h1>Conferma che sei tu.</h1>
-              <p className={styles.lead}>Una richiesta casuale rende più difficile usare foto di altre persone. Questa immagine non sarà pubblica.</p>
+              <h1>Conferma che sei tu con un gesto.</h1>
+              <p className={styles.lead}>È sufficiente una sola foto con il gesto mostrato. Se non ti è comodo, scegli “Cambia gesto”. L’immagine non sarà pubblica.</p>
               <div className={styles.gesture}>
                 <b>{challenge.emoji}</b>
                 <span><strong>{challenge.title}</strong><small>{challenge.description}</small></span>
@@ -318,11 +388,12 @@ function ProfileVerificationPage() {
                 {challengePreview ? <img src={challengePreview} alt="Anteprima foto challenge" /> : <span className={styles.silhouette}><ScanFace size={62} /></span>}
                 {challengePreview ? <span className={styles.captureOk}><Check size={18} /> Challenge acquisita</span> : <small>Viso e gesto devono essere visibili</small>}
               </div>
-              <input ref={challengeInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => choosePhoto('challenge', event.target.files?.[0])} />
+              <input ref={challengeInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('challenge', event.target.files?.[0]); event.target.value = ''; }} />
               <div className={styles.photoActions}>
                 <button type="button" className={styles.orangeSmall} onClick={() => challengeInputRef.current?.click()}><Camera size={18} /> Scatta challenge</button>
-                <button type="button" onClick={() => { setChallengePhoto(null); setChallengePreview(''); setChallengeIndex((current) => (current + 1) % CHALLENGES.length); }}><RefreshCw size={18} /> Altro gesto</button>
+                <button type="button" onClick={() => { setChallengePhoto(null); setChallengePreview(''); setChallengeIndex((current) => (current + 1) % CHALLENGES.length); }}><RefreshCw size={18} /> Cambia gesto</button>
               </div>
+              {challengePhoto ? <p className={styles.continueHint} role="status"><CheckCircle2 size={17} /> Foto acquisita. Premi “Avanti” per il controllo finale.</p> : null}
               <p className={styles.note}><Shield size={16} /> Foto privata, accessibile solo ai revisori autorizzati.</p>
             </>
           ) : null}
