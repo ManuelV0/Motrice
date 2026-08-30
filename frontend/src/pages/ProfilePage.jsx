@@ -79,7 +79,6 @@ function ProfilePage() {
         if (nextMode === 'mine') navigate('/account');
       }}
       onSaveProfile={() => false}
-      onSimulateCheckIn={() => false}
       onInvite={() => navigate(sourceEventId ? `/events/${sourceEventId}` : '/agenda')}
       publicActionLabel={sourceEventId ? 'TORNA ALL’EVENTO' : 'INVITA AD EVENTO'}
     />

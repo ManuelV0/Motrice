@@ -21,6 +21,7 @@ import LandingCTA from '../components/landing/LandingCTA';
 import HeroCard from '../components/HeroCard';
 import LoginPage from './LoginPage';
 import { completeAppIntro, hasCompletedAppIntro } from '../services/appIntro';
+import { shouldOfferProfileVerificationOnboarding } from '../services/profileVerification';
 import styles from '../styles/pages/landing.module.css';
 
 const problemBullets = [
@@ -138,6 +139,10 @@ function LandingPage() {
 
   if (!session.isAuthenticated) {
     return <LoginPage startup />;
+  }
+
+  if (shouldOfferProfileVerificationOnboarding(session)) {
+    return <Navigate to="/verify-profile" replace />;
   }
 
   if (!POST_LOGIN_INTRO_ENABLED || hasCompletedAppIntro(session)) {

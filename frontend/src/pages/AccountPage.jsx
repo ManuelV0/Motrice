@@ -7,8 +7,7 @@ import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
 import {
   createEmptyProfileV3,
-  getProfileV3State,
-  simulateProfileV3CheckIn
+  getProfileV3State
 } from '../services/profileV3';
 
 function AccountPage() {
@@ -64,18 +63,6 @@ function AccountPage() {
     }
   }
 
-  async function simulateCheckIn() {
-    try {
-      const next = await simulateProfileV3CheckIn(profile || {});
-      setProfileV3(next);
-      showToast('+20 MOT · +50 XP · presenza verificata', 'success');
-      return true;
-    } catch (error) {
-      showToast(error.message || 'Simulazione non riuscita', 'error');
-      return false;
-    }
-  }
-
   if (loading || !profile) {
     return <LoadingSkeleton rows={6} variant="detail" />;
   }
@@ -87,7 +74,7 @@ function AccountPage() {
       mode={mode}
       onModeChange={setMode}
       onSaveProfile={saveProfile}
-      onSimulateCheckIn={simulateCheckIn}
+      onVerify={() => navigate('/verify-profile')}
       onInvite={() => {
         showToast('Scegli un evento per invitare questo profilo', 'info');
         navigate('/agenda');

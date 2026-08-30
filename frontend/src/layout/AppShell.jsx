@@ -18,7 +18,8 @@ function AppShell({ children }) {
   const isStartupAuthRoute = isLandingRoute && !authSession.isAuthenticated;
   const isFirstAccessIntro =
     isLandingRoute && authSession.isAuthenticated && !hasCompletedAppIntro(authSession);
-  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro;
+  const isVerificationRoute = location.pathname === '/verify-profile';
+  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -96,7 +97,7 @@ function AppShell({ children }) {
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFullscreenEntryRoute ? 'mainContentStartupAuth' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFullscreenEntryRoute ? 'mainContentStartupAuth' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
@@ -113,7 +114,7 @@ function AppShell({ children }) {
         {children}
       </main>
       {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
-      {!isLandingRoute ? <Footer /> : null}
+      {!isLandingRoute && !isVerificationRoute ? <Footer /> : null}
       {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>
   );

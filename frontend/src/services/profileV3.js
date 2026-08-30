@@ -1,5 +1,9 @@
 import { getAuthSession } from './authSession';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
+import {
+  getMyProfileVerification,
+  getPublicProfileVerification
+} from './profileVerification';
 
 const STORAGE_PREFIX = 'motrice.profile-v3.';
 const SCHEMA_VERSION = 3;
@@ -24,6 +28,11 @@ export function createEmptyProfileV3(profile = {}) {
   return {
     schema_version: SCHEMA_VERSION,
     identity: identityFrom(profile),
+    identity_verification: {
+      status: 'unverified',
+      verified_at: null,
+      expires_at: null
+    },
     verified_checkins: 0,
     reliability: {
       score: 0,
@@ -42,8 +51,7 @@ export function createEmptyProfileV3(profile = {}) {
       { id: 'team', icon: '🤝', label: 'Team', detail: 'Prima collaborazione' },
       { id: 'host', icon: '🏅', label: 'Host', detail: 'Primo evento' }
     ],
-    recent_activity: [],
-    demo_used: false
+    recent_activity: []
   };
 }
 
@@ -62,12 +70,26 @@ function normalizeState(raw, profile = {}) {
   const score = outcomes > 0 ? Math.round((present / outcomes) * 100) : 0;
   const xpTotal = number(raw.xp?.total ?? raw.xp_total);
   const level = Math.max(1, Math.floor(xpTotal / 250) + 1);
+  const verificationStatus = String(raw.identity_verification?.status || 'unverified').toLowerCase();
+  const allowedVerificationStatuses = new Set([
+    'unverified',
+    'pending',
+    'verified',
+    'rejected',
+    'expired',
+    'suspended'
+  ]);
 
   return {
     ...empty,
     ...raw,
     schema_version: SCHEMA_VERSION,
     identity: { ...empty.identity, ...(raw.identity || {}) },
+    identity_verification: {
+      ...empty.identity_verification,
+      ...(raw.identity_verification || {}),
+      status: allowedVerificationStatuses.has(verificationStatus) ? verificationStatus : 'unverified'
+    },
     verified_checkins: number(raw.verified_checkins),
     reliability: { score, present, no_show: noShow, late_cancellations: late },
     mot: {
@@ -93,8 +115,7 @@ function normalizeState(raw, profile = {}) {
       locked_cents: number(raw.credit_wallet?.locked_cents ?? raw.locked_cents)
     },
     achievements: Array.isArray(raw.achievements) ? raw.achievements : empty.achievements,
-    recent_activity: Array.isArray(raw.recent_activity) ? raw.recent_activity : [],
-    demo_used: Boolean(raw.demo_used)
+    recent_activity: Array.isArray(raw.recent_activity) ? raw.recent_activity : []
   };
 }
 
@@ -109,46 +130,6 @@ function readLocal(profile) {
   }
 }
 
-function writeLocal(state) {
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(storageKey(), JSON.stringify(state));
-    } catch {
-      // Lo zero-state continua a funzionare anche senza storage persistente.
-    }
-  }
-  return state;
-}
-
-function simulateLocal(profile) {
-  const current = readLocal(profile);
-  if (current.demo_used) return current;
-  const occurredAt = new Date().toISOString();
-  const next = normalizeState(
-    {
-      ...current,
-      verified_checkins: 1,
-      reliability: { score: 100, present: 1, no_show: 0, late_cancellations: 0 },
-      mot: {
-        total: 20,
-        logs: [{ id: `mot-demo-${Date.now()}`, evento_id: null, mot: 20, qr_verificato: true, created_at: occurredAt }]
-      },
-      xp: {
-        level: 1,
-        total: 50,
-        next_level_at: 250,
-        logs: [{ id: `xp-demo-${Date.now()}`, xp: 50, motivo: 'Check-in QR verificato', created_at: occurredAt }]
-      },
-      recent_activity: [
-        { id: `activity-demo-${Date.now()}`, title: 'Check-in demo', subtitle: 'QR verificato · +20 MOT · +50 XP', created_at: occurredAt }
-      ],
-      demo_used: true
-    },
-    profile
-  );
-  return writeLocal(next);
-}
-
 function isMissingProfileV3Rpc(error, functionName = 'get_my_profile_v3') {
   const message = String(error?.message || '').toLowerCase();
   return error?.code === '42883' || error?.code === 'PGRST202' || message.includes(functionName);
@@ -158,12 +139,15 @@ export async function getProfileV3State(profile = {}) {
   const session = getAuthSession();
   if (!isSupabaseConfigured || !session?.authUserId) return readLocal(profile);
   const client = requireSupabase();
-  const { data, error } = await client.rpc('get_my_profile_v3');
+  const [{ data, error }, verification] = await Promise.all([
+    client.rpc('get_my_profile_v3'),
+    getMyProfileVerification()
+  ]);
   if (error) {
     if (isMissingProfileV3Rpc(error)) return readLocal(profile);
     throw new Error(error.message || 'Impossibile caricare il profilo Motrice');
   }
-  return normalizeState(data, profile);
+  return normalizeState({ ...data, identity_verification: verification }, profile);
 }
 
 export async function getPublicProfileV3State(targetUserId, profile = {}) {
@@ -181,26 +165,15 @@ export async function getPublicProfileV3State(targetUserId, profile = {}) {
   }
 
   const client = requireSupabase();
-  const { data, error } = await client.rpc('get_public_profile_v3', {
-    target_user_id: targetId
-  });
+  const [{ data, error }, verification] = await Promise.all([
+    client.rpc('get_public_profile_v3', { target_user_id: targetId }),
+    getPublicProfileVerification(targetId)
+  ]);
   if (error) {
     if (isMissingProfileV3Rpc(error, 'get_public_profile_v3')) {
       return createEmptyProfileV3(profile);
     }
     throw new Error(error.message || 'Impossibile caricare il profilo pubblico Motrice');
   }
-  return normalizeState(data, profile);
-}
-
-export async function simulateProfileV3CheckIn(profile = {}) {
-  const session = getAuthSession();
-  if (!isSupabaseConfigured || !session?.authUserId) return simulateLocal(profile);
-  const client = requireSupabase();
-  const { data, error } = await client.rpc('simulate_my_profile_v3_checkin');
-  if (error) {
-    if (isMissingProfileV3Rpc(error)) return simulateLocal(profile);
-    throw new Error(error.message || 'Simulazione check-in non riuscita');
-  }
-  return normalizeState(data, profile);
+  return normalizeState({ ...data, identity_verification: verification }, profile);
 }

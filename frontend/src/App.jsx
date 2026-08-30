@@ -38,6 +38,10 @@ import ChatThreadPage from './pages/ChatThreadPage';
 import CommunityPage from './pages/CommunityPage';
 import ChatSearchPage from './pages/ChatSearchPage';
 import FriendsPage from './pages/FriendsPage';
+import ProfileVerificationPage from './pages/ProfileVerificationPage';
+import VerifiedProfileRoute from './components/VerifiedProfileRoute';
+import AdminProfileVerificationsPage from './pages/AdminProfileVerificationsPage';
+import AdminVerificationRoute from './components/AdminVerificationRoute';
 
 const GameMapPage = lazy(() => import('./features/game/pages/GameMapPage'));
 const EXPLORE_SECTION_ENABLED = false;
@@ -58,7 +62,7 @@ function App() {
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/tutorial" element={<TutorialPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
-          <Route path="/create" element={<CreateEventPage />} />
+          <Route path="/create" element={<VerifiedProfileRoute><CreateEventPage /></VerifiedProfileRoute>} />
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/chat" element={<ChatInboxPage />} />
@@ -87,6 +91,7 @@ function App() {
           <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/verify-profile" element={<ProfileVerificationPage />} />
           <Route path="/account/xp" element={<Navigate to="/account" replace />} />
           <Route path="/account/ai" element={<AccountAiPage />} />
           <Route path="/coach" element={<CoachPage />} />
@@ -97,6 +102,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin/coach-applications" element={<AdminCoachApplicationsPage />} />
           <Route path="/admin/convenzioni-applications" element={<AdminConvenzioniApplicationsPage />} />
+          <Route path="/admin/verifiche" element={<AdminVerificationRoute><AdminProfileVerificationsPage /></AdminVerificationRoute>} />
           <Route path="/admin/tutorial" element={<AdminTutorialPage />} />
           <Route path="/coach/plan" element={<CoachPlanPage />} />
           <Route path="/coach/check-in" element={<CoachCheckInPage />} />

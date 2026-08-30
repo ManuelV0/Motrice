@@ -17,6 +17,7 @@ const defaultSession = {
   userId: null,
   authUserId: null,
   email: null,
+  role: null,
   isAuthenticated: false
 };
 
@@ -124,6 +125,9 @@ export function getAuthSession() {
       userId,
       authUserId,
       email: parsed.email || null,
+      role: ['admin', 'moderator'].includes(String(parsed.role || '').toLowerCase())
+        ? String(parsed.role).toLowerCase()
+        : null,
       isAuthenticated:
         typeof parsed.isAuthenticated === 'boolean' ? parsed.isAuthenticated : inferredAuthenticated
     };
@@ -143,6 +147,9 @@ export function setAuthSession(session) {
     userId,
     authUserId,
     email: session.email || null,
+    role: ['admin', 'moderator'].includes(String(session.role || '').toLowerCase())
+      ? String(session.role).toLowerCase()
+      : null,
     isAuthenticated: Boolean(session.isAuthenticated)
   };
 
@@ -184,6 +191,7 @@ function applySupabaseSession(session) {
     accessToken: session.access_token,
     authUserId: session.user.id,
     email: session.user.email || null,
+    role: session.user.app_metadata?.role || null,
     isAuthenticated: true
   });
 }

@@ -1,5 +1,7 @@
+import { Capacitor } from '@capacitor/core';
 import { getAuthSession, legacyIdFromAuthUserId } from './authSession';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
+import { assertProfileVerified } from './profileVerification';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -453,6 +455,7 @@ function createRemoteMethods(localApi) {
       const client = requireSupabase();
       const creatorId = requireAuthUserId();
       await ensureMyProfile(client);
+      await assertProfileVerified('creare un evento.');
       const { data, error } = await client
         .from('events')
         .insert({
@@ -514,6 +517,7 @@ function createRemoteMethods(localApi) {
     async joinEvent(id, payload = {}) {
       const client = requireSupabase();
       await ensureMyProfile(client);
+      await assertProfileVerified('partecipare a un evento.');
       const eventResult = await client
         .from('events')
         .select('id,join_policy,is_personal')
@@ -602,6 +606,7 @@ function createRemoteMethods(localApi) {
 
     async startEventCheckInSession(eventId) {
       const client = requireSupabase();
+      await assertProfileVerified('gestire il check-in.');
       const { data, error } = await client.rpc('start_event_checkin', {
         target_event_id: String(eventId)
       });
@@ -620,6 +625,7 @@ function createRemoteMethods(localApi) {
 
     async checkInToEvent({ eventId, token }) {
       const client = requireSupabase();
+      await assertProfileVerified('effettuare il check-in.');
       const submittedToken = (() => {
         const raw = normalizeText(token);
         if (!raw) return '';
@@ -673,6 +679,7 @@ function createRemoteMethods(localApi) {
       accuracyM = null
     }) {
       const client = requireSupabase();
+      await assertProfileVerified('scansionare i partecipanti.');
       const submittedToken = (() => {
         const raw = normalizeText(token);
         if (!raw) return '';
@@ -707,6 +714,7 @@ function createRemoteMethods(localApi) {
 
     async issueEventHostQr(eventId) {
       const client = requireSupabase();
+      await assertProfileVerified('mostrare il QR organizer.');
       const { data, error } = await client.rpc('issue_event_host_qr', {
         target_event_id: String(eventId)
       });
@@ -716,6 +724,7 @@ function createRemoteMethods(localApi) {
 
     async scanEventHostQr({ eventId, token }) {
       const client = requireSupabase();
+      await assertProfileVerified('effettuare il check-in.');
       const submittedToken = (() => {
         const raw = normalizeText(token);
         if (!raw) return '';
@@ -748,6 +757,7 @@ function createRemoteMethods(localApi) {
       speedMps = null
     }) {
       const client = requireSupabase();
+      await assertProfileVerified('registrare la presenza.');
       const { data, error } = await client.rpc('record_event_presence', {
         target_event_id: String(eventId),
         sample_lat: Number.isFinite(Number(lat)) && lat !== null ? Number(lat) : null,
@@ -981,6 +991,7 @@ function createRemoteMethods(localApi) {
     async sendEventGroupMessage({ eventId, text }) {
       const client = requireSupabase();
       const senderId = requireAuthUserId();
+      await assertProfileVerified('scrivere nella chat evento.');
       const body = normalizeText(text);
       if (!body) throw new Error('Scrivi un messaggio prima di inviare');
       const { data, error } = await client
@@ -1078,7 +1089,29 @@ function createRemoteMethods(localApi) {
 }
 
 export function createSupabaseApi(localApi) {
-  if (!isSupabaseConfigured) return localApi;
+  if (!isSupabaseConfigured) {
+    if (!Capacitor.isNativePlatform()) return localApi;
+
+    const requireSecureBackend = async () => {
+      throw new Error('Connessione sicura non disponibile. Aggiorna o riavvia Motrice prima di eseguire questa azione.');
+    };
+
+    return {
+      ...localApi,
+      createEvent: requireSecureBackend,
+      joinEvent: requireSecureBackend,
+      approveEventJoinRequest: requireSecureBackend,
+      declineEventJoinRequest: requireSecureBackend,
+      completePersonalEvent: requireSecureBackend,
+      startEventCheckInSession: requireSecureBackend,
+      checkInToEvent: requireSecureBackend,
+      scanEventParticipantQr: requireSecureBackend,
+      recordEventPresence: requireSecureBackend,
+      submitEventReview: requireSecureBackend,
+      finalizeEventOutcomes: requireSecureBackend,
+      sendEventGroupMessage: requireSecureBackend
+    };
+  }
   return {
     ...localApi,
     ...createRemoteMethods(localApi)

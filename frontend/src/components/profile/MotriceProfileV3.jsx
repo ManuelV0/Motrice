@@ -5,6 +5,7 @@ import {
   CircleCheck,
   Coins,
   CreditCard,
+  ArrowRight,
   LockKeyhole,
   MapPin,
   Pencil,
@@ -31,14 +32,13 @@ function MotriceProfileV3({
   mode,
   onModeChange,
   onSaveProfile,
-  onSimulateCheckIn,
+  onVerify,
   onInvite,
   publicActionLabel = 'INVITA AD EVENTO'
 }) {
   const [identityOpen, setIdentityOpen] = useState(false);
   const [ratingsOpen, setRatingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [simulating, setSimulating] = useState(false);
   const [form, setForm] = useState({ display_name: '', city: '', bio: '', avatar_url: '' });
 
   useEffect(() => {
@@ -58,6 +58,16 @@ function MotriceProfileV3({
   const xpProgress = Math.min(100, Math.round((state.xp.total / state.xp.next_level_at) * 100));
   const verified = Number(state.verified_checkins || reliability.present || 0);
   const isPrivate = mode === 'mine';
+  const verificationStatus = String(state.identity_verification?.status || 'unverified');
+  const verificationLabels = {
+    unverified: 'Profilo non verificato',
+    pending: 'Verifica in revisione',
+    verified: 'Profilo verificato',
+    rejected: 'Verifica da ripetere',
+    expired: 'Verifica scaduta',
+    suspended: 'Profilo sospeso'
+  };
+  const verificationLabel = verificationLabels[verificationStatus] || verificationLabels.unverified;
 
   const ringStyle = useMemo(
     () => ({ '--profile-v3-score': `${Math.max(0, Math.min(100, reliability.score)) * 3.6}deg` }),
@@ -75,21 +85,27 @@ function MotriceProfileV3({
     }
   }
 
-  async function simulate() {
-    setSimulating(true);
-    try {
-      await onSimulateCheckIn();
-    } finally {
-      setSimulating(false);
-    }
-  }
-
   return (
     <main className={`${styles.page} ${!isPrivate ? styles.publicMode : ''}`}>
       <header className={styles.topHeader}>
         <span>PROFILO</span>
-        <p><i aria-hidden="true" /> Live verificato</p>
+        <p className={styles[`verification_${verificationStatus}`]}>
+          <i aria-hidden="true" /> {verificationLabel}
+        </p>
       </header>
+
+      {isPrivate && verificationStatus !== 'verified' ? (
+        <section className={styles.verificationBanner}>
+          <span className={styles.verificationBannerIcon}><ShieldCheck size={22} /></span>
+          <span>
+            <strong>{verificationLabel}</strong>
+            <small>{verificationStatus === 'pending' ? 'Puoi esplorare mentre completiamo la revisione.' : 'Verifica il profilo per creare e partecipare agli eventi.'}</small>
+          </span>
+          <button type="button" onClick={onVerify}>
+            {verificationStatus === 'pending' ? 'Vedi stato' : 'Verifica'} <ArrowRight size={15} />
+          </button>
+        </section>
+      ) : null}
 
       <div className={styles.modeToggle} role="tablist" aria-label="Vista del profilo">
         <button
@@ -290,16 +306,11 @@ function MotriceProfileV3({
         <p><Zap size={16} /><strong>XP</strong><span>progressione</span></p>
       </section>
 
-      {isPrivate ? (
-        <button type="button" className={styles.demoButton} disabled={simulating || state.demo_used} onClick={simulate}>
-          <ScanLine size={19} aria-hidden="true" />
-          {state.demo_used ? 'Check-in demo completato' : simulating ? 'Simulazione...' : 'Simula Check-in QR'}
-        </button>
-      ) : (
+      {!isPrivate ? (
         <div className={styles.publicSticky}>
           <button type="button" onClick={onInvite}><UserRoundPlus size={20} /> {publicActionLabel}</button>
         </div>
-      )}
+      ) : null}
     </main>
   );
 }

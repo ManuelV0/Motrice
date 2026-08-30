@@ -502,6 +502,12 @@ function EventDetailPage() {
         // La conferma ricevuta dal backend resta valida anche se il refresh tarda.
       });
     } catch (err) {
+      if (err?.code === 'PROFILE_VERIFICATION_REQUIRED' || String(err?.message || '').includes('PROFILE_VERIFICATION_REQUIRED')) {
+        setModalOpen(false);
+        showToast('Verifica il profilo prima di partecipare', 'info');
+        navigate('/verify-profile');
+        return;
+      }
       showToast(err.message, 'error');
     } finally {
       setRsvpSubmitting(false);

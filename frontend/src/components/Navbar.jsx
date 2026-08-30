@@ -12,6 +12,7 @@ import {
   LocateFixed,
   LogIn,
   LogOut,
+  ShieldCheck,
   X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
@@ -20,6 +21,7 @@ import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { getAuthSession, signOutFromSupabase } from '../services/authSession';
+import { isProfileVerificationAdmin } from '../services/profileVerification';
 import IconButton from './IconButton';
 import BrandLogo from './BrandLogo';
 import styles from '../styles/components/navbar.module.css';
@@ -59,6 +61,15 @@ function Navbar({ forceMobile = false }) {
   const [unread, setUnread] = useState(0);
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const [authActionBusy, setAuthActionBusy] = useState(false);
+  const visibleDrawerSections = isProfileVerificationAdmin(authSession)
+    ? [
+        ...drawerSections,
+        {
+          title: 'Amministrazione',
+          items: [{ to: '/admin/verifiche', label: 'Centro verifiche', icon: ShieldCheck }]
+        }
+      ]
+    : drawerSections;
   const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
 
@@ -308,7 +319,7 @@ function Navbar({ forceMobile = false }) {
             />
           </form>
 
-          {drawerSections.map((section) => (
+          {visibleDrawerSections.map((section) => (
             <section key={section.title} className={styles.mobileSection} aria-label={section.title}>
               <p className={styles.mobileSectionTitle}>{section.title}</p>
               <div className={styles.mobileSectionList}>

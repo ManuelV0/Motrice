@@ -43,6 +43,69 @@
   box-shadow: 0 0 0.75rem rgb(198 255 0 / 55%);
 }
 
+.topHeader .verification_unverified i,
+.topHeader .verification_expired i {
+  background: #777;
+  box-shadow: none;
+}
+
+.topHeader .verification_pending i {
+  background: #f0bd36;
+  box-shadow: 0 0 0.65rem rgb(240 189 54 / 35%);
+}
+
+.topHeader .verification_rejected i,
+.topHeader .verification_suspended i {
+  background: #ff5b5b;
+  box-shadow: 0 0 0.65rem rgb(255 91 91 / 32%);
+}
+
+.verificationBanner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border: 1px solid rgb(198 255 0 / 30%);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgb(198 255 0 / 10%), #171a12);
+  box-shadow: 0 0 1.5rem rgb(198 255 0 / 6%);
+}
+
+.verificationBannerIcon {
+  width: 2.45rem;
+  height: 2.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.8rem;
+  color: var(--v3-lime);
+  background: rgb(198 255 0 / 10%);
+}
+
+.verificationBanner > span:nth-child(2) {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.verificationBanner strong { font-size: 0.78rem; }
+.verificationBanner small { color: #90958a; font-size: 0.66rem; line-height: 1.35; }
+
+.verificationBanner button {
+  min-height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0 0.65rem;
+  border: 0;
+  border-radius: 999px;
+  color: #0b0b0b;
+  background: var(--v3-lime);
+  font-size: 0.65rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .modeToggle {
   position: sticky;
   top: calc(var(--nav-h) + 0.35rem);
@@ -388,7 +451,6 @@
 .legend p svg { color: var(--v3-lime); }
 .legend p strong { color: #eee; font-size: 0.61rem; }
 
-.demoButton,
 .publicSticky button {
   width: 100%;
   min-height: 3.55rem;
@@ -403,7 +465,6 @@
   font-weight: 900;
   box-shadow: 0 0 1.5rem rgb(198 255 0 / 23%);
 }
-.demoButton:disabled { background: #2b2f24; color: #8c9381; box-shadow: none; }
 .publicSticky { position: sticky; bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 0.65rem); z-index: 7; padding: 0.45rem; border-radius: 999px; background: rgb(14 14 14 / 90%); backdrop-filter: blur(10px); }
 
 @media (max-width: 380px) {
@@ -419,10 +480,11 @@
   .scoreRing { width: 4.45rem; height: 4.45rem; }
   .achievementGrid { gap: 0.25rem; }
   .achievementGrid article { min-height: 5.9rem; }
+  .verificationBanner { grid-template-columns: auto 1fr; }
+  .verificationBanner button { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .identityAccordion { animation: none; }
   .progress i { transition: none; }
 }
-
