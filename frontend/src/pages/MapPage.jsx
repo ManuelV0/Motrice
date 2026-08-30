@@ -394,6 +394,16 @@ function MapFilterChips({
       <button
         type="button"
         role="tab"
+        aria-selected={selectedChip === 'custom'}
+        className={selectedChip === 'custom' ? styles.chipActive : styles.chip}
+        onClick={onCustomClick}
+      >
+        <span>Filtri</span>
+        {customApplied && <span className={styles.chipDot} aria-hidden="true" />}
+      </button>
+      <button
+        type="button"
+        role="tab"
         aria-selected={selectedChip === 'all'}
         className={selectedChip === 'all' ? styles.chipActive : styles.chip}
         onClick={onAllClick}
@@ -426,16 +436,6 @@ function MapFilterChips({
         onClick={onRadiusCycle}
       >
         <span>{selectedRadiusKm ? `${selectedRadiusKm} km` : 'Distanza'}</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'custom'}
-        className={selectedChip === 'custom' ? styles.chipActive : styles.chip}
-        onClick={onCustomClick}
-      >
-        <span>Filtri</span>
-        {customApplied && <span className={styles.chipDot} aria-hidden="true" />}
       </button>
     </div>
   );
