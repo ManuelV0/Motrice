@@ -41,7 +41,6 @@ const baseFilters = {
   sortBy: 'soonest'
 };
 
-const RADIUS_CYCLE_KM = [0, 10, 20, 30, 40];
 const DEFAULT_CENTER = { lat: 42.6, lng: 12.5 };
 const MAP_THEME_KEY = 'motrice.map.theme';
 const MAP_STYLES = {
@@ -374,73 +373,42 @@ function removeUserRadiusOverlay(map) {
   if (map.getSource(USER_RADIUS_SOURCE)) map.removeSource(USER_RADIUS_SOURCE);
 }
 
-function MapSearchBar({ value, onChange }) {
+function MapSearchBar({ value, onChange, onFilterClick, activeFilterCount, filtersOpen }) {
   return (
-    <label className={styles.searchBar}>
+    <div className={styles.searchBar}>
       <Search size={17} aria-hidden="true" />
-      <input value={value} onChange={onChange} placeholder="Cerca sport o città" />
-    </label>
+      <input value={value} onChange={onChange} placeholder="Cerca sport o città" aria-label="Cerca sport o città" />
+      <button
+        type="button"
+        className={`${styles.searchFilterButton} ${activeFilterCount > 0 ? styles.searchFilterButtonActive : ''}`}
+        onClick={onFilterClick}
+        aria-label={activeFilterCount > 0 ? `Apri filtri, ${activeFilterCount} attivi` : 'Apri filtri'}
+        aria-expanded={filtersOpen}
+      >
+        <SlidersHorizontal size={18} aria-hidden="true" />
+        {activeFilterCount > 0 ? <span>{activeFilterCount}</span> : null}
+      </button>
+    </div>
   );
 }
 
-function MapFilterChips({
-  selectedChip,
-  selectedRadiusKm,
-  customApplied,
-  onAllClick,
-  onTodayClick,
-  onWeekClick,
-  onRadiusCycle,
-  onCustomClick
-}) {
+function ActiveFilterPills({ items, onRemove }) {
+  if (!items.length) return null;
+
   return (
-    <div className={styles.chipRail} role="tablist" aria-label="Filtri rapidi mappa">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'custom'}
-        className={selectedChip === 'custom' ? styles.chipActive : styles.chip}
-        onClick={onCustomClick}
-      >
-        <span>Filtri</span>
-        {customApplied && <span className={styles.chipDot} aria-hidden="true" />}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'all'}
-        className={selectedChip === 'all' ? styles.chipActive : styles.chip}
-        onClick={onAllClick}
-      >
-        <span>Tutti</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'today'}
-        className={selectedChip === 'today' ? styles.chipActive : styles.chip}
-        onClick={onTodayClick}
-      >
-        <span>Oggi</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'week'}
-        className={selectedChip === 'week' ? styles.chipActive : styles.chip}
-        onClick={onWeekClick}
-      >
-        <span>Settimana</span>
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={selectedChip === 'radius'}
-        className={selectedChip === 'radius' ? styles.chipActive : styles.chip}
-        onClick={onRadiusCycle}
-      >
-        <span>{selectedRadiusKm ? `${selectedRadiusKm} km` : 'Distanza'}</span>
-      </button>
+    <div className={styles.activeFilterRail} aria-label="Filtri attivi">
+      {items.map((item) => (
+        <button
+          type="button"
+          key={item.key}
+          className={styles.activeFilterPill}
+          onClick={() => onRemove(item.key)}
+          aria-label={`Rimuovi filtro ${item.label}`}
+        >
+          <span>{item.label}</span>
+          <X size={13} aria-hidden="true" />
+        </button>
+      ))}
     </div>
   );
 }
@@ -649,7 +617,6 @@ function MapPage() {
   const shouldRecenterRef = useRef(true);
   const gpsTapRef = useRef(0);
   const mapStyleThemeRef = useRef(null);
-  const chipBeforeDrawerRef = useRef('all');
   const mapThemeBeforeDrawerRef = useRef('dark');
   const eventsSectionRef = useRef(null);
   const eventCardRefs = useRef(new Map());
@@ -664,12 +631,6 @@ function MapPage() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [savingIds, setSavingIds] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [selectedChip, setSelectedChip] = useState(() => {
-    if (filters.dateRange === 'today') return 'today';
-    if (filters.dateRange === 'week') return 'week';
-    return 'all';
-  });
-  const [selectedRadiusKm, setSelectedRadiusKm] = useState(null);
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
   const [mapTheme, setMapTheme] = useState(() => {
@@ -794,6 +755,12 @@ function MapPage() {
     [events, resolvedCoordinates]
   );
 
+  const selectedRadiusKm = useMemo(() => {
+    if (!entitlements.canUseAdvancedFilters || filters.distance === 'all') return null;
+    const parsedDistance = Number(filters.distance);
+    return Number.isFinite(parsedDistance) && parsedDistance > 0 ? parsedDistance : null;
+  }, [entitlements.canUseAdvancedFilters, filters.distance]);
+
   const eventsWithoutCoordinates = Math.max(0, events.length - withCoords.length);
 
   const eventsInRadius = useMemo(() => {
@@ -821,17 +788,23 @@ function MapPage() {
     [eventsInRadius, hasLocation, selectedRadiusKm]
   );
 
-  const hasCustomFiltersApplied = useMemo(() => {
-    return (
-      String(filters.q || '').trim().length > 0 ||
-      String(filters.sport) !== 'all' ||
-      String(filters.dateRange) !== 'all' ||
-      String(filters.distance) !== 'all' ||
-      String(filters.level) !== 'all' ||
-      String(filters.timeOfDay) !== 'all' ||
-      String(filters.sortBy) !== 'soonest'
-    );
-  }, [filters]);
+  const activeFilterPills = useMemo(() => {
+    const pills = [];
+    if (filters.sport !== 'all') {
+      const sport = sports.find((item) => String(item.id) === String(filters.sport));
+      pills.push({ key: 'sport', label: sport?.name || 'Sport selezionato' });
+    }
+    if (filters.dateRange !== 'all') {
+      const dateLabels = { today: 'Oggi', week: 'Questa settimana', month: 'Questo mese' };
+      pills.push({ key: 'dateRange', label: dateLabels[filters.dateRange] || 'Periodo selezionato' });
+    }
+    if (filters.distance !== 'all') pills.push({ key: 'distance', label: `Entro ${filters.distance} km` });
+    if (filters.sortBy !== 'soonest') {
+      const sortLabels = { closest: 'Più vicini', popular: 'Più popolari' };
+      pills.push({ key: 'sortBy', label: sortLabels[filters.sortBy] || 'Ordine personalizzato' });
+    }
+    return pills;
+  }, [filters.dateRange, filters.distance, filters.sortBy, filters.sport, sports]);
 
   const focusEvent = useCallback((event, { scrollToCard = false } = {}) => {
     const map = mapRef.current;
@@ -846,31 +819,8 @@ function MapPage() {
     }
   }, []);
 
-  function handleRadiusCycle() {
-    setSelectedRadiusKm((prev) => {
-      const current = Number.isFinite(Number(prev)) ? Number(prev) : 0;
-      const index = RADIUS_CYCLE_KM.indexOf(current);
-      const next = RADIUS_CYCLE_KM[(index + 1) % RADIUS_CYCLE_KM.length];
-      if (!coords && next > 0) {
-        requestLocation();
-        showToast('Attiva il GPS per applicare il raggio.', 'info');
-        return current;
-      }
-      if (next > 0) shouldRecenterRef.current = true;
-      return next;
-    });
-    setSelectedChip('radius');
-  }
-
-  function handleQuickDate(dateRange) {
-    setFilters((prev) => ({ ...prev, dateRange }));
-    setSelectedChip(dateRange);
-  }
-
   function handleCustomChip() {
-    chipBeforeDrawerRef.current = selectedChip;
     mapThemeBeforeDrawerRef.current = mapTheme;
-    setSelectedChip('custom');
     setDraftFilters(filters);
     setFiltersDrawerOpen(true);
   }
@@ -878,8 +828,11 @@ function MapPage() {
   function closeCustomFilters() {
     setDraftFilters(filters);
     setMapTheme(mapThemeBeforeDrawerRef.current);
-    setSelectedChip(chipBeforeDrawerRef.current);
     setFiltersDrawerOpen(false);
+  }
+
+  function removeActiveFilter(filterKey) {
+    setFilters((prev) => ({ ...prev, [filterKey]: baseFilters[filterKey] }));
   }
 
   function onGpsAction() {
@@ -1174,15 +1127,6 @@ function MapPage() {
 
   function applyCustomFilters() {
     setFilters(draftFilters);
-    const hasNonDateCustomFilter =
-      String(draftFilters.q || '').trim().length > 0 ||
-      String(draftFilters.sport) !== 'all' ||
-      String(draftFilters.distance) !== 'all' ||
-      String(draftFilters.level) !== 'all' ||
-      String(draftFilters.timeOfDay) !== 'all' ||
-      String(draftFilters.sortBy) !== 'soonest';
-    const quickDateChip = ['all', 'today', 'week'].includes(draftFilters.dateRange) ? draftFilters.dateRange : null;
-    setSelectedChip(!hasNonDateCustomFilter && quickDateChip ? quickDateChip : 'custom');
     setFiltersDrawerOpen(false);
   }
 
@@ -1209,17 +1153,14 @@ function MapPage() {
         </header>
 
         <div className={styles.topControls}>
-          <MapSearchBar value={filters.q || ''} onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))} />
-          <MapFilterChips
-            selectedChip={selectedChip}
-            selectedRadiusKm={selectedRadiusKm}
-            customApplied={hasCustomFiltersApplied}
-            onAllClick={() => handleQuickDate('all')}
-            onTodayClick={() => handleQuickDate('today')}
-            onWeekClick={() => handleQuickDate('week')}
-            onRadiusCycle={handleRadiusCycle}
-            onCustomClick={handleCustomChip}
+          <MapSearchBar
+            value={filters.q || ''}
+            onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
+            onFilterClick={handleCustomChip}
+            activeFilterCount={activeFilterPills.length}
+            filtersOpen={filtersDrawerOpen}
           />
+          <ActiveFilterPills items={activeFilterPills} onRemove={removeActiveFilter} />
         </div>
 
         <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi">

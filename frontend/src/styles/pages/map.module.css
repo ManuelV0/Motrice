@@ -136,7 +136,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: 0 var(--s-4);
+  padding: 0 0.38rem 0 var(--s-4);
   box-shadow:
     0 18px 34px rgb(0 0 0 / 22%),
     inset 0 1px 0 rgb(255 255 255 / 4%);
@@ -172,38 +172,92 @@
   color: var(--map-ui-muted);
 }
 
-.chipRail {
+.searchFilterButton {
+  position: relative;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 5%);
+  color: var(--map-ui-text);
+  box-shadow: none;
+  place-items: center;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.searchFilterButton:hover,
+.searchFilterButton:focus-visible {
+  border-color: rgb(199 255 0 / 52%);
+  background: rgb(199 255 0 / 9%);
+}
+
+.searchFilterButtonActive {
+  border-color: var(--map-neon);
+  background: var(--map-neon);
+  color: var(--map-neon-ink);
+  box-shadow: 0 0 18px rgb(199 255 0 / 18%);
+}
+
+.searchFilterButtonActive svg {
+  color: var(--map-neon-ink);
+}
+
+.searchFilterButton > span {
+  position: absolute;
+  top: -0.22rem;
+  right: -0.12rem;
+  display: grid;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.2rem;
+  border: 2px solid var(--map-ui-surface);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #080a08;
+  font-size: 0.58rem;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  place-items: center;
+}
+
+.activeFilterRail {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   width: calc(100% + (clamp(var(--s-3), 4vw, var(--s-6)) * 2));
   margin-inline: calc(clamp(var(--s-3), 4vw, var(--s-6)) * -1);
-  padding: 0 clamp(var(--s-3), 4vw, var(--s-6)) var(--s-1);
+  padding: 0 clamp(var(--s-3), 4vw, var(--s-6)) 0.08rem;
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: none;
   scroll-snap-type: inline proximity;
 }
 
-.chipRail::-webkit-scrollbar {
+.activeFilterRail::-webkit-scrollbar {
   display: none;
 }
 
-.chip,
-.chipActive {
+.activeFilterPill {
   flex: 0 0 auto;
-  min-height: 2.65rem;
-  padding: 0 var(--s-4);
+  min-height: 2.1rem;
+  padding: 0 0.68rem 0 0.78rem;
   border-radius: 999px;
-  border: 1px solid var(--map-ui-border);
-  background: var(--map-ui-surface);
-  color: var(--map-ui-text);
-  box-shadow: 0 8px 18px rgb(0 0 0 / 18%);
+  border: 1px solid rgb(199 255 0 / 34%);
+  background: rgb(199 255 0 / 8%);
+  color: var(--map-neon);
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s-2);
-  font-size: var(--text-sm);
+  gap: 0.42rem;
+  font-size: 0.7rem;
   font-weight: var(--weight-semibold);
   scroll-snap-align: start;
   transition:
@@ -212,26 +266,11 @@
     background-color var(--dur-fast) var(--ease);
 }
 
-.chip:hover,
-.chip:focus-visible {
-  border-color: color-mix(in srgb, var(--map-neon) 48%, var(--map-ui-border));
-  transform: translateY(-1px);
-}
-
-.chipActive {
+.activeFilterPill:hover,
+.activeFilterPill:focus-visible {
   border-color: var(--map-neon);
-  background: var(--map-neon);
-  color: var(--map-neon-ink);
-  box-shadow:
-    0 10px 24px rgb(0 0 0 / 26%),
-    0 0 22px rgb(199 255 0 / 22%);
-}
-
-.chipDot {
-  width: 0.42rem;
-  height: 0.42rem;
-  border-radius: 999px;
-  background: currentColor;
+  background: rgb(199 255 0 / 13%);
+  transform: translateY(-1px);
 }
 
 .mapStage {
@@ -1230,8 +1269,8 @@
     0 0 20px rgb(59 130 246 / 48%);
 }
 
-.chip:focus-visible,
-.chipActive:focus-visible,
+.searchFilterButton:focus-visible,
+.activeFilterPill:focus-visible,
 .locationPill:focus-visible,
 .fab:focus-visible,
 .eventCardMain:focus-visible,
@@ -1367,8 +1406,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .searchBar,
-  .chip,
-  .chipActive,
+  .searchFilterButton,
+  .activeFilterPill,
   .fab,
   .eventCard,
   .filtersDrawer {
