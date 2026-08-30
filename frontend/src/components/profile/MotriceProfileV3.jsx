@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
-  Camera,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -240,11 +239,20 @@ function MotriceProfileV3({
 
         <div className={styles.heroContent}>
           <span className={styles.avatarWrap}>
-            {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
+            <span className={styles.avatarImageFrame}>
+              {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
+            </span>
             <i aria-hidden="true" />
             {isPrivate ? (
-              <button type="button" className={styles.avatarButton} onClick={() => avatarInputRef.current?.click()} disabled={uploadingKind === 'avatar'} aria-label="Seleziona foto profilo">
-                {uploadingKind === 'avatar' ? <span className={styles.mediaSpinner} /> : <Camera size={14} aria-hidden="true" />}
+              <button
+                type="button"
+                className={styles.avatarButton}
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingKind === 'avatar'}
+                aria-label="Scegli la foto profilo dalla galleria"
+                title="Scegli dalla galleria"
+              >
+                {uploadingKind === 'avatar' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={14} strokeWidth={2.4} aria-hidden="true" />}
               </button>
             ) : null}
           </span>
