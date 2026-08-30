@@ -52,10 +52,10 @@ function normalizeSummary(raw) {
     rejection_reason: String(raw?.rejection_reason || ''),
     challenge_type: String(raw?.challenge_type || ''),
     enforcement_enabled: raw?.enforcement_enabled !== false,
-    can_use_verified_actions:
-      raw?.can_use_verified_actions === true ||
-      raw?.enforcement_enabled === false ||
-      resolvedStatus === 'verified'
+    // Fail closed: la UI non deve mai sbloccare le azioni sensibili usando
+    // una risposta precedente al rollout o una cache locale con enforcement
+    // disattivato. Solo lo stato effettivo "verified" abilita crea/partecipa.
+    can_use_verified_actions: resolvedStatus === 'verified'
   };
 }
 
