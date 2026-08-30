@@ -10,10 +10,8 @@ import {
   MapPin,
   MapPinOff,
   Minus,
-  Moon,
   Plus,
   Search,
-  Sun,
   Users
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -92,6 +90,22 @@ const EVENT_ACTIVITY_ICON_NODES = {
     ['circle', { cx: 12, cy: 4.6, r: 2.7, fill: 'currentColor', stroke: 'none' }],
     ['path', { d: 'M12 8.4v6.2M12 10.6 7.2 14M12 10.6l4.8 3.4M4 17.2c3.5 0 5.6-1 8-2.6 2.4 1.6 4.5 2.6 8 2.6M5.1 20.2c2.8-2 4.8-2.4 6.9-2.4s4.1.4 6.9 2.4', 'stroke-width': 3.15 }]
   ],
+  trekking: [
+    ['path', { d: 'm2.6 19.7 6-9.4 3.1 4.2 2.8-4.4 6.9 9.6H2.6Z', fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm8.6 10.3 1.7 2.3-2.4 1.2-1.1-1.3', stroke: 'var(--event-pin-fill)', 'stroke-width': 1.25 }]
+  ],
+  cycling: [
+    ['circle', { cx: 6.2, cy: 17.1, r: 3.55 }],
+    ['circle', { cx: 17.8, cy: 17.1, r: 3.55 }],
+    ['circle', { cx: 13.1, cy: 5.2, r: 1.8, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm10.2 8.1 3.8.5 2.1 3.4M10.2 8.1 7.5 12l4.3 2.2 2.1 3M10.2 8.1l2.9-1.3', 'stroke-width': 2.1 }]
+  ],
+  swimming: [
+    ['path', { d: 'M2 17c1.3 0 1.9-1 3.2-1s1.9 1 3.2 1 1.9-1 3.2-1 1.9 1 3.2 1 1.9-1 3.2-1 1.9 1 3.2 1', 'stroke-width': 2.1 }],
+    ['path', { d: 'M3.2 20c1.2 0 1.8-.8 3-.8s1.8.8 3 .8 1.8-.8 3-.8 1.8.8 3 .8 1.8-.8 3-.8 1.8.8 3 .8', 'stroke-width': 2.1 }],
+    ['circle', { cx: 15.8, cy: 7, r: 2.1, fill: 'currentColor', stroke: 'none' }],
+    ['path', { d: 'm5.2 14.7 5.1-5.1 4.2 2.2 3.2-1.1', 'stroke-width': 2.5 }]
+  ],
   activity: [
     ['path', { d: 'M3 12h4l2.2-5.2 4.1 10.4 2.2-5.2H21', 'stroke-width': 3.1 }]
   ]
@@ -104,9 +118,49 @@ function getEventActivityType(event) {
   if (/(tennis|padel|racchett|pickleball)/.test(activity)) return 'tennis';
   if (/(basket|pallacanestro)/.test(activity)) return 'basketball';
   if (/(yoga|pilates|meditazione|mindfulness)/.test(activity)) return 'yoga';
+  if (/(trekking|escursion|hiking|camminata|walking|montagna)/.test(activity)) return 'trekking';
+  if (/(ciclismo|bicicletta|bici|cycling|bike|mtb)/.test(activity)) return 'cycling';
+  if (/(nuoto|swimming|piscina|acqua)/.test(activity)) return 'swimming';
   if (/(palestra|gym|fitness|forza|functional|workout|crossfit|hiit|calisthenics|bodybuild)/.test(activity)) return 'gym';
   if (/(corsa|running|jogging|trail|maratona)/.test(activity)) return 'running';
   return 'activity';
+}
+
+const EVENT_ACTIVITY_LABELS = {
+  running: 'Corsa',
+  gym: 'Palestra',
+  tennis: 'Tennis / Padel',
+  football: 'Calcio',
+  basketball: 'Basket',
+  yoga: 'Yoga',
+  trekking: 'Trekking',
+  cycling: 'Ciclismo',
+  swimming: 'Nuoto',
+  activity: 'Attività sportiva'
+};
+
+const SVG_ATTRIBUTE_TO_REACT = {
+  'stroke-width': 'strokeWidth',
+  'stroke-linecap': 'strokeLinecap',
+  'stroke-linejoin': 'strokeLinejoin'
+};
+
+function EventActivityGlyph({ event, className = '' }) {
+  const activityType = getEventActivityType(event);
+
+  return (
+    <span className={className} data-activity={activityType} aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round">
+        {EVENT_ACTIVITY_ICON_NODES[activityType].map(([tagName, attributes], index) => {
+          const SvgNode = tagName;
+          const reactAttributes = Object.fromEntries(
+            Object.entries(attributes).map(([name, value]) => [SVG_ATTRIBUTE_TO_REACT[name] || name, value])
+          );
+          return <SvgNode key={`${activityType}-${tagName}-${index}`} {...reactAttributes} />;
+        })}
+      </svg>
+    </span>
+  );
 }
 
 function createEventActivityIcon(event) {
@@ -194,6 +248,85 @@ function distanceKm(aLat, aLng, bLat, bLng) {
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
   return 2 * earthKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function clusterEventsByScreenPosition(map, events, radiusPx = 48) {
+  if (!map) return [];
+
+  return events.reduce((clusters, event) => {
+    const point = map.project([event.lng, event.lat]);
+    const nearbyCluster = clusters.find((cluster) => {
+      const dx = point.x - cluster.screenX;
+      const dy = point.y - cluster.screenY;
+      return Math.sqrt(dx * dx + dy * dy) <= radiusPx;
+    });
+
+    if (!nearbyCluster) {
+      clusters.push({
+        events: [event],
+        screenX: point.x,
+        screenY: point.y,
+        lng: event.lng,
+        lat: event.lat
+      });
+      return clusters;
+    }
+
+    const previousCount = nearbyCluster.events.length;
+    const nextCount = previousCount + 1;
+    nearbyCluster.events.push(event);
+    nearbyCluster.screenX = (nearbyCluster.screenX * previousCount + point.x) / nextCount;
+    nearbyCluster.screenY = (nearbyCluster.screenY * previousCount + point.y) / nextCount;
+    nearbyCluster.lng = (nearbyCluster.lng * previousCount + event.lng) / nextCount;
+    nearbyCluster.lat = (nearbyCluster.lat * previousCount + event.lat) / nextCount;
+    return clusters;
+  }, []);
+}
+
+function zoomToEventCluster(map, cluster) {
+  if (!map || !cluster?.events?.length) return;
+
+  const bounds = new maplibregl.LngLatBounds();
+  cluster.events.forEach((event) => bounds.extend([event.lng, event.lat]));
+  const northEast = bounds.getNorthEast();
+  const southWest = bounds.getSouthWest();
+  const isSamePoint =
+    Math.abs(northEast.lng - southWest.lng) < 0.00001 && Math.abs(northEast.lat - southWest.lat) < 0.00001;
+
+  if (isSamePoint) {
+    map.flyTo({
+      center: [cluster.lng, cluster.lat],
+      zoom: Math.min(17, map.getZoom() + 2.4),
+      duration: 360,
+      essential: true
+    });
+    return;
+  }
+
+  map.fitBounds(bounds, {
+    padding: 76,
+    duration: 380,
+    maxZoom: Math.min(16, map.getZoom() + 3)
+  });
+}
+
+function getMapAreaLabel(events, hasLocation, selectedRadiusKm) {
+  if (hasLocation) return selectedRadiusKm ? `RAGGIO ${selectedRadiusKm} KM` : 'LA TUA ZONA';
+
+  const locations = events
+    .map((event) => String(event.city || event.location_name || '').trim())
+    .filter(Boolean)
+    .map((location) => location.split(',').at(-1)?.trim() || location);
+
+  if (!locations.length) return 'ASCOLI PICENO';
+
+  const counts = locations.reduce((result, location) => {
+    const key = location.toLocaleUpperCase('it-IT');
+    result.set(key, (result.get(key) || 0) + 1);
+    return result;
+  }, new Map());
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
 function formatEventDay(dateValue) {
@@ -335,7 +468,7 @@ function MapFilterChips({
   );
 }
 
-function MapFloatingControls({ onZoomIn, onZoomOut, onGps, onToggleTheme, mapTheme }) {
+function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
   return (
     <div className={styles.fabStack} aria-label="Controlli mappa">
       <button
@@ -365,15 +498,6 @@ function MapFloatingControls({ onZoomIn, onZoomOut, onGps, onToggleTheme, mapThe
         <LocateFixed size={18} aria-hidden="true" />
         <span>La mia posizione</span>
       </button>
-      <button
-        type="button"
-        className={`${styles.fab} ${styles.fabNeutral}`}
-        onClick={onToggleTheme}
-        aria-label={mapTheme === 'dark' ? 'Usa mappa chiara' : 'Usa mappa scura'}
-      >
-        {mapTheme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
-        <span>{mapTheme === 'dark' ? 'Chiaro' : 'Scuro'}</span>
-      </button>
     </div>
   );
 }
@@ -384,9 +508,11 @@ function MapFiltersDrawer({
   setFilters,
   sports,
   entitlements,
+  mapTheme,
   onClose,
   onApply,
-  onPaywall
+  onPaywall,
+  onMapThemeChange
 }) {
   return (
     <div className={`${styles.filtersDrawer} ${open ? styles.filtersDrawerOpen : styles.filtersDrawerClosed}`} aria-hidden={!open}>
@@ -450,6 +576,14 @@ function MapFiltersDrawer({
             <option value="popular">Più popolari</option>
           </select>
         </label>
+
+        <label className={styles.mapField}>
+          <span>Aspetto mappa</span>
+          <select value={mapTheme} onChange={(event) => onMapThemeChange(event.target.value)}>
+            <option value="dark">Scura</option>
+            <option value="light">Chiara</option>
+          </select>
+        </label>
       </div>
 
       <div className={styles.drawerActions}>
@@ -481,6 +615,7 @@ function MapPage() {
   const gpsTapRef = useRef(0);
   const mapStyleThemeRef = useRef(null);
   const eventsSectionRef = useRef(null);
+  const eventCardRefs = useRef(new Map());
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [sports, setSports] = useState([]);
@@ -644,6 +779,11 @@ function MapPage() {
     }).length;
   }, [eventsInRadius]);
 
+  const mapAreaLabel = useMemo(
+    () => getMapAreaLabel(eventsInRadius, hasLocation, selectedRadiusKm),
+    [eventsInRadius, hasLocation, selectedRadiusKm]
+  );
+
   const hasCustomFiltersApplied = useMemo(() => {
     return (
       String(filters.q || '').trim().length > 0 ||
@@ -656,11 +796,17 @@ function MapPage() {
     );
   }, [filters]);
 
-  const focusEvent = useCallback((event) => {
+  const focusEvent = useCallback((event, { scrollToCard = false } = {}) => {
     const map = mapRef.current;
     if (!map || !event) return;
     setSelectedEventId(String(event.id));
     map.flyTo({ center: [event.lng, event.lat], zoom: Math.max(12.8, map.getZoom()), duration: 320, essential: true });
+
+    if (scrollToCard) {
+      window.setTimeout(() => {
+        eventCardRefs.current.get(String(event.id))?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 120);
+    }
   }, []);
 
   function handleRadiusCycle() {
@@ -831,7 +977,37 @@ function MapPage() {
     eventMarkersRef.current.forEach((marker) => marker.remove());
     eventMarkersRef.current = [];
 
-    eventsInRadius.forEach((event) => {
+    const markerEvents = eventsInRadius.filter((event) => isEventInViewport(event, viewportBounds));
+    const clusterRadius = map.getZoom() >= 14 ? 34 : 48;
+    const clusters = clusterEventsByScreenPosition(map, markerEvents, clusterRadius);
+
+    clusters.forEach((cluster) => {
+      if (cluster.events.length > 1) {
+        const element = document.createElement('button');
+        element.type = 'button';
+        const includesSelected = cluster.events.some((event) => String(event.id) === String(selectedEventId));
+        element.className = `${styles.eventCluster} ${includesSelected ? styles.eventClusterSelected : ''}`;
+        element.title = `${cluster.events.length} eventi in questa zona`;
+        element.setAttribute('aria-label', `${element.title}. Tocca per avvicinare la mappa.`);
+
+        const count = document.createElement('strong');
+        count.textContent = String(cluster.events.length);
+        element.appendChild(count);
+
+        const caption = document.createElement('span');
+        caption.textContent = 'EVENTI';
+        element.appendChild(caption);
+
+        element.addEventListener('click', () => zoomToEventCluster(map, cluster));
+
+        const marker = new maplibregl.Marker({ element, anchor: 'center' })
+          .setLngLat([cluster.lng, cluster.lat])
+          .addTo(map);
+        eventMarkersRef.current.push(marker);
+        return;
+      }
+
+      const event = cluster.events[0];
       const element = document.createElement('button');
       element.type = 'button';
       const isSelected = String(event.id) === String(selectedEventId);
@@ -847,20 +1023,18 @@ function MapPage() {
       element.appendChild(label);
 
       element.addEventListener('click', () => {
-        focusEvent(event);
+        focusEvent(event, { scrollToCard: true });
       });
 
       const marker = new maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat([event.lng, event.lat]).addTo(map);
       eventMarkersRef.current.push(marker);
     });
 
-    syncViewport();
-
     return () => {
       eventMarkersRef.current.forEach((marker) => marker.remove());
       eventMarkersRef.current = [];
     };
-  }, [eventsInRadius, focusEvent, selectedEventId, syncViewport]);
+  }, [eventsInRadius, focusEvent, selectedEventId, viewportBounds]);
 
   useEffect(() => {
     if (!requestedEventId) return;
@@ -1002,7 +1176,7 @@ function MapPage() {
         <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi">
           <div className={styles.mapStageHeader}>
             <div>
-              <span className={styles.mapStageKicker}>{hasLocation ? 'LA TUA ZONA' : 'ITALIA'}</span>
+              <span className={styles.mapStageKicker}>{mapAreaLabel}</span>
               <strong>{activeEventsCount} {activeEventsCount === 1 ? 'evento attivo' : 'eventi attivi'}</strong>
             </div>
             {resolvingCoordinates ? <span className={styles.mapSync}>Aggiorno posizioni…</span> : null}
@@ -1013,6 +1187,7 @@ function MapPage() {
             <div className={styles.mapShade} aria-hidden="true" />
             <div className={styles.mapLegend} aria-label="Legenda della mappa">
               <span><i className={`${styles.legendDot} ${styles.legendEvent}`} aria-hidden="true" />Evento</span>
+              <span><i className={`${styles.legendDot} ${styles.legendCluster}`} aria-hidden="true" />Gruppo</span>
               <span><i className={`${styles.legendDot} ${styles.legendSaved}`} aria-hidden="true" />Salvato</span>
               <span><i className={`${styles.legendDot} ${styles.legendUser}`} aria-hidden="true" />Tu</span>
             </div>
@@ -1020,8 +1195,6 @@ function MapPage() {
               onZoomIn={() => zoomMap('in')}
               onZoomOut={() => zoomMap('out')}
               onGps={{ onClick: onGpsAction, active: followUser }}
-              onToggleTheme={() => setMapTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
-              mapTheme={mapTheme}
             />
           </div>
         </section>
@@ -1062,11 +1235,26 @@ function MapPage() {
             <ul className={styles.eventList}>
               {visibleEvents.map((event) => {
                 const isSelected = String(event.id) === String(selectedEventId);
+                const activityType = getEventActivityType(event);
                 return (
                   <li key={event.id}>
-                    <article className={`${styles.eventCard} ${isSelected ? styles.eventCardSelected : ''}`}>
+                    <article
+                      ref={(node) => {
+                        if (node) eventCardRefs.current.set(String(event.id), node);
+                        else eventCardRefs.current.delete(String(event.id));
+                      }}
+                      data-activity={activityType}
+                      className={`${styles.eventCard} ${isSelected ? styles.eventCardSelected : ''}`}
+                    >
                       <button type="button" className={styles.eventCardMain} onClick={() => focusEvent(event)}>
                         <span className={styles.eventAccent} aria-hidden="true" />
+                        <span className={styles.eventIdentity}>
+                          <EventActivityGlyph event={event} className={styles.eventCardIcon} />
+                          <span>
+                            <small>ATTIVITÀ</small>
+                            <b>{EVENT_ACTIVITY_LABELS[activityType]}</b>
+                          </span>
+                        </span>
                         <span className={styles.eventMeta}>
                           <span className={styles.eventDay}>{formatEventDay(event.event_datetime)}</span>
                           <span>
@@ -1126,9 +1314,11 @@ function MapPage() {
         setFilters={setDraftFilters}
         sports={sports}
         entitlements={entitlements}
+        mapTheme={mapTheme}
         onClose={() => setFiltersDrawerOpen(false)}
         onApply={applyCustomFilters}
         onPaywall={() => setPaywallOpen(true)}
+        onMapThemeChange={setMapTheme}
       />
 
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Filtri avanzati mappa" />
