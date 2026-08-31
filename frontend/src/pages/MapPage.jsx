@@ -5,20 +5,16 @@ import {
   Bookmark,
   BookmarkCheck,
   Check,
-  ChevronDown,
   ChevronRight,
   Crosshair,
-  List,
   LocateFixed,
   MapPinOff,
   Minus,
   Plus,
-  RefreshCw,
   RotateCcw,
   Search,
   SlidersHorizontal,
-  X,
-  Users
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -52,7 +48,14 @@ const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
 const USER_VIEW_RADIUS_KM = 8;
 const EVENT_CLUSTER_OVERLAP_PX = 12;
-const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
+const EVENT_PINS_LAYER = 'motrice-event-pins';
+const EVENT_CLUSTERS_LAYER = 'motrice-event-clusters';
+const EVENT_SELECTED_LABEL_LAYER = 'motrice-event-selected-label';
+const EVENT_PIN_FILL = '#ccff00';
+const EVENT_PIN_SAVED_FILL = '#ffffff';
+const EMPTY_EVENT_MARKERS = { type: 'FeatureCollection', features: [] };
+const eventMarkerImageCache = new Map();
 
 const EVENT_ACTIVITY_ICON_NODES = {
   running: [
@@ -130,29 +133,213 @@ function getEventActivityType(event) {
   return 'activity';
 }
 
-function createEventActivityIcon(event) {
-  const activityType = getEventActivityType(event);
-  const icon = document.createElement('span');
-  icon.className = styles.eventPinIcon;
-  icon.dataset.activity = activityType;
-  icon.setAttribute('aria-hidden', 'true');
+function escapeSvgAttribute(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
 
-  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2.15');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
+function renderEventActivityNodes(activityType, pinFill) {
+  return EVENT_ACTIVITY_ICON_NODES[activityType]
+    .map(([tagName, attributes]) => {
+      const serializedAttributes = Object.entries(attributes)
+        .map(([name, value]) => {
+          const normalizedValue = String(value)
+            .replaceAll('currentColor', '#050705')
+            .replaceAll('var(--event-pin-fill)', pinFill);
+          return `${name}="${escapeSvgAttribute(normalizedValue)}"`;
+        })
+        .join(' ');
+      return `<${tagName} ${serializedAttributes}/>`;
+    })
+    .join('');
+}
 
-  EVENT_ACTIVITY_ICON_NODES[activityType].forEach(([tagName, attributes]) => {
-    const node = document.createElementNS(SVG_NAMESPACE, tagName);
-    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, String(value)));
-    svg.appendChild(node);
+function getEventPinImageId(activityType, saved = false, selected = false) {
+  return `motrice-pin-${activityType}-${saved ? 'saved' : 'default'}${selected ? '-selected' : ''}`;
+}
+
+function createEventPinSvg(activityType, { saved = false, selected = false, cluster = false } = {}) {
+  const pinFill = saved ? EVENT_PIN_SAVED_FILL : EVENT_PIN_FILL;
+  const activityNodes = cluster ? '' : renderEventActivityNodes(activityType, pinFill);
+  const selectedOutline = selected
+    ? '<path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="none" stroke="#ffffff" stroke-width="4.6"/>'
+    : '<path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="3.4"/>';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 0 48 56">
+    <ellipse cx="24" cy="53.1" rx="7.4" ry="2.2" fill="rgba(0,0,0,.34)"/>
+    ${selectedOutline}
+    <path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
+    ${cluster ? '' : `<g transform="translate(12 9)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
+  </svg>`;
+}
+
+function svgToMapImage(svgMarkup) {
+  if (eventMarkerImageCache.has(svgMarkup)) return eventMarkerImageCache.get(svgMarkup);
+
+  const imagePromise = new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 96;
+      canvas.height = 112;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) {
+        reject(new Error('Canvas non disponibile per i segnaposto'));
+        return;
+      }
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(context.getImageData(0, 0, canvas.width, canvas.height));
+    };
+    image.onerror = () => reject(new Error('Impossibile generare il segnaposto'));
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgMarkup)}`;
   });
 
-  icon.appendChild(svg);
-  return icon;
+  eventMarkerImageCache.set(svgMarkup, imagePromise);
+  return imagePromise;
+}
+
+async function ensureEventMarkerImages(map) {
+  const imageDefinitions = [];
+
+  Object.keys(EVENT_ACTIVITY_ICON_NODES).forEach((activityType) => {
+    [false, true].forEach((saved) => {
+      [false, true].forEach((selected) => {
+        imageDefinitions.push({
+          id: getEventPinImageId(activityType, saved, selected),
+          svg: createEventPinSvg(activityType, { saved, selected })
+        });
+      });
+    });
+  });
+
+  imageDefinitions.push(
+    { id: 'motrice-pin-cluster', svg: createEventPinSvg('activity', { cluster: true }) },
+    { id: 'motrice-pin-cluster-selected', svg: createEventPinSvg('activity', { cluster: true, selected: true }) }
+  );
+
+  const images = await Promise.all(
+    imageDefinitions.map(async ({ id, svg }) => ({ id, data: await svgToMapImage(svg) }))
+  );
+
+  images.forEach(({ id, data }) => {
+    if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio: 2 });
+  });
+}
+
+async function ensureEventMarkerLayers(map) {
+  if (!map?.isStyleLoaded()) return false;
+  await ensureEventMarkerImages(map);
+  if (!map.isStyleLoaded()) return false;
+
+  if (!map.getSource(EVENT_MARKERS_SOURCE)) {
+    map.addSource(EVENT_MARKERS_SOURCE, {
+      type: 'geojson',
+      data: EMPTY_EVENT_MARKERS,
+      cluster: true,
+      clusterRadius: EVENT_CLUSTER_OVERLAP_PX,
+      clusterMaxZoom: 17,
+      clusterProperties: {
+        selectedCount: ['+', ['get', 'selected']]
+      }
+    });
+  }
+
+  if (!map.getLayer(EVENT_CLUSTERS_LAYER)) {
+    map.addLayer({
+      id: EVENT_CLUSTERS_LAYER,
+      type: 'symbol',
+      source: EVENT_MARKERS_SOURCE,
+      filter: ['has', 'point_count'],
+      layout: {
+        'icon-image': ['case', ['>', ['get', 'selectedCount'], 0], 'motrice-pin-cluster-selected', 'motrice-pin-cluster'],
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-size': 15,
+        'text-font': ['Open Sans Bold'],
+        'text-anchor': 'center',
+        'text-offset': [0, -1.72],
+        'text-allow-overlap': true,
+        'text-ignore-placement': true
+      },
+      paint: {
+        'text-color': '#050705'
+      }
+    });
+  }
+
+  if (!map.getLayer(EVENT_PINS_LAYER)) {
+    map.addLayer({
+      id: EVENT_PINS_LAYER,
+      type: 'symbol',
+      source: EVENT_MARKERS_SOURCE,
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-anchor': 'bottom',
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'symbol-sort-key': ['get', 'selected']
+      }
+    });
+  }
+
+  if (!map.getLayer(EVENT_SELECTED_LABEL_LAYER)) {
+    map.addLayer({
+      id: EVENT_SELECTED_LABEL_LAYER,
+      type: 'symbol',
+      source: EVENT_MARKERS_SOURCE,
+      filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'selected'], 1]],
+      layout: {
+        'text-field': ['get', 'label'],
+        'text-size': 11,
+        'text-font': ['Open Sans Bold'],
+        'text-anchor': 'bottom',
+        'text-offset': [0, -4.8],
+        'text-max-width': 12,
+        'text-allow-overlap': true,
+        'text-ignore-placement': true
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': 'rgba(5,7,5,.96)',
+        'text-halo-width': 4,
+        'text-halo-blur': 1
+      }
+    });
+  }
+
+  return true;
+}
+
+function buildEventMarkerGeoJson(events, selectedEventId) {
+  return {
+    type: 'FeatureCollection',
+    features: events.map((event) => {
+      const selected = String(event.id) === String(selectedEventId) ? 1 : 0;
+      const activityType = getEventActivityType(event);
+      const saved = Boolean(event.is_saved);
+      return {
+        type: 'Feature',
+        id: String(event.id),
+        geometry: {
+          type: 'Point',
+          coordinates: [Number(event.lng), Number(event.lat)]
+        },
+        properties: {
+          eventId: String(event.id),
+          selected,
+          icon: getEventPinImageId(activityType, saved, Boolean(selected)),
+          label: event.sport_name || event.title || 'Evento'
+        }
+      };
+    })
+  };
 }
 
 function hasValidCoordinates(lat, lng) {
@@ -163,6 +350,17 @@ function hasValidCoordinates(lat, lng) {
   if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return false;
   if (latNum < -90 || latNum > 90 || lngNum < -180 || lngNum > 180) return false;
   return true;
+}
+
+function createAnchoredMarker(element, anchor = 'bottom') {
+  return new maplibregl.Marker({
+    element,
+    anchor,
+    // DOM marker coordinates are rounded by default at moveend. Keeping
+    // sub-pixel precision prevents the pin from snapping away from its
+    // geographic point at the end of a zoom animation.
+    subpixelPositioning: true
+  });
 }
 
 function computeBounds(lat, lng, radiusKm) {
@@ -217,87 +415,6 @@ function distanceKm(aLat, aLng, bLat, bLng) {
   return 2 * earthKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVERLAP_PX) {
-  if (!map) return [];
-
-  const buckets = new Map();
-  const clusters = [];
-
-  events.forEach((event) => {
-    const point = map.project([event.lng, event.lat]);
-    const cellX = Math.floor(point.x / radiusPx);
-    const cellY = Math.floor(point.y / radiusPx);
-    const nearbyCandidates = [];
-
-    for (let x = cellX - 1; x <= cellX + 1; x += 1) {
-      for (let y = cellY - 1; y <= cellY + 1; y += 1) {
-        const candidates = buckets.get(`${x}:${y}`);
-        if (candidates) nearbyCandidates.push(...candidates);
-      }
-    }
-
-    const nearbyCluster = nearbyCandidates.find((cluster) =>
-      cluster.screenPoints.every((clusterPoint) => Math.hypot(point.x - clusterPoint.x, point.y - clusterPoint.y) <= radiusPx)
-    );
-
-    if (!nearbyCluster) {
-      const cluster = {
-        events: [event],
-        screenPoints: [point],
-        screenX: point.x,
-        screenY: point.y,
-        lng: event.lng,
-        lat: event.lat
-      };
-      clusters.push(cluster);
-      const bucketKey = `${cellX}:${cellY}`;
-      buckets.set(bucketKey, [...(buckets.get(bucketKey) || []), cluster]);
-      return;
-    }
-
-    const previousCount = nearbyCluster.events.length;
-    const nextCount = previousCount + 1;
-    nearbyCluster.events.push(event);
-    nearbyCluster.screenPoints.push(point);
-    nearbyCluster.screenX = (nearbyCluster.screenX * previousCount + point.x) / nextCount;
-    nearbyCluster.screenY = (nearbyCluster.screenY * previousCount + point.y) / nextCount;
-    nearbyCluster.lng = (nearbyCluster.lng * previousCount + event.lng) / nextCount;
-    nearbyCluster.lat = (nearbyCluster.lat * previousCount + event.lat) / nextCount;
-  });
-
-  return clusters.map((cluster) => {
-    const visualCenter = map.unproject([cluster.screenX, cluster.screenY]);
-    return { ...cluster, lng: visualCenter.lng, lat: visualCenter.lat };
-  });
-}
-
-function zoomToEventCluster(map, cluster) {
-  if (!map || !cluster?.events?.length) return;
-
-  const bounds = new maplibregl.LngLatBounds();
-  cluster.events.forEach((event) => bounds.extend([event.lng, event.lat]));
-  const northEast = bounds.getNorthEast();
-  const southWest = bounds.getSouthWest();
-  const isSamePoint =
-    Math.abs(northEast.lng - southWest.lng) < 0.00001 && Math.abs(northEast.lat - southWest.lat) < 0.00001;
-
-  if (isSamePoint) {
-    map.flyTo({
-      center: [cluster.lng, cluster.lat],
-      zoom: Math.min(17, map.getZoom() + 2.4),
-      duration: 360,
-      essential: true
-    });
-    return;
-  }
-
-  map.fitBounds(bounds, {
-    padding: 76,
-    duration: 380,
-    maxZoom: Math.min(16, map.getZoom() + 3)
-  });
-}
-
 function getMapAreaLabel(events, hasLocation, selectedRadiusKm) {
   if (hasLocation) return selectedRadiusKm ? `RAGGIO ${selectedRadiusKm} KM` : 'LA TUA ZONA';
 
@@ -341,6 +458,7 @@ function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
   const data = buildRadiusPolygon(lat, lng, radiusKm);
   const fillColor = mapTheme === 'light' ? 'rgba(139,207,0,0.18)' : 'rgba(168,240,0,0.18)';
   const lineColor = mapTheme === 'light' ? 'rgba(129,189,0,0.72)' : 'rgba(184,255,53,0.84)';
+  const beforeMarkerLayer = map.getLayer(EVENT_CLUSTERS_LAYER) ? EVENT_CLUSTERS_LAYER : undefined;
 
   if (!map.getSource(USER_RADIUS_SOURCE)) {
     map.addSource(USER_RADIUS_SOURCE, { type: 'geojson', data });
@@ -357,7 +475,7 @@ function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
         'fill-color': fillColor,
         'fill-opacity': 1
       }
-    });
+    }, beforeMarkerLayer);
   } else {
     map.setPaintProperty(USER_RADIUS_FILL, 'fill-color', fillColor);
   }
@@ -372,7 +490,7 @@ function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
         'line-opacity': 1,
         'line-width': 2
       }
-    });
+    }, beforeMarkerLayer);
   } else {
     map.setPaintProperty(USER_RADIUS_LINE, 'line-color', lineColor);
   }
@@ -667,7 +785,8 @@ function MapPage() {
   const resultsSheetRef = useRef(null);
   const filterButtonRef = useRef(null);
   const userMarkerRef = useRef(null);
-  const eventMarkersRef = useRef(new Map());
+  const eventLookupRef = useRef(new Map());
+  const focusEventRef = useRef(null);
   const coordinateAttemptsRef = useRef(new Set());
   const hasAutoFitEventsRef = useRef(false);
   const shouldRecenterRef = useRef(true);
@@ -675,7 +794,6 @@ function MapPage() {
   const sheetDragRef = useRef(null);
   const sheetTransitionTimerRef = useRef(null);
   const mapStyleThemeRef = useRef(null);
-  const mapInteractionRef = useRef(false);
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [searchInput, setSearchInput] = useState(() => filters.q || '');
@@ -690,8 +808,6 @@ function MapPage() {
   const [sheetSnap, setSheetSnap] = useState('medium');
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
-  const [mapRevision, setMapRevision] = useState(0);
-  const [searchAreaVisible, setSearchAreaVisible] = useState(false);
   const [mapTheme, setMapTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark';
     try {
@@ -867,21 +983,12 @@ function MapPage() {
   // bounds exist, an empty viewport must stay empty instead of showing events
   // from a different area as a fallback.
   const sheetEvents = viewportBounds ? visibleEvents : eventsInRadius;
-  const selectedEvent = useMemo(
-    () => sheetEvents.find((event) => String(event.id) === String(selectedEventId)) || sheetEvents[0] || null,
-    [selectedEventId, sheetEvents]
-  );
-  const nearbyEvents = useMemo(
-    () => sheetEvents.filter((event) => String(event.id) !== String(selectedEvent?.id)).slice(0, 2),
-    [selectedEvent?.id, sheetEvents]
-  );
 
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
     if (!map || !event) return;
     setSelectedEventId(String(event.id));
     setSheetSnap('medium');
-    setSearchAreaVisible(false);
 
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
     const centerEvent = () => {
@@ -918,6 +1025,14 @@ function MapPage() {
     else focusTimerRef.current = window.setTimeout(centerEvent, 285);
   }, [sheetSnap]);
 
+  useEffect(() => {
+    focusEventRef.current = focusEvent;
+  }, [focusEvent]);
+
+  useEffect(() => {
+    eventLookupRef.current = new Map(eventsInRadius.map((event) => [String(event.id), event]));
+  }, [eventsInRadius]);
+
   function handleCustomChip() {
     setDraftFilters(filters);
     setDraftMapTheme(mapTheme);
@@ -943,7 +1058,6 @@ function MapPage() {
     const map = mapRef.current;
     if (!map) return;
     shouldRecenterRef.current = true;
-    setSearchAreaVisible(false);
     setFollowUser(false);
     map.flyTo({ center: [coords.lng, coords.lat], zoom: Math.max(11.4, map.getZoom()), duration: 280, essential: true });
   }
@@ -1045,8 +1159,6 @@ function MapPage() {
     const map = mapRef.current;
     if (!map) return;
     const nextZoom = direction === 'in' ? map.getZoom() + 1 : map.getZoom() - 1;
-    mapInteractionRef.current = true;
-    setSearchAreaVisible(true);
     map.easeTo({ zoom: nextZoom, duration: 220 });
   }
 
@@ -1085,34 +1197,61 @@ function MapPage() {
 
     const handleMapLoad = () => {
       syncViewport();
-      setMapRevision((current) => current + 1);
-    };
-    const handleDragStart = () => {
-      mapInteractionRef.current = true;
-    };
-    const handleZoomStart = (event) => {
-      if (event?.originalEvent) mapInteractionRef.current = true;
     };
     const handleMoveEnd = () => {
-      setMapRevision((current) => current + 1);
+      // The visible bounds are the source of truth: after every pan, pinch or
+      // zoom the event list updates automatically without an extra CTA.
+      syncViewport();
+    };
+    const getInteractiveMarkerLayers = () =>
+      [EVENT_PINS_LAYER, EVENT_CLUSTERS_LAYER].filter((layerId) => Boolean(map.getLayer(layerId)));
+    const handleMapClick = (event) => {
+      const interactiveLayers = getInteractiveMarkerLayers();
+      if (!interactiveLayers.length) return;
+      const [feature] = map.queryRenderedFeatures(event.point, { layers: interactiveLayers });
+      if (!feature) return;
 
-      if (mapInteractionRef.current) {
-        mapInteractionRef.current = false;
-        setSearchAreaVisible(true);
+      if (feature.layer.id === EVENT_PINS_LAYER) {
+        const selectedEvent = eventLookupRef.current.get(String(feature.properties?.eventId));
+        if (selectedEvent) focusEventRef.current?.(selectedEvent);
         return;
       }
 
-      // Programmatic movements (event focus, GPS and automatic fits) update the
-      // result viewport immediately and never leave a stale interaction flag.
-      setSearchAreaVisible(false);
-      syncViewport();
+      const clusterId = Number(feature.properties?.cluster_id);
+      const source = map.getSource(EVENT_MARKERS_SOURCE);
+      if (!Number.isFinite(clusterId) || !source?.getClusterExpansionZoom) return;
+      source
+        .getClusterExpansionZoom(clusterId)
+        .then((expansionZoom) => {
+          if (mapRef.current !== map || !feature.geometry?.coordinates) return;
+          map.easeTo({
+            center: feature.geometry.coordinates,
+            zoom: Math.min(18, Math.max(map.getZoom() + 1, expansionZoom)),
+            duration: 340,
+            essential: true
+          });
+        })
+        .catch(() => {
+          // The source may be recreated while the map theme is changing.
+        });
+    };
+    const handleMapMouseMove = (event) => {
+      const interactiveLayers = getInteractiveMarkerLayers();
+      const hasInteractiveFeature = interactiveLayers.length
+        ? map.queryRenderedFeatures(event.point, { layers: interactiveLayers }).length > 0
+        : false;
+      map.getCanvas().style.cursor = hasInteractiveFeature ? 'pointer' : '';
+    };
+    const handleMapMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
     };
 
     mapStyleThemeRef.current = mapTheme;
     map.on('load', handleMapLoad);
-    map.on('dragstart', handleDragStart);
-    map.on('zoomstart', handleZoomStart);
     map.on('moveend', handleMoveEnd);
+    map.on('click', handleMapClick);
+    map.on('mousemove', handleMapMouseMove);
+    map.getCanvas().addEventListener('mouseleave', handleMapMouseLeave);
 
     mapRef.current = map;
     let resizeFrame = null;
@@ -1146,16 +1285,15 @@ function MapPage() {
       observer.disconnect();
       vv?.removeEventListener('resize', syncResize);
       window.removeEventListener('orientationchange', syncResize);
-      eventMarkersRef.current.forEach(({ marker }) => marker.remove());
-      eventMarkersRef.current.clear();
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
       }
       map.off('load', handleMapLoad);
-      map.off('dragstart', handleDragStart);
-      map.off('zoomstart', handleZoomStart);
       map.off('moveend', handleMoveEnd);
+      map.off('click', handleMapClick);
+      map.off('mousemove', handleMapMouseMove);
+      map.getCanvas().removeEventListener('mouseleave', handleMapMouseLeave);
       window.removeEventListener('resize', syncResize);
       map.remove();
       mapRef.current = null;
@@ -1174,83 +1312,27 @@ function MapPage() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    let cancelled = false;
+    const markerData = buildEventMarkerGeoJson(eventsInRadius, selectedEventId);
 
-    const markerEvents = eventsInRadius;
-    const clusters = clusterEventsByScreenPosition(map, markerEvents, EVENT_CLUSTER_OVERLAP_PX);
-    const nextKeys = new Set();
-
-    clusters.forEach((cluster) => {
-      if (cluster.events.length > 1) {
-        const clusterIds = cluster.events.map((event) => String(event.id)).sort();
-        const markerKey = `cluster:${clusterIds.join(',')}`;
-        nextKeys.add(markerKey);
-        const includesSelected = cluster.events.some((event) => String(event.id) === String(selectedEventId));
-        let entry = eventMarkersRef.current.get(markerKey);
-
-        if (!entry) {
-          const element = document.createElement('button');
-          element.type = 'button';
-          const count = document.createElement('strong');
-          element.appendChild(count);
-          element.addEventListener('click', () => element._activate?.());
-          const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-            .setLngLat([cluster.lng, cluster.lat])
-            .addTo(map);
-          entry = { element, marker };
-          eventMarkersRef.current.set(markerKey, entry);
-        }
-
-        const { element, marker } = entry;
-        element.className = `${styles.eventCluster} ${includesSelected ? styles.eventClusterSelected : ''}`;
-        element.title = `${cluster.events.length} eventi in questa zona`;
-        element.setAttribute('aria-label', `${element.title}. Tocca per avvicinare la mappa.`);
-        element.firstElementChild.textContent = String(cluster.events.length);
-        element._activate = () => {
-          mapInteractionRef.current = true;
-          zoomToEventCluster(map, cluster);
-          setSearchAreaVisible(true);
-        };
-        marker.setLngLat([cluster.lng, cluster.lat]);
-        return;
+    const applyMarkerData = async () => {
+      try {
+        const ready = await ensureEventMarkerLayers(map);
+        if (!ready || cancelled || mapRef.current !== map) return;
+        map.getSource(EVENT_MARKERS_SOURCE)?.setData(markerData);
+      } catch (error) {
+        if (!cancelled) console.error('Errore nel rendering dei segnaposto Motrice', error);
       }
+    };
 
-      const event = cluster.events[0];
-      const markerKey = `event:${event.id}`;
-      nextKeys.add(markerKey);
-      let entry = eventMarkersRef.current.get(markerKey);
+    if (map.isStyleLoaded()) applyMarkerData();
+    else map.once('style.load', applyMarkerData);
 
-      if (!entry) {
-        const element = document.createElement('button');
-        element.type = 'button';
-        element.appendChild(createEventActivityIcon(event));
-        const label = document.createElement('span');
-        label.className = styles.eventPinLabel;
-        element.appendChild(label);
-        element.addEventListener('click', () => element._activate?.());
-        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-          .setLngLat([event.lng, event.lat])
-          .addTo(map);
-        entry = { element, marker };
-        eventMarkersRef.current.set(markerKey, entry);
-      }
-
-      const { element, marker } = entry;
-      const isSelected = String(event.id) === String(selectedEventId);
-      const isSaved = Boolean(event.is_saved);
-      element.className = `${styles.eventPin} ${isSaved ? styles.eventPinSaved : styles.eventPinDefault} ${isSelected ? styles.eventPinSelected : ''}`;
-      element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;
-      element.setAttribute('aria-label', element.title);
-      element.querySelector(`.${styles.eventPinLabel}`).textContent = event.sport_name || event.title || 'Evento';
-      element._activate = () => focusEvent(event);
-      marker.setLngLat([event.lng, event.lat]);
-    });
-
-    eventMarkersRef.current.forEach((entry, key) => {
-      if (nextKeys.has(key)) return;
-      entry.marker.remove();
-      eventMarkersRef.current.delete(key);
-    });
-  }, [eventsInRadius, focusEvent, mapRevision, selectedEventId]);
+    return () => {
+      cancelled = true;
+      map.off('style.load', applyMarkerData);
+    };
+  }, [eventsInRadius, mapTheme, selectedEventId]);
 
   useEffect(() => () => {
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
@@ -1287,7 +1369,7 @@ function MapPage() {
     if (!userMarkerRef.current) {
       const userElement = document.createElement('div');
       userElement.className = styles.userLiveDot;
-      userMarkerRef.current = new maplibregl.Marker({ element: userElement, anchor: 'center' })
+      userMarkerRef.current = createAnchoredMarker(userElement, 'center')
         .setLngLat([coords.lng, coords.lat])
         .addTo(map);
     } else {
@@ -1380,21 +1462,6 @@ function MapPage() {
               <ActiveFilterPills items={activeFilterPills} onRemove={removeActiveFilter} />
             </div>
 
-            {searchAreaVisible ? (
-              <button
-                type="button"
-                className={styles.searchAreaButton}
-                onClick={() => {
-                  syncViewport();
-                  setSearchAreaVisible(false);
-                  showToast('Eventi aggiornati in questa zona', 'success');
-                }}
-              >
-                <RefreshCw size={14} aria-hidden="true" />
-                Cerca in questa zona
-              </button>
-            ) : null}
-
             {resolvingCoordinates ? <span className={styles.mapSyncBadge}>Aggiorno posizioni…</span> : null}
 
             <MapFloatingControls
@@ -1430,94 +1497,57 @@ function MapPage() {
                   {sheetEvents.length} {sheetEvents.length === 1 ? 'evento in questa zona' : 'eventi in questa zona'}
                 </h2>
               </div>
-              <button
-                type="button"
-                className={styles.sheetListButton}
-                onClick={() => setSheetSnap((current) => (current === 'full' ? 'medium' : 'full'))}
-                aria-expanded={sheetSnap === 'full'}
-              >
-                {sheetSnap === 'full' ? <ChevronDown size={17} aria-hidden="true" /> : <List size={17} aria-hidden="true" />}
-                {sheetSnap === 'full' ? 'Riduci' : 'Lista'}
-              </button>
+              <span className={styles.sheetModeLabel}>LISTA</span>
             </div>
 
             {loading ? (
               <div className={styles.sheetLoading}><LoadingSkeleton rows={2} /></div>
-            ) : selectedEvent ? (
-              <>
-                <article key={`featured-${selectedEvent.id}`} className={styles.featuredEventCard}>
-                  <div
-                    className={styles.featuredEventVisual}
-                    style={{ backgroundImage: `linear-gradient(150deg, rgb(7 9 7 / 8%), rgb(7 9 7 / 64%)), url("${getSportHeroImage(selectedEvent.sport_name, selectedEvent.title)}")` }}
-                  >
-                    <span>{selectedEvent.sport_name || 'ATTIVITÀ'}</span>
-                  </div>
-                  <div className={styles.featuredEventCopy}>
-                    <div className={styles.featuredEventTopline}>
-                      <span>{formatEventDay(selectedEvent.event_datetime)}</span>
-                      <strong>{formatEventTime(selectedEvent.event_datetime)}</strong>
-                    </div>
-                    <h3>{selectedEvent.title || selectedEvent.sport_name}</h3>
-                    <p>{selectedEvent.location_name || selectedEvent.city || 'Luogo da definire'}</p>
-                    <div className={styles.featuredEventStats}>
-                      <span><Users size={14} aria-hidden="true" />{Number(selectedEvent.participants_count || 0)}/{Number(selectedEvent.max_participants || 0)}</span>
-                      <span>{Number(selectedEvent.duration_minutes || 60)} min</span>
-                    </div>
-                  </div>
-                  <div className={styles.featuredEventControls} aria-label="Azioni evento">
+            ) : sheetEvents.length > 0 ? (
+              <div className={styles.sheetEventList} aria-label="Eventi visibili sulla mappa">
+                {sheetEvents.map((event) => (
+                  <article key={event.id} className={String(event.id) === String(selectedEventId) ? styles.sheetEventRowActive : ''}>
                     <button
                       type="button"
-                      className={`${styles.featuredEventSave} ${selectedEvent.is_saved ? styles.featuredEventSaveActive : ''}`}
-                      onClick={() => toggleSaveEvent(selectedEvent)}
-                      disabled={savingIds.includes(selectedEvent.id)}
-                      aria-label={selectedEvent.is_saved ? 'Rimuovi evento dai salvati' : 'Salva evento'}
-                      title={selectedEvent.is_saved ? 'Salvato' : 'Salva'}
+                      className={styles.sheetEventMain}
+                      onClick={() => focusEvent(event)}
                     >
-                      {selectedEvent.is_saved ? <BookmarkCheck size={17} aria-hidden="true" /> : <Bookmark size={17} aria-hidden="true" />}
-                    </button>
-                    <Link
-                      className={styles.featuredEventOpen}
-                      to={`/events/${selectedEvent.id}`}
-                      aria-label={`Apri dettagli ${selectedEvent.title || 'evento'}`}
-                      title="Dettagli"
-                    >
-                      <ChevronRight size={19} aria-hidden="true" />
-                    </Link>
-                  </div>
-                </article>
-
-                {nearbyEvents.length > 0 ? (
-                  <div className={styles.nearbyEventRail} aria-label="Altri eventi vicini">
-                    {nearbyEvents.map((event) => (
-                      <button type="button" key={event.id} onClick={() => focusEvent(event)}>
-                        <span
-                          className={styles.nearbyEventVisual}
-                          style={{ backgroundImage: `linear-gradient(rgb(7 9 7 / 25%), rgb(7 9 7 / 72%)), url("${getSportHeroImage(event.sport_name, event.title)}")` }}
+                      <span className={styles.sheetEventVisual} aria-hidden="true">
+                        <img
+                          src={getSportHeroImage(event.sport_name, event.title)}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
                         />
-                        <span>
-                          <strong>{event.title || event.sport_name}</strong>
-                          <small>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</small>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className={styles.sheetEventList} aria-label="Elenco completo eventi">
-                  {sheetEvents.map((event) => (
-                    <article key={event.id} className={String(event.id) === String(selectedEvent.id) ? styles.sheetEventRowActive : ''}>
-                      <button type="button" onClick={() => focusEvent(event)}>
                         <span className={styles.eventDay}>{formatEventDay(event.event_datetime)}</span>
-                        <span>
-                          <strong>{event.title || event.sport_name}</strong>
-                          <small>{formatEventTime(event.event_datetime)} · {event.location_name || event.city || 'Luogo da definire'}</small>
-                        </span>
+                      </span>
+                      <span>
+                        <strong>{event.title || event.sport_name}</strong>
+                        <small>{formatEventTime(event.event_datetime)} · {event.location_name || event.city || 'Luogo da definire'}</small>
+                      </span>
+                    </button>
+                    <div className={styles.sheetEventActions} aria-label={`Azioni ${event.title || 'evento'}`}>
+                      <button
+                        type="button"
+                        className={`${styles.sheetEventSave} ${event.is_saved ? styles.sheetEventSaveActive : ''}`}
+                        onClick={() => toggleSaveEvent(event)}
+                        disabled={savingIds.includes(event.id)}
+                        aria-label={event.is_saved ? 'Rimuovi evento dai salvati' : 'Salva evento'}
+                        title={event.is_saved ? 'Salvato' : 'Salva'}
+                      >
+                        {event.is_saved ? <BookmarkCheck size={15} aria-hidden="true" /> : <Bookmark size={15} aria-hidden="true" />}
                       </button>
-                      <Link to={`/events/${event.id}`} aria-label={`Dettagli ${event.title || 'evento'}`}><ChevronRight size={18} /></Link>
-                    </article>
-                  ))}
-                </div>
-              </>
+                      <Link
+                        className={styles.sheetEventDetails}
+                        to={`/events/${event.id}`}
+                        aria-label={`Dettagli ${event.title || 'evento'}`}
+                        title="Dettagli"
+                      >
+                        <ChevronRight size={17} aria-hidden="true" />
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
             ) : (
               <div className={styles.sheetEmpty}>
                 <MapPinOff size={24} aria-hidden="true" />

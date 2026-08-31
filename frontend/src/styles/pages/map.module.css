@@ -330,11 +330,11 @@
   outline: none;
 }
 
-.themeDark .mapCanvas :global(.maplibregl-canvas) {
+.themeDark .mapCanvas :global(.maplibregl-canvas-container) {
   filter: brightness(1.18) contrast(1.08) saturate(0.82);
 }
 
-.themeLight .mapCanvas :global(.maplibregl-canvas) {
+.themeLight .mapCanvas :global(.maplibregl-canvas-container) {
   filter: contrast(1.04) saturate(0.92);
 }
 
@@ -1373,63 +1373,6 @@
   padding: 0;
 }
 
-.searchAreaButton {
-  position: absolute;
-  z-index: calc(var(--z-overlay-mid) + 1);
-  top: 4.65rem;
-  left: 50%;
-  min-height: 2.75rem;
-  padding: 0 0.95rem;
-  border: 1px solid rgb(199 255 0 / 40%);
-  border-radius: 999px;
-  background: rgb(10 13 10 / 92%);
-  color: #f5f7f2;
-  box-shadow: 0 10px 24px rgb(0 0 0 / 34%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  font-size: 0.72rem;
-  font-weight: var(--weight-semibold);
-  white-space: nowrap;
-  transform: translateX(-50%);
-  animation: searchAreaReveal 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.mapViewport:has(.activeFilterRail) .searchAreaButton {
-  top: 7.15rem;
-}
-
-.searchAreaButton svg {
-  color: var(--map-neon);
-}
-
-.searchAreaButton:hover,
-.searchAreaButton:focus-visible {
-  border-color: var(--map-neon);
-  background: rgb(199 255 0 / 12%);
-  transform: translateX(-50%);
-  outline: none;
-}
-
-.searchAreaButton:active {
-  transform: translateX(-50%);
-}
-
-@keyframes searchAreaReveal {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -0.35rem) scale(0.96);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-  }
-}
-
 .mapSyncBadge {
   position: absolute;
   z-index: calc(var(--z-overlay-mid) + 1);
@@ -1482,6 +1425,8 @@
   -webkit-backdrop-filter: blur(9px) saturate(1.12) contrast(1.02);
   transition: height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
 }
 
 .resultsSheetDragging {
@@ -1512,18 +1457,15 @@
 .resultsSheetFull {
   bottom: 0.65rem;
   height: calc(100% - 4.55rem - 0.65rem);
-  overflow-y: auto;
+  overflow: hidden;
   padding-bottom: calc(1.35rem + env(safe-area-inset-bottom, 0px));
   border-radius: 1.65rem;
   scroll-padding-bottom: calc(1.35rem + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
 }
 
-.resultsSheetFull::-webkit-scrollbar {
-  display: none;
-}
-
 .resultsSheetHandle {
+  flex: 0 0 auto;
   position: sticky;
   z-index: 5;
   top: 0;
@@ -1557,6 +1499,7 @@
 }
 
 .resultsSheetHeader {
+  flex: 0 0 auto;
   min-height: 3.45rem;
   display: flex;
   align-items: center;
@@ -1580,24 +1523,23 @@
   white-space: nowrap;
 }
 
-.sheetListButton {
+.sheetModeLabel {
   flex: 0 0 auto;
-  min-height: 2.75rem;
-  padding: 0 0.8rem;
+  min-height: 2rem;
+  padding: 0 0.68rem;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
   background: rgb(255 255 255 / 4%);
-  color: inherit;
-  box-shadow: none;
+  color: var(--map-neon);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  font-size: 0.7rem;
-  font-weight: var(--weight-semibold);
+  font-size: 0.62rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
 }
 
-.themeLight .sheetListButton {
+.themeLight .sheetModeLabel {
   border-color: rgb(22 26 20 / 12%);
   background: rgb(22 26 20 / 4%);
 }
@@ -1836,27 +1778,41 @@
 }
 
 .sheetEventList {
-  display: none;
-  padding: 0.75rem 0 0;
-}
-
-.resultsSheetFull .sheetEventList {
+  min-height: 0;
+  padding: 0.55rem 0 0.2rem;
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   gap: 0.48rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgb(199 255 0 / 46%) transparent;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
-.resultsSheetFull .nearbyEventRail {
-  display: none;
+.sheetEventList::-webkit-scrollbar {
+  width: 0.25rem;
+}
+
+.sheetEventList::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(199 255 0 / 42%);
 }
 
 .sheetEventList > article {
-  min-height: 4.5rem;
+  min-height: 5.25rem;
   border: 1px solid rgb(255 255 255 / 9%);
   border-radius: 1rem;
   background: rgb(255 255 255 / 3%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 3rem;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  transition:
+    min-height 190ms var(--ease),
+    border-color 190ms var(--ease),
+    background-color 190ms var(--ease),
+    box-shadow 190ms var(--ease);
 }
 
 .themeLight .sheetEventList > article {
@@ -1865,27 +1821,104 @@
 }
 
 .sheetEventList > article.sheetEventRowActive {
-  border-color: rgb(199 255 0 / 42%);
-  background: rgb(199 255 0 / 6%);
+  min-height: 5.8rem;
+  border-color: rgb(199 255 0 / 78%);
+  background:
+    linear-gradient(100deg, rgb(199 255 0 / 11%), rgb(199 255 0 / 3%) 58%, transparent),
+    rgb(12 16 12 / 72%);
+  box-shadow:
+    0 0 0 1px rgb(199 255 0 / 18%),
+    0 8px 24px rgb(0 0 0 / 26%),
+    0 0 20px rgb(199 255 0 / 10%);
 }
 
-.sheetEventList article > button {
+.themeLight .sheetEventList > article.sheetEventRowActive {
+  background:
+    linear-gradient(100deg, rgb(199 255 0 / 19%), rgb(199 255 0 / 5%) 58%, transparent),
+    #fff;
+}
+
+.sheetEventMain {
   min-width: 0;
-  min-height: 4.35rem;
-  padding: 0.55rem 0.2rem 0.55rem 0.62rem;
+  min-height: 5.1rem;
+  padding: 0.36rem 0.2rem 0.36rem 0.36rem;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: inherit;
   box-shadow: none;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 4.8rem minmax(0, 1fr);
   align-items: center;
   gap: 0.65rem;
   text-align: left;
+  transition: min-height 190ms var(--ease);
 }
 
-.sheetEventList article > button > span:last-child {
+.sheetEventRowActive .sheetEventMain {
+  min-height: 5.65rem;
+}
+
+.sheetEventVisual {
+  position: relative;
+  width: 4.55rem;
+  height: 4.45rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  background: #171a17;
+  display: block;
+  transition:
+    width 190ms var(--ease),
+    height 190ms var(--ease),
+    box-shadow 190ms var(--ease);
+}
+
+.sheetEventRowActive .sheetEventVisual {
+  width: 4.8rem;
+  height: 4.9rem;
+  box-shadow: 0 0 0 1px rgb(199 255 0 / 32%);
+}
+
+.sheetEventVisual::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(180deg, transparent 42%, rgb(0 0 0 / 64%));
+  pointer-events: none;
+}
+
+.sheetEventVisual > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 220ms var(--ease);
+}
+
+.sheetEventMain:hover .sheetEventVisual > img,
+.sheetEventMain:focus-visible .sheetEventVisual > img {
+  transform: scale(1.045);
+}
+
+.sheetEventVisual .eventDay {
+  position: absolute;
+  z-index: 1;
+  left: 0.34rem;
+  bottom: 0.34rem;
+  min-height: 1.3rem;
+  max-width: calc(100% - 0.68rem);
+  padding: 0 0.38rem;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 999px;
+  background: rgb(8 10 8 / 78%);
+  color: #fff;
+  font-size: 0.52rem;
+  line-height: 1;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.sheetEventMain > span:last-child {
   min-width: 0;
   display: grid;
   gap: 0.24rem;
@@ -1907,13 +1940,45 @@
   font-size: 0.64rem;
 }
 
-.sheetEventList article > a {
+.sheetEventActions {
+  padding-right: 0.42rem;
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.sheetEventSave,
+.sheetEventDetails {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.3rem;
+  height: 2.3rem;
+  min-width: 2.3rem;
+  min-height: 2.3rem;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 11%);
   border-radius: 999px;
-  color: var(--map-neon);
+  background: rgb(255 255 255 / 4%);
+  color: inherit;
+  box-shadow: none;
   place-items: center;
+}
+
+.sheetEventSaveActive,
+.sheetEventDetails {
+  border-color: rgb(199 255 0 / 34%);
+  color: var(--map-neon);
+}
+
+.sheetEventSave:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.sheetEventSave:focus-visible,
+.sheetEventDetails:focus-visible {
+  border-color: var(--map-neon);
+  outline: 2px solid rgb(199 255 0 / 34%);
+  outline-offset: 2px;
 }
 
 .sheetLoading {
@@ -2085,10 +2150,6 @@
     right: 27rem;
   }
 
-  .searchAreaButton {
-    left: calc((100% - 26rem) / 2);
-  }
-
   .zoomControlGroup,
   .locationControlGroup {
     right: calc(26rem + var(--s-3));
@@ -2104,17 +2165,13 @@
     bottom: 0;
     width: 26rem;
     height: 100%;
-    overflow-y: auto;
+    overflow: hidden;
     border-top: 0;
     border-left: 1px solid rgb(255 255 255 / 11%);
     border-radius: 0;
   }
 
   .resultsSheetHandle {
-    display: none;
-  }
-
-  .sheetListButton {
     display: none;
   }
 
@@ -2220,7 +2277,6 @@
   }
 
   .featuredEventCard,
-  .searchAreaButton,
   .eventCluster strong {
     animation: none;
   }
