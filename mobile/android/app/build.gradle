@@ -6,8 +6,8 @@ def releaseKeyAlias = project.findProperty("RELEASE_KEY_ALIAS")
 def releaseKeyPassword = project.findProperty("RELEASE_KEY_PASSWORD")
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
 // Keep Play Store releases explicit and reproducible even when the CI run counter advances.
-def motriceVersionCode = 82
-def motriceVersionName = "1.0.82"
+def motriceVersionCode = 83
+def motriceVersionName = "1.0.83"
 
 android {
     namespace = "com.motrice.app"

@@ -114,7 +114,7 @@ function AppShell({ children }) {
         {children}
       </main>
       {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
-      {!isLandingRoute && !isVerificationRoute ? <Footer /> : null}
+      {!isLandingRoute && !isVerificationRoute && !isMapSurfaceRoute ? <Footer /> : null}
       {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>
   );
