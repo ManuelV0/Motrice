@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Crosshair,
   List,
   LocateFixed,
   MapPinOff,
@@ -219,26 +220,39 @@ function distanceKm(aLat, aLng, bLat, bLng) {
 function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVERLAP_PX) {
   if (!map) return [];
 
-  const clusters = events.reduce((result, event) => {
+  const buckets = new Map();
+  const clusters = [];
+
+  events.forEach((event) => {
     const point = map.project([event.lng, event.lat]);
-    const nearbyCluster = result.find((cluster) =>
-      cluster.screenPoints.every((clusterPoint) => {
-        const dx = point.x - clusterPoint.x;
-        const dy = point.y - clusterPoint.y;
-        return Math.sqrt(dx * dx + dy * dy) <= radiusPx;
-      })
+    const cellX = Math.floor(point.x / radiusPx);
+    const cellY = Math.floor(point.y / radiusPx);
+    const nearbyCandidates = [];
+
+    for (let x = cellX - 1; x <= cellX + 1; x += 1) {
+      for (let y = cellY - 1; y <= cellY + 1; y += 1) {
+        const candidates = buckets.get(`${x}:${y}`);
+        if (candidates) nearbyCandidates.push(...candidates);
+      }
+    }
+
+    const nearbyCluster = nearbyCandidates.find((cluster) =>
+      cluster.screenPoints.every((clusterPoint) => Math.hypot(point.x - clusterPoint.x, point.y - clusterPoint.y) <= radiusPx)
     );
 
     if (!nearbyCluster) {
-      result.push({
+      const cluster = {
         events: [event],
         screenPoints: [point],
         screenX: point.x,
         screenY: point.y,
         lng: event.lng,
         lat: event.lat
-      });
-      return result;
+      };
+      clusters.push(cluster);
+      const bucketKey = `${cellX}:${cellY}`;
+      buckets.set(bucketKey, [...(buckets.get(bucketKey) || []), cluster]);
+      return;
     }
 
     const previousCount = nearbyCluster.events.length;
@@ -249,8 +263,7 @@ function clusterEventsByScreenPosition(map, events, radiusPx = EVENT_CLUSTER_OVE
     nearbyCluster.screenY = (nearbyCluster.screenY * previousCount + point.y) / nextCount;
     nearbyCluster.lng = (nearbyCluster.lng * previousCount + event.lng) / nextCount;
     nearbyCluster.lat = (nearbyCluster.lat * previousCount + event.lat) / nextCount;
-    return result;
-  }, []);
+  });
 
   return clusters.map((cluster) => {
     const visualCenter = map.unproject([cluster.screenX, cluster.screenY]);
@@ -372,12 +385,13 @@ function removeUserRadiusOverlay(map) {
   if (map.getSource(USER_RADIUS_SOURCE)) map.removeSource(USER_RADIUS_SOURCE);
 }
 
-function MapSearchBar({ value, onChange, onFilterClick, activeFilterCount, filtersOpen }) {
+function MapSearchBar({ value, onChange, onFilterClick, activeFilterCount, filtersOpen, filterButtonRef }) {
   return (
     <div className={styles.searchBar}>
       <Search size={17} aria-hidden="true" />
       <input value={value} onChange={onChange} placeholder="Cerca sport o città" aria-label="Cerca sport o città" />
       <button
+        ref={filterButtonRef}
         type="button"
         className={`${styles.searchFilterButton} ${activeFilterCount > 0 ? styles.searchFilterButtonActive : ''}`}
         onClick={onFilterClick}
@@ -435,15 +449,27 @@ function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
           <span>Zoom indietro</span>
         </button>
       </div>
-      <button
-        type="button"
-        className={`${styles.fab} ${styles.fabNeutral} ${styles.locationFab} ${onGps.active ? styles.fabPrimary : ''}`}
-        onClick={onGps.onClick}
-        aria-label="Centra sulla mia posizione"
-      >
-        <LocateFixed size={18} aria-hidden="true" />
-        <span>La mia posizione</span>
-      </button>
+      <div className={styles.locationControlGroup}>
+        <button
+          type="button"
+          className={`${styles.fab} ${styles.fabNeutral}`}
+          onClick={onGps.onCenter}
+          aria-label="Centra sulla mia posizione"
+        >
+          <Crosshair size={18} aria-hidden="true" />
+          <span>Centra posizione</span>
+        </button>
+        <button
+          type="button"
+          className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
+          onClick={onGps.onFollow}
+          aria-label={onGps.active ? 'Disattiva Segui posizione' : 'Attiva Segui posizione'}
+          aria-pressed={onGps.active}
+        >
+          <LocateFixed size={18} aria-hidden="true" />
+          <span>{onGps.active ? 'Segui attivo' : 'Segui posizione'}</span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -459,13 +485,55 @@ function MapFiltersDrawer({
   onReset,
   onMapThemeChange
 }) {
+  const drawerRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const onCloseRef = useRef(onClose);
   const selectedOptionsCount = [
     filters.sport !== baseFilters.sport,
     filters.dateRange !== baseFilters.dateRange,
     filters.distance !== baseFilters.distance,
-    filters.sortBy !== baseFilters.sortBy,
-    mapTheme !== 'dark'
+    filters.sortBy !== baseFilters.sortBy
   ].filter(Boolean).length;
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !drawerRef.current) return;
+
+      const focusable = [...drawerRef.current.querySelectorAll('button:not(:disabled), select:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   return (
     <>
@@ -477,6 +545,7 @@ function MapFiltersDrawer({
         onClick={onClose}
       />
       <div
+        ref={drawerRef}
         className={`${styles.filtersDrawer} ${open ? styles.filtersDrawerOpen : styles.filtersDrawerClosed}`}
         role="dialog"
         aria-modal="true"
@@ -499,7 +568,7 @@ function MapFiltersDrawer({
               </p>
             </div>
           </div>
-          <button type="button" className={styles.sheetToggle} onClick={onClose} aria-label="Chiudi filtri">
+          <button ref={closeButtonRef} type="button" className={styles.sheetToggle} onClick={onClose} aria-label="Chiudi filtri">
             <X size={19} aria-hidden="true" />
           </button>
         </div>
@@ -595,17 +664,21 @@ function MapPage() {
 
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
+  const resultsSheetRef = useRef(null);
+  const filterButtonRef = useRef(null);
   const userMarkerRef = useRef(null);
-  const eventMarkersRef = useRef([]);
+  const eventMarkersRef = useRef(new Map());
   const coordinateAttemptsRef = useRef(new Set());
   const hasAutoFitEventsRef = useRef(false);
   const shouldRecenterRef = useRef(true);
-  const gpsTapRef = useRef(0);
+  const focusTimerRef = useRef(null);
+  const sheetDragRef = useRef(null);
+  const sheetTransitionTimerRef = useRef(null);
   const mapStyleThemeRef = useRef(null);
-  const mapThemeBeforeDrawerRef = useRef('dark');
   const mapInteractionRef = useRef(false);
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
+  const [searchInput, setSearchInput] = useState(() => filters.q || '');
   const [sports, setSports] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -630,6 +703,7 @@ function MapPage() {
   });
   const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(baseFilters);
+  const [draftMapTheme, setDraftMapTheme] = useState(mapTheme);
 
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
 
@@ -641,6 +715,17 @@ function MapPage() {
   useEffect(() => {
     api.listSports().then(setSports);
   }, []);
+
+  useEffect(() => {
+    setSearchInput(filters.q || '');
+  }, [filters.q]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setFilters((current) => (current.q === searchInput ? current : { ...current, q: searchInput }));
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     let active = true;
@@ -798,18 +883,17 @@ function MapPage() {
     setSheetSnap('medium');
     setSearchAreaVisible(false);
 
-    // Wait for the medium results sheet to settle, then center the pin inside
-    // the portion of the map that remains visible above it on mobile.
-    window.requestAnimationFrame(() => {
+    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
+    const centerEvent = () => {
       if (mapRef.current !== map) return;
 
       let offset = [0, 0];
       if (window.matchMedia('(max-width: 767px)').matches) {
         const mapRect = map.getContainer().getBoundingClientRect();
-        const rootFontSize = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
-        // Use the final medium-sheet height instead of its transient animated
-        // height, otherwise a pin clicked from the compact state can end low.
-        const sheetOverlap = Math.min(mapRect.height, 20.6 * rootFontSize);
+        const sheetRect = resultsSheetRef.current?.getBoundingClientRect();
+        const sheetOverlap = sheetRect
+          ? Math.max(0, Math.min(mapRect.bottom, sheetRect.bottom) - Math.max(mapRect.top, sheetRect.top))
+          : 0;
         const visibleHeight = Math.max(160, mapRect.height - sheetOverlap);
         const safeTop = Math.min(92, visibleHeight * 0.38);
         const safeBottom = 44;
@@ -828,47 +912,30 @@ function MapPage() {
         curve: 1.25,
         essential: true
       });
-    });
-  }, []);
+    };
 
-  function cycleSheetSnap() {
-    setSheetSnap((current) => {
-      if (current === 'compact') return 'medium';
-      if (current === 'medium') return 'full';
-      return 'compact';
-    });
-  }
+    if (sheetSnap === 'medium') window.requestAnimationFrame(centerEvent);
+    else focusTimerRef.current = window.setTimeout(centerEvent, 285);
+  }, [sheetSnap]);
 
   function handleCustomChip() {
-    mapThemeBeforeDrawerRef.current = mapTheme;
     setDraftFilters(filters);
+    setDraftMapTheme(mapTheme);
     setFiltersDrawerOpen(true);
   }
 
   function closeCustomFilters() {
     setDraftFilters(filters);
-    setMapTheme(mapThemeBeforeDrawerRef.current);
+    setDraftMapTheme(mapTheme);
     setFiltersDrawerOpen(false);
+    window.requestAnimationFrame(() => filterButtonRef.current?.focus());
   }
 
   function removeActiveFilter(filterKey) {
     setFilters((prev) => ({ ...prev, [filterKey]: baseFilters[filterKey] }));
   }
 
-  function onGpsAction() {
-    const now = Date.now();
-    const isDoubleTap = now - gpsTapRef.current <= 320;
-    gpsTapRef.current = now;
-
-    if (isDoubleTap) {
-      setFollowUser((prev) => {
-        const next = !prev;
-        showToast(next ? 'Follow me attivato' : 'Follow me disattivato', 'info');
-        return next;
-      });
-      return;
-    }
-
+  function centerOnUser() {
     if (!coords) {
       requestLocation();
       return;
@@ -879,6 +946,99 @@ function MapPage() {
     setSearchAreaVisible(false);
     setFollowUser(false);
     map.flyTo({ center: [coords.lng, coords.lat], zoom: Math.max(11.4, map.getZoom()), duration: 280, essential: true });
+  }
+
+  function toggleFollowUser() {
+    if (!coords) {
+      requestLocation();
+      showToast('Attiva la posizione per utilizzare Segui posizione', 'info');
+      return;
+    }
+    setFollowUser((current) => {
+      const next = !current;
+      showToast(next ? 'Segui posizione attivato' : 'Segui posizione disattivato', 'info');
+      return next;
+    });
+  }
+
+  function getSheetSnapHeights() {
+    const sheet = resultsSheetRef.current;
+    const stage = sheet?.parentElement;
+    const rootFontSize = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const compact = 6.3 * rootFontSize;
+    const medium = 20.6 * rootFontSize;
+    const full = Math.max(medium, (stage?.getBoundingClientRect().height || window.innerHeight) - 5.2 * rootFontSize);
+    return { compact, medium, full };
+  }
+
+  function onSheetPointerDown(event) {
+    if (window.matchMedia('(min-width: 768px)').matches || !resultsSheetRef.current) return;
+    const sheet = resultsSheetRef.current;
+    if (sheetTransitionTimerRef.current) window.clearTimeout(sheetTransitionTimerRef.current);
+    sheet.style.removeProperty('height');
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    sheetDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      lastTime: performance.now(),
+      velocity: 0,
+      startHeight: sheet.getBoundingClientRect().height,
+      currentHeight: sheet.getBoundingClientRect().height,
+      moved: false
+    };
+    sheet.classList.add(styles.resultsSheetDragging);
+  }
+
+  function onSheetPointerMove(event) {
+    const drag = sheetDragRef.current;
+    const sheet = resultsSheetRef.current;
+    if (!drag || !sheet || drag.pointerId !== event.pointerId) return;
+    const now = performance.now();
+    const elapsed = Math.max(1, now - drag.lastTime);
+    drag.velocity = (event.clientY - drag.lastY) / elapsed;
+    drag.lastY = event.clientY;
+    drag.lastTime = now;
+    const { compact, full } = getSheetSnapHeights();
+    drag.currentHeight = Math.min(full, Math.max(compact, drag.startHeight - (event.clientY - drag.startY)));
+    drag.moved ||= Math.abs(event.clientY - drag.startY) > 5;
+    sheet.style.height = `${drag.currentHeight}px`;
+  }
+
+  function finishSheetDrag(event) {
+    const drag = sheetDragRef.current;
+    const sheet = resultsSheetRef.current;
+    if (!drag || !sheet || drag.pointerId !== event.pointerId) return;
+    const heights = getSheetSnapHeights();
+    const snaps = [
+      ['compact', heights.compact],
+      ['medium', heights.medium],
+      ['full', heights.full]
+    ];
+    let nextSnap;
+
+    if (event.type === 'pointercancel') {
+      nextSnap = sheetSnap;
+    } else if (!drag.moved) {
+      nextSnap = sheetSnap === 'full' ? 'medium' : 'full';
+    } else {
+      const projectedHeight = drag.currentHeight - drag.velocity * 150;
+      nextSnap = snaps.reduce((best, candidate) =>
+        Math.abs(candidate[1] - projectedHeight) < Math.abs(best[1] - projectedHeight) ? candidate : best
+      )[0];
+    }
+
+    sheetDragRef.current = null;
+    sheet.classList.remove(styles.resultsSheetDragging);
+    sheet.style.height = `${drag.currentHeight}px`;
+    setSheetSnap(nextSnap);
+    window.requestAnimationFrame(() => {
+      if (!resultsSheetRef.current) return;
+      resultsSheetRef.current.style.height = `${heights[nextSnap]}px`;
+      sheetTransitionTimerRef.current = window.setTimeout(() => {
+        resultsSheetRef.current?.style.removeProperty('height');
+      }, 280);
+    });
   }
 
   function zoomMap(direction) {
@@ -955,34 +1115,39 @@ function MapPage() {
     map.on('moveend', handleMoveEnd);
 
     mapRef.current = map;
-    const onWindowResize = () => map.resize();
-    window.addEventListener('resize', onWindowResize, { passive: true });
-
-    let resizeTimer = null;
+    let resizeFrame = null;
+    let lastSize = { width: 0, height: 0 };
     const syncResize = () => {
-      map.resize();
-      if (resizeTimer) window.clearTimeout(resizeTimer);
-      resizeTimer = window.setTimeout(() => map.resize(), 220);
+      if (resizeFrame) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        const rect = mapNodeRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        const width = Math.round(rect.width);
+        const height = Math.round(rect.height);
+        if (width === lastSize.width && height === lastSize.height) return;
+        lastSize = { width, height };
+        map.resize();
+      });
     };
+    window.addEventListener('resize', syncResize, { passive: true });
 
     const observer = new ResizeObserver(syncResize);
     observer.observe(mapNodeRef.current);
 
     const vv = window.visualViewport;
     vv?.addEventListener('resize', syncResize);
-    vv?.addEventListener('scroll', syncResize);
     window.addEventListener('orientationchange', syncResize);
 
     requestAnimationFrame(syncResize);
 
     return () => {
-      if (resizeTimer) window.clearTimeout(resizeTimer);
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       vv?.removeEventListener('resize', syncResize);
-      vv?.removeEventListener('scroll', syncResize);
       window.removeEventListener('orientationchange', syncResize);
-      eventMarkersRef.current.forEach((marker) => marker.remove());
-      eventMarkersRef.current = [];
+      eventMarkersRef.current.forEach(({ marker }) => marker.remove());
+      eventMarkersRef.current.clear();
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
@@ -991,7 +1156,7 @@ function MapPage() {
       map.off('dragstart', handleDragStart);
       map.off('zoomstart', handleZoomStart);
       map.off('moveend', handleMoveEnd);
-      window.removeEventListener('resize', onWindowResize);
+      window.removeEventListener('resize', syncResize);
       map.remove();
       mapRef.current = null;
     };
@@ -1010,66 +1175,87 @@ function MapPage() {
     const map = mapRef.current;
     if (!map) return;
 
-    eventMarkersRef.current.forEach((marker) => marker.remove());
-    eventMarkersRef.current = [];
-
     const markerEvents = eventsInRadius;
     const clusters = clusterEventsByScreenPosition(map, markerEvents, EVENT_CLUSTER_OVERLAP_PX);
+    const nextKeys = new Set();
 
     clusters.forEach((cluster) => {
       if (cluster.events.length > 1) {
-        const element = document.createElement('button');
-        element.type = 'button';
+        const clusterIds = cluster.events.map((event) => String(event.id)).sort();
+        const markerKey = `cluster:${clusterIds.join(',')}`;
+        nextKeys.add(markerKey);
         const includesSelected = cluster.events.some((event) => String(event.id) === String(selectedEventId));
+        let entry = eventMarkersRef.current.get(markerKey);
+
+        if (!entry) {
+          const element = document.createElement('button');
+          element.type = 'button';
+          const count = document.createElement('strong');
+          element.appendChild(count);
+          element.addEventListener('click', () => element._activate?.());
+          const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+            .setLngLat([cluster.lng, cluster.lat])
+            .addTo(map);
+          entry = { element, marker };
+          eventMarkersRef.current.set(markerKey, entry);
+        }
+
+        const { element, marker } = entry;
         element.className = `${styles.eventCluster} ${includesSelected ? styles.eventClusterSelected : ''}`;
         element.title = `${cluster.events.length} eventi in questa zona`;
         element.setAttribute('aria-label', `${element.title}. Tocca per avvicinare la mappa.`);
-
-        const count = document.createElement('strong');
-        count.textContent = String(cluster.events.length);
-        element.appendChild(count);
-
-        element.addEventListener('click', () => {
+        element.firstElementChild.textContent = String(cluster.events.length);
+        element._activate = () => {
           mapInteractionRef.current = true;
           zoomToEventCluster(map, cluster);
           setSearchAreaVisible(true);
-        });
-
-        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-          .setLngLat([cluster.lng, cluster.lat])
-          .addTo(map);
-        eventMarkersRef.current.push(marker);
+        };
+        marker.setLngLat([cluster.lng, cluster.lat]);
         return;
       }
 
       const event = cluster.events[0];
-      const element = document.createElement('button');
-      element.type = 'button';
+      const markerKey = `event:${event.id}`;
+      nextKeys.add(markerKey);
+      let entry = eventMarkersRef.current.get(markerKey);
+
+      if (!entry) {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.appendChild(createEventActivityIcon(event));
+        const label = document.createElement('span');
+        label.className = styles.eventPinLabel;
+        element.appendChild(label);
+        element.addEventListener('click', () => element._activate?.());
+        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+          .setLngLat([event.lng, event.lat])
+          .addTo(map);
+        entry = { element, marker };
+        eventMarkersRef.current.set(markerKey, entry);
+      }
+
+      const { element, marker } = entry;
       const isSelected = String(event.id) === String(selectedEventId);
       const isSaved = Boolean(event.is_saved);
       element.className = `${styles.eventPin} ${isSaved ? styles.eventPinSaved : styles.eventPinDefault} ${isSelected ? styles.eventPinSelected : ''}`;
       element.title = `${event.sport_name || 'Evento'} - ${event.location_name || ''}`;
       element.setAttribute('aria-label', element.title);
-      element.appendChild(createEventActivityIcon(event));
-
-      const label = document.createElement('span');
-      label.className = styles.eventPinLabel;
-      label.textContent = event.sport_name || event.title || 'Evento';
-      element.appendChild(label);
-
-      element.addEventListener('click', () => {
-        focusEvent(event);
-      });
-
-      const marker = new maplibregl.Marker({ element, anchor: 'bottom' }).setLngLat([event.lng, event.lat]).addTo(map);
-      eventMarkersRef.current.push(marker);
+      element.querySelector(`.${styles.eventPinLabel}`).textContent = event.sport_name || event.title || 'Evento';
+      element._activate = () => focusEvent(event);
+      marker.setLngLat([event.lng, event.lat]);
     });
 
-    return () => {
-      eventMarkersRef.current.forEach((marker) => marker.remove());
-      eventMarkersRef.current = [];
-    };
+    eventMarkersRef.current.forEach((entry, key) => {
+      if (nextKeys.has(key)) return;
+      entry.marker.remove();
+      eventMarkersRef.current.delete(key);
+    });
   }, [eventsInRadius, focusEvent, mapRevision, selectedEventId]);
+
+  useEffect(() => () => {
+    if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
+    if (sheetTransitionTimerRef.current) window.clearTimeout(sheetTransitionTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!requestedEventId) return;
@@ -1169,7 +1355,9 @@ function MapPage() {
       showToast('Attiva la posizione per calcolare la distanza reale dagli eventi', 'info');
     }
     setFilters(draftFilters);
+    setMapTheme(draftMapTheme);
     setFiltersDrawerOpen(false);
+    window.requestAnimationFrame(() => filterButtonRef.current?.focus());
   }
 
   return (
@@ -1182,11 +1370,12 @@ function MapPage() {
 
             <div className={styles.mapTopOverlay}>
               <MapSearchBar
-                value={filters.q || ''}
-                onChange={(event) => setFilters((prev) => ({ ...prev, q: event.target.value }))}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 onFilterClick={handleCustomChip}
                 activeFilterCount={activeFilterPills.length}
                 filtersOpen={filtersDrawerOpen}
+                filterButtonRef={filterButtonRef}
               />
               <ActiveFilterPills items={activeFilterPills} onRemove={removeActiveFilter} />
             </div>
@@ -1211,19 +1400,25 @@ function MapPage() {
             <MapFloatingControls
               onZoomIn={() => zoomMap('in')}
               onZoomOut={() => zoomMap('out')}
-              onGps={{ onClick: onGpsAction, active: followUser }}
+              onGps={{ onCenter: centerOnUser, onFollow: toggleFollowUser, active: followUser }}
             />
           </div>
 
           <section
+            ref={resultsSheetRef}
             className={`${styles.resultsSheet} ${styles[`resultsSheet${sheetSnap[0].toUpperCase()}${sheetSnap.slice(1)}`]}`}
             aria-labelledby="map-events-title"
+            data-snap={sheetSnap}
           >
             <button
               type="button"
               className={styles.resultsSheetHandle}
-              onClick={cycleSheetSnap}
+              onPointerDown={onSheetPointerDown}
+              onPointerMove={onSheetPointerMove}
+              onPointerUp={finishSheetDrag}
+              onPointerCancel={finishSheetDrag}
               aria-label={sheetSnap === 'full' ? 'Riduci pannello eventi' : 'Espandi pannello eventi'}
+              aria-expanded={sheetSnap === 'full'}
             >
               <span aria-hidden="true" />
             </button>
@@ -1342,14 +1537,14 @@ function MapPage() {
         filters={draftFilters}
         setFilters={setDraftFilters}
         sports={sports}
-        mapTheme={mapTheme}
+        mapTheme={draftMapTheme}
         onClose={closeCustomFilters}
         onApply={applyCustomFilters}
         onReset={() => {
           setDraftFilters(baseFilters);
-          setMapTheme('dark');
+          setDraftMapTheme('dark');
         }}
-        onMapThemeChange={setMapTheme}
+        onMapThemeChange={setDraftMapTheme}
       />
 
       <div className={styles.a11yStatus}>

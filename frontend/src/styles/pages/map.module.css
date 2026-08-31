@@ -7,7 +7,7 @@
     radial-gradient(80% 30rem at 50% -8rem, rgb(199 255 0 / 10%), transparent 70%),
     #080a08;
   color: #f5f7f2;
-  --map-neon: #c7ff00;
+  --map-neon: #ccff00;
   --map-neon-strong: #b8ef00;
   --map-neon-ink: #101400;
   --map-ui-surface: rgb(17 19 17 / 94%);
@@ -246,7 +246,7 @@
 
 .activeFilterPill {
   flex: 0 0 auto;
-  min-height: 2.1rem;
+  min-height: 2.75rem;
   padding: 0 0.68rem 0 0.78rem;
   border-radius: 999px;
   border: 1px solid rgb(199 255 0 / 34%);
@@ -421,10 +421,10 @@
 }
 
 .zoomControlGroup .fab {
-  width: 2.45rem;
-  height: 2.45rem;
-  min-width: 2.45rem;
-  min-height: 2.45rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -467,10 +467,13 @@
     background-color var(--dur-fast) var(--ease);
 }
 
-.locationFab {
+.locationControlGroup {
   position: absolute;
   right: var(--s-3);
   bottom: var(--s-3);
+  display: grid;
+  gap: 0.38rem;
+  pointer-events: auto;
 }
 
 .fab > span {
@@ -494,7 +497,6 @@
 
 .fab:hover,
 .fab:focus-visible {
-  transform: translateX(-2px);
   border-color: color-mix(in srgb, var(--map-neon) 52%, rgb(255 255 255 / 13%));
 }
 
@@ -784,7 +786,7 @@
 
 .filtersBackdrop {
   position: fixed;
-  z-index: calc(var(--z-overlay-mid) - 1);
+  z-index: calc(var(--z-modal-max) - 1);
   inset: 0;
   border: 0;
   background: rgb(0 0 0 / 58%);
@@ -802,12 +804,12 @@
 
 .filtersDrawer {
   position: fixed;
-  z-index: var(--z-overlay-mid);
-  top: calc(var(--nav-h) + 4.45rem);
+  z-index: var(--z-modal-max);
+  top: max(0.55rem, env(safe-area-inset-top, 0px));
   left: var(--s-3);
   right: var(--s-3);
   bottom: auto;
-  max-height: min(68dvh, 39rem);
+  max-height: calc(100dvh - max(1.1rem, env(safe-area-inset-top, 0px) + 0.55rem));
   overflow: auto;
   padding: var(--s-4) var(--s-4) var(--s-3);
   border: 1px solid rgb(255 255 255 / 13%);
@@ -882,10 +884,10 @@
 
 .sheetToggle {
   display: grid;
-  width: 2.65rem;
-  height: 2.65rem;
-  min-width: 2.65rem;
-  min-height: 2.65rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   padding: 0;
   border: 1px solid var(--map-ui-border);
   border-radius: 50%;
@@ -1046,7 +1048,7 @@
   isolation: isolate;
   /* MapLibre owns the root transform while panning and zooming. Animating it
      makes markers lag behind the map and then snap back into place. */
-  animation: markerFadeIn 180ms ease-out;
+  animation: markerFadeIn 150ms ease-out;
   transition: filter 190ms ease;
 }
 
@@ -1172,7 +1174,7 @@
   display: grid;
   place-items: start center;
   isolation: isolate;
-  animation: markerFadeIn 180ms ease-out;
+  animation: markerFadeIn 150ms ease-out;
   transition: filter 190ms ease;
 }
 
@@ -1376,7 +1378,7 @@
   z-index: calc(var(--z-overlay-mid) + 1);
   top: 4.65rem;
   left: 50%;
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   padding: 0 0.95rem;
   border: 1px solid rgb(199 255 0 / 40%);
   border-radius: 999px;
@@ -1408,7 +1410,7 @@
 .searchAreaButton:focus-visible {
   border-color: var(--map-neon);
   background: rgb(199 255 0 / 12%);
-  transform: translateX(-50%) translateY(-1px);
+  transform: translateX(-50%);
   outline: none;
 }
 
@@ -1451,7 +1453,7 @@
   right: 0.8rem;
 }
 
-.locationFab {
+.locationControlGroup {
   top: 13.95rem;
   right: 0.8rem;
   bottom: auto;
@@ -1480,6 +1482,11 @@
   -webkit-backdrop-filter: blur(9px) saturate(1.12) contrast(1.02);
   transition: height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
   overscroll-behavior: contain;
+}
+
+.resultsSheetDragging {
+  transition: none;
+  user-select: none;
 }
 
 .themeLight .resultsSheet {
@@ -1521,8 +1528,8 @@
   z-index: 5;
   top: 0;
   width: 100%;
-  height: 1.35rem;
-  min-height: 1.35rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1530,6 +1537,12 @@
   box-shadow: none;
   display: grid;
   place-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+
+.resultsSheetHandle:active {
+  cursor: grabbing;
 }
 
 .resultsSheetHandle > span {
@@ -1569,7 +1582,7 @@
 
 .sheetListButton {
   flex: 0 0 auto;
-  min-height: 2.35rem;
+  min-height: 2.75rem;
   padding: 0 0.8rem;
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 999px;
@@ -1597,7 +1610,7 @@
   border-radius: 1.15rem;
   background: #151815;
   display: grid;
-  grid-template-columns: 5.25rem minmax(0, 1fr) 2.55rem;
+  grid-template-columns: 5.25rem minmax(0, 1fr) 3rem;
   align-items: stretch;
   transform-origin: 50% 100%;
   animation: featuredCardLift 320ms cubic-bezier(0.18, 0.82, 0.24, 1);
@@ -1703,10 +1716,10 @@
 .featuredEventOpen,
 .featuredEventSave {
   display: grid;
-  width: 2.2rem;
-  height: 2.2rem;
-  min-width: 2.2rem;
-  min-height: 2.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   padding: 0;
   border: 1px solid rgb(255 255 255 / 11%);
   border-radius: 999px;
@@ -1842,7 +1855,7 @@
   border-radius: 1rem;
   background: rgb(255 255 255 / 3%);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.6rem;
+  grid-template-columns: minmax(0, 1fr) 3rem;
   align-items: center;
 }
 
@@ -1896,8 +1909,8 @@
 
 .sheetEventList article > a {
   display: grid;
-  width: 2.15rem;
-  height: 2.15rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 999px;
   color: var(--map-neon);
   place-items: center;
@@ -1934,7 +1947,7 @@
 }
 
 .sheetEmpty > button {
-  min-height: 2.3rem;
+  min-height: 2.75rem;
   padding: 0 0.8rem;
   border: 0;
   border-radius: 999px;
@@ -1953,14 +1966,39 @@
 }
 
 .filtersBackdrop {
-  z-index: calc(var(--z-overlay-high) - 1);
+  z-index: calc(var(--z-modal-max) - 1);
 }
 
 .filtersDrawer {
-  z-index: var(--z-overlay-high);
+  z-index: var(--z-modal-max);
+}
+
+@media (max-width: 32rem) {
+  .filtersDrawer {
+    left: 0.65rem;
+    right: 0.65rem;
+    padding: 1rem 1rem 0.75rem;
+    border-radius: 1.25rem;
+  }
+
+  .sheetFiltersGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.72rem;
+  }
+
+  .mapAppearanceField {
+    grid-column: 1;
+  }
+
+  .mapField > select {
+    width: 100%;
+    min-height: 3rem;
+    font-size: 0.82rem;
+  }
 }
 
 @media (max-width: 27rem) {
+
   .pageHeading p {
     display: none;
   }
@@ -2052,7 +2090,7 @@
   }
 
   .zoomControlGroup,
-  .locationFab {
+  .locationControlGroup {
     right: calc(26rem + var(--s-3));
   }
 
@@ -2108,6 +2146,61 @@
 
   .filtersDrawerOpen {
     transform: translate(-50%, 0);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fab:hover {
+    transform: translateX(-2px);
+  }
+
+  .activeFilterPill:hover {
+    transform: translateY(-1px);
+  }
+
+  .eventPin:hover::before {
+    transform: translateX(-50%) rotate(-45deg) scale(1.05);
+  }
+
+  .eventPinSelected:hover::before {
+    transform: translateX(-50%) rotate(-45deg) scale(1.12);
+  }
+
+  .eventCluster:hover::before {
+    transform: translateX(-50%) rotate(-45deg) scale(1.05);
+  }
+
+  .featuredEventOpen:hover,
+  .featuredEventSave:hover:not(:disabled) {
+    transform: scale(1.06);
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .fab:hover,
+  .fab:focus-visible,
+  .activeFilterPill:hover,
+  .activeFilterPill:focus-visible,
+  .featuredEventOpen:hover,
+  .featuredEventSave:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .eventPin:hover::before {
+    transform: translateX(-50%) rotate(-45deg);
+  }
+
+  .eventPinSelected:hover::before {
+    transform: translateX(-50%) rotate(-45deg) scale(1.1);
+  }
+
+  .eventCluster:hover::before {
+    transform: translateX(-50%) rotate(-45deg);
+  }
+
+  .eventPin:active::before,
+  .eventCluster:active::before {
+    filter: brightness(0.94);
   }
 }
 
