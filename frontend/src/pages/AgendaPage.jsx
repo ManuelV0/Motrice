@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -20,6 +20,7 @@ import {
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
+import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerificationPanel';
 import styles from '../styles/pages/agenda.module.css';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
@@ -239,6 +240,7 @@ function AgendaPage() {
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('all');
   const [selectedRange, setSelectedRange] = useState(null);
+  const [verificationEventId, setVerificationEventId] = useState('');
   const now = useMemo(() => new Date(), []);
   const todayKey = useMemo(() => toDateKey(now), [now]);
   const [calendarCursor, setCalendarCursor] = useState(() => ({
@@ -251,26 +253,21 @@ function AgendaPage() {
     description: 'Tutti gli eventi che organizzi o a cui partecipi in un unica vista.'
   });
 
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    api
-      .listEvents({ dateRange: 'all', includePast: true, includeCancelled: true, sortBy: 'soonest' })
-      .then((nextEvents) => {
-        if (!active) return;
-        setEvents(Array.isArray(nextEvents) ? nextEvents : []);
-      })
-      .catch((error) => {
-        if (active) showToast(error?.message || 'Impossibile aggiornare gli eventi', 'error');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+  const loadEvents = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const nextEvents = await api.listEvents({ dateRange: 'all', includePast: true, includeCancelled: true, sortBy: 'soonest' });
+      setEvents(Array.isArray(nextEvents) ? nextEvents : []);
+    } catch (error) {
+      showToast(error?.message || 'Impossibile aggiornare gli eventi', 'error');
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, [showToast]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   const ownedEvents = useMemo(
     () => events.filter((event) => event.created_by === 'me'),
@@ -383,7 +380,7 @@ function AgendaPage() {
       return;
     }
     if (state.key === 'organizer' || state.key === 'locked') {
-      navigate(`/events/${event.id}#verify-presence`);
+      setVerificationEventId((current) => current === String(event.id) ? '' : String(event.id));
       return;
     }
     navigate(`/events/${event.id}`);
@@ -472,6 +469,16 @@ function AgendaPage() {
               <span>{state.action}</span>
               {state.key !== 'ready' ? <ArrowRight size={18} aria-hidden="true" /> : null}
             </button>
+            {verificationEventId === String(event.id) ? (
+              <AgendaEventVerificationPanel
+                event={event}
+                isOrganizer={event.created_by === 'me' && !event.is_personal}
+                showToast={showToast}
+                onClose={() => setVerificationEventId('')}
+                onVerified={() => loadEvents({ silent: true })}
+                onStartWorkout={() => navigate(`/events/${event.id}/workout`)}
+              />
+            ) : null}
           </section>
         );
       })() : null}
