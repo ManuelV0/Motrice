@@ -282,6 +282,33 @@ function calculateRouteDistanceKm(points) {
   }, 0);
 }
 
+function calculateDistanceMeters(from, to) {
+  const fromLat = Number(from?.lat);
+  const fromLng = Number(from?.lng);
+  const toLat = Number(to?.lat);
+  const toLng = Number(to?.lng);
+  if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) return null;
+
+  const earthRadiusM = 6371000;
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const lat1 = toRadians(fromLat);
+  const lat2 = toRadians(toLat);
+  const haversine =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadiusM * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function formatDistanceMeters(value) {
+  const distance = Number(value);
+  if (!Number.isFinite(distance)) return '';
+  if (distance < 1000) return `${Math.max(1, Math.round(distance))} m da te`;
+  return `${(distance / 1000).toLocaleString('it-IT', { maximumFractionDigits: 1 })} km da te`;
+}
+
 function RouteMapTapHandler({ active, onAddPoint }) {
   useMapEvents({
     click(event) {
@@ -293,15 +320,36 @@ function RouteMapTapHandler({ active, onAddPoint }) {
 }
 
 function LocationMapCenterHandler({ onMoveStart, onSelect }) {
+  const lastCenterRef = useRef(null);
+  const resolveTimerRef = useRef(null);
   const map = useMapEvents({
-    movestart() {
+    dragstart() {
       onMoveStart?.();
     },
     moveend() {
       const center = map.getCenter();
-      onSelect({ lat: center.lat, lng: center.lng });
+      const previous = lastCenterRef.current;
+      lastCenterRef.current = { lat: center.lat, lng: center.lng };
+      if (
+        previous &&
+        Math.abs(previous.lat - center.lat) < 0.000001 &&
+        Math.abs(previous.lng - center.lng) < 0.000001
+      ) {
+        return;
+      }
+      window.clearTimeout(resolveTimerRef.current);
+      resolveTimerRef.current = window.setTimeout(() => {
+        onSelect({ lat: center.lat, lng: center.lng });
+      }, 360);
     }
   });
+
+  useEffect(() => {
+    const center = map.getCenter();
+    lastCenterRef.current = { lat: center.lat, lng: center.lng };
+    return () => window.clearTimeout(resolveTimerRef.current);
+  }, [map]);
+
   return null;
 }
 
@@ -353,6 +401,7 @@ function CreateEventPage() {
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [locationMapRevision, setLocationMapRevision] = useState(0);
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
@@ -498,6 +547,17 @@ function CreateEventPage() {
     return 16;
   }, [geofenceRadius, locationPreview]);
 
+  const locationDistanceFromUser = useMemo(
+    () => calculateDistanceMeters(userLocationCoords, locationPreview),
+    [locationPreview, userLocationCoords]
+  );
+
+  const locationAccuracyLabel = useMemo(() => {
+    const accuracy = Number(userLocationCoords?.accuracy);
+    if (!Number.isFinite(accuracy) || accuracy <= 0) return '';
+    return `±${Math.max(1, Math.round(accuracy))} m`;
+  }, [userLocationCoords]);
+
   useEffect(() => {
     if (activeStep !== 2 || locationPreview || autoLocationAttemptedRef.current) return;
 
@@ -522,6 +582,7 @@ function CreateEventPage() {
 
   function setField(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (['city', 'location_name', 'lat', 'lng'].includes(key)) setLocationConfirmed(false);
     setErrors((prev) => {
       const errorKey = key === 'lat' || key === 'lng' ? 'coordinates' : key;
       if (!prev[errorKey]) return prev;
@@ -725,18 +786,25 @@ function CreateEventPage() {
 
   function setLocationMode(hasRoute) {
     setForm((prev) => ({ ...prev, has_route: hasRoute }));
+    setLocationConfirmed(false);
     clearRouteFieldErrors();
     if (hasRoute) {
+      setLocationSelectionMessage('Tocca la mappa per impostare partenza, tappe e arrivo.');
       setManualRouteSelection(true);
       setRoutePicking(routePoints.length < 2);
       return;
     }
+    setLocationSelectionMessage(
+      locationPreview
+        ? 'Controlla il pin centrale e conferma il punto d’incontro.'
+        : 'Cerca un luogo oppure centra la mappa sulla tua posizione.'
+    );
     setRoutePicking(false);
     setManualRouteSelection(false);
   }
 
   async function useCurrentLocationForMode() {
-    const coords = userLocationCoords || (await requestLocation());
+    const coords = (await requestLocation()) || userLocationCoords;
     if (!coords) {
       showToast('Attiva la geolocalizzazione per usare la tua posizione', 'error');
       return;
@@ -934,6 +1002,7 @@ function CreateEventPage() {
     const controller = new AbortController();
     locationRequestRef.current = controller;
     setLocationResolving(true);
+    setLocationConfirmed(false);
     setLocationSelectionMessage('Pin centrato. Sto recuperando l’indirizzo...');
     setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
     if (source !== 'map') {
@@ -980,7 +1049,18 @@ function CreateEventPage() {
 
   function handleLocationMapMoveStart() {
     locationRequestRef.current?.abort();
+    setLocationConfirmed(false);
     setLocationSelectionMessage('Sposta la mappa: il pin resta fisso al centro.');
+  }
+
+  function confirmSelectedLocation() {
+    if (!locationPreview) {
+      showToast('Scegli prima un punto sulla mappa', 'error');
+      return;
+    }
+    setLocationConfirmed(true);
+    setLocationSelectionMessage('Punto d’incontro confermato. Puoi continuare.');
+    showToast('Punto d’incontro confermato', 'success');
   }
 
   function collectValidationErrors() {
@@ -1504,6 +1584,22 @@ function CreateEventPage() {
               </button>
             </div>
 
+            {!form.has_route ? (
+              <div className={styles.locationFlowGuide} aria-label="Come scegliere il punto d’incontro">
+                <span className={locationPreview ? styles.locationFlowDone : ''}>
+                  <b>1</b> Trova l’area
+                </span>
+                <i aria-hidden="true" />
+                <span className={locationPreview ? styles.locationFlowDone : ''}>
+                  <b>2</b> Sposta la mappa
+                </span>
+                <i aria-hidden="true" />
+                <span className={locationConfirmed ? styles.locationFlowDone : ''}>
+                  <b>{locationConfirmed ? <Check size={12} /> : '3'}</b> Conferma
+                </span>
+              </div>
+            ) : null}
+
             <section className={`${styles.locationPicker} ${styles.locationPickerActive}`}>
               <div className={styles.locationMapHead}>
                 <span>
@@ -1515,7 +1611,7 @@ function CreateEventPage() {
                   {locationRequesting
                     ? 'Cerco la tua area'
                     : userLocationCoords
-                      ? 'GPS attivo'
+                      ? `GPS attivo${locationAccuracyLabel ? ` ${locationAccuracyLabel}` : ''}`
                       : locationPermission === 'denied'
                         ? 'GPS non autorizzato'
                         : 'GPS in attesa'}
@@ -1621,9 +1717,9 @@ function CreateEventPage() {
               </div>
 
               <div className={`${styles.mapQuickActions} ${form.has_route ? styles.mapQuickActionsRoute : ''}`}>
-                <button type="button" onClick={() => void useCurrentLocationForMode()}>
+                <button type="button" disabled={locationRequesting} onClick={() => void useCurrentLocationForMode()}>
                   <MapPinned size={17} aria-hidden="true" />
-                  Usa posizione attuale
+                  {locationRequesting ? 'Posizione in corso…' : 'Centra sulla mia posizione'}
                 </button>
                 {form.has_route ? (
                   <>
@@ -1668,15 +1764,26 @@ function CreateEventPage() {
                   </button>
                 </div>
               ) : (
-                <div className={styles.locationResultCard}>
+                <div className={`${styles.locationResultCard} ${locationConfirmed ? styles.locationResultConfirmed : ''}`}>
                   <span><MapPin size={20} aria-hidden="true" /></span>
                   <div>
                     <strong>{form.location_name || 'Sposta la mappa per scegliere il punto'}</strong>
                     <small>
                       {form.city || (locationPreview ? `${locationPreview.lat.toFixed(5)}, ${locationPreview.lng.toFixed(5)}` : 'Via e città si compileranno automaticamente')}
                     </small>
+                    {locationDistanceFromUser !== null ? (
+                      <em>{formatDistanceMeters(locationDistanceFromUser)}</em>
+                    ) : null}
                   </div>
-                  <b>{locationPreview ? 'PUNTO PRONTO' : 'DA IMPOSTARE'}</b>
+                  <button
+                    type="button"
+                    disabled={!locationPreview || locationResolving}
+                    className={locationConfirmed ? styles.locationConfirmButtonDone : ''}
+                    onClick={confirmSelectedLocation}
+                  >
+                    {locationConfirmed ? <Check size={16} aria-hidden="true" /> : <MapPinned size={16} aria-hidden="true" />}
+                    {locationConfirmed ? 'Confermato' : 'Conferma punto'}
+                  </button>
                 </div>
               )}
 
