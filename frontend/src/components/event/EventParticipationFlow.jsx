@@ -179,6 +179,7 @@ function EventParticipationFlow({
   const [review, setReview] = useState(EMPTY_REVIEW);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [lastPresence, setLastPresence] = useState(null);
+  const [participantVerificationChoice, setParticipantVerificationChoice] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const videoRef = useRef(null);
   const scannerControlsRef = useRef(null);
@@ -357,15 +358,17 @@ function EventParticipationFlow({
         return;
       }
       const xpAwarded = Number(result?.xp_awarded ?? result?.xpAwarded?.participant ?? 20);
+      const motAwarded = Number(result?.mot_awarded ?? 5);
       setScanFeedback({
         kind: 'success',
         title: 'Check-in valido',
         participantName,
-        detail: `+${xpAwarded} XP assegnati`,
-        xpAwarded
+        detail: `+${motAwarded} MOT · +${xpAwarded} XP assegnati`,
+        xpAwarded,
+        motAwarded
       });
       playScanFeedback('success');
-      showToast(`Check-in valido · ${participantName} · +${xpAwarded} XP`, 'success');
+      showToast(`Check-in valido · ${participantName} · +${motAwarded} MOT · +${xpAwarded} XP`, 'success');
       setManualToken('');
       await loadFlow({ silent: true });
       await onEventRefresh?.();
@@ -439,15 +442,23 @@ function EventParticipationFlow({
         if (interactive) throw new Error('Posizione non disponibile');
         return;
       }
-      const result = await api.recordEventPresence({
-        eventId: event.id,
-        lat: location?.lat ?? null,
-        lng: location?.lng ?? null
-      });
+      const startsGpsCheckIn = !isOrganizer && usesGeo && !progress?.checked_in_at;
+      const result = startsGpsCheckIn
+        ? await api.startEventGpsCheckIn({
+          eventId: event.id,
+          lat: location?.lat ?? null,
+          lng: location?.lng ?? null,
+          accuracyM: location?.accuracy ?? null
+        })
+        : await api.recordEventPresence({
+          eventId: event.id,
+          lat: location?.lat ?? null,
+          lng: location?.lng ?? null
+        });
       setLastPresence(result);
       await loadFlow({ silent: true });
       if (result?.checked_in_now) {
-        showToast('Presenza GPS verificata · cashback 60%', 'success');
+        showToast(`Presenza GPS verificata · +${Number(result?.mot_awarded || 2)} MOT`, 'success');
         await onEventRefresh?.();
       } else if (result?.completed_now) {
         showToast(`Partecipazione completata: cashback 100% e +${event.completion_xp || 50} PX`, 'success');
@@ -470,11 +481,13 @@ function EventParticipationFlow({
     coords,
     event?.completion_xp,
     event?.id,
+    isOrganizer,
     loadFlow,
     onEventRefresh,
     requestLocation,
     showToast,
-    usesGeo
+    usesGeo,
+    progress?.checked_in_at
   ]);
 
   useEffect(() => {
@@ -666,7 +679,25 @@ function EventParticipationFlow({
               </div>
             </div>
 
-            {progressPercent < 60 && usesQr && qrDataUrl ? (
+            {progressPercent < 60 && verificationMode === 'both' ? (
+              <div className={styles.verificationChoice}>
+                <div>
+                  <span className={styles.eyebrow}>Scegli come verificarti</span>
+                  <h3>Verifica presenza</h3>
+                  <p>Il QR assegna il bonus maggiore; la posizione è l’alternativa rapida nell’area evento.</p>
+                </div>
+                <div className={styles.verificationChoiceButtons}>
+                  <Button type="button" icon={QrCode} onClick={() => setParticipantVerificationChoice('qr')} variant={participantVerificationChoice === 'qr' ? 'primary' : 'secondary'}>
+                    Mostra il mio QR
+                  </Button>
+                  <Button type="button" icon={LocateFixed} onClick={() => setParticipantVerificationChoice('geo')} variant={participantVerificationChoice === 'geo' ? 'primary' : 'secondary'}>
+                    Verifica posizione
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {progressPercent < 60 && usesQr && qrDataUrl && (verificationMode === 'qr' || participantVerificationChoice === 'qr') ? (
               <div className={styles.participantQr}>
                 <div>
                   <span className={styles.eyebrow}>QR personale</span>
@@ -693,7 +724,7 @@ function EventParticipationFlow({
               </div>
             ) : null}
 
-            {progressPercent < 60 && verificationMode === 'geo' ? (
+            {progressPercent < 60 && (verificationMode === 'geo' || participantVerificationChoice === 'geo') ? (
               <div className={styles.monitorCard}>
                 <div className={styles.monitorHead}>
                   <LocateFixed size={20} />

@@ -29,111 +29,8 @@
   font-size: var(--text-base);
 }
 
-.monthSummary {
-  width: min(100%, 48rem);
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.9fr);
-  align-items: stretch;
-  gap: var(--s-3);
-  justify-self: center;
-  overflow: hidden;
-  padding: 0.55rem;
-  border: 1px solid var(--glass-border-strong);
-  border-radius: var(--r-xl);
-  background: #090a09;
-  color: var(--text);
-  box-shadow: var(--sh-card), var(--glass-highlight);
-}
-
-.summaryContext {
-  min-width: 0;
-  display: grid;
-  align-content: center;
-  gap: 0.2rem;
-  padding: 0.65rem 0.7rem;
-}
-
-.summaryContext small {
-  color: var(--muted);
-  font-size: 0.58rem;
-  font-weight: var(--weight-bold);
-  letter-spacing: 0.14em;
-}
-
-.summaryContext strong {
-  overflow: hidden;
-  font-size: clamp(0.8rem, 3.6vw, 0.98rem);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.summaryStats {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-  border: 1px solid #272a27;
-  border-radius: calc(var(--r-xl) - 0.35rem);
-  background: #111311;
-}
-
-.summaryStats > span {
-  min-width: 0;
-  min-height: 3.5rem;
-  display: grid;
-  place-content: center;
-  gap: 0.12rem;
-  padding: 0.45rem 0.2rem;
-  text-align: center;
-}
-
-.summaryStats > span + span {
-  border-left: 1px solid #292c29;
-}
-
-.summaryStats b {
-  overflow: hidden;
-  color: var(--text);
-  font-size: clamp(0.9rem, 4vw, 1.1rem);
-  line-height: 1;
-  text-overflow: ellipsis;
-}
-
-.summaryStats small {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: clamp(0.55rem, 2.5vw, 0.66rem);
-  font-weight: var(--weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.summaryStats .summaryXp b,
-.summaryStats .summaryXp small {
-  color: var(--accent);
-}
-
-.summaryStats .summaryXp small {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-}
-
-.summaryXp em {
-  width: 0.9rem;
-  height: 0.9rem;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--primary-contrast);
-  font-size: 0.54rem;
-  font-style: normal;
-  line-height: 1;
-}
-
 .eventFilters {
+  position: relative;
   width: min(100%, 48rem);
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -148,13 +45,36 @@
   isolation: isolate;
 }
 
+.eventFilterGlider {
+  position: absolute;
+  z-index: 0;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: 0.3rem;
+  width: calc((100% - 0.6rem) / 3);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  box-shadow: 0 0 1.15rem color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform 280ms var(--ease);
+}
+
+.eventFilterGlider[data-active='participating'] {
+  transform: translateX(100%);
+}
+
+.eventFilterGlider[data-active='created'] {
+  transform: translateX(200%);
+}
+
 .eventFilters button {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   min-height: 3.15rem;
   padding: 0 var(--s-2);
   border: 0;
   border-radius: var(--r-pill);
-  background: #050605;
+  background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: clamp(0.76rem, 3.6vw, var(--text-sm));
@@ -186,9 +106,9 @@
 }
 
 .eventFilters .filterActive {
-  background: var(--accent);
+  background: transparent;
   color: var(--primary-contrast);
-  box-shadow: 0 0 1.15rem color-mix(in srgb, var(--accent) 30%, transparent);
+  box-shadow: none;
 }
 
 .eventFilters .filterActive span {
@@ -200,6 +120,214 @@
 .eventFilters .filterActive:hover,
 .eventFilters .filterActive:focus-visible {
   color: var(--primary-contrast);
+  transform: none;
+}
+
+.todayWorkoutCard {
+  width: min(100%, 48rem);
+  display: grid;
+  gap: var(--s-3);
+  justify-self: center;
+  overflow: hidden;
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, #2a2d2a);
+  border-radius: var(--r-2xl);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 34%),
+    linear-gradient(145deg, #181b18, #0d0f0d);
+  box-shadow: var(--sh-card), 0 0 1.8rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.todayWorkoutCard_locked {
+  border-color: #343734;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 255 255 / 4%), transparent 34%),
+    linear-gradient(145deg, #181a18, #0d0f0d);
+}
+
+.todayWorkoutCard_ready {
+  border-color: color-mix(in srgb, var(--accent) 44%, #2a2d2a);
+}
+
+.todayWorkoutCard_organizer {
+  border-color: color-mix(in srgb, var(--accent) 38%, #2a2d2a);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 38%),
+    linear-gradient(145deg, #181b18, #0d0f0d);
+}
+
+.todayWorkoutCard_completed {
+  border-color: color-mix(in srgb, var(--accent) 50%, #2a2d2a);
+}
+
+.todayWorkoutTopline {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.todayWorkoutIcon {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, #2a2d2a);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--accent) 13%, #111311);
+  color: var(--accent);
+}
+
+.todayWorkoutTopline > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.todayWorkoutTopline small {
+  color: var(--accent);
+  font-size: 0.61rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+}
+
+.todayWorkoutTopline strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(1rem, 4.4vw, 1.25rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayWorkoutTopline time {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  border: 1px solid #303330;
+  border-radius: var(--r-pill);
+  background: #111311;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.todayWorkoutStatus {
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, #2a2d2a);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--accent) 7%, #111311);
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.todayWorkoutCard_locked .todayWorkoutStatus {
+  border-color: #303330;
+  background: #111311;
+  color: var(--muted);
+}
+
+.todayWorkoutStatus svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.todayWorkoutCard_locked .todayWorkoutStatus svg {
+  color: var(--muted);
+}
+
+.todayWorkoutMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.todayWorkoutMeta span {
+  min-height: 1.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid #2a2d2a;
+  border-radius: var(--r-pill);
+  background: #111311;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+}
+
+.todayWorkoutMeta span:last-child {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayWorkoutProgress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.todayWorkoutProgress > div {
+  height: 0.38rem;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: #292c29;
+}
+
+.todayWorkoutProgress > div span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 0.75rem color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: width 360ms var(--ease);
+}
+
+.todayWorkoutProgress small,
+.todayWorkoutProgress strong {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+}
+
+.todayWorkoutProgress strong {
+  color: var(--accent);
+}
+
+.todayWorkoutAction {
+  min-height: 3.45rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  place-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--primary-contrast);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  box-shadow: 0 0 1.4rem color-mix(in srgb, var(--accent) 22%, transparent);
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.todayWorkoutAction:hover,
+.todayWorkoutAction:focus-visible {
+  filter: brightness(1.06);
+  outline: none;
   transform: translateY(-1px);
 }
 
@@ -1312,16 +1440,38 @@
     gap: var(--s-4);
   }
 
-  .monthSummary {
-    min-height: 3.75rem;
-    gap: 0.48rem;
-    padding-inline: var(--s-3);
-    font-size: clamp(0.68rem, 3.1vw, 0.8rem);
-  }
-
   .eventFilters button {
     min-height: 2.85rem;
     font-size: clamp(0.68rem, 3.25vw, 0.82rem);
+  }
+
+  .todayWorkoutCard {
+    padding: var(--s-3);
+  }
+
+  .todayWorkoutTopline {
+    grid-template-columns: 2.65rem minmax(0, 1fr) auto;
+    gap: var(--s-2);
+  }
+
+  .todayWorkoutIcon {
+    width: 2.65rem;
+    height: 2.65rem;
+  }
+
+  .todayWorkoutTopline time {
+    min-height: 2rem;
+    padding-inline: 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .todayWorkoutStatus {
+    align-items: flex-start;
+    font-size: 0.76rem;
+  }
+
+  .todayWorkoutMeta span {
+    font-size: 0.67rem;
   }
 
   .calendarPanel {
@@ -1419,6 +1569,9 @@
 @media (prefers-reduced-motion: reduce) {
   .ownedCard,
   .eventFilters button,
+  .eventFilterGlider,
+  .todayWorkoutAction,
+  .todayWorkoutProgress > div span,
   .calendarNavButton,
   .calendarDay,
   .calendarEventCard,

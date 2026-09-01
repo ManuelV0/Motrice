@@ -2277,13 +2277,24 @@ const localApi = {
         updated_at: nowIso()
       }
     };
+    const participantXp = awardXp({
+      userId: currentUserId,
+      type: 'event_checkin',
+      pointsGlobal: 25,
+      pointsSport: 0,
+      sportId: event.sport_id || event.sport_name || 'generic',
+      refId: `event_${event.id}_workout_qr_checkin`,
+      meta: { eventId: event.id, source: 'qr' }
+    }, store);
     saveStore(store);
     return withDelay({
       ok: true,
       participant_id: currentUserId,
       cashback_percent: 60,
       checked_in_at: store.participationFlowsByEvent[eventKey].checked_in_at,
-      distance_m: Number(distanceM.toFixed(1))
+      distance_m: Number(distanceM.toFixed(1)),
+      mot_awarded: 5,
+      xp_awarded: Number(participantXp?.event?.points || 0)
     });
   },
 
@@ -2368,6 +2379,112 @@ const localApi = {
       completed_now: completed,
       cashback_percent: next.cashback_percent
     });
+  },
+
+  async startEventGpsCheckIn({ eventId, lat, lng }) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    if (isEventOrganizerForUser(store, event, currentUserId)) {
+      throw new Error('Il check-in GPS partecipante non e disponibile per l organizzatore');
+    }
+    const rsvp = store.rsvps[eventKey];
+    if (!rsvp || !['going', 'completed'].includes(String(rsvp.status || ''))) {
+      throw new Error('Partecipazione non valida');
+    }
+    const distanceM = haversineKm(Number(lat), Number(lng), Number(event.lat), Number(event.lng)) * 1000;
+    if (!Number.isFinite(distanceM) || distanceM > Number(event.geofence_radius_m ?? 250)) {
+      throw new Error(`Sei fuori dall area dell evento (${Math.round(distanceM || 0)} m)`);
+    }
+    const current = store.participationFlowsByEvent?.[eventKey] || {};
+    const checkedInAt = current.checked_in_at || nowIso();
+    store.participationFlowsByEvent = {
+      ...(store.participationFlowsByEvent || {}),
+      [eventKey]: {
+        ...current,
+        verification_source: 'gps',
+        checked_in_at: checkedInAt,
+        cashback_percent: Math.max(60, Number(current.cashback_percent || 0)),
+        sample_count: Math.max(1, Number(current.sample_count || 0)),
+        updated_at: nowIso()
+      }
+    };
+    store.rsvps[eventKey] = {
+      ...rsvp,
+      checked_in_at: checkedInAt,
+      cashback_percent: 60,
+      updated_at: nowIso()
+    };
+    saveStore(store);
+    return withDelay({ ok: true, checked_in_now: !current.checked_in_at, checked_in_at: checkedInAt, mot_awarded: current.checked_in_at ? 0 : 2, cashback_percent: 60 });
+  },
+
+  async startEventWorkout(eventId) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const flow = store.participationFlowsByEvent?.[eventKey] || {};
+    if (!isOrganizer && !event.is_personal && !flow.checked_in_at && Number(flow.cashback_percent || 0) < 60) {
+      throw new Error('Verifica prima la presenza');
+    }
+    const previous = store.workoutSessionsByEvent?.[eventKey] || {};
+    const next = { ...previous, started_at: previous.started_at || nowIso(), role: isOrganizer ? 'organizer' : 'participant', progress_percent: Number(previous.progress_percent || 0) };
+    store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
+    saveStore(store);
+    return withDelay(clone(next));
+  },
+
+  async recordEventWorkoutProgress(eventId, progressPercent) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const current = store.workoutSessionsByEvent?.[eventKey];
+    if (!current?.started_at) throw new Error('Avvia prima l allenamento');
+    const progress = Math.max(Number(current.progress_percent || 0), Math.min(100, Number(progressPercent) || 0));
+    const isGps = String(store.participationFlowsByEvent?.[eventKey]?.verification_source || '') === 'gps';
+    const motAwarded = isGps && progress >= 60 && !current.mot_sixty_awarded ? 3 : 0;
+    const next = { ...current, progress_percent: progress, mot_sixty_awarded: Boolean(current.mot_sixty_awarded || motAwarded) };
+    store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
+    saveStore(store);
+    return withDelay({ ...clone(next), mot_awarded: motAwarded });
+  },
+
+  async completeEventWorkout(eventId) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const current = store.workoutSessionsByEvent?.[eventKey];
+    if (!current?.started_at) throw new Error('Avvia prima l allenamento');
+    if (Number(current.progress_percent || 0) < 100) throw new Error('Completa tutta la scheda prima di terminare');
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const xp = !isOrganizer && !current.xp_completion_awarded ? 25 : 0;
+    if (xp) {
+      awardXp({
+        userId: currentUserId,
+        type: 'event_workout_completed',
+        pointsGlobal: xp,
+        pointsSport: 0,
+        sportId: event.sport_id || 'generic',
+        refId: `event_${event.id}_workout_complete`,
+        meta: { eventId: event.id }
+      }, store);
+    }
+    const completedAt = current.completed_at || nowIso();
+    const next = { ...current, progress_percent: 100, completed_at: completedAt, xp_completion_awarded: Boolean(current.xp_completion_awarded || xp) };
+    store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
+    if (!isOrganizer && store.rsvps[eventKey]) {
+      store.rsvps[eventKey] = { ...store.rsvps[eventKey], status: 'completed', attendance: 'attended', cashback_percent: 100, updated_at: nowIso() };
+      store.participationFlowsByEvent = {
+        ...(store.participationFlowsByEvent || {}),
+        [eventKey]: { ...(store.participationFlowsByEvent?.[eventKey] || {}), cashback_percent: 100, completed_at: completedAt, updated_at: nowIso() }
+      };
+    }
+    saveStore(store);
+    return withDelay({ ...clone(next), xp_awarded: xp });
   },
 
   async listEventValidationStatus(eventId) {

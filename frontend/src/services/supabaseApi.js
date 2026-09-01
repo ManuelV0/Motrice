@@ -431,7 +431,7 @@ async function fetchEvents(filters = {}) {
 
   const { data, error } = await query;
   throwIfError(error);
-  const context = await loadEventContext(client, data);
+  const context = await loadEventContext(client, data, { includeWorkoutPlans: true });
   const authUserId = currentAuthUserId();
   const visibleEvents = (data || []).filter((event) => {
     if (event.visibility !== 'private') return true;
@@ -738,7 +738,12 @@ function createRemoteMethods(localApi) {
         organizer_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null
       });
       throwIfError(error);
-      return data;
+      const alreadyChecked = Boolean(data?.already_checked || data?.status === 'already_checked');
+      return {
+        ...data,
+        xp_awarded: alreadyChecked ? 0 : 25,
+        mot_awarded: alreadyChecked ? 0 : 5
+      };
     },
 
     async issueEventHostQr(eventId) {
@@ -793,6 +798,48 @@ function createRemoteMethods(localApi) {
         sample_lng: Number.isFinite(Number(lng)) && lng !== null ? Number(lng) : null,
         sample_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null,
         sample_speed_mps: Number.isFinite(Number(speedMps)) ? Number(speedMps) : null
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async startEventGpsCheckIn({ eventId, lat, lng, accuracyM = null }) {
+      const client = requireSupabase();
+      await assertProfileVerified('verificare la presenza con la posizione.');
+      const { data, error } = await client.rpc('start_event_gps_checkin', {
+        target_event_id: String(eventId),
+        sample_lat: Number(lat),
+        sample_lng: Number(lng),
+        sample_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async startEventWorkout(eventId) {
+      const client = requireSupabase();
+      await assertProfileVerified('avviare l allenamento.');
+      const { data, error } = await client.rpc('start_event_workout', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async recordEventWorkoutProgress(eventId, progressPercent) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('record_event_workout_progress', {
+        target_event_id: String(eventId),
+        progress_percent_value: Math.max(0, Math.min(100, Number(progressPercent) || 0))
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async completeEventWorkout(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('complete_event_workout', {
+        target_event_id: String(eventId)
       });
       throwIfError(error);
       return data;
@@ -1156,6 +1203,10 @@ export function createSupabaseApi(localApi) {
       checkInToEvent: requireSecureBackend,
       scanEventParticipantQr: requireSecureBackend,
       recordEventPresence: requireSecureBackend,
+      startEventGpsCheckIn: requireSecureBackend,
+      startEventWorkout: requireSecureBackend,
+      recordEventWorkoutProgress: requireSecureBackend,
+      completeEventWorkout: requireSecureBackend,
       submitEventReview: requireSecureBackend,
       finalizeEventOutcomes: requireSecureBackend,
       sendEventGroupMessage: requireSecureBackend

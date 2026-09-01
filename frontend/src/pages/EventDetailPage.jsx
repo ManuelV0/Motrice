@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import {
   AlertTriangle,
@@ -18,6 +18,7 @@ import {
   MapPin,
   MessageCircle,
   Navigation,
+  Play,
   Send,
   Share2,
   ShieldCheck,
@@ -166,6 +167,7 @@ function EventDetailPage() {
     id: String(authSession.authUserId || authSession.userId || '')
   };
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { entitlements } = useBilling();
@@ -242,6 +244,23 @@ function EventDetailPage() {
     setOrganizerCancelOpen(false);
     setOrganizerCancelForm({ reasonCode: '', note: '' });
   }, [event?.id]);
+
+  useEffect(() => {
+    if (!event?.id || !event?.workout_plan || location.hash !== '#workout-plan') return undefined;
+    setWorkoutPlanOpen(true);
+    const timer = window.setTimeout(() => {
+      document.getElementById('workout-plan')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [event?.id, event?.workout_plan, location.hash]);
+
+  useEffect(() => {
+    if (!event?.id || location.hash !== '#verify-presence') return undefined;
+    const timer = window.setTimeout(() => {
+      document.getElementById('verify-presence')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [event?.id, location.hash]);
 
   async function openChatParticipantProfile(identity) {
     const fallback = {
@@ -1313,7 +1332,7 @@ function EventDetailPage() {
           ) : null}
 
           {!event.is_personal && isOrganizerForEvent && !eventIsCancelled ? (
-            <div ref={participationFlowRef} className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
+            <div id="verify-presence" ref={participationFlowRef} className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
               <EventParticipationFlow
                 event={event}
                 isOrganizer
@@ -1328,7 +1347,7 @@ function EventDetailPage() {
           ) : null}
 
           {event.workout_plan ? (
-            <Card as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
+            <Card id="workout-plan" as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
               <button
                 type="button"
                 className={styles.workoutPlanToggle}
@@ -1377,6 +1396,16 @@ function EventDetailPage() {
                         : workoutPlanSaving
                           ? 'Salvataggio...'
                           : 'Salva nelle mie schede'}
+                    </Button>
+                  ) : null}
+                  {(event.is_personal || Number(event?.user_rsvp?.cashback_percent || 0) >= 60 || Boolean(event?.user_rsvp?.checked_in_at) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={Play}
+                      onClick={() => navigate(`/events/${event.id}/workout`)}
+                    >
+                      Avvia allenamento
                     </Button>
                   ) : null}
                 </div>
@@ -1609,7 +1638,7 @@ function EventDetailPage() {
           )}
 
           {!event.is_personal && !isOrganizerForEvent && !eventIsCancelled ? (
-            <div ref={participationFlowRef} className={styles.participationFlowAnchor}>
+            <div id="verify-presence" ref={participationFlowRef} className={styles.participationFlowAnchor}>
               <EventParticipationFlow
                 event={event}
                 isOrganizer={isOrganizerForEvent}

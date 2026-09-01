@@ -86,6 +86,38 @@
   box-shadow: var(--sh-inner);
 }
 
+.verificationChoice {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--glass-border-strong));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.verificationChoice h3,
+.verificationChoice p {
+  margin: 0;
+}
+
+.verificationChoice p {
+  margin-top: var(--s-1);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.verificationChoiceButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+@media (max-width: 460px) {
+  .verificationChoiceButtons {
+    grid-template-columns: 1fr;
+  }
+}
+
 .progressCopy span {
   flex: 0 0 auto;
   color: var(--primary);

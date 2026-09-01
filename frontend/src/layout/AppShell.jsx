@@ -19,7 +19,8 @@ function AppShell({ children }) {
   const isFirstAccessIntro =
     isLandingRoute && authSession.isAuthenticated && !hasCompletedAppIntro(authSession);
   const isVerificationRoute = location.pathname === '/verify-profile';
-  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute;
+  const isWorkoutRoute = /^\/events\/[^/]+\/workout$/.test(location.pathname);
+  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isWorkoutRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -97,7 +98,7 @@ function AppShell({ children }) {
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFullscreenEntryRoute ? 'mainContentStartupAuth' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFullscreenEntryRoute ? 'mainContentStartupAuth' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
@@ -114,7 +115,7 @@ function AppShell({ children }) {
         {children}
       </main>
       {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
-      {!isLandingRoute && !isVerificationRoute && !isMapSurfaceRoute ? <Footer /> : null}
+      {!isFullscreenEntryRoute && !isLandingRoute && !isMapSurfaceRoute ? <Footer /> : null}
       {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>
   );
