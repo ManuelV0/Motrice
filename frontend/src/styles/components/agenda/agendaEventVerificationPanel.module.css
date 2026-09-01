@@ -165,6 +165,35 @@
   opacity: 0.72;
 }
 
+.locationStatus {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #343733;
+  border-radius: 12px;
+  color: #a4a8a1;
+  background: rgba(16, 18, 16, 0.82);
+  font-size: 0.7rem;
+  font-weight: 720;
+  line-height: 1.35;
+}
+
+.locationStatus[data-tone='loading'] {
+  border-color: rgba(255, 255, 255, 0.13);
+  color: #d8dbd5;
+}
+
+.locationStatus[data-tone='success'] {
+  border-color: rgba(198, 255, 0, 0.38);
+  color: #c6ff00;
+  background: rgba(198, 255, 0, 0.07);
+}
+
+.locationStatus[data-tone='error'] {
+  border-color: rgba(255, 96, 96, 0.42);
+  color: #ff9a9a;
+  background: rgba(112, 22, 22, 0.15);
+}
+
 .infoState,
 .gpsState,
 .verifiedState {
@@ -209,6 +238,8 @@
 .verifiedState small { color: #858a82; font-size: 0.7rem; line-height: 1.35; }
 .gpsState .primaryAction,
 .verifiedState button { grid-column: 1 / -1; }
+
+.gpsState .locationStatus { grid-column: 1 / -1; }
 
 .verifiedState button {
   display: flex;

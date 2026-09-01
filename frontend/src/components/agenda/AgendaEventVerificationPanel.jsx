@@ -93,6 +93,7 @@ function AgendaEventVerificationPanel({
   const [busy, setBusy] = useState(false);
   const [verified, setVerified] = useState(false);
   const [organizerLocationVerified, setOrganizerLocationVerified] = useState(false);
+  const [locationFeedback, setLocationFeedback] = useState(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState('');
   const [scanFeedback, setScanFeedback] = useState(null);
@@ -270,9 +271,17 @@ function AgendaEventVerificationPanel({
   async function verifyGps() {
     if (!event?.id || busy) return;
     setBusy(true);
+    setLocationFeedback({ tone: 'loading', message: 'Acquisizione della posizione attuale…' });
     try {
-      const location = coords || await requestLocation();
-      if (!location) throw new Error(locationError || 'Posizione non disponibile.');
+      // La verifica deve usare una rilevazione nuova: la posizione in cache serve
+      // alla mappa, ma non e sufficiente per certificare la presenza all evento.
+      const location = await requestLocation();
+      if (!location) {
+        throw new Error(locationError || 'Attiva la posizione del telefono, autorizza Motrice e riprova.');
+      }
+      if (!Number.isFinite(Number(location.lat)) || !Number.isFinite(Number(location.lng))) {
+        throw new Error('Coordinate non valide. Attiva la posizione precisa e riprova.');
+      }
       const result = isOrganizer
         ? await api.recordEventPresence({
           eventId: event.id,
@@ -287,22 +296,49 @@ function AgendaEventVerificationPanel({
           accuracyM: location.accuracy ?? null
         });
 
+      const eventRadius = Math.max(50, Number(event?.geofence_radius_m || 250));
+      const distance = Number(result?.distance_m);
+      const insideRadius = typeof result?.inside_radius === 'boolean'
+        ? result.inside_radius
+        : !Number.isFinite(distance) || distance <= eventRadius;
+
+      if (!insideRadius) {
+        throw new Error(`Sei fuori dall’area dell’evento (${Math.round(distance || 0)} m, raggio ${eventRadius} m).`);
+      }
+
       if (isOrganizer) {
-        if (!result?.inside_radius) {
-          throw new Error(`Sei fuori dall’area dell’evento (${Math.round(Number(result?.distance_m || 0))} m).`);
-        }
         setOrganizerLocationVerified(true);
-        showToast('Posizione organizer verificata', 'success');
+        setLocationFeedback({
+          tone: 'success',
+          message: Number.isFinite(distance)
+            ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
+            : 'Posizione confermata nell’area dell’evento.'
+        });
+        showToast('Geolocalizzazione confermata · allenamento sbloccato', 'success');
         playFeedback(true);
+        await notifyVerified();
         return;
       }
 
-      setProgress((current) => ({ ...current, ...result, cashback_percent: Math.max(60, Number(result?.cashback_percent || 0)) }));
-      showToast(`Presenza verificata · +${Number(result?.mot_awarded || 2)} MOT`, 'success');
+      setProgress((current) => ({
+        ...current,
+        ...result,
+        checked_in_at: result?.checked_in_at || current?.checked_in_at || new Date().toISOString(),
+        cashback_percent: Math.max(60, Number(result?.cashback_percent || 0))
+      }));
+      setLocationFeedback({
+        tone: 'success',
+        message: Number.isFinite(distance)
+          ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
+          : 'Posizione confermata nell’area dell’evento.'
+      });
+      showToast(`Presenza verificata · +${Number(result?.mot_awarded || 2)} MOT · allenamento sbloccato`, 'success');
       playFeedback(true);
       await notifyVerified();
     } catch (error) {
-      showToast(error?.message || 'Verifica posizione non riuscita', 'error');
+      const message = error?.message || 'Verifica posizione non riuscita';
+      setLocationFeedback({ tone: 'error', message });
+      showToast(message, 'error');
       playFeedback(false);
     } finally {
       setBusy(false);
@@ -316,7 +352,7 @@ function AgendaEventVerificationPanel({
     setScannerCycle((cycle) => cycle + 1);
   }
 
-  const panelVerified = verified || Boolean(progress?.checked_in_at) || Number(progress?.cashback_percent || 0) >= 60;
+  const panelVerified = verified || organizerLocationVerified || Boolean(progress?.checked_in_at) || Number(progress?.cashback_percent || 0) >= 60;
 
   return (
     <section className={`${styles.panel} ${panelVerified ? styles.panelVerified : ''}`} aria-label="Verifica presenza evento">
@@ -357,12 +393,15 @@ function AgendaEventVerificationPanel({
             >
               {organizerLocationVerified ? <CheckCircle2 size={21} /> : <LocateFixed size={21} />}
               <span>
-                <strong>{organizerLocationVerified ? 'Posizione verificata' : 'Utilizza geolocalizzazione'}</strong>
+                <strong>{organizerLocationVerified ? 'Posizione verificata' : 'Conferma geolocalizzazione'}</strong>
                 <small>{organizerLocationVerified
                   ? 'La tua presenza nell’area evento è attiva'
-                  : 'Conferma la tua presenza nell’area evento'}</small>
+                  : 'Verifica la distanza dal punto dell’evento'}</small>
               </span>
             </button>
+          ) : null}
+          {locationFeedback ? (
+            <p className={styles.locationStatus} data-tone={locationFeedback.tone}>{locationFeedback.message}</p>
           ) : null}
           {!usesQr && !usesGeo ? (
             <div className={styles.infoState}><LocateFixed size={20} /><span>Nessun metodo di verifica disponibile.</span></div>
@@ -377,9 +416,12 @@ function AgendaEventVerificationPanel({
                 <strong>Mostra QR Code</strong>
                 <small>+5 MOT · +25 XP</small>
               </button>
-              <button type="button" onClick={() => setMethod('geo')}>
+              <button type="button" onClick={() => {
+                setMethod('geo');
+                verifyGps();
+              }} disabled={busy || requesting}>
                 <LocateFixed size={24} />
-                <strong>Verifica posizione</strong>
+                <strong>Conferma geolocalizzazione</strong>
                 <small>+2 MOT iniziali</small>
               </button>
             </div>
@@ -402,8 +444,11 @@ function AgendaEventVerificationPanel({
               <span aria-hidden="true"><LocateFixed size={26} /></span>
               <div><strong>Verifica nell’area evento</strong><small>Il telefono controllerà la distanza dal punto dell’attività.</small></div>
               <button type="button" className={styles.primaryAction} onClick={verifyGps} disabled={busy || requesting}>
-                <LocateFixed size={19} /> {busy || requesting ? 'Verifica in corso…' : 'Verifica posizione'}
+                <LocateFixed size={19} /> {busy || requesting ? 'Verifica in corso…' : 'Conferma geolocalizzazione'}
               </button>
+              {locationFeedback ? (
+                <p className={styles.locationStatus} data-tone={locationFeedback.tone}>{locationFeedback.message}</p>
+              ) : null}
             </div>
           ) : null}
 

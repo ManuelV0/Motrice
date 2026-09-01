@@ -13,7 +13,12 @@ function readCachedLocation() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.lat !== 'number' || typeof parsed.lng !== 'number') return null;
     if (!parsed.updatedAt || Date.now() - Number(parsed.updatedAt) > CACHE_TTL_MS) return null;
-    return { lat: parsed.lat, lng: parsed.lng, updatedAt: parsed.updatedAt };
+    return {
+      lat: parsed.lat,
+      lng: parsed.lng,
+      accuracy: Number.isFinite(Number(parsed.accuracy)) ? Number(parsed.accuracy) : null,
+      updatedAt: parsed.updatedAt
+    };
   } catch {
     return null;
   }
@@ -26,6 +31,7 @@ function writeCachedLocation(coords) {
       JSON.stringify({
         lat: Number(coords.lat),
         lng: Number(coords.lng),
+        accuracy: Number.isFinite(Number(coords.accuracy)) ? Number(coords.accuracy) : null,
         updatedAt: Date.now()
       })
     );
@@ -64,7 +70,11 @@ function normalizeError(error) {
 function useUserLocation() {
   const isNative = Capacitor.isNativePlatform();
   const cached = readCachedLocation();
-  const [coords, setCoords] = useState(cached ? { lat: cached.lat, lng: cached.lng } : null);
+  const [coords, setCoords] = useState(cached ? {
+    lat: cached.lat,
+    lng: cached.lng,
+    accuracy: cached.accuracy
+  } : null);
   const [permission, setPermission] = useState(cached ? 'granted' : 'prompt');
   const [error, setError] = useState('');
   const [requesting, setRequesting] = useState(false);
@@ -146,7 +156,7 @@ function useUserLocation() {
         position = await Geolocation.getCurrentPosition({
           enableHighAccuracy: true,
           timeout: 15000,
-          maximumAge: 1000 * 60,
+          maximumAge: 0,
           enableLocationFallback: true
         });
       } else {
@@ -154,14 +164,17 @@ function useUserLocation() {
           navigator.geolocation.getCurrentPosition(resolve, reject, {
             enableHighAccuracy: true,
             timeout: 15000,
-            maximumAge: 1000 * 60
+            maximumAge: 0
           });
         });
       }
 
       const nextCoords = {
         lat: Number(position.coords.latitude),
-        lng: Number(position.coords.longitude)
+        lng: Number(position.coords.longitude),
+        accuracy: Number.isFinite(Number(position.coords.accuracy))
+          ? Number(position.coords.accuracy)
+          : null
       };
 
       setCoords(nextCoords);

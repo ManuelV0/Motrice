@@ -111,14 +111,15 @@ function WorkoutSessionPage() {
         const exercises = normalizeWorkoutExercises(eventResult?.workout_plan?.exercises);
         if (!exercises.length) throw new Error('Questo evento non contiene una scheda allenamento.');
         const checkedParticipants = Math.max(0, Number(eventResult?.participants_checked_in_count || 0));
+        const organizerLocationVerified = Boolean(progress?.organizer_present);
         const participantVerified = Boolean(
           eventResult?.is_personal ||
           progress?.checked_in_at ||
           Number(progress?.cashback_percent || eventResult?.user_rsvp?.cashback_percent || 0) >= 60
         );
-        if (!participantVerified && !(organizer && checkedParticipants > 0)) {
+        if (!participantVerified && !(organizer && (checkedParticipants > 0 || organizerLocationVerified))) {
           throw new Error(organizer
-            ? 'Scannerizza prima il QR di almeno un partecipante.'
+            ? 'Scannerizza il QR di un partecipante oppure conferma la geolocalizzazione.'
             : 'Verifica prima la presenza con QR Code o posizione.');
         }
         const remoteSession = await api.startEventWorkout(id);

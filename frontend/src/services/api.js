@@ -2427,6 +2427,10 @@ const localApi = {
     const eventKey = String(event.id);
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
     const flow = store.participationFlowsByEvent?.[eventKey] || {};
+    const hasParticipantCheckIn = Object.keys(store.checkinRecordsByEvent?.[eventKey] || {}).length > 0;
+    if (isOrganizer && !event.is_personal && !flow.organizer_present && !hasParticipantCheckIn) {
+      throw new Error('Scannerizza il QR di un partecipante oppure conferma la geolocalizzazione');
+    }
     if (!isOrganizer && !event.is_personal && !flow.checked_in_at && Number(flow.cashback_percent || 0) < 60) {
       throw new Error('Verifica prima la presenza');
     }
