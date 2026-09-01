@@ -43,6 +43,7 @@ import VerifiedProfileRoute from './components/VerifiedProfileRoute';
 import AdminProfileVerificationsPage from './pages/AdminProfileVerificationsPage';
 import AdminVerificationRoute from './components/AdminVerificationRoute';
 import WorkoutSessionPage from './pages/WorkoutSessionPage';
+import ExerciseProgressPage from './pages/ExerciseProgressPage';
 
 const GameMapPage = lazy(() => import('./features/game/pages/GameMapPage'));
 const EXPLORE_SECTION_ENABLED = false;
@@ -64,6 +65,7 @@ function App() {
           <Route path="/tutorial" element={<TutorialPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
           <Route path="/events/:id/workout" element={<WorkoutSessionPage />} />
+          <Route path="/dashboard/progress" element={<ExerciseProgressPage />} />
           <Route path="/create" element={<VerifiedProfileRoute><CreateEventPage /></VerifiedProfileRoute>} />
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />

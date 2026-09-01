@@ -13,6 +13,7 @@ import {
   LogIn,
   LogOut,
   ShieldCheck,
+  TrendingUp,
   X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
@@ -39,7 +40,8 @@ const drawerSections = [
     title: 'La tua attività',
     items: [
       { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays }
+      { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays },
+      { to: '/dashboard/progress', label: 'Progressi esercizi', icon: TrendingUp }
     ]
   },
   {

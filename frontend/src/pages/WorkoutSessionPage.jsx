@@ -23,6 +23,7 @@ import { useToast } from '../context/ToastContext';
 import {
   createWorkoutSession,
   normalizeWorkoutExercises,
+  recordWorkoutSet,
   saveWorkoutSession
 } from '../features/workout/services/workoutSessionStore';
 import styles from '../styles/pages/workoutSession.module.css';
@@ -194,17 +195,57 @@ function WorkoutSessionPage() {
     return () => { active = false; };
   }, [id, session, showToast, totals.percent]);
 
+  function getExerciseLoad(exercise) {
+    const savedLoad = session?.exerciseLoads?.[exercise.id];
+    const parsed = Number(savedLoad ?? exercise.weight ?? 0);
+    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+  }
+
+  function updateExerciseLoad(exercise, value) {
+    if (!session || session.completedAt) return;
+    const normalized = Math.max(0, Number(String(value).replace(',', '.')) || 0);
+    const next = {
+      ...session,
+      exerciseLoads: {
+        ...(session.exerciseLoads || {}),
+        [exercise.id]: normalized
+      }
+    };
+    setSession(saveWorkoutSession(id, next));
+  }
+
   function completeSet(exercise) {
     if (!session || session.completedAt) return;
     const current = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
     if (current >= exercise.sets) return;
+    const completedNow = current + 1;
+    const exerciseIndex = exercises.findIndex((item) => item.id === exercise.id);
+    const nextExercise = exercises[exerciseIndex + 1];
+    const nextExerciseId = completedNow >= exercise.sets && nextExercise ? nextExercise.id : exercise.id;
+    const loadKg = getExerciseLoad(exercise);
+    const completedLoads = Array.isArray(session.completedSetLoads?.[exercise.id])
+      ? [...session.completedSetLoads[exercise.id]]
+      : [];
+    completedLoads[current] = loadKg;
     const next = {
       ...session,
-      currentExerciseId: exercise.id,
-      completedSets: { ...session.completedSets, [exercise.id]: current + 1 }
+      currentExerciseId: nextExerciseId,
+      completedSets: { ...session.completedSets, [exercise.id]: completedNow },
+      completedSetLoads: {
+        ...(session.completedSetLoads || {}),
+        [exercise.id]: completedLoads
+      }
     };
     setSession(saveWorkoutSession(id, next));
-    if (exercise.recovery > 0 && current + 1 < exercise.sets) {
+    recordWorkoutSet({
+      eventId: id,
+      exercise,
+      setNumber: completedNow,
+      weightKg: loadKg,
+      reps: exercise.reps
+    });
+    setOpenExerciseId(nextExerciseId);
+    if (exercise.recovery > 0 && completedNow < exercise.sets) {
       setRestTimer({ exerciseId: exercise.id, remaining: exercise.recovery, running: true });
     }
     if (navigator.vibrate) navigator.vibrate(45);
@@ -269,6 +310,96 @@ function WorkoutSessionPage() {
   const verificationMode = String(event.verification_mode || 'both');
   const qrVerified = verificationMode !== 'geo' && Boolean(participation?.checked_in_at || organizer);
   const restExercise = exercises.find((exercise) => exercise.id === restTimer.exerciseId);
+  const firstIncompleteExerciseIndex = exercises.findIndex((exercise) => (
+    Number(session.completedSets?.[exercise.id] || 0) < exercise.sets
+  ));
+  const currentExerciseIndex = firstIncompleteExerciseIndex >= 0
+    ? firstIncompleteExerciseIndex
+    : Math.max(0, exercises.length - 1);
+  const currentExercise = exercises[currentExerciseIndex] || exercises[0];
+  const queuedExercises = exercises
+    .map((exercise, index) => ({ exercise, index }))
+    .filter(({ exercise }) => exercise.id !== currentExercise?.id);
+
+  function renderExerciseCard(exercise, index, featured = false) {
+    const completed = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
+    const isComplete = completed === exercise.sets;
+    const open = featured || openExerciseId === exercise.id;
+
+    return (
+      <article
+        key={exercise.id}
+        className={`${styles.exerciseCard} ${featured ? styles.exerciseCurrent : ''} ${isComplete ? styles.exerciseComplete : ''}`}
+      >
+        <button
+          type="button"
+          className={styles.exerciseSummary}
+          onClick={() => setOpenExerciseId(open && !featured ? '' : exercise.id)}
+          aria-expanded={open}
+        >
+          <span className={styles.exerciseIndex}>{isComplete ? <Check size={18} /> : String(index + 1).padStart(2, '0')}</span>
+          <div>
+            <small className={styles.exerciseState}>{featured && !isComplete ? 'IN CORSO' : isComplete ? 'COMPLETATO' : `ESERCIZIO ${index + 1}`}</small>
+            <strong>{exercise.name}</strong>
+            <small>{exercise.sets} × {exercise.reps}{getExerciseLoad(exercise) ? ` · ${getExerciseLoad(exercise)} kg` : ' · Corpo libero'}</small>
+          </div>
+          <span className={styles.setCounter}>{completed}/{exercise.sets}</span>
+          <ChevronDown className={open ? styles.chevronOpen : ''} />
+        </button>
+        {open ? (
+          <div className={styles.exerciseDetails}>
+            <div className={styles.exerciseMetrics}>
+              <span><small>SERIE</small><strong>{exercise.sets}</strong></span>
+              <span><small>RIPETIZIONI</small><strong>{exercise.reps}</strong></span>
+              <span><small>CARICO</small><strong>{getExerciseLoad(exercise) ? `${getExerciseLoad(exercise)} kg` : 'Corpo libero'}</strong></span>
+              <span><small>RIR</small><strong>{exercise.rir}</strong></span>
+              <span><small>RECUPERO</small><strong>{exercise.recovery ? `${exercise.recovery}s` : '—'}</strong></span>
+            </div>
+            <label className={styles.loadEditor}>
+              <span>
+                <small>CARICO DELLA PROSSIMA SERIE</small>
+                <strong>Modificalo prima di completare la serie</strong>
+              </span>
+              <span className={styles.loadInput}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  inputMode="decimal"
+                  value={getExerciseLoad(exercise)}
+                  onChange={(eventChange) => updateExerciseLoad(exercise, eventChange.target.value)}
+                  disabled={Boolean(session.completedAt) || isComplete}
+                  aria-label={`Carico ${exercise.name} in chilogrammi`}
+                />
+                <b>kg</b>
+              </span>
+            </label>
+            <div className={styles.setProgressLabel}>
+              <span>PROGRESSO SERIE</span>
+              <strong>{completed} di {exercise.sets}</strong>
+            </div>
+            <div className={styles.setDots}>
+              {Array.from({ length: exercise.sets }, (_, setIndex) => (
+                <button
+                  key={`${exercise.id}-set-${setIndex + 1}`}
+                  type="button"
+                  className={setIndex < completed ? styles.setDone : undefined}
+                  onClick={() => setIndex === completed && completeSet(exercise)}
+                  disabled={setIndex > completed || Boolean(session.completedAt)}
+                  aria-label={`Serie ${setIndex + 1} ${setIndex < completed ? 'completata' : ''}`}
+                >{setIndex < completed ? <Check size={18} /> : setIndex + 1}</button>
+              ))}
+            </div>
+            {completed < exercise.sets ? (
+              <button type="button" className={styles.completeSetButton} onClick={() => completeSet(exercise)} disabled={Boolean(session.completedAt)}>
+                <CheckCircle2 size={19} /> Completa serie {completed + 1}
+              </button>
+            ) : <p className={styles.exerciseDoneLabel}><CheckCircle2 size={18} /> Esercizio completato</p>}
+          </div>
+        ) : null}
+      </article>
+    );
+  }
 
   return (
     <section className={styles.page}>
@@ -289,61 +420,42 @@ function WorkoutSessionPage() {
             <span><Clock3 size={15} /> {event.workout_plan?.duration || event.duration_minutes || 60} min</span>
             <span><Gauge size={15} /> {event.workout_plan?.level || 'Livello libero'}</span>
           </div>
-          <div className={styles.progressHeading}><span>{totals.completedSets}/{totals.totalSets} serie</span><strong>{totals.percent}%</strong></div>
-          <div className={styles.progress}><span style={{ width: `${totals.percent}%` }} /></div>
-          <div className={styles.rewardLine}>
-            <span className={qrVerified ? styles.rewardReached : undefined}>{qrVerified ? <Check /> : null}{qrVerified ? '+5 MOT · +25 XP QR' : '+2 MOT posizione'}</span>
-            <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>{session.sixtyPercentAwarded ? <Check /> : null}+3 MOT al 60%</span>
-            <span className={session.completionAwarded ? styles.rewardReached : undefined}>{session.completionAwarded ? <Check /> : null}+25 XP fine</span>
+          <div className={styles.progressPanel}>
+            <div className={styles.progressHeading}>
+              <div><small>PROGRESSO SESSIONE</small><span>{totals.completedSets} di {totals.totalSets} serie</span></div>
+              <strong>{totals.percent}%</strong>
+            </div>
+            <div className={styles.progress}><span style={{ width: `${totals.percent}%` }} /></div>
+          </div>
+          <div className={styles.rewardTimeline} aria-label="Ricompense allenamento">
+            <span className={qrVerified ? styles.rewardReached : undefined}>
+              <i>{qrVerified ? <Check size={14} /> : '1'}</i><b>Verifica</b><small>{qrVerified ? '+5 MOT · +25 XP' : '+2 MOT posizione'}</small>
+            </span>
+            <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>
+              <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>60% scheda</b><small>+3 MOT</small>
+            </span>
+            <span className={session.completionAwarded ? styles.rewardReached : undefined}>
+              <i>{session.completionAwarded ? <Check size={14} /> : '3'}</i><b>Conclusione</b><small>+25 XP</small>
+            </span>
           </div>
         </section>
 
         <section className={styles.exerciseSection}>
-          <div className={styles.sectionHeading}><div><small>SCHEDA PREIMPOSTATA</small><h2>Esercizi</h2></div><strong>{exercises.length}</strong></div>
-          <div className={styles.exerciseList}>
-            {exercises.map((exercise, index) => {
-              const completed = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
-              const open = openExerciseId === exercise.id;
-              return (
-                <article key={exercise.id} className={`${styles.exerciseCard} ${completed === exercise.sets ? styles.exerciseComplete : ''}`}>
-                  <button type="button" className={styles.exerciseSummary} onClick={() => setOpenExerciseId(open ? '' : exercise.id)}>
-                    <span className={styles.exerciseIndex}>{String(index + 1).padStart(2, '0')}</span>
-                    <div><strong>{exercise.name}</strong><small>{exercise.sets} × {exercise.reps}{exercise.weight ? ` · ${exercise.weight} kg` : ''}</small></div>
-                    <span className={styles.setCounter}>{completed}/{exercise.sets}</span>
-                    <ChevronDown className={open ? styles.chevronOpen : ''} />
-                  </button>
-                  {open ? (
-                    <div className={styles.exerciseDetails}>
-                      <div className={styles.exerciseMetrics}>
-                        <span><small>SERIE</small><strong>{exercise.sets}</strong></span>
-                        <span><small>RIP.</small><strong>{exercise.reps}</strong></span>
-                        <span><small>CARICO</small><strong>{exercise.weight ? `${exercise.weight} kg` : 'Corpo libero'}</strong></span>
-                        <span><small>RIR</small><strong>{exercise.rir}</strong></span>
-                        <span><small>RECUPERO</small><strong>{exercise.recovery ? `${exercise.recovery}s` : '—'}</strong></span>
-                      </div>
-                      <div className={styles.setDots}>
-                        {Array.from({ length: exercise.sets }, (_, setIndex) => (
-                          <button
-                            key={`${exercise.id}-set-${setIndex + 1}`}
-                            type="button"
-                            className={setIndex < completed ? styles.setDone : undefined}
-                            onClick={() => setIndex === completed && completeSet(exercise)}
-                            disabled={setIndex > completed || Boolean(session.completedAt)}
-                            aria-label={`Serie ${setIndex + 1} ${setIndex < completed ? 'completata' : ''}`}
-                          >{setIndex < completed ? <Check size={18} /> : setIndex + 1}</button>
-                        ))}
-                      </div>
-                      {completed < exercise.sets ? (
-                        <button type="button" className={styles.completeSetButton} onClick={() => completeSet(exercise)} disabled={Boolean(session.completedAt)}>
-                          <CheckCircle2 size={19} /> Completa serie {completed + 1}
-                        </button>
-                      ) : <p className={styles.exerciseDoneLabel}><CheckCircle2 size={18} /> Esercizio completato</p>}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
+          <div className={styles.sectionHeading}>
+            <div><small>ESERCIZIO ATTUALE</small><h2>{currentExercise?.name || 'Scheda completata'}</h2></div>
+            <strong>{Math.min(currentExerciseIndex + 1, exercises.length)}/{exercises.length}</strong>
           </div>
+          <div className={styles.exerciseList}>
+            {currentExercise ? renderExerciseCard(currentExercise, currentExerciseIndex, true) : null}
+          </div>
+          {queuedExercises.length ? (
+            <div className={styles.exerciseQueue}>
+              <div><span>SCALLETTA ESERCIZI</span><small>{queuedExercises.length} rimanenti e completati</small></div>
+              <div className={styles.exerciseList}>
+                {queuedExercises.map(({ exercise, index }) => renderExerciseCard(exercise, index))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         {session.completedAt ? (
