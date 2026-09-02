@@ -6,6 +6,7 @@ import { ToastProvider } from './context/ToastContext';
 import { BillingProvider } from './context/BillingContext';
 import RootErrorBoundary from './components/RootErrorBoundary';
 import { initializeSupabaseAuth } from './services/authSession';
+import { initializeProfileVerificationCamera } from './services/profileVerificationCamera';
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
@@ -17,6 +18,9 @@ function bootstrapTheme() {
 bootstrapTheme();
 initializeSupabaseAuth().catch(() => {
   // La pagina di login mostrera l'errore se Supabase non e raggiungibile.
+});
+initializeProfileVerificationCamera().catch(() => {
+  // La verifica mantiene disponibile il fallback galleria.
 });
 window.__MOTRICE_BOOT_OK__ = true;
 

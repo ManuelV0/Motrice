@@ -403,6 +403,11 @@
   font-weight: 800;
 }
 
+.photoActions button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
 .photoActions .primarySmall {
   border-color: #c6ff00;
   color: #0e0e0e;
@@ -426,6 +431,22 @@
 }
 
 .continueHint svg { flex: 0 0 auto; }
+
+.cameraIssue {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin: 0.72rem 0 0;
+  padding: 0.72rem 0.78rem;
+  border: 1px solid rgb(255 138 43 / 42%);
+  border-radius: 0.9rem;
+  color: #ffad6a;
+  background: rgb(255 138 43 / 9%);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.cameraIssue svg { flex: 0 0 auto; }
 
 .gesture {
   display: flex;

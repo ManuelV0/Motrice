@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   UserRound
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -30,6 +31,12 @@ import {
   markProfileVerificationOnboardingSeen,
   submitProfileVerification
 } from '../services/profileVerification';
+import {
+  cameraResultToFile,
+  captureProfileVerificationPhoto,
+  consumeRestoredProfileCameraCapture,
+  profileCameraRestoredEvent
+} from '../services/profileVerificationCamera';
 import styles from '../styles/pages/profileVerification.module.css';
 
 const CHALLENGES = [
@@ -114,6 +121,8 @@ function ProfileVerificationPage() {
   const challengeInputRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState('');
+  const [cameraIssue, setCameraIssue] = useState('');
   const [step, setStep] = useState(0);
   const [summary, setSummary] = useState({ status: 'unverified', rejection_reason: '' });
   const [profilePhoto, setProfilePhoto] = useState(null);
@@ -189,6 +198,40 @@ function ProfileVerificationPage() {
     if (challengePreview.startsWith('blob:')) URL.revokeObjectURL(challengePreview);
   }, [challengePreview]);
 
+  useEffect(() => {
+    let active = true;
+
+    async function restoreCapture(payload) {
+      if (!active || !payload) return;
+      if (payload.error || !payload.result) {
+        setCameraIssue(payload.error || 'La fotocamera è stata interrotta. Riprova.');
+        return;
+      }
+      try {
+        const file = await cameraResultToFile(payload.result, payload.kind);
+        if (!active) return;
+        choosePhoto(payload.kind, file);
+        setStep(payload.kind === 'challenge' ? 3 : 2);
+        setCameraIssue('');
+        showToast('Foto recuperata correttamente', 'success');
+      } catch (error) {
+        if (active) setCameraIssue(error.message || 'Impossibile recuperare la foto. Riprova.');
+      }
+    }
+
+    const restored = consumeRestoredProfileCameraCapture();
+    if (restored) restoreCapture(restored);
+    const handleRestored = (event) => {
+      consumeRestoredProfileCameraCapture();
+      restoreCapture(event.detail);
+    };
+    window.addEventListener(profileCameraRestoredEvent, handleRestored);
+    return () => {
+      active = false;
+      window.removeEventListener(profileCameraRestoredEvent, handleRestored);
+    };
+  }, [showToast]);
+
   const canAdvance = useMemo(() => {
     if (step === 1) {
       return form.firstName.trim().length >= 2
@@ -224,6 +267,7 @@ function ProfileVerificationPage() {
       showToast('La foto non può superare 8 MB', 'error');
       return;
     }
+    setCameraIssue('');
     const preview = URL.createObjectURL(file);
     if (kind === 'profile') {
       setProfilePhoto(file);
@@ -231,6 +275,28 @@ function ProfileVerificationPage() {
     } else {
       setChallengePhoto(file);
       setChallengePreview(preview);
+    }
+  }
+
+  async function openCamera(kind, fallbackInputRef) {
+    if (cameraBusy) return;
+    const isNative = Capacitor.isNativePlatform();
+    setCameraBusy(kind);
+    setCameraIssue('');
+    try {
+      const file = await captureProfileVerificationPhoto(kind);
+      if (file) {
+        choosePhoto(kind, file);
+        showToast('Foto acquisita', 'success');
+      } else if (!isNative) {
+        fallbackInputRef.current?.click();
+      }
+    } catch (error) {
+      const message = error.message || 'Fotocamera non disponibile. Usa la galleria.';
+      setCameraIssue(message);
+      showToast(message, 'error');
+    } finally {
+      setCameraBusy('');
     }
   }
 
@@ -367,12 +433,13 @@ function ProfileVerificationPage() {
                 {profilePreview ? <img src={profilePreview} alt="Anteprima foto profilo" /> : <span className={styles.silhouette}><UserRound size={62} /></span>}
                 {profilePreview ? <span className={styles.captureOk}><Check size={18} /> Foto acquisita</span> : <small>Inquadra viso e spalle</small>}
               </div>
-              <input ref={profileInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => choosePhoto('profile', event.target.files?.[0])} />
-              <input ref={profileGalleryInputRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={(event) => choosePhoto('profile', event.target.files?.[0])} />
+              <input ref={profileInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
+              <input ref={profileGalleryInputRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
               <div className={styles.photoActions}>
-                <button type="button" className={styles.primarySmall} onClick={() => profileInputRef.current?.click()}><Camera size={18} /> Scatta foto</button>
+                <button type="button" className={styles.primarySmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('profile', profileInputRef)}><Camera size={18} /> {cameraBusy === 'profile' ? 'Apertura...' : 'Scatta foto'}</button>
                 <button type="button" onClick={() => profileGalleryInputRef.current?.click()}><ImagePlus size={18} /> Galleria</button>
               </div>
+              {cameraIssue ? <p className={styles.cameraIssue} role="alert"><Info size={17} /> {cameraIssue}</p> : null}
             </>
           ) : null}
 
@@ -391,9 +458,10 @@ function ProfileVerificationPage() {
               </div>
               <input ref={challengeInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('challenge', event.target.files?.[0]); event.target.value = ''; }} />
               <div className={styles.photoActions}>
-                <button type="button" className={styles.orangeSmall} onClick={() => challengeInputRef.current?.click()}><Camera size={18} /> Scatta challenge</button>
+                <button type="button" className={styles.orangeSmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('challenge', challengeInputRef)}><Camera size={18} /> {cameraBusy === 'challenge' ? 'Apertura...' : 'Scatta challenge'}</button>
                 <button type="button" onClick={() => { setChallengePhoto(null); setChallengePreview(''); setChallengeIndex((current) => (current + 1) % CHALLENGES.length); }}><RefreshCw size={18} /> Cambia gesto</button>
               </div>
+              {cameraIssue ? <p className={styles.cameraIssue} role="alert"><Info size={17} /> {cameraIssue}</p> : null}
               {challengePhoto ? <p className={styles.continueHint} role="status"><CheckCircle2 size={17} /> Foto acquisita. Premi “Avanti” per il controllo finale.</p> : null}
               <p className={styles.note}><Shield size={16} /> Foto privata, accessibile solo ai revisori autorizzati.</p>
             </>
