@@ -30,6 +30,18 @@ Il frontend deve ricevere soltanto `VITE_SUPABASE_URL` e
 `VITE_SUPABASE_PUBLISHABLE_KEY`. Non usare mai una secret key o `service_role`
 nel browser o nell'APK.
 
+## Callback autenticazione Android
+
+Google OAuth e la conferma email usano lo stesso callback nativo:
+
+```text
+com.motrice.app://login-callback
+```
+
+In `Supabase > Authentication > URL Configuration > Redirect URLs` questo URL
+deve essere presente. In questo modo il link di conferma ricevuto via email
+riapre Motrice e completa automaticamente la sessione nell'app Android.
+
 ## Accesso Google
 
 L'app usa Supabase Auth con OAuth PKCE. Per attivare `Continua con Google`:
@@ -38,7 +50,7 @@ L'app usa Supabase Auth con OAuth PKCE. Per attivare `Continua con Google`:
 2. Inserisci come URI di reindirizzamento autorizzato il callback mostrato in
    `Supabase > Authentication > Sign In / Providers > Google`.
 3. Copia Client ID e Client Secret nel provider Google di Supabase e abilitalo.
-4. In `Supabase > Authentication > URL Configuration > Redirect URLs` aggiungi:
+4. Verifica che in `Supabase > Authentication > URL Configuration > Redirect URLs` sia presente:
 
 ```text
 com.motrice.app://login-callback

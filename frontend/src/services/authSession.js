@@ -5,7 +5,9 @@ import { isSupabaseConfigured, requireSupabase, supabase } from './supabaseClien
 const STORAGE_KEY = 'motrice_auth_session_v1';
 const OPERATIONAL_STORE_KEY = 'motrice_operational_store_v2';
 const LOGOUT_REASON_KEY = 'motrice_auth_logout_reason_v1';
-const NATIVE_GOOGLE_REDIRECT_URL = 'com.motrice.app://login-callback';
+// Un solo callback nativo per tutti i flussi Supabase (Google e conferma email).
+// Android intercetta questo URL tramite l'intent-filter definito nel manifest.
+const NATIVE_AUTH_REDIRECT_URL = 'com.motrice.app://login-callback';
 const providerUserMap = {
   google: 1,
   facebook: 2
@@ -196,8 +198,14 @@ function applySupabaseSession(session) {
   });
 }
 
-function isNativeGoogleCallback(url) {
-  return String(url || '').startsWith(NATIVE_GOOGLE_REDIRECT_URL);
+function getAuthRedirectUrl() {
+  if (Capacitor.isNativePlatform()) return NATIVE_AUTH_REDIRECT_URL;
+  if (typeof window === 'undefined') return undefined;
+  return new URL('/login', window.location.origin).toString();
+}
+
+function isNativeAuthCallback(url) {
+  return String(url || '').startsWith(NATIVE_AUTH_REDIRECT_URL);
 }
 
 function readOAuthCallbackParams(url) {
@@ -235,13 +243,13 @@ async function closeNativeAuthBrowser() {
   }
 }
 
-async function handleNativeGoogleCallback(url) {
-  if (!isNativeGoogleCallback(url)) return null;
+async function handleNativeAuthCallback(url) {
+  if (!isNativeAuthCallback(url)) return null;
 
   try {
     const { code, error: callbackError } = readOAuthCallbackParams(url);
     if (callbackError) throw new Error(callbackError);
-    if (!code) throw new Error('Google non ha restituito un codice di accesso valido.');
+    if (!code) throw new Error('Il link di conferma non contiene un codice di accesso valido.');
 
     const client = requireSupabase();
     const { data, error } = await client.auth.exchangeCodeForSession(code);
@@ -267,11 +275,11 @@ async function ensureNativeAuthReady() {
 
     if (!nativeAuthAppListener) {
       nativeAuthAppListener = await App.addListener('appUrlOpen', ({ url }) => {
-        handleNativeGoogleCallback(url).catch((error) => {
+        handleNativeAuthCallback(url).catch((error) => {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(
               new CustomEvent('motrice-auth-error', {
-                detail: error?.message || 'Accesso con Google non riuscito'
+                detail: error?.message || 'Conferma dell account non riuscita'
               })
             );
           }
@@ -282,8 +290,8 @@ async function ensureNativeAuthReady() {
     if (!nativeLaunchUrlChecked) {
       nativeLaunchUrlChecked = true;
       const launch = await App.getLaunchUrl();
-      if (isNativeGoogleCallback(launch?.url)) {
-        await handleNativeGoogleCallback(launch.url);
+      if (isNativeAuthCallback(launch?.url)) {
+        await handleNativeAuthCallback(launch.url);
       }
     }
   })();
@@ -321,7 +329,7 @@ export async function signInWithGoogle() {
   const client = requireSupabase();
 
   if (!Capacitor.isNativePlatform()) {
-    const redirectTo = new URL('/login', window.location.origin).toString();
+    const redirectTo = getAuthRedirectUrl();
     const { data, error } = await client.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -343,7 +351,7 @@ export async function signInWithGoogle() {
   const { data, error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: NATIVE_GOOGLE_REDIRECT_URL,
+      redirectTo: NATIVE_AUTH_REDIRECT_URL,
       skipBrowserRedirect: true,
       queryParams: {
         prompt: 'select_account'
@@ -379,6 +387,7 @@ export async function signUpWithPassword({ email, password, displayName }) {
     email: String(email || '').trim().toLowerCase(),
     password,
     options: {
+      emailRedirectTo: getAuthRedirectUrl(),
       data: {
         display_name: String(displayName || '').trim()
       }
