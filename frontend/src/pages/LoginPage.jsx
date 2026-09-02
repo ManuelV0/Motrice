@@ -1,17 +1,38 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Facebook, LockKeyhole, LogIn, LogOut, Mail, UserPlus, ArrowRight } from 'lucide-react';
 import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Eye,
+  EyeOff,
+  Facebook,
+  KeyRound,
+  LockKeyhole,
+  LogIn,
+  LogOut,
+  Mail,
+  UserPlus
+} from 'lucide-react';
+import {
+  clearAuthSession,
   continueWithProvider,
   consumeAuthLogoutReason,
   getAuthSession,
   initializeSupabaseAuth,
+  requestPasswordReset,
   signInWithGoogle,
   signInWithPassword,
   signOutFromSupabase,
-  signUpWithPassword
+  signUpWithPassword,
+  updatePassword
 } from '../services/authSession';
 import { isSupabaseConfigured, supabaseAuthCallbackError } from '../services/supabaseClient';
+import {
+  getPasswordPolicyError,
+  getPasswordRequirementStatus,
+  isStrongPassword
+} from '../utils/passwordPolicy';
 import { usePageMeta } from '../hooks/usePageMeta';
 import Card from '../components/Card';
 import Button from '../components/Button';
@@ -74,14 +95,16 @@ function GoogleMark() {
   );
 }
 
-function LoginPage({ startup = false }) {
+function LoginPage({ startup = false, resetPasswordMode = false }) {
   const navigate = useNavigate();
   const [session, setSession] = useState(getAuthSession());
   const [logoutReason] = useState(() => consumeAuthLogoutReason());
-  const [mode, setMode] = useState('login');
+  const [mode, setMode] = useState(() => (resetPasswordMode ? 'reset' : 'login'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [busyAction, setBusyAction] = useState('');
   const [error, setError] = useState(consumeOAuthCallbackError);
@@ -105,9 +128,26 @@ function LoginPage({ startup = false }) {
   }, []);
 
   useEffect(() => {
-    if (startup || !session.isAuthenticated) return;
+    if (startup || resetPasswordMode || mode === 'reset' || !session.isAuthenticated) return;
     navigate('/map', { replace: true });
-  }, [navigate, session.isAuthenticated, startup]);
+  }, [mode, navigate, resetPasswordMode, session.isAuthenticated, startup]);
+
+  useEffect(() => {
+    if (resetPasswordMode) setMode('reset');
+  }, [resetPasswordMode]);
+
+  const passwordRequirements = getPasswordRequirementStatus(password);
+  const passwordIsStrong = isStrongPassword(password);
+  const passwordsMatch = Boolean(confirmPassword) && password === confirmPassword;
+
+  function selectMode(nextMode) {
+    setMode(nextMode);
+    setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setError('');
+    setMessage('');
+  }
 
   function onContinue(provider) {
     const next = continueWithProvider(provider);
@@ -139,6 +179,8 @@ function LoginPage({ startup = false }) {
 
     try {
       if (mode === 'register') {
+        const policyError = getPasswordPolicyError(password);
+        if (policyError) throw new Error(policyError);
         const result = await signUpWithPassword({ email, password, displayName });
         if (result.needsEmailConfirmation) {
           setMessage('Controlla la tua email e conferma la registrazione, poi torna qui per accedere.');
@@ -146,6 +188,31 @@ function LoginPage({ startup = false }) {
           setPassword('');
           return;
         }
+      } else if (mode === 'forgot') {
+        await requestPasswordReset(email);
+        setMessage('Se l email e associata a un account Motrice, riceverai il link per reimpostare la password.');
+        return;
+      } else if (mode === 'reset') {
+        const policyError = getPasswordPolicyError(password);
+        if (policyError) throw new Error(policyError);
+        if (password !== confirmPassword) throw new Error('Le due password non coincidono.');
+        if (!getAuthSession().isAuthenticated) {
+          throw new Error('Il link di recupero non e valido o e scaduto. Richiedine uno nuovo.');
+        }
+
+        await updatePassword(password);
+        try {
+          await signOutFromSupabase();
+        } catch {
+          clearAuthSession();
+        }
+        setSession(getAuthSession());
+        setPassword('');
+        setConfirmPassword('');
+        setMode('login');
+        setMessage('Password aggiornata. Ora puoi accedere con la nuova password.');
+        navigate('/login', { replace: true });
+        return;
       } else {
         const next = await signInWithPassword({ email, password });
         setSession(next);
@@ -158,6 +225,23 @@ function LoginPage({ startup = false }) {
       setBusyAction('');
     }
   }
+
+  const isCredentialEntryMode = mode === 'login' || mode === 'register';
+  const showResetForm = mode === 'reset';
+  const cardTitle = showResetForm
+    ? 'Crea una nuova password'
+    : mode === 'forgot'
+      ? 'Recupera password'
+      : session.isAuthenticated
+        ? 'Account connesso'
+        : 'Accedi a Motrice';
+  const cardSubtitle = showResetForm
+    ? 'Scegli una password sicura per proteggere il tuo account.'
+    : mode === 'forgot'
+      ? 'Ti invieremo un link sicuro all indirizzo associato al tuo account.'
+      : isSupabaseConfigured
+        ? 'Il tuo account sara sincronizzato su tutti i dispositivi.'
+        : 'Modalita demo locale.';
 
   async function onGoogleSignIn() {
     setBusy(true);
@@ -211,9 +295,9 @@ function LoginPage({ startup = false }) {
         </div>
 
         <Card className={styles.card}>
-          <h2 className={styles.cardTitle}>{session.isAuthenticated ? 'Account connesso' : 'Accedi a Motrice'}</h2>
+          <h2 className={styles.cardTitle}>{cardTitle}</h2>
           <p className={styles.cardSub}>
-            {isSupabaseConfigured ? 'Il tuo account sara sincronizzato su tutti i dispositivi.' : 'Modalita demo locale.'}
+            {cardSubtitle}
           </p>
 
           {logoutReason?.code === 'voucher_redeemed' ? (
@@ -225,40 +309,44 @@ function LoginPage({ startup = false }) {
             </div>
           ) : null}
 
-          {isSupabaseConfigured && !session.isAuthenticated ? (
+          {isSupabaseConfigured && (!session.isAuthenticated || showResetForm) ? (
             <>
-              <button
-                type="button"
-                className={styles.googleButton}
-                onClick={onGoogleSignIn}
-                disabled={busy}
-              >
-                <GoogleMark />
-                <span>{busyAction === 'google' ? 'Apertura Google...' : 'Continua con Google'}</span>
-              </button>
+              {isCredentialEntryMode ? (
+                <>
+                  <button
+                    type="button"
+                    className={styles.googleButton}
+                    onClick={onGoogleSignIn}
+                    disabled={busy}
+                  >
+                    <GoogleMark />
+                    <span>{busyAction === 'google' ? 'Apertura Google...' : 'Continua con Google'}</span>
+                  </button>
 
-              <div className={styles.divider} aria-hidden="true">
-                <span />
-                <small>oppure</small>
-                <span />
-              </div>
+                  <div className={styles.divider} aria-hidden="true">
+                    <span />
+                    <small>oppure</small>
+                    <span />
+                  </div>
 
-              <div className={styles.modeSwitch} role="group" aria-label="Tipo accesso">
-                <button
-                  type="button"
-                  className={mode === 'login' ? styles.modeActive : ''}
-                  onClick={() => setMode('login')}
-                >
-                  Accedi
-                </button>
-                <button
-                  type="button"
-                  className={mode === 'register' ? styles.modeActive : ''}
-                  onClick={() => setMode('register')}
-                >
-                  Registrati
-                </button>
-              </div>
+                  <div className={styles.modeSwitch} role="group" aria-label="Tipo accesso">
+                    <button
+                      type="button"
+                      className={mode === 'login' ? styles.modeActive : ''}
+                      onClick={() => selectMode('login')}
+                    >
+                      Accedi
+                    </button>
+                    <button
+                      type="button"
+                      className={mode === 'register' ? styles.modeActive : ''}
+                      onClick={() => selectMode('register')}
+                    >
+                      Registrati
+                    </button>
+                  </div>
+                </>
+              ) : null}
 
               <form className={styles.authForm} onSubmit={onSubmit}>
                 {mode === 'register' ? (
@@ -275,36 +363,117 @@ function LoginPage({ startup = false }) {
                     />
                   </label>
                 ) : null}
-                <label>
-                  Email
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    autoComplete="email"
-                    inputMode="email"
-                    required
-                  />
-                </label>
-                <label>
-                  Password
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    minLength={6}
-                    autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                    required
-                  />
-                </label>
+                {mode !== 'reset' ? (
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      autoComplete="email"
+                      inputMode="email"
+                      required
+                    />
+                  </label>
+                ) : null}
+
+                {mode !== 'forgot' ? (
+                  <label>
+                    {mode === 'reset' ? 'Nuova password' : 'Password'}
+                    <span className={styles.passwordField}>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        minLength={mode === 'register' || mode === 'reset' ? 8 : 6}
+                        autoComplete={mode === 'register' || mode === 'reset' ? 'new-password' : 'current-password'}
+                        aria-describedby={mode === 'register' || mode === 'reset' ? 'password-requirements' : undefined}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className={styles.passwordVisibility}
+                        onClick={() => setShowPassword((current) => !current)}
+                        aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}
+                      >
+                        {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                      </button>
+                    </span>
+                  </label>
+                ) : null}
+
+                {mode === 'reset' ? (
+                  <label>
+                    Conferma nuova password
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      minLength={8}
+                      autoComplete="new-password"
+                      required
+                    />
+                  </label>
+                ) : null}
+
+                {mode === 'register' || mode === 'reset' ? (
+                  <div id="password-requirements" className={styles.passwordRequirements} aria-live="polite">
+                    <p>La password deve contenere:</p>
+                    <ul>
+                      {passwordRequirements.map((requirement) => (
+                        <li key={requirement.id} className={requirement.met ? styles.requirementMet : ''}>
+                          <Check size={14} aria-hidden="true" />
+                          {requirement.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {mode === 'reset' && confirmPassword && !passwordsMatch ? (
+                  <p className={styles.inlineError}>Le password non coincidono.</p>
+                ) : null}
+
+                {mode === 'login' ? (
+                  <button type="button" className={styles.textAction} onClick={() => selectMode('forgot')}>
+                    Password dimenticata?
+                  </button>
+                ) : null}
+
                 <Button
                   type="submit"
                   fullWidth
-                  disabled={busy}
-                  icon={mode === 'register' ? UserPlus : LogIn}
+                  disabled={
+                    busy ||
+                    ((mode === 'register' || mode === 'reset') && !passwordIsStrong) ||
+                    (mode === 'reset' && !passwordsMatch)
+                  }
+                  icon={mode === 'register' ? UserPlus : mode === 'forgot' || mode === 'reset' ? KeyRound : LogIn}
                 >
-                  {busyAction === 'password' ? 'Attendi...' : mode === 'register' ? 'Crea account' : 'Accedi'}
+                  {busyAction === 'password'
+                    ? 'Attendi...'
+                    : mode === 'register'
+                      ? 'Crea account'
+                      : mode === 'forgot'
+                        ? 'Invia link di recupero'
+                        : mode === 'reset'
+                          ? 'Salva nuova password'
+                          : 'Accedi'}
                 </Button>
+
+                {mode === 'forgot' || mode === 'reset' ? (
+                  <button
+                    type="button"
+                    className={styles.backToLogin}
+                    onClick={() => {
+                      selectMode('login');
+                      if (resetPasswordMode) navigate('/login', { replace: true });
+                    }}
+                  >
+                    <ArrowLeft size={16} aria-hidden="true" />
+                    Torna ad accedere
+                  </button>
+                ) : null}
               </form>
             </>
           ) : null}
@@ -338,17 +507,17 @@ function LoginPage({ startup = false }) {
           {message ? <p className={styles.success} role="status">{message}</p> : null}
 
           <div className={styles.note}>
-            {session.isAuthenticated ? <Mail size={16} aria-hidden="true" /> : <LockKeyhole size={16} aria-hidden="true" />}
+            {session.isAuthenticated && !showResetForm ? <Mail size={16} aria-hidden="true" /> : <LockKeyhole size={16} aria-hidden="true" />}
             <span>
-              {session.isAuthenticated ? (
+              {session.isAuthenticated && !showResetForm ? (
                 <>Account: <strong>{session.email || session.provider || 'connesso'}</strong></>
               ) : (
-                <>Connessione: <strong>{isSupabaseConfigured ? 'Supabase pronto' : 'Supabase da configurare'}</strong></>
+                <>Protezione account: <strong>{isSupabaseConfigured ? 'Supabase attiva' : 'Supabase da configurare'}</strong></>
               )}
             </span>
           </div>
 
-          {session.isAuthenticated ? (
+          {session.isAuthenticated && !showResetForm ? (
             <Button type="button" variant="ghost" className={styles.oauthButton} icon={LogOut} onClick={onLogout} disabled={busy}>
               Logout
             </Button>

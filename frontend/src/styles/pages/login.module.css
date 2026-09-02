@@ -208,6 +208,129 @@
   box-shadow: var(--focus);
 }
 
+.passwordField {
+  position: relative;
+  display: block;
+}
+
+.passwordField input {
+  padding-right: 3rem;
+}
+
+.passwordVisibility {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  width: 2.25rem;
+  min-height: 2.25rem;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+
+.passwordVisibility:hover {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  box-shadow: none;
+  transform: translateY(-50%);
+}
+
+.passwordRequirements {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface-2) 55%, #000);
+}
+
+.passwordRequirements p {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.passwordRequirements ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.passwordRequirements li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.passwordRequirements li svg {
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 50%;
+}
+
+.passwordRequirements .requirementMet {
+  color: var(--primary);
+}
+
+.passwordRequirements .requirementMet svg {
+  border-color: color-mix(in srgb, var(--primary) 65%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+.inlineError {
+  margin: calc(var(--s-1) * -1) 0 0;
+  color: color-mix(in srgb, var(--danger) 82%, white);
+  font-size: var(--text-xs);
+}
+
+.textAction,
+.backToLogin {
+  width: fit-content;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
+}
+
+.textAction {
+  margin-left: auto;
+}
+
+.backToLogin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  margin-inline: auto;
+  color: var(--muted);
+}
+
+.textAction:hover,
+.backToLogin:hover {
+  color: var(--text);
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
 .modeSwitch {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -408,6 +531,10 @@
 
   .startupContent .note {
     padding: var(--s-2) var(--s-3);
+  }
+
+  .passwordRequirements ul {
+    gap: 0.35rem var(--s-2);
   }
 }
 

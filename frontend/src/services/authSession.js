@@ -1,13 +1,14 @@
 import { Capacitor } from '@capacitor/core';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
+import { getPasswordPolicyError } from '../utils/passwordPolicy';
 import { isSupabaseConfigured, requireSupabase, supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'motrice_auth_session_v1';
 const OPERATIONAL_STORE_KEY = 'motrice_operational_store_v2';
 const LOGOUT_REASON_KEY = 'motrice_auth_logout_reason_v1';
-// Un solo callback nativo per tutti i flussi Supabase (Google e conferma email).
-// Android intercetta questo URL tramite l'intent-filter definito nel manifest.
+// Callback nativi intercettati dagli intent-filter Android.
 const NATIVE_AUTH_REDIRECT_URL = 'com.motrice.app://login-callback';
+const NATIVE_PASSWORD_RESET_REDIRECT_URL = 'com.motrice.app://reset-password';
 const providerUserMap = {
   google: 1,
   facebook: 2
@@ -204,8 +205,25 @@ function getAuthRedirectUrl() {
   return new URL('/login', window.location.origin).toString();
 }
 
+function getPasswordResetRedirectUrl() {
+  if (Capacitor.isNativePlatform()) return NATIVE_PASSWORD_RESET_REDIRECT_URL;
+  if (typeof window === 'undefined') return undefined;
+  return new URL('/reset-password', window.location.origin).toString();
+}
+
 function isNativeAuthCallback(url) {
-  return String(url || '').startsWith(NATIVE_AUTH_REDIRECT_URL);
+  const value = String(url || '');
+  return value.startsWith(NATIVE_AUTH_REDIRECT_URL) || value.startsWith(NATIVE_PASSWORD_RESET_REDIRECT_URL);
+}
+
+function isNativePasswordResetCallback(url) {
+  return String(url || '').startsWith(NATIVE_PASSWORD_RESET_REDIRECT_URL);
+}
+
+function navigateToPasswordReset() {
+  if (typeof window === 'undefined') return;
+  window.history.replaceState(window.history.state, '', '/reset-password');
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 function readOAuthCallbackParams(url) {
@@ -247,6 +265,7 @@ async function handleNativeAuthCallback(url) {
   if (!isNativeAuthCallback(url)) return null;
 
   try {
+    const isPasswordReset = isNativePasswordResetCallback(url);
     const { code, error: callbackError } = readOAuthCallbackParams(url);
     if (callbackError) throw new Error(callbackError);
     if (!code) throw new Error('Il link di conferma non contiene un codice di accesso valido.');
@@ -258,6 +277,7 @@ async function handleNativeAuthCallback(url) {
     const next = applySupabaseSession(data.session);
     settleNativeGoogleAuth(null, next);
     await closeNativeAuthBrowser();
+    if (isPasswordReset) navigateToPasswordReset();
     return next;
   } catch (error) {
     settleNativeGoogleAuth(error);
@@ -382,6 +402,9 @@ export async function signInWithGoogle() {
 }
 
 export async function signUpWithPassword({ email, password, displayName }) {
+  const policyError = getPasswordPolicyError(password);
+  if (policyError) throw new Error(policyError);
+
   const client = requireSupabase();
   const { data, error } = await client.auth.signUp({
     email: String(email || '').trim().toLowerCase(),
@@ -400,6 +423,27 @@ export async function signUpWithPassword({ email, password, displayName }) {
     session: data.session,
     needsEmailConfirmation: Boolean(data.user && !data.session)
   };
+}
+
+export async function requestPasswordReset(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Inserisci l email associata al tuo account.');
+
+  const client = requireSupabase();
+  const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo: getPasswordResetRedirectUrl()
+  });
+  if (error) throw error;
+}
+
+export async function updatePassword(newPassword) {
+  const policyError = getPasswordPolicyError(newPassword);
+  if (policyError) throw new Error(policyError);
+
+  const client = requireSupabase();
+  const { data, error } = await client.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+  return data.user;
 }
 
 export async function signInWithPassword({ email, password }) {

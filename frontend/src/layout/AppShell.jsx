@@ -19,9 +19,10 @@ function AppShell({ children }) {
   const isFirstAccessIntro =
     isLandingRoute && authSession.isAuthenticated && !hasCompletedAppIntro(authSession);
   const isVerificationRoute = location.pathname === '/verify-profile';
+  const isPasswordResetRoute = location.pathname === '/reset-password';
   const isWorkoutRoute = /^\/events\/[^/]+\/workout$/.test(location.pathname);
-  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isWorkoutRoute;
-  const isFixedFullscreenRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute;
+  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute;
+  const isFixedFullscreenRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
@@ -99,7 +100,7 @@ function AppShell({ children }) {
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">

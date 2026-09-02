@@ -104,6 +104,7 @@ function App() {
           <Route path="/dashboard/coach" element={<CoachDashboardPage />} />
           <Route path="/dashboard/plans" element={<MyPlansPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/reset-password" element={<LoginPage resetPasswordMode />} />
           <Route path="/admin/coach-applications" element={<AdminCoachApplicationsPage />} />
           <Route path="/admin/convenzioni-applications" element={<AdminConvenzioniApplicationsPage />} />
           <Route path="/admin/verifiche" element={<AdminVerificationRoute><AdminProfileVerificationsPage /></AdminVerificationRoute>} />

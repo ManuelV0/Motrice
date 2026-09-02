@@ -32,15 +32,25 @@ nel browser o nell'APK.
 
 ## Callback autenticazione Android
 
-Google OAuth e la conferma email usano lo stesso callback nativo:
+Google OAuth e la conferma email usano il callback nativo:
 
 ```text
 com.motrice.app://login-callback
 ```
 
-In `Supabase > Authentication > URL Configuration > Redirect URLs` questo URL
-deve essere presente. In questo modo il link di conferma ricevuto via email
-riapre Motrice e completa automaticamente la sessione nell'app Android.
+Il recupero password usa un callback dedicato:
+
+```text
+com.motrice.app://reset-password
+```
+
+In `Supabase > Authentication > URL Configuration > Redirect URLs` entrambi gli
+URL devono essere presenti. In questo modo i link ricevuti via email riaprono
+Motrice nella schermata corretta dell'app Android.
+
+La policy password richiede almeno 8 caratteri e almeno una lettera minuscola,
+una maiuscola, un numero e un simbolo. Gli stessi requisiti sono validati nelle
+schermate di registrazione e reimpostazione password.
 
 ## Accesso Google
 
