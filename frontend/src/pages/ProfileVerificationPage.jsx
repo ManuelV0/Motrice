@@ -427,11 +427,11 @@ function ProfileVerificationPage() {
           {step === 2 ? (
             <>
               <p className={styles.eyebrow}>Passaggio 2</p>
-              <h1>Aggiungi una foto riconoscibile.</h1>
-              <p className={styles.lead}>Viso ben visibile, luce frontale e niente occhiali scuri. Sarà la foto del profilo pubblico.</p>
+              <h1>Scatta una foto per la verifica.</h1>
+              <p className={styles.lead}>Viso ben visibile, luce frontale e niente occhiali scuri. La foto resterà privata e non sostituirà l’immagine del profilo.</p>
               <div className={styles.cameraFrame}>
-                {profilePreview ? <img src={profilePreview} alt="Anteprima foto profilo" /> : <span className={styles.silhouette}><UserRound size={62} /></span>}
-                {profilePreview ? <span className={styles.captureOk}><Check size={18} /> Foto acquisita</span> : <small>Inquadra viso e spalle</small>}
+                {profilePreview ? <img src={profilePreview} alt="Anteprima foto di verifica" /> : <span className={styles.silhouette}><UserRound size={62} /></span>}
+                {profilePreview ? <span className={styles.captureOk}><Check size={18} /> Foto di verifica acquisita</span> : <small>Inquadra viso e spalle</small>}
               </div>
               <input ref={profileInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
               <input ref={profileGalleryInputRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
@@ -474,7 +474,7 @@ function ProfileVerificationPage() {
               <p className={styles.lead}>Nella beta la richiesta viene verificata manualmente. Non è una certificazione legale dell’identità.</p>
               <div className={styles.checklist}>
                 <span><CheckCircle2 size={20} /><strong>Dati profilo completi<small>{form.firstName} {form.lastName} · {form.city}</small></strong></span>
-                <span><CheckCircle2 size={20} /><strong>Foto profilo acquisita<small>Visibile nella community Motrice</small></strong></span>
+                <span><CheckCircle2 size={20} /><strong>Foto di verifica acquisita<small>Privata e separata dall’immagine del profilo</small></strong></span>
                 <span><CheckCircle2 size={20} /><strong>Challenge privata acquisita<small>Solo per la revisione</small></strong></span>
               </div>
               <label className={styles.consent}><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>Confermo che dati e foto appartengono a me e accetto il trattamento necessario alla verifica.</span></label>

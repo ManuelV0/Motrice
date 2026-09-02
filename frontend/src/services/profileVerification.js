@@ -5,7 +5,6 @@ import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 const LOCAL_STATE_PREFIX = 'motrice.profile-verification.';
 const ONBOARDING_PREFIX = 'motrice.profile-verification-onboarding.';
 const PRIVATE_BUCKET = 'profile-verification-private';
-const AVATAR_BUCKET = 'profile-avatars';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 const allowedStatuses = new Set([
@@ -215,9 +214,9 @@ export async function submitProfileVerification({
   try {
     const profileUpload = await uploadImage(
       client,
-      AVATAR_BUCKET,
+      PRIVATE_BUCKET,
       session.authUserId,
-      'profile',
+      'identity',
       profilePhoto
     );
     uploaded.push(profileUpload);
@@ -229,10 +228,6 @@ export async function submitProfileVerification({
       challengePhoto
     );
     uploaded.push(challengeUpload);
-    const { data: publicAvatar } = client.storage
-      .from(AVATAR_BUCKET)
-      .getPublicUrl(profileUpload.path);
-
     const { data, error } = await client.rpc('submit_profile_verification', {
       p_first_name: payload.first_name,
       p_last_name: payload.last_name,
@@ -242,7 +237,9 @@ export async function submitProfileVerification({
       p_sport_level: payload.sport_level,
       p_bio: payload.bio,
       p_challenge_type: payload.challenge_type,
-      p_profile_photo_url: publicAvatar?.publicUrl || '',
+      // Il nome del parametro RPC resta invariato per compatibilita, ma ora
+      // contiene un percorso privato e non l'avatar pubblico dell'utente.
+      p_profile_photo_url: profileUpload.path,
       p_challenge_photo_path: challengeUpload.path
     });
     if (error) throw error;
@@ -292,14 +289,23 @@ export async function listProfileVerificationRequests(status = 'pending') {
 
   const requests = Array.isArray(data) ? data : [];
   return Promise.all(requests.map(async (request) => {
+    const identityReference = String(request?.profile_photo_url || '').trim();
     const challengePath = String(request?.challenge_photo_path || '').trim();
-    if (!challengePath) return { ...request, challenge_photo_url: '' };
-    const { data: signed, error: signedError } = await client.storage
-      .from(PRIVATE_BUCKET)
-      .createSignedUrl(challengePath, 5 * 60);
+    const legacyPublicIdentity = /^https?:\/\//i.test(identityReference);
+    const [identitySigned, challengeSigned] = await Promise.all([
+      identityReference && !legacyPublicIdentity
+        ? client.storage.from(PRIVATE_BUCKET).createSignedUrl(identityReference, 5 * 60)
+        : Promise.resolve({ data: null, error: null }),
+      challengePath
+        ? client.storage.from(PRIVATE_BUCKET).createSignedUrl(challengePath, 5 * 60)
+        : Promise.resolve({ data: null, error: null })
+    ]);
     return {
       ...request,
-      challenge_photo_url: signedError ? '' : String(signed?.signedUrl || '')
+      profile_photo_url: legacyPublicIdentity
+        ? identityReference
+        : identitySigned.error ? '' : String(identitySigned.data?.signedUrl || ''),
+      challenge_photo_url: challengeSigned.error ? '' : String(challengeSigned.data?.signedUrl || '')
     };
   }));
 }

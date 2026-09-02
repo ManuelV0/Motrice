@@ -199,7 +199,7 @@ function AdminProfileVerificationsPage() {
                   <strong>{selected.display_name}</strong>
                   <small>{selected.city} · {selected.primary_sport}</small>
                 </span>
-                <span className={styles.privatePill}><LockKeyhole size={13} /> Challenge privata</span>
+                <span className={styles.privatePill}><LockKeyhole size={13} /> Foto di verifica private</span>
               </div>
 
               <div className={styles.photoGrid}>
@@ -207,7 +207,7 @@ function AdminProfileVerificationsPage() {
                   {selected.profile_photo_url ? (
                     <img src={selected.profile_photo_url} alt={`Foto profilo di ${selected.display_name}`} />
                   ) : <span className={styles.photoFallback}><UserRound size={50} /></span>}
-                  <figcaption>Foto profilo pubblica</figcaption>
+                  <figcaption>Foto identità privata</figcaption>
                 </figure>
                 <figure>
                   {selected.challenge_photo_url ? (
