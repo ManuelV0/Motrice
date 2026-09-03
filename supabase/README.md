@@ -89,6 +89,17 @@ Saldo, cashback e PX vengono aggiornati esclusivamente da funzioni RPC
 `security definer`; il client non può scrivere direttamente le tabelle
 operative.
 
+La migration `20260902190000_event_lifecycle.sql` rende temporale il ciclo di
+vita degli eventi:
+
+- check-in aperto 30 minuti prima dell'inizio;
+- tolleranza organizzatore configurabile da 0 a 30 minuti dopo l'inizio, senza
+  modificare la fine dell'evento;
+- controllo server-side della finestra per QR e geolocalizzazione;
+- rimozione dalla mappa alla fine effettiva;
+- chiusura automatica ogni minuto tramite Supabase Cron, con consolidamento di
+  presenze, no-show e depositi anche se l'organizzatore non riapre l'app.
+
 ## Schede personali
 
 La migration `20260821210000_personal_workout_plans.sql` aggiunge la tabella

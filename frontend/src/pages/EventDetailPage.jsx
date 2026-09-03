@@ -4,6 +4,7 @@ import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   Ban,
   Bookmark,
   BookmarkCheck,
@@ -43,6 +44,7 @@ import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { downloadEventIcs } from '../utils/ics';
+import { getEventPhaseLabel, getEventTiming } from '../utils/eventLifecycle';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
 import { calculateCompatibility, getCoachProfile } from '../features/coach/services/coach';
@@ -140,6 +142,12 @@ function formatCurrencyFromCents(value) {
     style: 'currency',
     currency: 'EUR'
   });
+}
+
+function hasMeaningfulDescription(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return (text.match(/[\p{L}\p{N}]/gu) || []).length >= 3;
 }
 
 function EventDetailPage() {
@@ -787,14 +795,8 @@ function EventDetailPage() {
   });
   const canAccessGroupChat = Boolean(participationState.canAccessChat || isOrganizerForEvent);
   const eventStartsMs = Date.parse(event?.event_datetime || '');
-  const eventDurationMinutes = Number.isFinite(Number(event?.duration_minutes))
-    ? Math.max(30, Number(event.duration_minutes))
-    : Number.isFinite(Number(event?.duration_hours))
-      ? Math.max(1, Number(event.duration_hours)) * 60
-      : 120;
-  const eventHasEnded = Number.isFinite(eventStartsMs)
-    ? checkInNowMs > (eventStartsMs + eventDurationMinutes * 60 * 1000)
-    : false;
+  const eventTiming = getEventTiming(event || {}, checkInNowMs);
+  const eventHasEnded = eventTiming.hasEnded;
   const canInviteFriendsFromGroupChat = Boolean(
     eventHasEnded ||
     Number(event?.user_rsvp?.cashback_percent || 0) >= 100 ||
@@ -968,6 +970,9 @@ function EventDetailPage() {
     : [];
   const sportVisual = getSportDetailVisual(event);
   const eventTitle = String(event.title || event.sport_name || 'Evento');
+  const eventDescription = String(event.description || '').trim();
+  const showHeroDescription = hasMeaningfulDescription(eventDescription);
+  const showHeroDateSport = normalizeName(eventTitle) !== normalizeName(event.sport_name);
   const durationMinutes = Number(event.duration_minutes || 120);
   const minimumPresenceMinutes = Number(event.minimum_presence_minutes || 45);
   const completionXp = Number(event.completion_xp || (event.is_personal ? 5 : 50));
@@ -1074,6 +1079,20 @@ function EventDetailPage() {
     : participantWasNoShow
       ? 'Negativo'
       : 'Neutro';
+  const checkInWindowLabel = eventTiming.checkInOpensAtMs != null && eventTiming.checkInClosesAtMs != null
+    ? `${formatEventTime(eventTiming.checkInOpensAtMs)} – ${formatEventTime(eventTiming.checkInClosesAtMs)}`
+    : 'Orario non disponibile';
+  const checkInStatusLabel = getEventPhaseLabel(eventTiming);
+  const canOpenAgendaCheckIn = Boolean(
+    isOrganizerForEvent ||
+    ['confirmed', 'checked_in', 'completed'].includes(participationState.id)
+  );
+  const agendaCheckInPath = `/agenda?verifyEvent=${encodeURIComponent(String(event.id))}`;
+  const checkInActionLabel = isClosedEvent
+    ? 'Vedi stato check-in'
+    : isOrganizerForEvent
+      ? 'Gestisci check-in'
+      : 'Verifica presenza';
 
   return (
     <div className={styles.page}>
@@ -1083,6 +1102,7 @@ function EventDetailPage() {
         error={locationError}
         requesting={requesting}
         onRequest={requestLocation}
+        compact
       />
       <main className={styles.eventShell}>
         <article className={styles.detailCard}>
@@ -1119,14 +1139,14 @@ function EventDetailPage() {
                   <p>Organizzato da <strong>{organizerName}</strong></p>
                 </div>
                 <h1>{eventTitle}</h1>
-                <p className={styles.heroDescription}>{event.description}</p>
+                {showHeroDescription ? <p className={styles.heroDescription}>{eventDescription}</p> : null}
                 <div className={styles.heroDate}>
                   <span className={styles.heroDateIcon}><CalendarDays size={21} aria-hidden="true" /></span>
                   <span className={styles.heroDateCopy}>
                     <small>Data evento</small>
                     <strong>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</strong>
                   </span>
-                  <small className={styles.heroDateSport}>• {event.sport_name}</small>
+                  {showHeroDateSport ? <small className={styles.heroDateSport}>• {event.sport_name}</small> : null}
                 </div>
               </div>
             </div>
@@ -1202,6 +1222,73 @@ function EventDetailPage() {
             </div>
           </Card>
 
+          {event.workout_plan ? (
+            <Card id="workout-plan" as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
+              <button
+                type="button"
+                className={styles.workoutPlanToggle}
+                aria-expanded={workoutPlanOpen}
+                aria-controls={`event-workout-plan-${event.id}`}
+                onClick={() => setWorkoutPlanOpen((open) => !open)}
+              >
+                <span className={styles.workoutPlanIcon}><Dumbbell size={23} aria-hidden="true" /></span>
+                <span className={styles.workoutPlanHeading}>
+                  <span className={styles.workoutPlanEyebrow}>Scheda allenamento</span>
+                  <strong>{event.workout_plan.title}</strong>
+                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
+                </span>
+                <span className={styles.workoutPlanToggleAction}>
+                  <span>{workoutPlanOpen ? 'Nascondi dettagli' : 'Visualizza dettagli'}</span>
+                  <ChevronDown
+                    size={20}
+                    className={workoutPlanOpen ? styles.workoutPlanChevronOpen : ''}
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+              {workoutPlanOpen ? (
+                <div id={`event-workout-plan-${event.id}`} className={styles.workoutPlanDetails}>
+                  <div className={styles.workoutPlanExercises}>
+                    {(event.workout_plan.exercises || []).map((exercise, index) => (
+                      <article key={exercise.instanceId || `${exercise.name}-${index}`}>
+                        <span>{String(index + 1).padStart(2, '0')}</span>
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {!isOrganizerForEvent && event.is_going ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
+                      onClick={saveAttachedWorkoutPlan}
+                      disabled={workoutPlanSaving || workoutPlanSaved}
+                    >
+                      {workoutPlanSaved
+                        ? 'Salvata nelle Schede personali'
+                        : workoutPlanSaving
+                          ? 'Salvataggio...'
+                          : 'Salva nelle mie schede'}
+                    </Button>
+                  ) : null}
+                  {(event.is_personal || Number(event?.user_rsvp?.cashback_percent || 0) >= 60 || Boolean(event?.user_rsvp?.checked_in_at) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={Play}
+                      onClick={() => navigate(`/events/${event.id}/workout`)}
+                    >
+                      Avvia allenamento
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
+
           <section className={styles.statGrid} aria-label="Riepilogo evento">
             <div className={styles.statCard}>
               <Clock3 size={22} aria-hidden="true" />
@@ -1229,10 +1316,10 @@ function EventDetailPage() {
             </div>
           </section>
 
-          {!event.is_personal && !isOrganizerForEvent ? (
-            <Card as="section" className={styles.organizerProfileCard}>
+          {!event.is_personal ? (
+            <Card as="section" className={`${styles.organizerProfileCard} ${isOrganizerForEvent ? styles.organizerProfileCardSelf : ''}`}>
               <div className={styles.organizerProfileTopline}>
-                <span>Profilo organizzatore</span>
+                <span>{isOrganizerForEvent ? 'Il tuo profilo organizzatore' : 'Profilo organizzatore'}</span>
                 <strong><i aria-hidden="true" /> Verificato</strong>
               </div>
               <div className={styles.organizerProfileMain}>
@@ -1249,16 +1336,18 @@ function EventDetailPage() {
                   </div>
                 </div>
               </div>
-              <p className={styles.organizerProfileBio}>
-                {organizerBio || 'Apri il profilo pubblico per conoscere esperienza, attività e reputazione verificata dell’organizzatore.'}
-              </p>
+              {!isOrganizerForEvent ? (
+                <p className={styles.organizerProfileBio}>
+                  {organizerBio || 'Apri il profilo pubblico per conoscere esperienza, attività e reputazione verificata dell’organizzatore.'}
+                </p>
+              ) : null}
               <Link
                 className={styles.organizerProfileLink}
                 to={`/profile/${organizerProfileId}?event=${event.id}`}
                 state={organizerProfileState}
               >
                 <UserRound size={19} aria-hidden="true" />
-                Vedi profilo pubblico
+                {isOrganizerForEvent ? 'Vedi il tuo profilo' : 'Vedi profilo pubblico'}
                 <span aria-hidden="true">→</span>
               </Link>
             </Card>
@@ -1331,8 +1420,42 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
+          {!event.is_personal && !eventIsCancelled ? (
+            <Card
+              id="verify-presence"
+              ref={participationFlowRef}
+              as="section"
+              className={styles.checkInBridgeCard}
+              data-open={eventTiming.isCheckInOpen ? 'true' : 'false'}
+            >
+              <div className={styles.checkInBridgeIcon} aria-hidden="true">
+                <ShieldCheck size={23} />
+              </div>
+              <div className={styles.checkInBridgeCopy}>
+                <span>Presenza evento</span>
+                <h2>{checkInStatusLabel}</h2>
+                <p>
+                  {canOpenAgendaCheckIn
+                    ? isOrganizerForEvent
+                      ? 'Scansiona i QR, verifica la posizione e gestisci la tolleranza da I miei eventi.'
+                      : 'Mostra il tuo QR o verifica la posizione dalla sezione I miei eventi.'
+                    : 'Il check-in sarà disponibile in I miei eventi dopo la conferma della partecipazione.'}
+                </p>
+                <small><Clock3 size={14} aria-hidden="true" /> Finestra check-in {checkInWindowLabel}</small>
+              </div>
+              {canOpenAgendaCheckIn ? (
+                <Link className={styles.checkInBridgeAction} to={agendaCheckInPath}>
+                  {checkInActionLabel}
+                  <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              ) : (
+                <span className={styles.checkInBridgeLocked}>Prima partecipa</span>
+              )}
+            </Card>
+          ) : null}
+
           {!event.is_personal && isOrganizerForEvent && !eventIsCancelled ? (
-            <div id="verify-presence" ref={participationFlowRef} className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
+            <div className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
               <EventParticipationFlow
                 event={event}
                 isOrganizer
@@ -1342,75 +1465,9 @@ function EventDetailPage() {
                 requestLocation={requestLocation}
                 showToast={showToast}
                 onEventRefresh={reload}
+                managementOnly
               />
             </div>
-          ) : null}
-
-          {event.workout_plan ? (
-            <Card id="workout-plan" as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
-              <button
-                type="button"
-                className={styles.workoutPlanToggle}
-                aria-expanded={workoutPlanOpen}
-                aria-controls={`event-workout-plan-${event.id}`}
-                onClick={() => setWorkoutPlanOpen((open) => !open)}
-              >
-                <span className={styles.workoutPlanIcon}><Dumbbell size={23} aria-hidden="true" /></span>
-                <span className={styles.workoutPlanHeading}>
-                  <span className={styles.workoutPlanEyebrow}>Scheda allenamento</span>
-                  <strong>{event.workout_plan.title}</strong>
-                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
-                </span>
-                <span className={styles.workoutPlanToggleAction}>
-                  <span>{workoutPlanOpen ? 'Nascondi dettagli' : 'Visualizza dettagli'}</span>
-                  <ChevronDown
-                    size={20}
-                    className={workoutPlanOpen ? styles.workoutPlanChevronOpen : ''}
-                    aria-hidden="true"
-                  />
-                </span>
-              </button>
-              {workoutPlanOpen ? (
-                <div id={`event-workout-plan-${event.id}`} className={styles.workoutPlanDetails}>
-                  <div className={styles.workoutPlanExercises}>
-                    {(event.workout_plan.exercises || []).map((exercise, index) => (
-                      <article key={exercise.instanceId || `${exercise.name}-${index}`}>
-                        <span>{String(index + 1).padStart(2, '0')}</span>
-                        <div>
-                          <strong>{exercise.name}</strong>
-                          <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                  {!isOrganizerForEvent && event.is_going ? (
-                    <Button
-                      type="button"
-                      fullWidth
-                      icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
-                      onClick={saveAttachedWorkoutPlan}
-                      disabled={workoutPlanSaving || workoutPlanSaved}
-                    >
-                      {workoutPlanSaved
-                        ? 'Salvata nelle Schede personali'
-                        : workoutPlanSaving
-                          ? 'Salvataggio...'
-                          : 'Salva nelle mie schede'}
-                    </Button>
-                  ) : null}
-                  {(event.is_personal || Number(event?.user_rsvp?.cashback_percent || 0) >= 60 || Boolean(event?.user_rsvp?.checked_in_at) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
-                    <Button
-                      type="button"
-                      fullWidth
-                      icon={Play}
-                      onClick={() => navigate(`/events/${event.id}/workout`)}
-                    >
-                      Avvia allenamento
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
-            </Card>
           ) : null}
 
           {!isOrganizerForEvent || event.is_personal ? (
@@ -1637,21 +1694,6 @@ function EventDetailPage() {
             </Card>
           )}
 
-          {!event.is_personal && !isOrganizerForEvent && !eventIsCancelled ? (
-            <div id="verify-presence" ref={participationFlowRef} className={styles.participationFlowAnchor}>
-              <EventParticipationFlow
-                event={event}
-                isOrganizer={isOrganizerForEvent}
-                currentUser={currentUser}
-                coords={coords}
-                requestingLocation={requesting}
-                requestLocation={requestLocation}
-                showToast={showToast}
-                onEventRefresh={reload}
-              />
-            </div>
-          ) : null}
-
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (
             <Card subtle className={styles.postWorkoutCard}>
               <h2>Allenamento completato ✅</h2>
@@ -1690,16 +1732,26 @@ function EventDetailPage() {
               <p>Continua a muoverti</p>
               <h2>Eventi simili</h2>
             </div>
-            <div className={styles.similarGrid}>
-              {similarEvents.map((item) => (
-                <Card key={item.id} hover className={styles.similarCard}>
-                  <span>{item.sport_name}</span>
-                  <h3>{item.title || item.location_name}</h3>
-                  <p>{item.location_name}</p>
-                  <p className="muted">{new Date(item.event_datetime).toLocaleString('it-IT')}</p>
-                  <Link to={`/events/${item.id}`}>Apri dettaglio</Link>
-                </Card>
-              ))}
+            <div className={styles.similarGrid} role="list" aria-label="Eventi simili">
+              {similarEvents.map((item) => {
+                const similarVisual = getSportDetailVisual(item);
+                return (
+                  <Card key={item.id} hover className={styles.similarCard} role="listitem">
+                    <div
+                      className={styles.similarCardImage}
+                      style={{ '--similar-event-image': `url("${similarVisual.image}")` }}
+                    >
+                      <span>{similarVisual.label}</span>
+                    </div>
+                    <div className={styles.similarCardBody}>
+                      <h3>{item.title || item.location_name}</h3>
+                      <p>{item.location_name}</p>
+                      <p className="muted">{formatEventDay(item.event_datetime)} · {formatEventTime(item.event_datetime)}</p>
+                      <Link to={`/events/${item.id}`}>Apri dettaglio <ArrowRight size={15} aria-hidden="true" /></Link>
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </section>
         ) : null}

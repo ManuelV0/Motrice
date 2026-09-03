@@ -21,6 +21,11 @@ import Button from '../Button';
 import Card from '../Card';
 import Modal from '../Modal';
 import styles from '../../styles/components/event/eventParticipationFlow.module.css';
+import {
+  getEventPhaseLabel,
+  getEventTiming,
+  getMaximumCheckInGraceMinutes
+} from '../../utils/eventLifecycle';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
@@ -29,16 +34,6 @@ const EMPTY_REVIEW = {
   wouldJoinAgain: true,
   note: ''
 };
-
-function getCheckInWindow(event) {
-  const startsAtMs = Date.parse(event?.event_datetime || '');
-  if (!Number.isFinite(startsAtMs)) return null;
-  const durationMinutes = Math.max(30, Number(event?.duration_minutes || 120));
-  return {
-    validFromMs: startsAtMs - 30 * 60 * 1000,
-    validUntilMs: startsAtMs + (durationMinutes + 30) * 60 * 1000
-  };
-}
 
 function formatEventTime(value) {
   const date = new Date(value);
@@ -160,7 +155,8 @@ function EventParticipationFlow({
   requestingLocation,
   requestLocation,
   showToast,
-  onEventRefresh
+  onEventRefresh,
+  managementOnly = false
 }) {
   const [progress, setProgress] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -181,6 +177,7 @@ function EventParticipationFlow({
   const [lastPresence, setLastPresence] = useState(null);
   const [participantVerificationChoice, setParticipantVerificationChoice] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [graceMinutes, setGraceMinutes] = useState(() => Number(event?.checkin_grace_minutes ?? 15));
   const videoRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const scanBusyRef = useRef(false);
@@ -192,6 +189,18 @@ function EventParticipationFlow({
   const verificationMode = event?.verification_mode || 'both';
   const usesQr = verificationMode === 'qr' || verificationMode === 'both';
   const usesGeo = verificationMode === 'geo' || verificationMode === 'both';
+  const timing = useMemo(
+    () => getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs),
+    [event, graceMinutes, nowMs]
+  );
+  const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
+  const extensionOptions = [10, 15, 20, 30].filter(
+    (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
+  );
+
+  useEffect(() => {
+    setGraceMinutes(Number(event?.checkin_grace_minutes ?? 15));
+  }, [event?.checkin_grace_minutes]);
 
   const loadFlow = useCallback(async ({ silent = false } = {}) => {
     if (!canLoad) return;
@@ -443,6 +452,9 @@ function EventParticipationFlow({
         return;
       }
       const startsGpsCheckIn = !isOrganizer && usesGeo && !progress?.checked_in_at;
+      if (startsGpsCheckIn && !getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }).isCheckInOpen) {
+        throw new Error('La finestra di check-in non è aperta');
+      }
       const result = startsGpsCheckIn
         ? await api.startEventGpsCheckIn({
           eventId: event.id,
@@ -481,6 +493,11 @@ function EventParticipationFlow({
     coords,
     event?.completion_xp,
     event?.id,
+    event?.event_datetime,
+    event?.duration_minutes,
+    event?.minimum_presence_minutes,
+    event?.status,
+    graceMinutes,
     isOrganizer,
     loadFlow,
     onEventRefresh,
@@ -495,13 +512,12 @@ function EventParticipationFlow({
       !isOrganizer &&
       Boolean(progress?.checked_in_at) &&
       Number(progress?.cashback_percent || 0) < 100;
-    const eventStartMs = Date.parse(event?.event_datetime || '');
-    const eventEndMs = eventStartMs + Number(event?.duration_minutes || 120) * 60000;
+    const liveTiming = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes });
     const organizerWindow =
       isOrganizer &&
-      Number.isFinite(eventStartMs) &&
-      Date.now() >= eventStartMs - 30 * 60000 &&
-      Date.now() <= eventEndMs + 30 * 60000;
+      liveTiming.startsAtMs != null &&
+      Date.now() >= liveTiming.checkInOpensAtMs &&
+      Date.now() < liveTiming.endsAtMs;
 
     if ((usesGeo && !coords) || (!shouldMonitorParticipant && !organizerWindow)) return undefined;
     sendPresence();
@@ -511,6 +527,9 @@ function EventParticipationFlow({
     coords,
     event?.duration_minutes,
     event?.event_datetime,
+    event?.minimum_presence_minutes,
+    event?.status,
+    graceMinutes,
     isOrganizer,
     progress?.cashback_percent,
     progress?.checked_in_at,
@@ -570,19 +589,43 @@ function EventParticipationFlow({
       completed: items.filter((item) => Number(item.cashback_percent || 0) >= 100).length
     };
   }, [registeredParticipants]);
-  const checkInWindow = useMemo(() => getCheckInWindow(event), [event]);
-  const qrWindowLabel = checkInWindow
-    ? `${formatEventTime(checkInWindow.validFromMs)} – ${formatEventTime(checkInWindow.validUntilMs)}`
+  const qrWindowLabel = timing.checkInOpensAtMs != null && timing.checkInClosesAtMs != null
+    ? `${formatEventTime(timing.checkInOpensAtMs)} – ${formatEventTime(timing.checkInClosesAtMs)}`
     : 'Finestra non disponibile';
-  const qrCountdown = checkInWindow
-    ? nowMs < checkInWindow.validFromMs
-      ? `Si attiva tra ${formatCountdown(checkInWindow.validFromMs - nowMs)}`
-      : nowMs <= checkInWindow.validUntilMs
-        ? `Scade tra ${formatCountdown(checkInWindow.validUntilMs - nowMs)}`
+  const qrCountdown = timing.checkInOpensAtMs != null && timing.checkInClosesAtMs != null
+    ? nowMs < timing.checkInOpensAtMs
+      ? `Si attiva tra ${formatCountdown(timing.checkInOpensAtMs - nowMs)}`
+      : nowMs <= timing.checkInClosesAtMs
+        ? `Scade tra ${formatCountdown(timing.checkInClosesAtMs - nowMs)}`
         : 'QR scaduto'
     : '';
 
+  async function extendCheckIn(minutes) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await api.extendEventCheckInWindow(event.id, minutes);
+      const nextMinutes = Number(result?.checkin_grace_minutes ?? minutes);
+      setGraceMinutes(nextMinutes);
+      showToast(`Check-in prolungato fino alle ${formatEventTime(timing.startsAtMs + nextMinutes * 60000)}`, 'success');
+      await onEventRefresh?.();
+    } catch (error) {
+      showToast(error?.message || 'Impossibile prolungare il check-in', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openScanner() {
+    if (!timing.isCheckInOpen) {
+      showToast(
+        timing.phase === 'scheduled'
+          ? 'Il check-in apre 30 minuti prima dell’evento'
+          : 'La finestra di check-in è chiusa',
+        'info'
+      );
+      return;
+    }
     setScannerError('');
     setScanFeedback(null);
     setManualToken('');
@@ -639,7 +682,14 @@ function EventParticipationFlow({
 
   return (
     <>
-      <Card subtle className={`${styles.flowCard} ${isOrganizer ? styles.organizerFlowCard : ''}`}>
+      <Card subtle className={`${styles.flowCard} ${isOrganizer ? styles.organizerFlowCard : ''} ${managementOnly ? styles.managementOnlyCard : ''}`}>
+        {!managementOnly ? <div className={styles.lifecycleStatus} data-open={timing.isCheckInOpen ? 'true' : 'false'}>
+          <Clock3 size={18} aria-hidden="true" />
+          <div>
+            <strong>{getEventPhaseLabel(timing)}</strong>
+            <span>Check-in {qrWindowLabel} · fine evento {timing.endsAtMs ? formatEventTime(timing.endsAtMs) : '—'}</span>
+          </div>
+        </div> : null}
         {!isOrganizer ? (
           <>
             <div className={styles.flowHeader}>
@@ -679,7 +729,17 @@ function EventParticipationFlow({
               </div>
             </div>
 
-            {progressPercent < 60 && verificationMode === 'both' ? (
+            {progressPercent < 60 && !timing.isCheckInOpen ? (
+              <div className={styles.checkInUnavailable}>
+                <Clock3 size={20} aria-hidden="true" />
+                <div>
+                  <strong>{timing.phase === 'scheduled' ? 'Check-in non ancora disponibile' : 'Check-in chiuso'}</strong>
+                  <span>{timing.phase === 'scheduled' ? 'Torna qui 30 minuti prima dell’inizio.' : 'Non è più possibile registrare una nuova presenza.'}</span>
+                </div>
+              </div>
+            ) : null}
+
+            {progressPercent < 60 && timing.isCheckInOpen && verificationMode === 'both' ? (
               <div className={styles.verificationChoice}>
                 <div>
                   <span className={styles.eyebrow}>Scegli come verificarti</span>
@@ -697,7 +757,7 @@ function EventParticipationFlow({
               </div>
             ) : null}
 
-            {progressPercent < 60 && usesQr && qrDataUrl && (verificationMode === 'qr' || participantVerificationChoice === 'qr') ? (
+            {progressPercent < 60 && timing.isCheckInOpen && usesQr && qrDataUrl && (verificationMode === 'qr' || participantVerificationChoice === 'qr') ? (
               <div className={styles.participantQr}>
                 <div>
                   <span className={styles.eyebrow}>QR personale</span>
@@ -724,7 +784,7 @@ function EventParticipationFlow({
               </div>
             ) : null}
 
-            {progressPercent < 60 && (verificationMode === 'geo' || participantVerificationChoice === 'geo') ? (
+            {progressPercent < 60 && timing.isCheckInOpen && (verificationMode === 'geo' || participantVerificationChoice === 'geo') ? (
               <div className={styles.monitorCard}>
                 <div className={styles.monitorHead}>
                   <LocateFixed size={20} />
@@ -788,8 +848,8 @@ function EventParticipationFlow({
             <section className={styles.organizerHero} aria-label="Dashboard organizer">
               <div className={styles.organizerHeroTitle}>
                 <div>
-                  <h2>Sei<br />l&apos;organizzatore</h2>
-                  <p>Stato: {event.status === 'completed' ? 'Completato' : 'Attivo'} • Evento {event.visibility === 'private' ? 'privato' : 'pubblico'}</p>
+                  <h2>{managementOnly ? 'Gestisci partecipanti' : <>Sei<br />l&apos;organizzatore</>}</h2>
+                  <p>{managementOnly ? 'Richieste, iscritti e presenze in un unico pannello.' : `Stato: ${event.status === 'completed' ? 'Completato' : 'Attivo'} • Evento ${event.visibility === 'private' ? 'privato' : 'pubblico'}`}</p>
                 </div>
                 <strong className={styles.organizerCount}>{validationSummary.total}/{event.max_participants || '∞'} partecipanti<br />registrati</strong>
                 <Button
@@ -861,19 +921,44 @@ function EventParticipationFlow({
               </section>
             ) : null}
 
-            {usesQr ? (
+            {!managementOnly && !timing.isCheckInOpen ? (
+              <div className={styles.checkInUnavailable}>
+                <Clock3 size={20} aria-hidden="true" />
+                <div>
+                  <strong>{timing.phase === 'scheduled' ? 'Check-in non ancora disponibile' : 'Check-in chiuso'}</strong>
+                  <span>
+                    {timing.phase === 'scheduled'
+                      ? 'La scansione si attiva 30 minuti prima dell’inizio.'
+                      : timing.canExtendCheckIn
+                        ? 'Puoi aumentare la tolleranza per registrare i ritardatari.'
+                        : 'Le nuove presenze non possono più essere registrate.'}
+                  </span>
+                </div>
+                {timing.canExtendCheckIn && extensionOptions.length ? (
+                  <div className={styles.extensionActions}>
+                    {extensionOptions.map((minutes) => (
+                      <button key={minutes} type="button" onClick={() => extendCheckIn(minutes)} disabled={busy}>
+                        Estendi a +{minutes}′
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!managementOnly && usesQr ? (
               <Button
                 type="button"
                 icon={Camera}
                 iconSize={28}
                 className={styles.organizerScanButton}
                 onClick={openScanner}
-                disabled={requestingLocation}
+                disabled={requestingLocation || !timing.isCheckInOpen}
                 fullWidth
               >
                 {requestingLocation ? 'ATTIVO POSIZIONE...' : 'SCANNERIZZA CHECK-IN'}
               </Button>
-            ) : (
+            ) : !managementOnly ? (
               <Button
                 type="button"
                 icon={LocateFixed}
@@ -883,9 +968,9 @@ function EventParticipationFlow({
               >
                 {busy || requestingLocation ? 'Verifico posizione...' : 'Registra presenza organizzatore'}
               </Button>
-            )}
+            ) : null}
 
-            {usesQr ? (
+            {!managementOnly && usesQr ? (
               <div className={styles.organizerQrActions}>
                 <Button
                   type="button"
@@ -899,6 +984,7 @@ function EventParticipationFlow({
                   variant="ghost"
                   icon={QrCode}
                   onClick={openScanner}
+                  disabled={!timing.isCheckInOpen}
                 >
                   Scansiona QR
                 </Button>
@@ -907,8 +993,8 @@ function EventParticipationFlow({
 
             <section className={styles.participantSection}>
               <div className={styles.participantSectionTitle}>
-                <h3>Presenze live {validationSummary.checked}/{validationSummary.total}</h3>
-                <span>Lista partecipanti {validationSummary.total}/{event.max_participants || '∞'}</span>
+                <h3>{managementOnly ? 'Iscritti' : `Presenze live ${validationSummary.checked}/${validationSummary.total}`}</h3>
+                <span>{managementOnly ? `${validationSummary.total}/${event.max_participants || '∞'} posti occupati` : `Lista partecipanti ${validationSummary.total}/${event.max_participants || '∞'}`}</span>
               </div>
               <div className={styles.participantList} aria-live="polite">
                 {registeredParticipants.length ? registeredParticipants.map((participant) => {
@@ -936,19 +1022,21 @@ function EventParticipationFlow({
                 }) : (
                   <div className={styles.emptyParticipants}>
                     <span><Users size={28} aria-hidden="true" /></span>
-                    <p>Nessun partecipante registrato</p>
+                    <p>{managementOnly ? 'Nessun iscritto' : 'Nessun partecipante registrato'}</p>
                   </div>
                 )}
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                className={styles.organizerQrButton}
-                onClick={() => setOrganizerQrOpen(true)}
-                fullWidth
-              >
-                Mostra mio QR organizzatore
-              </Button>
+              {!managementOnly ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={styles.organizerQrButton}
+                  onClick={() => setOrganizerQrOpen(true)}
+                  fullWidth
+                >
+                  Mostra mio QR organizzatore
+                </Button>
+              ) : null}
             </section>
           </>
         )}

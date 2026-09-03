@@ -3,6 +3,7 @@ import {
   Check,
   Clock3,
   LockKeyhole,
+  LockOpen,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -64,6 +65,7 @@ function AdminProfileVerificationsPage() {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
   const [reason, setReason] = useState('');
 
   usePageMeta({
@@ -91,6 +93,7 @@ function AdminProfileVerificationsPage() {
 
   useEffect(() => {
     setRejectOpen(false);
+    setUnlockOpen(false);
     setReason('');
     loadRequests(filter);
   }, [filter, loadRequests]);
@@ -102,6 +105,7 @@ function AdminProfileVerificationsPage() {
 
   async function review(decision) {
     if (!selected || reviewing) return;
+    const isUnlockingSuspendedProfile = decision === 'verified' && selected.status === 'suspended';
     if (decision === 'rejected' && reason.trim().length < 5) {
       showToast('Inserisci una motivazione chiara', 'info');
       return;
@@ -111,12 +115,15 @@ function AdminProfileVerificationsPage() {
     try {
       await reviewProfileVerification(selected.user_id, decision, reason);
       const message = {
-        verified: 'Profilo verificato: funzioni evento abilitate',
+        verified: isUnlockingSuspendedProfile
+          ? 'Profilo sbloccato: funzioni evento ripristinate'
+          : 'Profilo verificato: funzioni evento abilitate',
         rejected: 'Richiesta rifiutata e motivazione salvata',
         suspended: 'Profilo sospeso'
       }[decision];
       showToast(message || 'Verifica aggiornata', 'success');
       setRejectOpen(false);
+      setUnlockOpen(false);
       setReason('');
       await loadRequests(filter);
     } catch (error) {
@@ -173,6 +180,7 @@ function AdminProfileVerificationsPage() {
                     onClick={() => {
                       setSelectedId(request.user_id);
                       setRejectOpen(false);
+                      setUnlockOpen(false);
                       setReason('');
                     }}
                   >
@@ -250,6 +258,29 @@ function AdminProfileVerificationsPage() {
                   {selected.rejection_reason ? <p>{selected.rejection_reason}</p> : null}
                   {selected.status === 'verified' ? (
                     <button type="button" disabled={reviewing} onClick={() => review('suspended')}><ShieldAlert size={17} /> Sospendi profilo</button>
+                  ) : null}
+                  {selected.status === 'suspended' ? (
+                    unlockOpen ? (
+                      <div className={styles.unlockBox} role="alertdialog" aria-labelledby="unlock-profile-title">
+                        <span>
+                          <LockOpen size={18} />
+                          <strong id="unlock-profile-title">Sbloccare {selected.display_name}?</strong>
+                        </span>
+                        <p>Il profilo tornerà verificato e potrà nuovamente creare e partecipare agli eventi.</p>
+                        <div>
+                          <button type="button" disabled={reviewing} onClick={() => setUnlockOpen(false)}>
+                            <X size={16} /> Annulla
+                          </button>
+                          <button type="button" className={styles.unlockConfirm} disabled={reviewing} onClick={() => review('verified')}>
+                            <ShieldCheck size={17} /> {reviewing ? 'Sblocco…' : 'Conferma sblocco'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button type="button" className={styles.unlockButton} disabled={reviewing} onClick={() => setUnlockOpen(true)}>
+                        <LockOpen size={17} /> Sblocca profilo
+                      </button>
+                    )
                   ) : null}
                 </div>
               )}

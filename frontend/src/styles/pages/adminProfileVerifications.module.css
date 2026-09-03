@@ -427,6 +427,51 @@
 .reviewedState p { margin: 0; color: #ff9d50; font-size: 0.7rem; }
 .reviewedState button { border: 1px solid rgb(255 138 43 / 45%); color: #ff9d50; background: rgb(255 138 43 / 8%); }
 
+.reviewedState .unlockButton {
+  border-color: rgb(198 255 0 / 45%);
+  color: #c6ff00;
+  background: rgb(198 255 0 / 8%);
+}
+
+.unlockBox {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgb(198 255 0 / 40%);
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(198 255 0 / 11%), transparent 48%),
+    #10130d;
+}
+
+.unlockBox > span {
+  color: #c6ff00;
+}
+
+.unlockBox > p {
+  color: #a1a697;
+  line-height: 1.45;
+}
+
+.unlockBox > div {
+  display: grid;
+  grid-template-columns: 0.8fr 1.25fr;
+  gap: 0.55rem;
+}
+
+.reviewedState .unlockBox button:first-child {
+  border-color: #383838;
+  color: #c7c7c7;
+  background: #202020;
+}
+
+.reviewedState .unlockConfirm {
+  border-color: #c6ff00;
+  color: #0e0e0e;
+  background: #c6ff00;
+  box-shadow: 0 0 1.2rem rgb(198 255 0 / 14%);
+}
+
 .privacy {
   display: flex;
   align-items: flex-start;

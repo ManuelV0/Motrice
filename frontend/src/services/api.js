@@ -13,6 +13,12 @@ import {
   updatePartnerBadge
 } from './partnerBadge';
 import { createSupabaseApi } from './supabaseApi';
+import {
+  CHECK_IN_LEAD_MINUTES,
+  getEventTiming,
+  getMaximumCheckInGraceMinutes,
+  normalizeCheckInGraceMinutes
+} from '../utils/eventLifecycle';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const EVENT_DURATION_HOURS = 2;
@@ -36,8 +42,6 @@ function nowMs() {
 
 const CHAT_SESSION_MINUTES = 45;
 const EVENT_JOIN_STAKE_CENTS = 500;
-const EVENT_CHECKIN_LEAD_MINUTES = 15;
-const EVENT_CHECKIN_TAIL_MINUTES = 15;
 const EVENT_CHECKIN_FALLBACK_MINUTES = 90;
 const CONVENTION_VOUCHER_VALIDITY_MINUTES = 90;
 const CONVENTION_SUBSCRIPTION_DAYS = 365;
@@ -555,12 +559,6 @@ function getEventDurationMs(event) {
   return safeMinutes * 60 * 1000;
 }
 
-function getEventCheckInDurationMs(event) {
-  const minutes = Number(event?.duration_minutes);
-  const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : EVENT_CHECKIN_FALLBACK_MINUTES;
-  return safeMinutes * 60 * 1000;
-}
-
 function buildEventCheckInWindow(event, issuedAtMs = nowMs()) {
   const startMs = Date.parse(event?.event_datetime || '');
   if (!Number.isFinite(startMs)) {
@@ -571,8 +569,8 @@ function buildEventCheckInWindow(event, issuedAtMs = nowMs()) {
   }
 
   return {
-    startsAtMs: startMs - EVENT_CHECKIN_LEAD_MINUTES * 60 * 1000,
-    expiresAtMs: startMs + getEventCheckInDurationMs(event) + EVENT_CHECKIN_TAIL_MINUTES * 60 * 1000
+    startsAtMs: startMs - CHECK_IN_LEAD_MINUTES * 60 * 1000,
+    expiresAtMs: startMs + normalizeCheckInGraceMinutes(event) * 60 * 1000
   };
 }
 
@@ -1100,6 +1098,8 @@ function enrichEvent(event, store, origin) {
     minimum_presence_minutes: Number(event.minimum_presence_minutes ?? 45),
     verification_mode: String(event.verification_mode || 'both'),
     geofence_radius_m: Number(event.geofence_radius_m ?? 250),
+    checkin_grace_minutes: Number(event.checkin_grace_minutes ?? 15),
+    completed_at: event.completed_at || null,
     completion_xp: Number(event.completion_xp ?? 50),
     review_bonus_xp: Number(event.review_bonus_xp ?? 25),
     audience: String(event.audience || 'mixed'),
@@ -1210,6 +1210,10 @@ function applySort(events, sortBy) {
 function applyFilters(events, filters) {
   let result = [...events];
   const q = normalizeSearchText(filters.q);
+
+  if (filters.activeOnly === true) {
+    result = result.filter((event) => getEventTiming(event).isMapVisible);
+  }
 
   if (filters.sport && filters.sport !== 'all') {
     result = result.filter((event) => String(event.sport_id) === String(filters.sport));
@@ -1373,6 +1377,7 @@ const localApi = {
       minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
       verification_mode: String(payload.verification_mode || 'both'),
       geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
+      checkin_grace_minutes: Number(payload.checkin_grace_minutes ?? 15),
       completion_xp: Number(payload.completion_xp ?? 50),
       review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
       status: 'scheduled',
@@ -2562,6 +2567,41 @@ const localApi = {
     event.status = 'completed';
     saveStore(store);
     return withDelay({ success: true, validated_count: 0, no_show_count: 0, event_status: 'completed' });
+  },
+
+  async extendEventCheckInWindow(eventId, graceMinutes) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    if (!isEventOrganizerForUser(store, event, resolveAuthUserId())) {
+      throw new Error('Solo l’organizzatore può prolungare il check-in');
+    }
+    const requested = Number(graceMinutes);
+    const current = normalizeCheckInGraceMinutes(event);
+    const maximum = getMaximumCheckInGraceMinutes(event);
+    const startsAtMs = Date.parse(event.event_datetime || '');
+    if (String(event.status || 'scheduled') !== 'scheduled') {
+      throw new Error('L’evento non è più attivo');
+    }
+    if (!Number.isInteger(requested) || requested <= current || requested > maximum) {
+      throw new Error(`La tolleranza può essere aumentata fino a ${maximum} minuti`);
+    }
+    if (!Number.isFinite(startsAtMs)) {
+      throw new Error('Orario evento non valido');
+    }
+    if (nowMs() < startsAtMs - CHECK_IN_LEAD_MINUTES * 60 * 1000) {
+      throw new Error('Puoi modificare la tolleranza da 30 minuti prima dell’evento');
+    }
+    if (nowMs() > startsAtMs + 30 * 60 * 1000) {
+      throw new Error('La finestra di proroga è terminata');
+    }
+    event.checkin_grace_minutes = requested;
+    event.checkin_grace_updated_at = nowIso();
+    saveStore(store);
+    return withDelay({
+      success: true,
+      checkin_grace_minutes: requested,
+      checkin_closes_at: new Date(startsAtMs + requested * 60 * 1000).toISOString()
+    });
   },
 
   async requestFriendship(targetUserId) {

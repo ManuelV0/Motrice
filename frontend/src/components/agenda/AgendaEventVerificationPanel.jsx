@@ -5,6 +5,7 @@ import {
   Camera,
   Check,
   CheckCircle2,
+  Clock3,
   LocateFixed,
   Play,
   QrCode,
@@ -16,6 +17,11 @@ import { api } from '../../services/api';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import Modal from '../Modal';
 import styles from '../../styles/components/agenda/agendaEventVerificationPanel.module.css';
+import {
+  getEventPhaseLabel,
+  getEventTiming,
+  getMaximumCheckInGraceMinutes
+} from '../../utils/eventLifecycle';
 
 function decodeQrPayload(rawValue) {
   const raw = String(rawValue || '').trim();
@@ -99,12 +105,28 @@ function AgendaEventVerificationPanel({
   const [scanFeedback, setScanFeedback] = useState(null);
   const [scannerCycle, setScannerCycle] = useState(0);
   const [manualToken, setManualToken] = useState('');
+  const [graceMinutes, setGraceMinutes] = useState(() => Number(event?.checkin_grace_minutes ?? 15));
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const videoRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const scanBusyRef = useRef(false);
   const lastScanRef = useRef({ fingerprint: '', at: 0 });
   const verifiedNotifiedRef = useRef(false);
   const { coords, requesting, requestLocation, error: locationError } = useUserLocation();
+  const timing = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs);
+  const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
+  const extensionOptions = [10, 15, 20, 30].filter(
+    (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
+  );
+
+  useEffect(() => {
+    setGraceMinutes(Number(event?.checkin_grace_minutes ?? 15));
+  }, [event?.checkin_grace_minutes]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const notifyVerified = useCallback(async () => {
     if (verifiedNotifiedRef.current) return;
@@ -345,6 +367,22 @@ function AgendaEventVerificationPanel({
     }
   }
 
+  async function extendCheckIn(minutes) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await api.extendEventCheckInWindow(event.id, minutes);
+      const nextMinutes = Number(result?.checkin_grace_minutes ?? minutes);
+      setGraceMinutes(nextMinutes);
+      showToast(`Check-in prolungato fino a ${new Date(timing.startsAtMs + nextMinutes * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 'success');
+      await onVerified?.();
+    } catch (error) {
+      showToast(error?.message || 'Impossibile prolungare il check-in', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function scanAnother() {
     setScanFeedback(null);
     setScannerError('');
@@ -370,7 +408,39 @@ function AgendaEventVerificationPanel({
         <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Chiudi verifica"><X size={19} /></button>
       </header>
 
-      {panelVerified ? (
+      <div className={styles.timingBar} data-open={timing.isCheckInOpen ? 'true' : 'false'}>
+        <Clock3 size={18} aria-hidden="true" />
+        <div>
+          <strong>{getEventPhaseLabel(timing)}</strong>
+          <small>
+            {timing.checkInOpensAtMs != null && timing.checkInClosesAtMs != null
+              ? `${new Date(timing.checkInOpensAtMs).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}–${new Date(timing.checkInClosesAtMs).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`
+              : 'Finestra non disponibile'}
+          </small>
+        </div>
+      </div>
+
+      {!panelVerified && !timing.isCheckInOpen ? (
+        <div className={styles.closedTimingState}>
+          <strong>{timing.phase === 'scheduled' ? 'Il check-in non è ancora aperto' : 'La finestra di check-in è chiusa'}</strong>
+          <small>
+            {timing.phase === 'scheduled'
+              ? 'Torna qui 30 minuti prima dell’inizio.'
+              : isOrganizer && timing.canExtendCheckIn
+                ? 'Puoi concedere una tolleranza ai ritardatari.'
+                : 'Non è più possibile registrare nuove presenze.'}
+          </small>
+          {isOrganizer && timing.canExtendCheckIn && extensionOptions.length ? (
+            <div className={styles.extensionActions}>
+              {extensionOptions.map((minutes) => (
+                <button key={minutes} type="button" onClick={() => extendCheckIn(minutes)} disabled={busy}>
+                  Fino a +{minutes}′
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : panelVerified ? (
         <div className={styles.verifiedState}>
           <span aria-hidden="true"><CheckCircle2 size={25} /></span>
           <div><strong>Allenamento sbloccato</strong><small>Puoi iniziare la scheda preimpostata.</small></div>

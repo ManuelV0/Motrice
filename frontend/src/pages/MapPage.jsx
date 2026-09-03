@@ -794,6 +794,7 @@ function MapPage() {
   const sheetDragRef = useRef(null);
   const sheetTransitionTimerRef = useRef(null);
   const mapStyleThemeRef = useRef(null);
+  const hasLoadedEventsRef = useRef(false);
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [searchInput, setSearchInput] = useState(() => filters.q || '');
@@ -820,6 +821,7 @@ function MapPage() {
   const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(baseFilters);
   const [draftMapTheme, setDraftMapTheme] = useState(mapTheme);
+  const [lifecycleTick, setLifecycleTick] = useState(() => Date.now());
 
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
 
@@ -830,6 +832,18 @@ function MapPage() {
 
   useEffect(() => {
     api.listSports().then(setSports);
+  }, []);
+
+  useEffect(() => {
+    const refreshLifecycle = () => setLifecycleTick(Date.now());
+    const timer = window.setInterval(refreshLifecycle, 60 * 1000);
+    document.addEventListener('visibilitychange', refreshLifecycle);
+    window.addEventListener('focus', refreshLifecycle);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshLifecycle);
+      window.removeEventListener('focus', refreshLifecycle);
+    };
   }, []);
 
   useEffect(() => {
@@ -845,10 +859,10 @@ function MapPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    if (!hasLoadedEventsRef.current) setLoading(true);
     setLoadError('');
     api
-      .listEvents({ ...filters, ...originParams })
+      .listEvents({ ...filters, ...originParams, activeOnly: true })
       .then((rows) => {
         if (active) setEvents(rows || []);
       })
@@ -859,13 +873,16 @@ function MapPage() {
         }
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          hasLoadedEventsRef.current = true;
+          setLoading(false);
+        }
       });
 
     return () => {
       active = false;
     };
-  }, [filters, originParams]);
+  }, [filters, lifecycleTick, originParams]);
 
   useEffect(() => {
     const next = writeFiltersToSearch(searchParams, filters, baseFilters);
@@ -1422,7 +1439,7 @@ function MapPage() {
         showToast('Evento salvato nei tuoi eventi', 'success');
       }
 
-      const refreshed = await api.listEvents({ ...filters, ...originParams });
+      const refreshed = await api.listEvents({ ...filters, ...originParams, activeOnly: true });
       setEvents(refreshed);
     } catch (error) {
       showToast(error.message || 'Impossibile aggiornare i tuoi eventi', 'error');

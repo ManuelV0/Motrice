@@ -43,6 +43,7 @@ import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
 import { geocodeAddress, geocodeEventLocation, reverseGeocodeCoordinates } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
+import { getMaximumCheckInGraceMinutes } from '../utils/eventLifecycle';
 import {
   ensurePersonalWorkoutPlanRemote,
   listAvailablePersonalWorkoutPlans
@@ -60,6 +61,7 @@ const initialState = {
   minimum_presence_minutes: 45,
   verification_mode: 'both',
   geofence_radius_m: 250,
+  checkin_grace_minutes: 15,
   completion_xp: 50,
   review_bonus_xp: 25,
   max_participants: 8,
@@ -106,11 +108,15 @@ const LEVEL_OPTIONS = [
 const DURATION_PRESETS = [60, 90, 120];
 const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
 const PRESENCE_PRESETS = [30, 45, 60, 90];
+const CHECK_IN_GRACE_PRESETS = [0, 10, 15, 20, 30];
+const HOURS_24 = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+const MINUTES_60 = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, '0'));
 const ADVANCED_RULE_FIELDS = [
   'deposit_cents',
   'minimum_presence_minutes',
   'verification_mode',
   'geofence_radius_m',
+  'checkin_grace_minutes',
   'completion_xp',
   'review_bonus_xp'
 ];
@@ -148,6 +154,7 @@ const STEP_ERROR_FIELDS = {
     'minimum_presence_minutes',
     'verification_mode',
     'geofence_radius_m',
+    'checkin_grace_minutes',
     'completion_xp',
     'review_bonus_xp',
     'visibility',
@@ -179,6 +186,22 @@ function isKeyboardInput(target) {
   if (target?.isContentEditable) return true;
   if (tagName !== 'input') return false;
   return !NON_KEYBOARD_INPUT_TYPES.has(String(target?.type || 'text').toLowerCase());
+}
+
+function getTimeParts(value = '') {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(value));
+  if (!match) return { hour: '', minute: '' };
+  return { hour: match[1], minute: match[2] };
+}
+
+function getTimePeriodLabel(value = '') {
+  const { hour } = getTimeParts(value);
+  if (!hour) return '';
+  const numericHour = Number(hour);
+  if (numericHour < 5) return 'notte';
+  if (numericHour < 12) return 'mattina';
+  if (numericHour < 18) return 'pomeriggio';
+  return 'sera';
 }
 
 function useKeyboardVisibility() {
@@ -428,6 +451,14 @@ function CreateEventPage() {
     requestLocation
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
+  const eventTimeParts = useMemo(() => getTimeParts(eventTime), [eventTime]);
+  const eventTimePeriod = useMemo(() => getTimePeriodLabel(eventTime), [eventTime]);
+
+  function setEventTimePart(part, value) {
+    const nextHour = part === 'hour' ? value : (eventTimeParts.hour || '00');
+    const nextMinute = part === 'minute' ? value : (eventTimeParts.minute || '00');
+    setEventTime(`${nextHour}:${nextMinute}`);
+  }
 
   const filteredWorkoutPlans = useMemo(() => {
     const query = String(workoutPlanQuery || '').trim().toLowerCase();
@@ -539,6 +570,27 @@ function CreateEventPage() {
     [form.geofence_radius_m]
   );
 
+  const maximumCheckInGraceMinutes = useMemo(
+    () => getMaximumCheckInGraceMinutes(form),
+    [form.duration_minutes, form.minimum_presence_minutes]
+  );
+
+  const checkInWindowPreview = useMemo(() => {
+    const startsAt = new Date(form.event_datetime || '');
+    if (Number.isNaN(startsAt.getTime())) {
+      return 'Il check-in apre 30 minuti prima dell’orario dell’evento.';
+    }
+    const opensAt = new Date(startsAt.getTime() - 30 * 60 * 1000);
+    const closesAt = new Date(
+      startsAt.getTime() + Number(form.checkin_grace_minutes || 0) * 60 * 1000
+    );
+    const formatTime = (value) => value.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    return `Check-in disponibile dalle ${formatTime(opensAt)} alle ${formatTime(closesAt)}.`;
+  }, [form.checkin_grace_minutes, form.event_datetime]);
+
   const locationMapZoom = useMemo(() => {
     if (!locationPreview) return 6;
     if (geofenceRadius >= 750) return 13;
@@ -642,7 +694,8 @@ function CreateEventPage() {
         deposit_cents: form.deposit_cents,
         minimum_presence_minutes: form.minimum_presence_minutes,
         verification_mode: form.verification_mode,
-        geofence_radius_m: form.geofence_radius_m
+        geofence_radius_m: form.geofence_radius_m,
+        checkin_grace_minutes: form.checkin_grace_minutes
       };
       setForm((prev) => ({
         ...prev,
@@ -650,7 +703,8 @@ function CreateEventPage() {
         deposit_cents: 0,
         minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
         verification_mode: 'qr',
-        geofence_radius_m: 250
+        geofence_radius_m: 250,
+        checkin_grace_minutes: 0
       }));
       setAdvancedSettingsOpen(false);
       return;
@@ -665,7 +719,8 @@ function CreateEventPage() {
         previous.minimum_presence_minutes ?? Math.min(45, Number(prev.duration_minutes || 45))
       ),
       verification_mode: previous.verification_mode || 'both',
-      geofence_radius_m: Number(previous.geofence_radius_m ?? 250)
+      geofence_radius_m: Number(previous.geofence_radius_m ?? 250),
+      checkin_grace_minutes: Number(previous.checkin_grace_minutes ?? 15)
     }));
   }
 
@@ -679,6 +734,7 @@ function CreateEventPage() {
         minimum_presence_minutes: form.minimum_presence_minutes,
         verification_mode: form.verification_mode,
         geofence_radius_m: form.geofence_radius_m,
+        checkin_grace_minutes: form.checkin_grace_minutes,
         completion_xp: form.completion_xp,
         review_bonus_xp: form.review_bonus_xp,
         participation_protection: form.participation_protection
@@ -694,6 +750,7 @@ function CreateEventPage() {
         minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
         verification_mode: 'geo',
         geofence_radius_m: 250,
+        checkin_grace_minutes: 0,
         completion_xp: 5,
         review_bonus_xp: 0
       }));
@@ -713,6 +770,7 @@ function CreateEventPage() {
       minimum_presence_minutes: Number(previous.minimum_presence_minutes ?? 45),
       verification_mode: previous.verification_mode || 'both',
       geofence_radius_m: Number(previous.geofence_radius_m ?? 250),
+      checkin_grace_minutes: Number(previous.checkin_grace_minutes ?? 15),
       completion_xp: Number(previous.completion_xp ?? 50),
       review_bonus_xp: Number(previous.review_bonus_xp ?? 25)
     }));
@@ -1083,6 +1141,19 @@ function CreateEventPage() {
     ) {
       nextErrors.minimum_presence_minutes = 'Il tempo minimo deve essere compreso nella durata evento';
     }
+    const maximumGraceMinutes = getMaximumCheckInGraceMinutes(form);
+    if (
+      !form.is_personal &&
+      (
+        !Number.isInteger(Number(form.checkin_grace_minutes)) ||
+        Number(form.checkin_grace_minutes) < 0 ||
+        Number(form.checkin_grace_minutes) > maximumGraceMinutes
+      )
+    ) {
+      nextErrors.checkin_grace_minutes = maximumGraceMinutes > 0
+        ? `Scegli una tolleranza tra 0 e ${maximumGraceMinutes} minuti`
+        : 'La presenza minima occupa tutta la durata: il check-in deve chiudere all’inizio';
+    }
     if (
       Number(form.deposit_cents) < 0 ||
       Number(form.deposit_cents) > 5000 ||
@@ -1245,6 +1316,7 @@ function CreateEventPage() {
         minimum_presence_minutes: Number(form.minimum_presence_minutes),
         verification_mode: form.verification_mode,
         geofence_radius_m: Number(form.geofence_radius_m),
+        checkin_grace_minutes: Number(form.checkin_grace_minutes),
         completion_xp: Number(form.completion_xp),
         review_bonus_xp: Number(form.review_bonus_xp),
         max_participants: Number(form.max_participants),
@@ -1430,16 +1502,34 @@ function CreateEventPage() {
                   }}
                 />
               </label>
-              <label className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
-                <span><Clock3 size={18} />Ora</span>
-                <input
-                  type="time"
-                  value={eventTime}
-                  onInput={(e) => {
-                    setEventTime(e.target.value);
-                  }}
-                />
-              </label>
+              <div className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
+                <span>
+                  <Clock3 size={18} />Ora
+                  <small className={styles.time24Badge}>24H</small>
+                </span>
+                <div className={styles.time24Picker} role="group" aria-label="Orario evento in formato 24 ore">
+                  <select
+                    aria-label="Ora, da 00 a 23"
+                    value={eventTimeParts.hour}
+                    onChange={(event) => setEventTimePart('hour', event.target.value)}
+                  >
+                    <option value="" disabled>Ora</option>
+                    {HOURS_24.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
+                  </select>
+                  <strong aria-hidden="true">:</strong>
+                  <select
+                    aria-label="Minuti, da 00 a 59"
+                    value={eventTimeParts.minute}
+                    onChange={(event) => setEventTimePart('minute', event.target.value)}
+                  >
+                    <option value="" disabled>Min</option>
+                    {MINUTES_60.map((minute) => <option key={minute} value={minute}>{minute}</option>)}
+                  </select>
+                </div>
+                <small className={styles.time24Preview} aria-live="polite">
+                  {eventTime ? `${eventTime} · ${eventTimePeriod}` : 'Seleziona l’orario da 00:00 a 23:59'}
+                </small>
+              </div>
             </div>
             {errors.event_datetime && <span className="error">{errors.event_datetime}</span>}
 
@@ -2128,6 +2218,29 @@ function CreateEventPage() {
                       <small>Al raggiungimento il cashback passa al 100%.</small>
                       {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
                     </div>
+
+                    <div className={`${styles.ruleCard} ${errors.checkin_grace_minutes ? styles.invalidCard : ''}`}>
+                      <span className={styles.controlTitle}><Clock3 size={18} />Tolleranza ritardatari</span>
+                      <div className={styles.presetRow}>
+                        {CHECK_IN_GRACE_PRESETS.map((minutes) => {
+                          const disabled = minutes > maximumCheckInGraceMinutes;
+                          return (
+                            <button
+                              key={minutes}
+                              type="button"
+                              className={Number(form.checkin_grace_minutes) === minutes ? styles.presetSelected : ''}
+                              onClick={() => setField('checkin_grace_minutes', minutes)}
+                              disabled={disabled}
+                              title={disabled ? `Con la presenza minima scelta puoi consentire al massimo ${maximumCheckInGraceMinutes} minuti` : undefined}
+                            >
+                              {minutes === 0 ? 'No' : `${minutes}′`}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <small>{checkInWindowPreview} Non modifica la fine dell’evento.</small>
+                      {errors.checkin_grace_minutes && <span className="error">{errors.checkin_grace_minutes}</span>}
+                    </div>
                   </div>
 
                   <div className={styles.choiceSection}>
@@ -2272,7 +2385,7 @@ function CreateEventPage() {
               <div>
                 <strong>{form.title || 'Il tuo evento'}</strong>
                 <small>
-                  {[selectedSport?.name, form.city, eventDate && eventTime ? `${eventDate} · ${eventTime}` : 'Data da scegliere']
+                  {[selectedSport?.name, form.city, eventDate && eventTime ? `${eventDate} · ${eventTime} (${eventTimePeriod})` : 'Data da scegliere']
                     .filter(Boolean)
                     .join(' · ')}
                 </small>

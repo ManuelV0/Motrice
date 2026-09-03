@@ -30,8 +30,8 @@ export function resolveEventParticipationState({ event, isOrganizer = false, isF
       tone: 'organizer',
       title: 'Gestione organizer attiva',
       description: approvalRequired
-        ? 'Approva le richieste e registra i check-in dalla dashboard qui sotto.'
-        : 'Controlla gli iscritti e registra i check-in dalla dashboard qui sotto.',
+        ? 'Approva le richieste qui; registra i check-in dalla sezione I miei eventi.'
+        : 'Controlla gli iscritti qui; registra i check-in dalla sezione I miei eventi.',
       badge: 'Organizer',
       stepIndex: 0,
       action: 'progress',
@@ -91,7 +91,7 @@ export function resolveEventParticipationState({ event, isOrganizer = false, isF
       id: 'confirmed',
       tone: 'success',
       title: 'Partecipazione confermata',
-      description: 'Il posto è riservato e il QR personale è disponibile qui sotto.',
+      description: 'Il posto è riservato. Il QR personale è disponibile in I miei eventi.',
       badge: 'Confermata',
       stepIndex: 2,
       action: 'cancel',

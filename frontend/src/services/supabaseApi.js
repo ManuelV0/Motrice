@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { getAuthSession, legacyIdFromAuthUserId } from './authSession';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 import { assertProfileVerified } from './profileVerification';
+import { getEventTiming } from '../utils/eventLifecycle';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -115,6 +116,10 @@ function applyDateRange(events, dateRange) {
 function filterAndSortEvents(events, filters = {}) {
   let result = [...events];
   const query = normalizeSearchText(filters.q);
+
+  if (filters.activeOnly === true) {
+    result = result.filter((event) => getEventTiming(event).isMapVisible);
+  }
 
   if (filters.sport && filters.sport !== 'all') {
     result = result.filter((event) => String(event.sport_id) === String(filters.sport));
@@ -361,6 +366,8 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     minimum_presence_minutes: Number(rawEvent.minimum_presence_minutes ?? 45),
     verification_mode: rawEvent.verification_mode || 'both',
     geofence_radius_m: Number(rawEvent.geofence_radius_m ?? 250),
+    checkin_grace_minutes: Number(rawEvent.checkin_grace_minutes ?? 15),
+    completed_at: rawEvent.completed_at || null,
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
     status: rawEvent.status || 'scheduled',
@@ -494,6 +501,7 @@ function createRemoteMethods(localApi) {
           minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
           verification_mode: payload.verification_mode || 'both',
           geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
+          checkin_grace_minutes: Number(payload.checkin_grace_minutes ?? 15),
           completion_xp: Number(payload.completion_xp ?? 50),
           review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
           audience: payload.audience || 'mixed',
@@ -888,6 +896,17 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
+    async extendEventCheckInWindow(eventId, graceMinutes) {
+      const client = requireSupabase();
+      await assertProfileVerified('prolungare il check-in.');
+      const { data, error } = await client.rpc('extend_event_checkin_window', {
+        target_event_id: String(eventId),
+        requested_grace_minutes: Number(graceMinutes)
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async saveEvent(id) {
       const client = requireSupabase();
       const userId = requireAuthUserId();
@@ -1209,6 +1228,7 @@ export function createSupabaseApi(localApi) {
       completeEventWorkout: requireSecureBackend,
       submitEventReview: requireSecureBackend,
       finalizeEventOutcomes: requireSecureBackend,
+      extendEventCheckInWindow: requireSecureBackend,
       sendEventGroupMessage: requireSecureBackend
     };
   }

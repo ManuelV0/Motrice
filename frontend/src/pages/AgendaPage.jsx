@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
   CalendarDays,
@@ -22,6 +22,7 @@ import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
 import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerificationPanel';
 import styles from '../styles/pages/agenda.module.css';
+import { getEventTiming } from '../utils/eventLifecycle';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -168,8 +169,9 @@ function getVerificationCta(event, { isOrganizer = false } = {}) {
   };
 }
 
-function getTodayWorkoutState(event) {
+function getTodayWorkoutState(event, referenceTime = Date.now()) {
   const isOrganizer = event?.created_by === 'me' && !event?.is_personal;
+  const timing = getEventTiming(event, referenceTime);
   const participantStatus = String(event?.user_rsvp?.status || '').toLowerCase();
   const cashbackPercent = Number(event?.user_rsvp?.cashback_percent || 0);
   const isCompleted =
@@ -180,6 +182,31 @@ function getTodayWorkoutState(event) {
     Boolean(event?.is_personal) ||
     Boolean(event?.user_rsvp?.checked_in_at) ||
     cashbackPercent >= 60;
+
+  if (!event?.is_personal && !isCompleted && !isVerified && timing.phase === 'scheduled') {
+    return {
+      key: 'scheduled',
+      eyebrow: isOrganizer ? 'EVENTO DI OGGI · ORGANIZER' : 'ALLENAMENTO DI OGGI',
+      status: `Check-in disponibile dalle ${formatEventTime(timing.checkInOpensAtMs)}`,
+      action: 'Vedi evento',
+      progress: 0,
+      canOpenVerification: false
+    };
+  }
+
+  if (!event?.is_personal && !isCompleted && !isVerified && timing.phase === 'in_progress') {
+    const canExtend = isOrganizer && timing.canExtendCheckIn;
+    return {
+      key: canExtend ? 'organizer' : 'closed',
+      eyebrow: isOrganizer ? 'EVENTO IN CORSO · ORGANIZER' : 'ALLENAMENTO IN CORSO',
+      status: canExtend
+        ? 'Check-in chiuso · puoi prolungare la tolleranza'
+        : 'La finestra per registrare la presenza è chiusa',
+      action: canExtend ? 'Gestisci check-in' : 'Vedi evento',
+      progress: 0,
+      canOpenVerification: canExtend
+    };
+  }
 
   if (isOrganizer) {
     const checkedIn = Math.max(0, Number(event?.participants_checked_in_count || 0));
@@ -193,7 +220,8 @@ function getTodayWorkoutState(event) {
         : verificationCta.status,
       action: checkedIn > 0 && event?.workout_plan ? 'Avvia allenamento' : verificationCta.action,
       verificationIcon: verificationCta.icon,
-      progress: registered > 0 ? Math.round((checkedIn / registered) * 100) : 0
+      progress: registered > 0 ? Math.round((checkedIn / registered) * 100) : 0,
+      canOpenVerification: timing.isCheckInOpen || timing.canExtendCheckIn
     };
   }
 
@@ -229,19 +257,22 @@ function getTodayWorkoutState(event) {
     status: verificationCta.status,
     action: verificationCta.action,
     verificationIcon: verificationCta.icon,
-    progress: 0
+    progress: 0,
+    canOpenVerification: timing.isCheckInOpen
   };
 }
 
 function AgendaPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState('all');
   const [selectedRange, setSelectedRange] = useState(null);
   const [verificationEventId, setVerificationEventId] = useState('');
-  const now = useMemo(() => new Date(), []);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const now = useMemo(() => new Date(nowMs), [nowMs]);
   const todayKey = useMemo(() => toDateKey(now), [now]);
   const [calendarCursor, setCalendarCursor] = useState(() => ({
     year: now.getFullYear(),
@@ -269,6 +300,11 @@ function AgendaPage() {
     loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const ownedEvents = useMemo(
     () => events.filter((event) => event.created_by === 'me'),
     [events]
@@ -293,7 +329,7 @@ function AgendaPage() {
         const isParticipant = !isOrganizer && (event?.is_going || event?.user_rsvp);
         return Boolean(event?.workout_plan && (isOrganizer || event?.is_personal || isParticipant));
       })
-      .map((event) => ({ event, state: getTodayWorkoutState(event) }))
+      .map((event) => ({ event, state: getTodayWorkoutState(event, nowMs) }))
       .filter(({ event, state }) => {
         if (state.key === 'completed') return true;
         const startsAt = Date.parse(event?.event_datetime || '');
@@ -301,14 +337,47 @@ function AgendaPage() {
         return !Number.isFinite(endsAt) || endsAt >= now.getTime();
       })
       .sort((a, b) => {
-        const priority = { ready: 0, organizer: 0, locked: 1, completed: 2 };
+        const priority = { ready: 0, organizer: 0, locked: 1, scheduled: 2, closed: 3, completed: 4 };
         const stateDelta = priority[a.state.key] - priority[b.state.key];
         if (stateDelta) return stateDelta;
         return Date.parse(a.event.event_datetime) - Date.parse(b.event.event_datetime);
       });
 
     return candidates[0] || null;
-  }, [calendarEvents, now, todayKey]);
+  }, [calendarEvents, now, nowMs, todayKey]);
+
+  const requestedEventId = String(searchParams.get('verifyEvent') || '');
+  const requestedAgendaEvent = useMemo(
+    () => requestedEventId
+      ? calendarEvents.find((item) => String(item.id) === requestedEventId) || null
+      : null,
+    [calendarEvents, requestedEventId]
+  );
+  const focusedWorkout = useMemo(() => {
+    if (!requestedAgendaEvent) return todayWorkout;
+    return {
+      event: requestedAgendaEvent,
+      state: getTodayWorkoutState(requestedAgendaEvent, nowMs)
+    };
+  }, [nowMs, requestedAgendaEvent, todayWorkout]);
+
+  useEffect(() => {
+    if (!requestedEventId || !requestedAgendaEvent) return;
+
+    const requestedDate = new Date(requestedAgendaEvent.event_datetime);
+    const requestedDateKey = toDateKey(requestedDate);
+    if (requestedDateKey) {
+      setCalendarCursor({ year: requestedDate.getFullYear(), month: requestedDate.getMonth() });
+      setSelectedRange({ start: requestedDateKey, end: requestedDateKey });
+    }
+
+    setActiveSection('all');
+    setVerificationEventId(requestedEventId);
+
+    window.setTimeout(() => {
+      document.getElementById('agenda-focus-event')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+  }, [requestedAgendaEvent, requestedEventId]);
   const visibleCalendarEvents = useMemo(() => {
     if (activeSection === 'created') return ownedEvents;
     if (activeSection === 'participating') return participatingEvents;
@@ -373,13 +442,13 @@ function AgendaPage() {
   }
 
   function openTodayWorkout() {
-    if (!todayWorkout?.event?.id) return;
-    const { event, state } = todayWorkout;
+    if (!focusedWorkout?.event?.id) return;
+    const { event, state } = focusedWorkout;
     if (state.key === 'ready' && event.workout_plan) {
       navigate(`/events/${event.id}/workout`);
       return;
     }
-    if (state.key === 'organizer' || state.key === 'locked') {
+    if ((state.key === 'organizer' || state.key === 'locked') && state.canOpenVerification) {
       setVerificationEventId((current) => current === String(event.id) ? '' : String(event.id));
       return;
     }
@@ -395,8 +464,8 @@ function AgendaPage() {
         </div>
       </div>
 
-      {todayWorkout ? (() => {
-        const { event, state } = todayWorkout;
+      {focusedWorkout ? (() => {
+        const { event, state } = focusedWorkout;
         const workoutPlan = event.workout_plan;
         const exerciseCount = Array.isArray(workoutPlan?.exercises) ? workoutPlan.exercises.length : 0;
         const workoutDuration = Number(workoutPlan?.duration || event.duration_minutes || 0);
@@ -420,6 +489,7 @@ function AgendaPage() {
 
         return (
           <section
+            id="agenda-focus-event"
             className={`${styles.todayWorkoutCard} ${styles[`todayWorkoutCard_${state.key}`]}`}
             aria-labelledby="today-workout-title"
           >

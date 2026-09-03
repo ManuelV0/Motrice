@@ -92,6 +92,36 @@
   border-radius: 999px;
 }
 
+.compact {
+  min-height: 4.25rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 1.2rem;
+}
+
+.compact .iconBubble {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.compact .copy {
+  gap: 0;
+}
+
+.compact .copy strong {
+  font-size: 0.85rem;
+}
+
+.compact .copy p {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.compact > button {
+  min-width: 4.9rem;
+  min-height: 2.35rem;
+  padding-inline: 0.72rem;
+}
+
 @media (max-width: 42rem) {
   .wrap {
     min-height: 5.35rem;
@@ -125,5 +155,19 @@
     min-width: 5.5rem;
     min-height: 2.65rem;
     padding-inline: 0.8rem;
+  }
+
+  .compact {
+    min-height: 3.9rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .compact .copy p {
+    display: none;
+  }
+
+  .compact > button {
+    min-width: 4.65rem;
+    min-height: 2.25rem;
   }
 }
