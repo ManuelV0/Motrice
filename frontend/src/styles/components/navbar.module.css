@@ -399,18 +399,33 @@
 .mobileNav {
   position: relative;
   z-index: var(--z-raised);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   padding: var(--s-4);
   display: grid;
+  align-content: start;
   gap: var(--s-3);
-  max-height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .mobileHeader {
+  position: sticky;
+  top: calc(var(--s-4) * -1);
+  z-index: calc(var(--z-raised) + 1);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--s-3);
+  margin: calc(var(--s-4) * -1) calc(var(--s-4) * -1) 0;
+  padding: var(--s-4);
+  background: linear-gradient(180deg, #0c0f0c 78%, rgb(12 15 12 / 94%));
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
 }
 
 .mobileHeaderCopy {
@@ -914,6 +929,7 @@
   right: auto;
   width: min(88vw, 22rem);
   height: 100dvh;
+  box-sizing: border-box;
   padding-top: var(--nav-h);
   background: #0c0f0c;
   border-right: 1px solid rgb(255 255 255 / 8%);
@@ -933,6 +949,12 @@
 
 .mobileNav {
   gap: var(--s-5);
+  padding: var(--s-5) var(--s-5) calc(var(--s-8) + env(safe-area-inset-bottom));
+}
+
+.mobileHeader {
+  top: calc(var(--s-5) * -1);
+  margin: calc(var(--s-5) * -1) calc(var(--s-5) * -1) 0;
   padding: var(--s-5);
 }
 

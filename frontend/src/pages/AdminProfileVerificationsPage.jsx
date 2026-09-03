@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
+import AdminProfilePhotoReviews from '../components/AdminProfilePhotoReviews';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import {
@@ -67,6 +68,7 @@ function AdminProfileVerificationsPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [reviewArea, setReviewArea] = useState('identity');
 
   usePageMeta({
     title: 'Centro verifiche | Motrice',
@@ -146,6 +148,17 @@ function AdminProfileVerificationsPage() {
         </button>
       </header>
 
+      <div className={styles.reviewKinds} role="tablist" aria-label="Tipo di verifica">
+        <button type="button" role="tab" aria-selected={reviewArea === 'identity'} onClick={() => setReviewArea('identity')}>
+          <ShieldCheck size={17} /> Identità
+        </button>
+        <button type="button" role="tab" aria-selected={reviewArea === 'photo'} onClick={() => setReviewArea('photo')}>
+          <UserRound size={17} /> Foto profilo
+        </button>
+      </div>
+
+      {reviewArea === 'photo' ? <AdminProfilePhotoReviews /> : (
+        <>
       <div className={styles.tabs} role="tablist" aria-label="Stato richieste">
         <button type="button" role="tab" aria-selected={filter === 'pending'} onClick={() => setFilter('pending')}>
           <Clock3 size={16} /> In attesa
@@ -289,6 +302,8 @@ function AdminProfileVerificationsPage() {
             </section>
           ) : null}
         </div>
+      )}
+        </>
       )}
     </main>
   );

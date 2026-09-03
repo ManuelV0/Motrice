@@ -58,6 +58,80 @@
   background: #1e1e1e;
 }
 
+.reviewKinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.reviewKinds button {
+  min-height: 3.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid #2f2f2f;
+  border-radius: 1rem;
+  color: #858585;
+  background: #171717;
+  font-weight: 850;
+}
+
+.reviewKinds button[aria-selected='true'] {
+  border-color: rgb(198 255 0 / 55%);
+  color: #c6ff00;
+  background: rgb(198 255 0 / 7%);
+  box-shadow: 0 0 1rem rgb(198 255 0 / 8%);
+}
+
+.photoReviewSection { display: grid; gap: 0.75rem; }
+
+.photoReviewIntro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem;
+  border: 1px solid rgb(198 255 0 / 28%);
+  border-radius: 1rem;
+  background: linear-gradient(135deg, rgb(198 255 0 / 8%), #141611);
+}
+
+.photoReviewIntro > span,
+.photoReviewIntro > button {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(198 255 0 / 25%);
+  border-radius: 0.8rem;
+  color: #c6ff00;
+  background: rgb(198 255 0 / 8%);
+}
+
+.photoReviewIntro > button { border-radius: 50%; }
+.photoReviewIntro > div { display: grid; gap: 0.16rem; }
+.photoReviewIntro strong { font-size: 0.82rem; }
+.photoReviewIntro small { color: #898d82; font-size: 0.68rem; line-height: 1.4; }
+
+.comparisonGuide {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+  border: 1px solid #303030;
+  border-radius: 0.9rem;
+  color: #c6ff00;
+  background: #121212;
+}
+
+.comparisonGuide > span { display: grid; gap: 0.2rem; }
+.comparisonGuide strong { color: #efefef; font-size: 0.74rem; }
+.comparisonGuide small { color: #858585; font-size: 0.64rem; line-height: 1.45; }
+
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -202,10 +276,12 @@
 }
 
 .status_pending,
-.status_verified { color: #c6ff00; }
+.status_verified,
+.status_approved { color: #c6ff00; }
 .status_rejected,
 .status_suspended { color: #ff8a2b; }
-.status_expired { color: #a0a0a0; }
+.status_expired,
+.status_cancelled { color: #a0a0a0; }
 
 .detail { padding: 1rem; }
 

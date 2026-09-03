@@ -43,6 +43,7 @@ function MotriceProfileV3({
   onModeChange,
   onSaveProfile,
   onUploadMedia,
+  photoReview = { status: 'none' },
   onVerify,
   onInvite,
   isPremium = false,
@@ -54,6 +55,7 @@ function MotriceProfileV3({
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState('');
   const [mediaError, setMediaError] = useState('');
+  const [avatarConsentOpen, setAvatarConsentOpen] = useState(false);
   const [form, setForm] = useState({
     display_name: '',
     city: '',
@@ -92,6 +94,8 @@ function MotriceProfileV3({
     suspended: 'Profilo sospeso'
   };
   const verificationLabel = verificationLabels[verificationStatus] || verificationLabels.unverified;
+  const photoReviewStatus = String(photoReview?.status || 'none');
+  const avatarReviewPending = photoReviewStatus === 'pending';
   const profileCompletion = Math.round(
     [form.display_name, form.city, form.bio, form.avatar_url, form.cover_url]
       .filter((value) => String(value || '').trim()).length / 5 * 100
@@ -166,9 +170,14 @@ function MotriceProfileV3({
     setForm((current) => ({ ...current, [field]: previewUrl }));
 
     try {
-      const uploadedUrl = onUploadMedia
+      const uploadResult = onUploadMedia
         ? await onUploadMedia(file, kind)
         : await fileAsDataUrl(file);
+      if (kind === 'avatar' && uploadResult && typeof uploadResult === 'object') {
+        setForm(previous);
+        return;
+      }
+      const uploadedUrl = String(uploadResult || '');
       const next = { ...previous, [field]: uploadedUrl };
       setForm(next);
       const saved = await onSaveProfile(next);
@@ -263,10 +272,16 @@ function MotriceProfileV3({
               <button
                 type="button"
                 className={styles.avatarButton}
-                onClick={() => avatarInputRef.current?.click()}
-                disabled={uploadingKind === 'avatar'}
-                aria-label="Scegli la foto profilo dalla galleria"
-                title="Scegli dalla galleria"
+                onClick={() => {
+                  if (verificationStatus !== 'verified') {
+                    onVerify?.();
+                    return;
+                  }
+                  setAvatarConsentOpen(true);
+                }}
+                disabled={uploadingKind === 'avatar' || avatarReviewPending}
+                aria-label={avatarReviewPending ? 'Foto profilo in revisione' : 'Scegli la foto profilo dalla galleria'}
+                title={avatarReviewPending ? 'Foto in revisione' : 'Scegli dalla galleria'}
               >
                 {uploadingKind === 'avatar' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={14} strokeWidth={2.4} aria-hidden="true" />}
               </button>
@@ -288,6 +303,27 @@ function MotriceProfileV3({
             <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
             <span className={styles.sportPills}>{identity.sports.map((sport) => <small key={sport}>{sport}</small>)}</span>
           </div>
+
+          {avatarConsentOpen ? (
+            <section className={styles.avatarConsent} role="dialog" aria-label="Consenso confronto foto profilo">
+              <span><ShieldCheck size={19} /></span>
+              <div>
+                <strong>Confronto foto profilo</strong>
+                <small>La nuova foto resterà privata e sarà confrontata solo con la tua foto di verifica. L’avatar attuale non cambia fino all’approvazione.</small>
+              </div>
+              <div className={styles.avatarConsentActions}>
+                <button type="button" onClick={() => setAvatarConsentOpen(false)}>Annulla</button>
+                <button type="button" onClick={() => { setAvatarConsentOpen(false); avatarInputRef.current?.click(); }}>Accetto e scelgo</button>
+              </div>
+            </section>
+          ) : null}
+
+          {isPrivate && avatarReviewPending ? (
+            <p className={styles.photoReviewStatus} role="status"><ShieldCheck size={16} /><span><strong>Nuova foto in verifica</strong>L’avatar attuale resta pubblico fino all’esito.</span></p>
+          ) : null}
+          {isPrivate && photoReviewStatus === 'rejected' ? (
+            <p className={`${styles.photoReviewStatus} ${styles.photoReviewRejected}`} role="status"><ImagePlus size={16} /><span><strong>Foto non approvata</strong>{photoReview.rejection_reason || 'Scegli una foto frontale più nitida.'}</span></p>
+          ) : null}
 
           <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
             <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>

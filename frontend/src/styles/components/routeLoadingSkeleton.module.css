@@ -1,0 +1,187 @@
+.root {
+  width: 100%;
+  min-height: min(46rem, calc(100dvh - var(--nav-h)));
+  color: var(--text);
+  overflow: hidden;
+  animation: routeSkeletonIn 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.pageLayout {
+  width: min(100% - (var(--container-pad-x) * 2), var(--container-max));
+  margin-inline: auto;
+  display: grid;
+  gap: var(--s-4);
+}
+
+.compact,
+.profileLayout {
+  width: min(100% - (var(--container-pad-x) * 2), 32rem);
+}
+
+.block {
+  display: block;
+  min-height: 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--surface-2) 82%, transparent) 20%,
+    color-mix(in srgb, var(--primary) 10%, var(--surface-2)) 38%,
+    color-mix(in srgb, var(--surface-2) 82%, transparent) 56%
+  );
+  background-size: 240% 100%;
+  animation: routeSkeletonShimmer 1.35s linear infinite;
+}
+
+.eyebrow { width: 5rem; height: 0.7rem; border-radius: 999px; }
+.heroTitle { width: min(72%, 24rem); height: clamp(2rem, 6vw, 3rem); }
+.title { width: 62%; height: 1.6rem; }
+.subtitle { width: min(58%, 22rem); height: 0.9rem; border-radius: 999px; }
+.segmented { width: 100%; height: 3.2rem; border-radius: 999px; }
+.input { width: 100%; height: 3.4rem; }
+
+.calendar,
+.formCard,
+.profileHero,
+.chatRow,
+.mapList {
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: var(--r-xl);
+}
+
+.calendar { padding: var(--s-5); min-height: 25rem; }
+.calendarTitle { width: 42%; height: 1.4rem; margin-bottom: var(--s-5); }
+.calendarGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: clamp(0.45rem, 2.5vw, 0.85rem); }
+.calendarGrid i {
+  display: block;
+  aspect-ratio: 1;
+  max-width: 2.5rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--surface-3) 80%, var(--surface));
+}
+.calendarGrid i:nth-child(5n + 2),
+.calendarGrid i:nth-child(9n) { background: color-mix(in srgb, var(--primary) 15%, var(--surface-3)); }
+
+.chatRow {
+  min-height: 4.8rem;
+  padding: var(--s-3);
+  display: grid;
+  grid-template-columns: 3.2rem 1fr;
+  align-items: center;
+  gap: var(--s-3);
+}
+.chatRow > span:last-child { display: grid; gap: var(--s-2); }
+.avatar { width: 3.2rem; height: 3.2rem; border-radius: 50%; }
+.rowTitle { width: 42%; height: 0.9rem; border-radius: 999px; }
+.rowText { width: 72%; height: 0.7rem; border-radius: 999px; }
+
+.profileHero { position: relative; min-height: 21rem; padding: 10.5rem var(--s-4) var(--s-4); overflow: hidden; }
+.cover { position: absolute; inset: 0 0 auto; width: 100%; height: 10rem; border: 0; border-radius: 0; }
+.profileAvatar { position: absolute; top: 7.2rem; left: var(--s-4); width: 5.5rem; height: 5.5rem; border-radius: 50%; }
+.profileName { width: 58%; height: 1.55rem; margin-top: var(--s-3); }
+.profileBio { width: 82%; height: 0.85rem; margin-top: var(--s-3); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-2); margin-top: var(--s-5); }
+.stats .block { height: 4rem; }
+.profileCard { width: 100%; height: 9rem; }
+
+.formCard { display: grid; gap: var(--s-4); padding: var(--s-5); }
+.progress { width: 100%; height: 0.35rem; border-radius: 999px; }
+.sectionTitle { width: 48%; height: 1.5rem; }
+.sportGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s-3); }
+.sportGrid .block { height: 7.5rem; }
+
+.detailHero,
+.workoutHero {
+  min-height: clamp(18rem, 52vw, 31rem);
+  padding: var(--s-6);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--s-3);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 72% 25%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 34%),
+    var(--surface);
+}
+.workoutHero { min-height: 13rem; }
+.detailBadge { width: 5.5rem; height: 1.8rem; border-radius: 999px; }
+.detailTitle { width: min(58%, 26rem); height: clamp(2.3rem, 7vw, 4.2rem); }
+.detailSubtitle { width: min(72%, 34rem); height: 1rem; }
+.detailMap { width: 100%; height: clamp(12rem, 32vw, 22rem); }
+.detailStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; overflow: hidden; border-radius: var(--r-xl); }
+.detailStats .block { height: 6.5rem; border-radius: 0; }
+.detailCard { width: 100%; height: 10rem; }
+
+.mapLayout {
+  width: 100%;
+  min-height: calc(100dvh - var(--nav-h));
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(18rem, 0.8fr);
+  background: var(--surface);
+}
+.mapSurface {
+  position: relative;
+  min-height: inherit;
+  overflow: hidden;
+  background:
+    linear-gradient(25deg, transparent 46%, color-mix(in srgb, var(--text) 8%, transparent) 47% 49%, transparent 50%),
+    linear-gradient(115deg, transparent 42%, color-mix(in srgb, var(--text) 7%, transparent) 43% 46%, transparent 47%),
+    color-mix(in srgb, var(--surface-2) 86%, #172117);
+}
+.search { position: absolute; top: var(--s-4); left: var(--s-4); width: min(70%, 28rem); height: 3.2rem; border-radius: 999px; }
+.mapAction { position: absolute; top: 5rem; left: 50%; translate: -50% 0; width: 10rem; height: 2.4rem; border-radius: 999px; }
+.mapPins i {
+  position: absolute;
+  width: 2.8rem;
+  height: 3.4rem;
+  border-radius: 50% 50% 50% 8%;
+  rotate: -45deg;
+  background: color-mix(in srgb, var(--primary) 55%, var(--surface-3));
+  opacity: 0.48;
+}
+.mapPins i:nth-child(1) { left: 28%; top: 34%; }
+.mapPins i:nth-child(2) { left: 62%; top: 52%; }
+.mapPins i:nth-child(3) { left: 45%; top: 68%; }
+.mapList { border-radius: 0; padding: var(--s-5); display: grid; align-content: start; gap: var(--s-4); }
+.eventRow { width: 100%; height: 8rem; }
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes routeSkeletonShimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@keyframes routeSkeletonIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 47.99rem) {
+  .root { min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h)); }
+  .pageLayout { width: min(100% - (var(--s-3) * 2), 32rem); }
+  .mapLayout { min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h)); display: block; }
+  .mapSurface { min-height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h)); }
+  .mapList { position: absolute; inset: auto var(--s-3) calc(var(--bottom-nav-h) + var(--s-3)); border-radius: var(--r-xl); min-height: 14rem; }
+  .mapList .eventRow:nth-of-type(n + 4) { display: none; }
+  .sportGrid { grid-template-columns: repeat(2, 1fr); }
+  .sportGrid .block { height: 6.8rem; }
+  .detailHero { min-height: 23rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .block { animation: none; }
+}

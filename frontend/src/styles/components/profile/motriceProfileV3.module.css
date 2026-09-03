@@ -365,6 +365,73 @@
 .sportPills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .sportPills small { padding: 0.28rem 0.52rem; border: 1px solid #333; border-radius: 999px; background: #232323; color: #e9e9e9; font-size: 0.64rem; }
 
+.avatarConsent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(198 255 0 / 38%);
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgb(198 255 0 / 8%), #11140d);
+  animation: accordion-open 180ms ease-out;
+}
+
+.avatarConsent > span {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.72rem;
+  color: var(--v3-lime);
+  background: rgb(198 255 0 / 10%);
+}
+
+.avatarConsent > div:nth-child(2) { display: grid; gap: 0.18rem; }
+.avatarConsent strong { font-size: 0.74rem; }
+.avatarConsent small { color: #90958a; font-size: 0.63rem; line-height: 1.42; }
+
+.avatarConsentActions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 0.45rem;
+}
+
+.avatarConsentActions button {
+  min-height: 2.55rem;
+  border: 1px solid #343434;
+  border-radius: 999px;
+  color: #aaa;
+  background: #1b1b1b;
+  font-size: 0.65rem;
+  font-weight: 850;
+}
+
+.avatarConsentActions button:last-child {
+  border-color: var(--v3-lime);
+  color: #090909;
+  background: var(--v3-lime);
+}
+
+.photoReviewStatus {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.72rem 0 0;
+  padding: 0.68rem 0.72rem;
+  border: 1px solid rgb(198 255 0 / 28%);
+  border-radius: 14px;
+  color: var(--v3-lime);
+  background: rgb(198 255 0 / 6%);
+}
+
+.photoReviewStatus > span { display: grid; gap: 0.12rem; }
+.photoReviewStatus strong { color: #f0f0f0; font-size: 0.68rem; }
+.photoReviewStatus span { color: #8d9187; font-size: 0.61rem; line-height: 1.35; }
+.photoReviewRejected { border-color: rgb(255 91 91 / 32%); color: #ff7979; background: rgb(255 91 91 / 6%); }
+
 .metricButtons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.42rem; margin-top: 0.85rem; }
 .metricButtons button {
   position: relative;

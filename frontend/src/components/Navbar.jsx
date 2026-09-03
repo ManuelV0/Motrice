@@ -17,7 +17,6 @@ import {
   X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
-import { api } from '../services/api';
 import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
@@ -39,7 +38,6 @@ const drawerSections = [
   {
     title: 'La tua attività',
     items: [
-      { to: '/coach', label: 'Coach', icon: Target },
       { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays },
       { to: '/dashboard/progress', label: 'Progressi esercizi', icon: TrendingUp }
     ]
@@ -47,6 +45,7 @@ const drawerSections = [
   {
     title: 'Altro',
     items: [
+      { to: '/coach', label: 'Coach', icon: Target },
       { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
     ]
   }
@@ -98,8 +97,8 @@ function Navbar({ forceMobile = false }) {
       };
     }
 
-    api
-      .getUnreadCount()
+    import('../services/api')
+      .then(({ api }) => api.getUnreadCount())
       .then((count) => {
         if (!active) return;
         setUnread(Number.isFinite(count) ? count : 0);

@@ -1,50 +1,53 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './layout/AppShell';
-import LandingPage from './pages/LandingPage';
-import ExplorePage from './pages/ExplorePage';
-import ExploreFoldersEmbedPage from './pages/ExploreFoldersEmbedPage';
-import FaqPage from './pages/FaqPage';
-import EventDetailPage from './pages/EventDetailPage';
-import CreateEventPage from './pages/CreateEventPage';
-import MapPage from './pages/MapPage';
-import ProfilePage from './pages/ProfilePage';
-import NotFoundPage from './pages/NotFoundPage';
-import AgendaPage from './pages/AgendaPage';
-import NotificationsPage from './pages/NotificationsPage';
 import AppErrorBoundary from './components/AppErrorBoundary';
-import PricingPage from './pages/PricingPage';
-import AccountPage from './pages/AccountPage';
-import AccountAiPage from './pages/AccountAiPage';
-import ConvenzioniPage from './pages/ConvenzioniPage';
-import ConvenzioneVoucherPage from './pages/ConvenzioneVoucherPage';
-import ConvenzioneAgreementGeneratorPage from './pages/ConvenzioneAgreementGeneratorPage';
-import AdminConvenzioniApplicationsPage from './pages/AdminConvenzioniApplicationsPage';
-import CoachPage from './features/coach/pages/CoachPage';
-import CoachPlanPage from './features/coach/pages/CoachPlanPage';
-import CoachCheckInPage from './features/coach/pages/CoachCheckInPage';
-import CoachProfilePage from './features/coach/pages/CoachProfilePage';
-import BecomeCoachApplyPage from './features/coach/pages/BecomeCoachApplyPage';
-import CoachDashboardPage from './features/coach/pages/CoachDashboardPage';
-import MyPlansPage from './features/coach/pages/MyPlansPage';
-import LoginPage from './pages/LoginPage';
-import AdminCoachApplicationsPage from './features/coach/pages/AdminCoachApplicationsPage';
-import TutorialPage from './pages/TutorialPage';
-import AdminTutorialPage from './pages/AdminTutorialPage';
-import ChatInboxPage from './pages/ChatInboxPage';
-import MetPeoplePage from './pages/MetPeoplePage';
-import FocusProfilePage from './pages/FocusProfilePage';
-import ChatThreadPage from './pages/ChatThreadPage';
-import CommunityPage from './pages/CommunityPage';
-import ChatSearchPage from './pages/ChatSearchPage';
-import FriendsPage from './pages/FriendsPage';
-import ProfileVerificationPage from './pages/ProfileVerificationPage';
 import VerifiedProfileRoute from './components/VerifiedProfileRoute';
-import AdminProfileVerificationsPage from './pages/AdminProfileVerificationsPage';
 import AdminVerificationRoute from './components/AdminVerificationRoute';
-import WorkoutSessionPage from './pages/WorkoutSessionPage';
-import ExerciseProgressPage from './pages/ExerciseProgressPage';
+import RouteLoadingSkeleton from './components/RouteLoadingSkeleton';
 
+// Each screen is downloaded only when its route is opened. This keeps heavy
+// features such as maps, QR tools and admin dashboards out of the startup bundle.
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const ExplorePage = lazy(() => import('./pages/ExplorePage'));
+const ExploreFoldersEmbedPage = lazy(() => import('./pages/ExploreFoldersEmbedPage'));
+const FaqPage = lazy(() => import('./pages/FaqPage'));
+const EventDetailPage = lazy(() => import('./pages/EventDetailPage'));
+const CreateEventPage = lazy(() => import('./pages/CreateEventPage'));
+const MapPage = lazy(() => import('./pages/MapPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const AgendaPage = lazy(() => import('./pages/AgendaPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const AccountAiPage = lazy(() => import('./pages/AccountAiPage'));
+const ConvenzioniPage = lazy(() => import('./pages/ConvenzioniPage'));
+const ConvenzioneVoucherPage = lazy(() => import('./pages/ConvenzioneVoucherPage'));
+const ConvenzioneAgreementGeneratorPage = lazy(() => import('./pages/ConvenzioneAgreementGeneratorPage'));
+const AdminConvenzioniApplicationsPage = lazy(() => import('./pages/AdminConvenzioniApplicationsPage'));
+const CoachPage = lazy(() => import('./features/coach/pages/CoachPage'));
+const CoachPlanPage = lazy(() => import('./features/coach/pages/CoachPlanPage'));
+const CoachCheckInPage = lazy(() => import('./features/coach/pages/CoachCheckInPage'));
+const CoachProfilePage = lazy(() => import('./features/coach/pages/CoachProfilePage'));
+const BecomeCoachApplyPage = lazy(() => import('./features/coach/pages/BecomeCoachApplyPage'));
+const CoachDashboardPage = lazy(() => import('./features/coach/pages/CoachDashboardPage'));
+const MyPlansPage = lazy(() => import('./features/coach/pages/MyPlansPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AdminCoachApplicationsPage = lazy(() => import('./features/coach/pages/AdminCoachApplicationsPage'));
+const TutorialPage = lazy(() => import('./pages/TutorialPage'));
+const AdminTutorialPage = lazy(() => import('./pages/AdminTutorialPage'));
+const ChatInboxPage = lazy(() => import('./pages/ChatInboxPage'));
+const MetPeoplePage = lazy(() => import('./pages/MetPeoplePage'));
+const FocusProfilePage = lazy(() => import('./pages/FocusProfilePage'));
+const ChatThreadPage = lazy(() => import('./pages/ChatThreadPage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
+const ChatSearchPage = lazy(() => import('./pages/ChatSearchPage'));
+const FriendsPage = lazy(() => import('./pages/FriendsPage'));
+const ProfileVerificationPage = lazy(() => import('./pages/ProfileVerificationPage'));
+const AdminProfileVerificationsPage = lazy(() => import('./pages/AdminProfileVerificationsPage'));
+const WorkoutSessionPage = lazy(() => import('./pages/WorkoutSessionPage'));
+const ExerciseProgressPage = lazy(() => import('./pages/ExerciseProgressPage'));
 const GameMapPage = lazy(() => import('./features/game/pages/GameMapPage'));
 const EXPLORE_SECTION_ENABLED = false;
 
@@ -54,7 +57,8 @@ function App() {
   return (
     <AppErrorBoundary resetKey={location.pathname}>
       <AppShell>
-        <Routes>
+        <Suspense fallback={<RouteLoadingSkeleton pathname={location.pathname} />}>
+          <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route
             path="/explore"
@@ -82,14 +86,7 @@ function App() {
           <Route path="/chatrice" element={<Navigate to="/chat" replace />} />
           <Route path="/chatrice/:threadId" element={<ChatThreadPage />} />
           <Route path="/map" element={<MapPage />} />
-          <Route
-            path="/game"
-            element={
-              <Suspense fallback={<main className="container">Caricamento Motrice Game...</main>}>
-                <GameMapPage />
-              </Suspense>
-            }
-          />
+          <Route path="/game" element={<GameMapPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/convenzioni" element={<ConvenzioniPage />} />
           <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
@@ -115,7 +112,8 @@ function App() {
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/404" element={<NotFoundPage />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
-        </Routes>
+          </Routes>
+        </Suspense>
       </AppShell>
     </AppErrorBoundary>
   );

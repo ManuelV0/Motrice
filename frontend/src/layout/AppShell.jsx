@@ -2,9 +2,9 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import BottomNav from '../components/BottomNav';
 import SiteTourOverlay from '../components/SiteTourOverlay';
-import { useEffect, useState } from 'react';
+import PullToRefresh from '../components/PullToRefresh';
+import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { api } from '../services/api';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
 import { hasCompletedAppIntro } from '../services/appIntro';
@@ -31,7 +31,47 @@ function AppShell({ children }) {
   const isLocalProfileRoute = location.pathname === '/profile/me';
   const isAccountLikeRoute = isAccountRoute || isLocalProfileRoute;
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   useViewportInsets();
+
+  const isRefreshableRoute = useMemo(() => {
+    const pathname = location.pathname;
+    if (pathname === '/agenda' || pathname === '/map' || pathname === '/account' || pathname === '/notifications') return true;
+    if (pathname === '/chat' || pathname === '/chat/inbox') return true;
+    if (/^\/events\/[^/]+$/.test(pathname)) return true;
+    return /^\/(admin|coach|convenzioni|dashboard|profile)(\/|$)/.test(pathname);
+  }, [location.pathname]);
+
+  const refreshCurrentPage = useCallback(async () => {
+    window.dispatchEvent(
+      new CustomEvent('motrice:pull-refresh', {
+        detail: { pathname: location.pathname, requestedAt: Date.now() }
+      })
+    );
+
+    setRefreshVersion((version) => version + 1);
+
+    try {
+      const { api } = await import('../services/api');
+      const items = await api.listNotifications();
+      const list = Array.isArray(items) ? items : [];
+      const soon = list.find((item) => item.type === 'event_starting_soon' && !item.read);
+      setSoonNotification(soon || null);
+    } catch {
+      // The route refresh still succeeds even when the optional notification refresh fails.
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 520));
+    window.dispatchEvent(
+      new CustomEvent('motrice:pull-refreshed', {
+        detail: { pathname: location.pathname, completedAt: Date.now() }
+      })
+    );
+  }, [location.pathname]);
+
+  const refreshedChildren = isValidElement(children)
+    ? cloneElement(children, { key: `${location.pathname}:${refreshVersion}` })
+    : children;
 
   useEffect(() => {
     const refreshAuthSession = () => setAuthSession(getAuthSession());
@@ -42,8 +82,8 @@ function AppShell({ children }) {
   useEffect(() => {
     let active = true;
 
-    api
-      .listNotifications()
+    import('../services/api')
+      .then(({ api }) => api.listNotifications())
       .then((items) => {
         if (!active) return;
         const list = Array.isArray(items) ? items : [];
@@ -97,10 +137,18 @@ function AppShell({ children }) {
 
   return (
     <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
+      <PullToRefresh
+        enabled={authSession.isAuthenticated && isRefreshableRoute && !isFullscreenEntryRoute}
+        edgeOnly={isMapSurfaceRoute}
+        fullscreen={isMapSurfaceRoute || isChatRoute}
+        routeKey={`${location.pathname}${location.search}`}
+        onRefresh={refreshCurrentPage}
+      />
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
+        key={location.pathname}
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent mainContentRouteEnter ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
@@ -114,7 +162,7 @@ function AppShell({ children }) {
             </p>
           </section>
         )}
-        {children}
+        {refreshedChildren}
       </main>
       {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
       {!isFullscreenEntryRoute && !isLandingRoute && !isMapSurfaceRoute ? <Footer /> : null}

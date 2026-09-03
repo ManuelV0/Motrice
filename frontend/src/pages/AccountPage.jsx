@@ -11,6 +11,10 @@ import {
   getProfileV3State
 } from '../services/profileV3';
 import { uploadProfileMedia } from '../services/profileMedia';
+import {
+  getMyProfilePhotoChange,
+  submitProfilePhotoChange
+} from '../services/profilePhotoVerification';
 
 function AccountPage() {
   const navigate = useNavigate();
@@ -19,6 +23,7 @@ function AccountPage() {
   const [profile, setProfile] = useState(null);
   const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
   const [mode, setMode] = useState('mine');
+  const [photoReview, setPhotoReview] = useState({ status: 'none' });
   const [loading, setLoading] = useState(true);
 
   usePageMeta({
@@ -31,7 +36,12 @@ function AccountPage() {
     try {
       const identity = await api.getLocalProfile();
       setProfile(identity);
-      setProfileV3(await getProfileV3State(identity));
+      const [nextProfileV3, nextPhotoReview] = await Promise.all([
+        getProfileV3State(identity),
+        getMyProfilePhotoChange()
+      ]);
+      setProfileV3(nextProfileV3);
+      setPhotoReview(nextPhotoReview);
     } catch (error) {
       showToast(error.message || 'Impossibile caricare il profilo', 'error');
     } finally {
@@ -67,6 +77,20 @@ function AccountPage() {
     }
   }
 
+  async function uploadMedia(file, kind) {
+    if (kind === 'cover') return uploadProfileMedia(file, 'cover');
+
+    const result = await submitProfilePhotoChange(file);
+    setPhotoReview(result);
+
+    if (result.local && result.approved_avatar_url) {
+      return result.approved_avatar_url;
+    }
+
+    showToast('Foto inviata al confronto. L’avatar attuale resta visibile fino all’approvazione.', 'success');
+    return result;
+  }
+
   if (loading || !profile) {
     return <LoadingSkeleton rows={6} variant="detail" />;
   }
@@ -78,7 +102,8 @@ function AccountPage() {
       mode={mode}
       onModeChange={setMode}
       onSaveProfile={saveProfile}
-      onUploadMedia={uploadProfileMedia}
+      onUploadMedia={uploadMedia}
+      photoReview={photoReview}
       isPremium={isPremium}
       onVerify={() => navigate('/verify-profile')}
       onInvite={() => {

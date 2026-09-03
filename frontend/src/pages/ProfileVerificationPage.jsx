@@ -35,6 +35,7 @@ import {
   cameraResultToFile,
   captureProfileVerificationPhoto,
   consumeRestoredProfileCameraCapture,
+  initializeProfileVerificationCamera,
   profileCameraRestoredEvent
 } from '../services/profileVerificationCamera';
 import styles from '../styles/pages/profileVerification.module.css';
@@ -219,13 +220,21 @@ function ProfileVerificationPage() {
       }
     }
 
-    const restored = consumeRestoredProfileCameraCapture();
-    if (restored) restoreCapture(restored);
     const handleRestored = (event) => {
       consumeRestoredProfileCameraCapture();
       restoreCapture(event.detail);
     };
     window.addEventListener(profileCameraRestoredEvent, handleRestored);
+
+    initializeProfileVerificationCamera()
+      .then(() => {
+        const restored = consumeRestoredProfileCameraCapture();
+        if (restored) restoreCapture(restored);
+      })
+      .catch((error) => {
+        if (active) setCameraIssue(error?.message || 'Fotocamera non disponibile. Puoi usare la galleria.');
+      });
+
     return () => {
       active = false;
       window.removeEventListener(profileCameraRestoredEvent, handleRestored);
