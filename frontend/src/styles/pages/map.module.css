@@ -1392,12 +1392,14 @@
 }
 
 .zoomControlGroup {
-  top: 8.15rem;
+  top: 7.35rem;
   right: 0.8rem;
 }
 
 .locationControlGroup {
-  top: 13.95rem;
+  /* Mantiene lo stesso respiro tra il gruppo zoom e i controlli GPS,
+     evitando che "Centra posizione" si sovrapponga al pulsante meno. */
+  top: 13.72rem;
   right: 0.8rem;
   bottom: auto;
 }
@@ -1801,23 +1803,12 @@
 }
 
 .sheetEventList > article {
-  min-height: 5.25rem;
-  border: 1px solid rgb(255 255 255 / 9%);
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 3%);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  transition:
-    min-height 190ms var(--ease),
-    border-color 190ms var(--ease),
-    background-color 190ms var(--ease),
-    box-shadow 190ms var(--ease);
+  min-width: 0;
 }
 
 .themeLight .sheetEventList > article {
-  border-color: rgb(22 26 20 / 10%);
-  background: #fff;
+  border-color: rgb(22 26 20 / 22%);
+  background: #171917;
 }
 
 .sheetEventList > article.sheetEventRowActive {

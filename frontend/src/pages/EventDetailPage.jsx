@@ -40,6 +40,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import EventCard from '../components/EventCard';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
@@ -1733,25 +1734,16 @@ function EventDetailPage() {
               <h2>Eventi simili</h2>
             </div>
             <div className={styles.similarGrid} role="list" aria-label="Eventi simili">
-              {similarEvents.map((item) => {
-                const similarVisual = getSportDetailVisual(item);
-                return (
-                  <Card key={item.id} hover className={styles.similarCard} role="listitem">
-                    <div
-                      className={styles.similarCardImage}
-                      style={{ '--similar-event-image': `url("${similarVisual.image}")` }}
-                    >
-                      <span>{similarVisual.label}</span>
-                    </div>
-                    <div className={styles.similarCardBody}>
-                      <h3>{item.title || item.location_name}</h3>
-                      <p>{item.location_name}</p>
-                      <p className="muted">{formatEventDay(item.event_datetime)} · {formatEventTime(item.event_datetime)}</p>
-                      <Link to={`/events/${item.id}`}>Apri dettaglio <ArrowRight size={15} aria-hidden="true" /></Link>
-                    </div>
-                  </Card>
-                );
-              })}
+              {similarEvents.map((item) => (
+                <EventCard
+                  key={item.id}
+                  event={item}
+                  variant="featured"
+                  context="similar"
+                  showProgress={false}
+                  detailsLabel="Apri dettaglio"
+                />
+              ))}
             </div>
           </section>
         ) : null}

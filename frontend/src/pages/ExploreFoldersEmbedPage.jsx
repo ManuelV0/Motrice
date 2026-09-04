@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { FolderOpen } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Card from '../components/Card';
+import EventCard from '../components/EventCard';
 import { api } from '../services/api';
 import styles from '../styles/pages/exploreFoldersEmbed.module.css';
 
@@ -14,17 +15,6 @@ const DEFAULT_FILTERS = {
   timeOfDay: 'all',
   sortBy: 'soonest'
 };
-
-function formatDate(value) {
-  const date = new Date(value || '');
-  if (Number.isNaN(date.getTime())) return 'n/d';
-  return date.toLocaleString('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
 
 function ExploreFoldersEmbedPage() {
   const [events, setEvents] = useState([]);
@@ -105,14 +95,16 @@ function ExploreFoldersEmbedPage() {
             </div>
             <div className={styles.rail}>
               {folder.items.slice(0, 10).map((event) => (
-                <article className={styles.item} key={event.id}>
-                  <h3>{event.title || event.sport_name}</h3>
-                  <p className={styles.muted}>{event.location_name} · {event.city || 'Italia'}</p>
-                  <p className={styles.muted}>{formatDate(event.event_datetime)} · {event.participants_count}/{event.max_participants} posti</p>
-                  <Link to={`/events/${event.id}`} target="_top" className={styles.itemLink}>
-                    Apri evento
-                  </Link>
-                </article>
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  variant="compact"
+                  context="folder"
+                  showProgress={false}
+                  detailsLabel="Apri"
+                  detailsIconOnly
+                  linkTarget="_top"
+                />
               ))}
             </div>
           </Card>

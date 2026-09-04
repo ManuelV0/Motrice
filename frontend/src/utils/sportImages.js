@@ -4,6 +4,7 @@ const SPORT_IMAGE_MAP = {
   calcio: '/images/calcio.svg',
   bici: '/images/bici.svg',
   palestra: '/images/palestra.svg',
+  'palestra outdoor': '/images/palestra.svg',
   trekking: '/images/trekking.svg'
 };
 

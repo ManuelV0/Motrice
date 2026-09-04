@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import {
-  Bookmark,
-  BookmarkCheck,
   Check,
-  ChevronRight,
   Crosshair,
   LocateFixed,
   MapPinOff,
@@ -23,7 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
-import { getSportHeroImage } from '../utils/sportImages';
+import EventCard from '../components/EventCard';
 import styles from '../styles/pages/map.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -432,26 +429,6 @@ function getMapAreaLabel(events, hasLocation, selectedRadiusKm) {
   }, new Map());
 
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-}
-
-function formatEventDay(dateValue) {
-  const date = new Date(dateValue);
-  if (!Number.isFinite(date.getTime())) return 'PROSSIMO';
-
-  const today = new Date();
-  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const startEvent = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayDelta = Math.round((startEvent.getTime() - startToday.getTime()) / 86400000);
-
-  if (dayDelta === 0) return 'OGGI';
-  if (dayDelta === 1) return 'DOMANI';
-  return date.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' }).toUpperCase();
-}
-
-function formatEventTime(dateValue) {
-  const date = new Date(dateValue);
-  if (!Number.isFinite(date.getTime())) return '';
-  return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 }
 
 function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
@@ -1522,47 +1499,18 @@ function MapPage() {
             ) : sheetEvents.length > 0 ? (
               <div className={styles.sheetEventList} aria-label="Eventi visibili sulla mappa">
                 {sheetEvents.map((event) => (
-                  <article key={event.id} className={String(event.id) === String(selectedEventId) ? styles.sheetEventRowActive : ''}>
-                    <button
-                      type="button"
-                      className={styles.sheetEventMain}
-                      onClick={() => focusEvent(event)}
-                    >
-                      <span className={styles.sheetEventVisual} aria-hidden="true">
-                        <img
-                          src={getSportHeroImage(event.sport_name, event.title)}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        <span className={styles.eventDay}>{formatEventDay(event.event_datetime)}</span>
-                      </span>
-                      <span>
-                        <strong>{event.title || event.sport_name}</strong>
-                        <small>{formatEventTime(event.event_datetime)} · {event.location_name || event.city || 'Luogo da definire'}</small>
-                      </span>
-                    </button>
-                    <div className={styles.sheetEventActions} aria-label={`Azioni ${event.title || 'evento'}`}>
-                      <button
-                        type="button"
-                        className={`${styles.sheetEventSave} ${event.is_saved ? styles.sheetEventSaveActive : ''}`}
-                        onClick={() => toggleSaveEvent(event)}
-                        disabled={savingIds.includes(event.id)}
-                        aria-label={event.is_saved ? 'Rimuovi evento dai salvati' : 'Salva evento'}
-                        title={event.is_saved ? 'Salvato' : 'Salva'}
-                      >
-                        {event.is_saved ? <BookmarkCheck size={15} aria-hidden="true" /> : <Bookmark size={15} aria-hidden="true" />}
-                      </button>
-                      <Link
-                        className={styles.sheetEventDetails}
-                        to={`/events/${event.id}`}
-                        aria-label={`Dettagli ${event.title || 'evento'}`}
-                        title="Dettagli"
-                      >
-                        <ChevronRight size={17} aria-hidden="true" />
-                      </Link>
-                    </div>
-                  </article>
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    variant="compact"
+                    context="map"
+                    selected={String(event.id) === String(selectedEventId)}
+                    onSelect={focusEvent}
+                    onToggleSave={toggleSaveEvent}
+                    saving={savingIds.includes(event.id)}
+                    detailsIconOnly
+                    showProgress={false}
+                  />
                 ))}
               </div>
             ) : (

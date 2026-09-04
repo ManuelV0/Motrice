@@ -1,115 +1,193 @@
 import { Link } from 'react-router-dom';
-import { Bookmark, BookmarkCheck, Users } from 'lucide-react';
-import EventBadge from './EventBadge';
+import {
+  Bookmark,
+  BookmarkCheck,
+  ChevronRight,
+  Clock3,
+  MapPin,
+  ShieldCheck,
+  Users
+} from 'lucide-react';
 import Card from './Card';
-import Button from './Button';
+import { getSportHeroImage } from '../utils/sportImages';
 import styles from '../styles/components/eventCard.module.css';
-import { getSportImage } from '../utils/sportImages';
+
+function formatEventDate(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return { day: 'Data da definire', time: '--:--' };
+  return {
+    day: new Intl.DateTimeFormat('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }).format(date),
+    time: new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(date)
+  };
+}
+
+function resolveStatus(event, status) {
+  if (status?.label) return status;
+  if (event.status === 'cancelled') return { label: 'Annullato', tone: 'danger' };
+  if (event.status === 'completed') return { label: 'Svolto', tone: 'neutral' };
+  if (event.is_going) return { label: 'Partecipo', tone: 'success' };
+  if (event.featured_boost) return { label: 'In evidenza', tone: 'success' };
+  return null;
+}
 
 function EventCard({
   event,
-  variant = 'compact',
+  variant = 'standard',
+  context = 'default',
+  status,
+  selected = false,
+  stats = [],
+  metaItems,
+  primaryAction,
+  secondaryAction,
+  detailsLabel = 'Dettagli',
+  detailsIconOnly = false,
+  onSelect,
   onToggleSave,
   onBookGroup,
   saving = false,
   booking = false,
+  showProgress,
+  showDescription = false,
+  linkTarget,
   className = ''
 }) {
-  const isExpanded = variant === 'expanded';
-  const isFolder = variant === 'folder';
+  const visualVariant = variant === 'folder' ? 'featured' : variant === 'expanded' ? 'featured' : variant;
+  const safeVariant = ['compact', 'standard', 'featured'].includes(visualVariant) ? visualVariant : 'standard';
+  const date = formatEventDate(event.event_datetime);
+  const resolvedStatus = resolveStatus(event, status);
+  const StatusIcon = resolvedStatus?.icon;
+  const PrimaryIcon = primaryAction?.icon;
+  const SecondaryIcon = secondaryAction?.icon;
+  const participants = Math.max(0, Number(event.participants_count || 0));
+  const capacity = Math.max(participants, Number(event.max_participants || 0));
+  const displayProgress = showProgress ?? safeVariant !== 'compact';
+  const defaultMetaItems = [
+    event.duration_minutes ? { icon: Clock3, label: `${Number(event.duration_minutes)} min` } : null,
+    capacity ? { icon: Users, label: `${participants}/${capacity}` } : null,
+    event.created_by === 'me' ? { icon: ShieldCheck, label: 'Organizer' } : null
+  ].filter(Boolean);
+  const renderedMetaItems = Array.isArray(metaItems) ? metaItems : defaultMetaItems;
+  const hasActions = Boolean(primaryAction || secondaryAction || onBookGroup || detailsLabel);
+  const title = event.title || event.sport_name || 'Evento Motrice';
+  const location = event.location_name || event.city || 'Luogo da definire';
+  const detailHref = `/events/${event.id}`;
 
-  return (
-    <Card as="article" className={`${styles.card} ${isFolder ? styles.folder : ''} ${className}`.trim()} hover>
-      <div className={styles.imageWrap}>
+  const mainContent = (
+    <>
+      <span className={styles.imageWrap} aria-hidden="true">
         <img
           className={styles.image}
-          src={getSportImage(event.sport_name)}
-          alt={`${event.sport_name} a ${event.location_name}`}
+          src={getSportHeroImage(event.sport_name, event.title)}
+          alt=""
           loading="lazy"
           decoding="async"
-          onError={(eventTarget) => {
-            eventTarget.currentTarget.src = '/images/default-sport.svg';
+          onError={(imageEvent) => {
+            imageEvent.currentTarget.src = '/images/hero-sport-default-v2.jpg';
           }}
         />
-        <div className={styles.overlay}>
-          <span className={styles.overlayText}>{event.sport_name}</span>
-        </div>
-      </div>
-
-      <div className={styles.head}>
-        <EventBadge label={event.sport_name} type="sport" />
-        <EventBadge label={event.level} type="level" />
-        {event.creator_plan === 'premium' && <EventBadge label="Premium" type="premium" />}
-        {event.featured_boost && <EventBadge label="Featured" type="status" />}
-        {Number(event.group_chat_unread_count || 0) > 0 && (
-          <span className={styles.groupUnreadBadge}>
-            Chat gruppo: {event.group_chat_unread_count} new
+        <span className={styles.imageShade} />
+        <span className={styles.sportBadge}>{event.sport_name || 'Sport'}</span>
+        {resolvedStatus ? (
+          <span className={`${styles.stateBadge} ${styles[`state_${resolvedStatus.tone || 'neutral'}`]}`}>
+            {StatusIcon ? <StatusIcon size={13} aria-hidden="true" /> : null}
+            {resolvedStatus.label}
           </span>
-        )}
-      </div>
+        ) : null}
+      </span>
 
-      <h3>
-        <Link className={styles.titleLink} to={`/events/${event.id}`}>
-          {event.location_name}
+      <span className={styles.content}>
+        <span className={styles.dateLine}>
+          <strong>{date.time}</strong>
+          <small>{date.day}</small>
+        </span>
+        <strong className={styles.title}>{title}</strong>
+        <span className={styles.location}><MapPin size={14} aria-hidden="true" /> {location}</span>
+        {renderedMetaItems.length ? (
+          <span className={styles.metaRow}>
+            {renderedMetaItems.map((item, index) => {
+              const Icon = item.icon;
+              return <span key={`${item.label}-${index}`}>{Icon ? <Icon size={14} aria-hidden="true" /> : null}{item.label}</span>;
+            })}
+          </span>
+        ) : null}
+        {showDescription && event.description ? <span className={styles.description}>{event.description}</span> : null}
+        {displayProgress && capacity > 0 ? (
+          <span className={styles.progressBlock}>
+            <span><small>Partecipanti</small><b>{participants}/{capacity}</b></span>
+            <progress value={participants} max={capacity} />
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+
+  return (
+    <Card
+      as="article"
+      className={`${styles.card} ${styles[`variant_${safeVariant}`]} ${styles[`context_${context}`] || ''} ${selected ? styles.selected : ''} ${resolvedStatus?.tone === 'danger' ? styles.danger : ''} ${resolvedStatus?.tone === 'neutral' ? styles.mutedCard : ''} ${className}`.trim()}
+    >
+      {onSelect ? (
+        <button type="button" className={styles.main} onClick={() => onSelect(event)} aria-label={`Seleziona ${title}`}>
+          {mainContent}
+        </button>
+      ) : (
+        <Link className={styles.main} to={detailHref} target={linkTarget} aria-label={`Apri ${title}`}>
+          {mainContent}
         </Link>
-      </h3>
-
-      {event.title && (
-        <p>
-          <strong>{event.title}</strong>
-        </p>
-      )}
-      <p className="muted">{new Date(event.event_datetime).toLocaleString('it-IT')}</p>
-      {event.city && <p className="muted">{event.city}</p>}
-      <div>
-        <p className={styles.progressLabel}>
-          {event.participants_count}/{event.max_participants} partecipanti
-        </p>
-        <progress className={styles.progress} value={event.participants_count} max={event.max_participants} />
-      </div>
-      {event.is_going && (
-        <p>
-          <EventBadge label="You're going" type="status" />
-        </p>
       )}
 
-      {event.distance_km != null && <p className="muted">Distanza: {event.distance_km} km</p>}
-      {event.route_info ? (
-        <p className={styles.routeInfo}>
-          Percorso: {event.route_info.name} - {event.route_info.from_label || 'Via X'} → {event.route_info.to_label || 'Via Y'} ({event.route_info.distance_km} km
-          {event.route_info.elevation_gain_m ? `, +${event.route_info.elevation_gain_m} m` : ''})
-        </p>
+      {onToggleSave ? (
+        <button
+          type="button"
+          className={`${styles.saveButton} ${event.is_saved ? styles.saveButtonActive : ''}`}
+          onClick={() => onToggleSave(event)}
+          disabled={saving}
+          aria-label={event.is_saved ? 'Rimuovi evento dai salvati' : 'Salva evento'}
+          title={event.is_saved ? 'Salvato' : 'Salva'}
+        >
+          {event.is_saved ? <BookmarkCheck size={17} aria-hidden="true" /> : <Bookmark size={17} aria-hidden="true" />}
+        </button>
       ) : null}
-      {isExpanded && <p>{event.description}</p>}
-      <div className={styles.actions}>
-        {onBookGroup && (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => onBookGroup(event)}
-            disabled={booking}
-            icon={Users}
-            size={isFolder ? 'sm' : 'md'}
-          >
-            {booking ? 'Prenotazione...' : isFolder ? 'Prenota gruppo' : 'Prenota sessione di gruppo'}
-          </Button>
-        )}
-        {onToggleSave && (
-          <Button
-            type="button"
-            variant={event.is_saved ? 'secondary' : 'ghost'}
-            onClick={() => onToggleSave(event)}
-            disabled={saving}
-            icon={event.is_saved ? BookmarkCheck : Bookmark}
-            size={isFolder ? 'sm' : 'md'}
-          >
-            {event.is_saved ? (isFolder ? 'Salvato' : 'Salvato nei tuoi eventi') : isFolder ? 'Salva' : 'Salva nei tuoi eventi'}
-          </Button>
-        )}
-        <Link to={`/events/${event.id}`}>
-          <Button variant="ghost" size={isFolder ? 'sm' : 'md'}>{isFolder ? 'Apri' : 'View'}</Button>
-        </Link>
-      </div>
+
+      {stats.length ? (
+        <div className={styles.statsGrid}>
+          {stats.map((item) => (
+            <span key={item.label}><b>{item.value}</b><small>{item.label}</small></span>
+          ))}
+        </div>
+      ) : null}
+
+      {hasActions ? (
+        <div className={styles.actions}>
+          {secondaryAction ? (
+            <button type="button" className={styles.secondaryAction} onClick={() => secondaryAction.onClick?.(event)}>
+              {SecondaryIcon ? <SecondaryIcon size={16} aria-hidden="true" /> : null}{secondaryAction.label}
+            </button>
+          ) : null}
+          {onBookGroup ? (
+            <button type="button" className={styles.primaryAction} onClick={() => onBookGroup(event)} disabled={booking}>
+              <Users size={16} aria-hidden="true" />{booking ? 'Prenotazione…' : 'Prenota'}
+            </button>
+          ) : null}
+          {primaryAction ? (
+            <button type="button" className={styles.primaryAction} onClick={() => primaryAction.onClick?.(event)} disabled={primaryAction.disabled}>
+              {PrimaryIcon ? <PrimaryIcon size={16} aria-hidden="true" /> : null}{primaryAction.label}
+            </button>
+          ) : null}
+          {detailsLabel ? (
+            <Link
+              className={`${styles.detailsAction} ${detailsIconOnly ? styles.iconOnly : ''}`}
+              to={detailHref}
+              target={linkTarget}
+              aria-label={detailsIconOnly ? `Dettagli ${title}` : undefined}
+              title={detailsIconOnly ? 'Dettagli' : undefined}
+            >
+              {detailsIconOnly ? <ChevronRight size={18} aria-hidden="true" /> : <>{detailsLabel}<ChevronRight size={16} aria-hidden="true" /></>}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

@@ -20,6 +20,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  Timer,
   Trash2,
   Undo2,
   UserRound,
@@ -109,8 +110,7 @@ const DURATION_PRESETS = [60, 90, 120];
 const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
 const PRESENCE_PRESETS = [30, 45, 60, 90];
 const CHECK_IN_GRACE_PRESETS = [0, 10, 15, 20, 30];
-const HOURS_24 = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
-const MINUTES_60 = Array.from({ length: 60 }, (_, minute) => String(minute).padStart(2, '0'));
+const TIME_QUICK_OPTIONS = ['07:00', '12:30', '18:00', '18:30', '19:00', '20:00'];
 const ADVANCED_RULE_FIELDS = [
   'deposit_cents',
   'minimum_presence_minutes',
@@ -128,13 +128,27 @@ const AUDIENCE_OPTIONS = [
 ];
 
 const SPORT_VISUALS = {
-  running: { emoji: '🏃', subtitle: 'Gruppi corsa' },
-  padel: { emoji: '🎾', subtitle: 'Doppio · Singolo' },
-  calcio: { emoji: '⚽', subtitle: '5vs5 · 11vs11' },
-  palestra: { emoji: '🏋️', subtitle: 'Forza · Fitness' },
-  bici: { emoji: '🚴', subtitle: 'Strada · Gravel' },
-  trekking: { emoji: '🥾', subtitle: 'Sentieri · Gruppi' }
+  'palestra-outdoor': {
+    emoji: '🌳',
+    cardImage: '/images/hero-palestra-outdoor-v2.png',
+    subtitle: 'Corpo libero · Calisthenics'
+  },
+  running: { emoji: '🏃', cardImage: '/images/hero-running-v2.jpg', subtitle: 'Gruppi corsa' },
+  padel: { emoji: '🎾', cardImage: '/images/hero-padel-v2.jpg', subtitle: 'Doppio · Singolo' },
+  calcio: { emoji: '⚽', cardImage: '/images/hero-calcio-v2.jpg', subtitle: '5vs5 · 11vs11' },
+  palestra: { emoji: '🏋️', cardImage: '/images/hero-palestra-v2.jpg', subtitle: 'Forza · Fitness' },
+  bici: { emoji: '🚴', cardImage: '/images/hero-bici-v2.jpg', subtitle: 'Strada · Gravel' },
+  trekking: { emoji: '🥾', cardImage: '/images/hero-trekking-v2.jpg', subtitle: 'Sentieri · Gruppi' }
 };
+
+const CREATE_SPORT_ORDER = [
+  'palestra-outdoor',
+  'palestra',
+  'running',
+  'trekking',
+  'calcio',
+  'padel'
+];
 
 const STEP_ERROR_FIELDS = {
   1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants', 'audience'],
@@ -202,6 +216,56 @@ function getTimePeriodLabel(value = '') {
   if (numericHour < 12) return 'mattina';
   if (numericHour < 18) return 'pomeriggio';
   return 'sera';
+}
+
+function toLocalDateInputValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDate(value = '') {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value));
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatEventDateLabel(value = '') {
+  const date = parseLocalDate(value);
+  if (!date) return 'Scegli data';
+  const label = new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short'
+  }).format(date);
+  return label.charAt(0).toUpperCase() + label.slice(1).replace(/\.$/, '');
+}
+
+function getDateValueWithOffset(offsetDays) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + offsetDays);
+  return toLocalDateInputValue(date);
+}
+
+function getWeekendDateValue() {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  const daysUntilSaturday = (6 - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + daysUntilSaturday);
+  return toLocalDateInputValue(date);
+}
+
+function getEventEndTime(startTime = '', durationMinutes = 0) {
+  const { hour, minute } = getTimeParts(startTime);
+  const duration = Number(durationMinutes);
+  if (!hour || !minute || !Number.isFinite(duration) || duration <= 0) return '';
+  const totalMinutes = Number(hour) * 60 + Number(minute) + duration;
+  const endHour = Math.floor((totalMinutes % 1440) / 60);
+  const endMinute = totalMinutes % 60;
+  return `${String(endHour).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`;
 }
 
 function useKeyboardVisibility() {
@@ -272,8 +336,15 @@ function useKeyboardVisibility() {
   return keyboardVisible;
 }
 
+function getSportKey(sport) {
+  return String(sport?.slug || sport?.name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+}
+
 function getSportVisual(sport) {
-  const key = String(sport?.slug || sport?.name || '').trim().toLowerCase();
+  const key = getSportKey(sport);
   return SPORT_VISUALS[key] || { emoji: '🏅', subtitle: 'Allenamento di gruppo' };
 }
 
@@ -430,6 +501,7 @@ function CreateEventPage() {
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [activeWhenPanel, setActiveWhenPanel] = useState('date');
   const [workoutPlans, setWorkoutPlans] = useState([]);
   const [workoutPlansLoading, setWorkoutPlansLoading] = useState(false);
   const [workoutPlanPickerOpen, setWorkoutPlanPickerOpen] = useState(false);
@@ -451,13 +523,52 @@ function CreateEventPage() {
     requestLocation
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
-  const eventTimeParts = useMemo(() => getTimeParts(eventTime), [eventTime]);
   const eventTimePeriod = useMemo(() => getTimePeriodLabel(eventTime), [eventTime]);
+  const eventEndTime = useMemo(
+    () => getEventEndTime(eventTime, form.duration_minutes),
+    [eventTime, form.duration_minutes]
+  );
+  const todayDateValue = toLocalDateInputValue();
 
-  function setEventTimePart(part, value) {
-    const nextHour = part === 'hour' ? value : (eventTimeParts.hour || '00');
-    const nextMinute = part === 'minute' ? value : (eventTimeParts.minute || '00');
-    setEventTime(`${nextHour}:${nextMinute}`);
+  function toggleWhenPanel(panel) {
+    if (panel === 'time' && !eventDate) {
+      setActiveWhenPanel('date');
+      showToast('Scegli prima la data', 'info');
+      return;
+    }
+    if (panel === 'duration' && !eventTime) {
+      setActiveWhenPanel(eventDate ? 'time' : 'date');
+      showToast(eventDate ? 'Scegli prima l’orario' : 'Scegli prima data e orario', 'info');
+      return;
+    }
+    setActiveWhenPanel((current) => current === panel ? null : panel);
+  }
+
+  function selectEventDate(value) {
+    if (!value) return;
+    setEventDate(value);
+    if (value === todayDateValue && eventTime) {
+      const selectedDateTime = new Date(`${value}T${eventTime}`);
+      if (selectedDateTime.getTime() <= Date.now()) setEventTime('');
+    }
+    setActiveWhenPanel('time');
+  }
+
+  function selectEventTime(value) {
+    if (!value) return;
+    const selectedDate = eventDate || todayDateValue;
+    const selectedDateTime = new Date(`${selectedDate}T${value}`);
+    if (selectedDate === todayDateValue && selectedDateTime.getTime() <= Date.now()) {
+      showToast('Scegli un orario successivo a quello attuale', 'error');
+      return;
+    }
+    setEventTime(value);
+    setActiveWhenPanel('duration');
+  }
+
+  function selectEventDuration(minutes) {
+    setField('duration_minutes', minutes);
+    setActiveWhenPanel(null);
   }
 
   const filteredWorkoutPlans = useMemo(() => {
@@ -527,6 +638,13 @@ function CreateEventPage() {
     () => sports.find((item) => String(item.id) === String(form.sport_id)) || null,
     [sports, form.sport_id]
   );
+
+  const orderedSports = useMemo(() => {
+    const rankBySlug = new Map(CREATE_SPORT_ORDER.map((slug, index) => [slug, index]));
+    return sports
+      .filter((sport) => rankBySlug.has(getSportKey(sport)))
+      .sort((left, right) => rankBySlug.get(getSportKey(left)) - rankBySlug.get(getSportKey(right)));
+  }, [sports]);
 
   const selectedSportHasRoute = useMemo(() => {
     const slug = String(selectedSport?.slug || '').toLowerCase();
@@ -1267,6 +1385,13 @@ function CreateEventPage() {
     });
 
     if (Object.keys(currentStepErrors).length) {
+      if (activeStep === 1) {
+        if (currentStepErrors.event_datetime) {
+          setActiveWhenPanel(eventDate ? 'time' : 'date');
+        } else if (currentStepErrors.duration_minutes) {
+          setActiveWhenPanel('duration');
+        }
+      }
       showToast('Completa i campi evidenziati prima di continuare', 'error');
       return;
     }
@@ -1452,18 +1577,24 @@ function CreateEventPage() {
                 <small>{selectedSport ? selectedSport.name : 'Seleziona uno'}</small>
               </div>
               <div className={styles.sportGrid} role="group" aria-label="Scegli lo sport">
-                {sports.map((sport) => {
+                {orderedSports.map((sport) => {
                   const visual = getSportVisual(sport);
                   const selected = String(form.sport_id) === String(sport.id);
                   return (
                     <button
                       key={sport.id}
                       type="button"
-                      className={`${styles.sportCard} ${selected ? styles.sportCardSelected : ''}`}
+                      className={`${styles.sportCard} ${visual.cardImage ? styles.sportCardWithImage : ''} ${selected ? styles.sportCardSelected : ''}`}
                       aria-pressed={selected}
                       onClick={() => onSportChange(sport.id)}
                     >
-                      <span className={styles.sportEmoji} aria-hidden="true">{visual.emoji}</span>
+                      {visual.cardImage ? (
+                        <span className={styles.sportImageWrap} aria-hidden="true">
+                          <img className={styles.sportImage} src={visual.cardImage} alt="" />
+                        </span>
+                      ) : (
+                        <span className={styles.sportEmoji} aria-hidden="true">{visual.emoji}</span>
+                      )}
                       <strong>{sport.name}</strong>
                       <small>{visual.subtitle}</small>
                       {selected ? <span className={styles.sportCheck}><Check size={17} /></span> : null}
@@ -1491,79 +1622,174 @@ function CreateEventPage() {
               </div>
             </div>
 
-            <div className={styles.dateTimeGrid}>
-              <label className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
-                <span><CalendarDays size={18} />Data</span>
-                <input
-                  type="date"
-                  value={eventDate}
-                  onInput={(e) => {
-                    setEventDate(e.target.value);
-                  }}
-                />
-              </label>
-              <div className={`${styles.infoControl} ${errors.event_datetime ? styles.invalidCard : ''}`}>
-                <span>
-                  <Clock3 size={18} />Ora
-                  <small className={styles.time24Badge}>24H</small>
-                </span>
-                <div className={styles.time24Picker} role="group" aria-label="Orario evento in formato 24 ore">
-                  <select
-                    aria-label="Ora, da 00 a 23"
-                    value={eventTimeParts.hour}
-                    onChange={(event) => setEventTimePart('hour', event.target.value)}
+            <div className={styles.whenSection}>
+              <div className={styles.sectionLabelRow}>
+                <span>Data e ora</span>
+                <small>Completa in ordine</small>
+              </div>
+              <div className={`${styles.whenAccordion} ${errors.event_datetime || errors.duration_minutes ? styles.invalidCard : ''}`}>
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'date' ? styles.whenItemOpen : ''}`}>
+                  <button
+                    type="button"
+                    className={styles.whenHeader}
+                    onClick={() => toggleWhenPanel('date')}
+                    aria-expanded={activeWhenPanel === 'date'}
+                    aria-controls="event-date-panel"
                   >
-                    <option value="" disabled>Ora</option>
-                    {HOURS_24.map((hour) => <option key={hour} value={hour}>{hour}</option>)}
-                  </select>
-                  <strong aria-hidden="true">:</strong>
-                  <select
-                    aria-label="Minuti, da 00 a 59"
-                    value={eventTimeParts.minute}
-                    onChange={(event) => setEventTimePart('minute', event.target.value)}
-                  >
-                    <option value="" disabled>Min</option>
-                    {MINUTES_60.map((minute) => <option key={minute} value={minute}>{minute}</option>)}
-                  </select>
+                    <span className={styles.whenIcon}><CalendarDays size={20} /></span>
+                    <span className={styles.whenSummary}>
+                      <strong>{eventDate ? formatEventDateLabel(eventDate) : 'Scegli data'}</strong>
+                    </span>
+                    <span className={`${styles.whenState} ${activeWhenPanel === 'date' ? styles.whenStateOpen : ''}`} aria-hidden="true">
+                      {eventDate && activeWhenPanel !== 'date' ? <Check size={18} /> : <ChevronDown size={19} />}
+                    </span>
+                  </button>
+                  {activeWhenPanel === 'date' ? (
+                    <div className={styles.whenBody} id="event-date-panel">
+                      <p>Scegli una data rapida oppure apri il calendario.</p>
+                      <div className={styles.dateQuickOptions} role="group" aria-label="Date rapide">
+                        {[
+                          { label: 'Oggi', value: getDateValueWithOffset(0) },
+                          { label: 'Domani', value: getDateValueWithOffset(1) },
+                          { label: 'Weekend', value: getWeekendDateValue() }
+                        ].map((option) => (
+                          <button
+                            type="button"
+                            key={`${option.label}-${option.value}`}
+                            className={eventDate === option.value ? styles.pickerOptionSelected : ''}
+                            onClick={() => selectEventDate(option.value)}
+                          >
+                            <strong>{option.label}</strong>
+                            <small>{formatEventDateLabel(option.value)}</small>
+                          </button>
+                        ))}
+                      </div>
+                      <label className={styles.nativePickerField}>
+                        <CalendarDays size={21} aria-hidden="true" />
+                        <span>
+                          <small>Altra data</small>
+                          <input
+                            type="date"
+                            min={todayDateValue}
+                            value={eventDate}
+                            onChange={(event) => selectEventDate(event.target.value)}
+                          />
+                        </span>
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
-                <small className={styles.time24Preview} aria-live="polite">
-                  {eventTime ? `${eventTime} · ${eventTimePeriod}` : 'Seleziona l’orario da 00:00 a 23:59'}
-                </small>
+
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'time' ? styles.whenItemOpen : ''}`}>
+                  <button
+                    type="button"
+                    className={styles.whenHeader}
+                    onClick={() => toggleWhenPanel('time')}
+                    aria-expanded={activeWhenPanel === 'time'}
+                    aria-controls="event-time-panel"
+                  >
+                    <span className={styles.whenIcon}><Clock3 size={20} /></span>
+                    <span className={styles.whenSummary}>
+                      <strong>{eventTime || 'Scegli ora'}</strong>
+                    </span>
+                    <span className={`${styles.whenState} ${activeWhenPanel === 'time' ? styles.whenStateOpen : ''}`} aria-hidden="true">
+                      {eventTime && activeWhenPanel !== 'time' ? <Check size={18} /> : <ChevronDown size={19} />}
+                    </span>
+                  </button>
+                  {activeWhenPanel === 'time' ? (
+                    <div className={styles.whenBody} id="event-time-panel">
+                      <p>Formato 24 ore, con precisione di 5 minuti.</p>
+                      <label className={styles.nativePickerField}>
+                        <Clock3 size={21} aria-hidden="true" />
+                        <span>
+                          <small>Ora di inizio</small>
+                          <input
+                            type="time"
+                            step="300"
+                            value={eventTime}
+                            onChange={(event) => selectEventTime(event.target.value)}
+                          />
+                        </span>
+                        <b>24H</b>
+                      </label>
+                      <div className={styles.timeQuickOptions} role="group" aria-label="Orari rapidi">
+                        {TIME_QUICK_OPTIONS.map((time) => (
+                          <button
+                            type="button"
+                            key={time}
+                            className={eventTime === time ? styles.pickerOptionSelected : ''}
+                            onClick={() => selectEventTime(time)}
+                          >
+                            {time}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'duration' ? styles.whenItemOpen : ''}`}>
+                  <button
+                    type="button"
+                    className={styles.whenHeader}
+                    onClick={() => toggleWhenPanel('duration')}
+                    aria-expanded={activeWhenPanel === 'duration'}
+                    aria-controls="event-duration-panel"
+                  >
+                    <span className={styles.whenIcon}><Timer size={20} /></span>
+                    <span className={styles.whenSummary}>
+                      <strong>{eventTime ? `${Number(form.duration_minutes) || 0} minuti` : 'Durata'}</strong>
+                    </span>
+                    <span className={`${styles.whenState} ${activeWhenPanel === 'duration' ? styles.whenStateOpen : ''}`} aria-hidden="true">
+                      {eventTime && Number(form.duration_minutes) >= 15 && activeWhenPanel !== 'duration' ? <Check size={18} /> : <ChevronDown size={19} />}
+                    </span>
+                  </button>
+                  {activeWhenPanel === 'duration' ? (
+                    <div className={styles.whenBody} id="event-duration-panel">
+                      <p>Scegli una durata rapida oppure inseriscila in minuti.</p>
+                      <div className={styles.presetRow} role="group" aria-label="Durata evento">
+                        {DURATION_PRESETS.map((minutes) => (
+                          <button
+                            key={minutes}
+                            type="button"
+                            className={Number(form.duration_minutes) === minutes ? styles.presetSelected : ''}
+                            onClick={() => selectEventDuration(minutes)}
+                          >
+                            {minutes}′
+                          </button>
+                        ))}
+                      </div>
+                      <label className={styles.compactNumber}>
+                        Durata personalizzata
+                        <input
+                          type="number"
+                          min="15"
+                          max="360"
+                          step="15"
+                          value={form.duration_minutes}
+                          onChange={(event) => setField('duration_minutes', event.target.value)}
+                          onBlur={() => {
+                            if (Number(form.duration_minutes) >= 15) setActiveWhenPanel(null);
+                          }}
+                          aria-label="Durata personalizzata in minuti"
+                        />
+                      </label>
+                      {eventEndTime ? (
+                        <small className={styles.endTimePreview} aria-live="polite">
+                          {formatEventDateLabel(eventDate)} · {eventTime}
+                          <strong>Fine {eventEndTime}</strong>
+                        </small>
+                      ) : null}
+                      {errors.duration_minutes && <span className="error">{errors.duration_minutes}</span>}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
             {errors.event_datetime && <span className="error">{errors.event_datetime}</span>}
 
             <div className={styles.controlGrid}>
-              <div className={`${styles.controlCard} ${errors.duration_minutes ? styles.invalidCard : ''}`}>
-                <span className={styles.controlTitle}><Clock3 size={18} />Durata</span>
-                <div className={styles.presetRow}>
-                  {DURATION_PRESETS.map((minutes) => (
-                    <button
-                      key={minutes}
-                      type="button"
-                      className={Number(form.duration_minutes) === minutes ? styles.presetSelected : ''}
-                      onClick={() => setField('duration_minutes', minutes)}
-                    >
-                      {minutes}′
-                    </button>
-                  ))}
-                </div>
-                <label className={styles.compactNumber}>
-                  Altro
-                  <input
-                    type="number"
-                    min="15"
-                    max="360"
-                    step="15"
-                    value={form.duration_minutes}
-                    onChange={(e) => setField('duration_minutes', e.target.value)}
-                    aria-label="Durata personalizzata in minuti"
-                  />
-                </label>
-                {errors.duration_minutes && <span className="error">{errors.duration_minutes}</span>}
-              </div>
-
-              <div className={`${styles.controlCard} ${errors.max_participants ? styles.invalidCard : ''}`}>
+              <div className={`${styles.controlCard} ${styles.participantsCard} ${errors.max_participants ? styles.invalidCard : ''}`}>
                 <span className={styles.controlTitle}><Users size={18} />Partecipanti</span>
                 <div className={styles.stepper}>
                   <button type="button" onClick={() => changeParticipantCount(-1)} aria-label="Riduci partecipanti">

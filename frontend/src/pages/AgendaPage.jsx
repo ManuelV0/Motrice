@@ -14,13 +14,13 @@ import {
   QrCode,
   Settings2,
   ShieldCheck,
-  Users,
   XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
 import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerificationPanel';
+import EventCard from '../components/EventCard';
 import styles from '../styles/pages/agenda.module.css';
 import { getEventTiming } from '../utils/eventLifecycle';
 
@@ -700,23 +700,23 @@ function AgendaPage() {
 
                 if (isCancelled) {
                   return (
-                    <article key={event.id} className={`${styles.sheetEventCard} ${styles.cancelledEventCard}`}>
-                      <div className={styles.sheetEventTopline}>
-                        <span className={`${styles.eventState} ${styles.eventState_danger}`}>
-                          <XCircle size={15} aria-hidden="true" /> Annullato
-                        </span>
-                        <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
-                      </div>
-                      <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
-                      <p>{event.location_name || event.city || 'Luogo da definire'}</p>
-                      <div className={styles.cancelledEventMeta}>
-                        <span>{event.cancellation_note || 'Evento cancellato dall organizer'}</span>
-                        <strong>Depositi restituiti</strong>
-                      </div>
-                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>
-                        Apri riepilogo annullamento
-                      </button>
-                    </article>
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      variant="standard"
+                      context="agenda"
+                      status={{ label: 'Annullato', tone: 'danger', icon: XCircle }}
+                      metaItems={[
+                        { label: event.cancellation_note || 'Cancellato dall’organizer' },
+                        { label: `${participants}/${capacity || '—'} iscritti` }
+                      ]}
+                      stats={[
+                        { value: 'Restituiti', label: 'Depositi' },
+                        { value: `${participants}`, label: 'Iscritti' }
+                      ]}
+                      showProgress={false}
+                      detailsLabel="Riepilogo"
+                    />
                   );
                 }
 
@@ -724,50 +724,41 @@ function AgendaPage() {
                   const stats = getClosedEventStats(event);
                   const StatusIcon = stats.attendance.tone === 'danger' ? XCircle : CheckCircle2;
                   return (
-                    <article key={event.id} className={`${styles.sheetEventCard} ${styles.closedEventCard}`}>
-                      <div className={styles.sheetEventTopline}>
-                        <span className={`${styles.eventState} ${styles[`eventState_${stats.attendance.tone}`]}`}>
-                          <StatusIcon size={15} aria-hidden="true" /> {stats.attendance.label}
-                        </span>
-                        <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
-                      </div>
-                      <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
-                      <p>{event.location_name || event.city || 'Luogo da definire'}</p>
-                      <div className={styles.closedStatsGrid}>
-                        <span><b>+{stats.earnedXp} XP</b><small>guadagnati</small></span>
-                        <span><b>{stats.trainedMinutes} min</b><small>allenati</small></span>
-                        <span><b>{stats.reliability}</b><small>Affidabilità</small></span>
-                        <span><b>{stats.presentCount}/{stats.totalCount}</b><small>presenti</small></span>
-                      </div>
-                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>
-                        Apri riepilogo evento
-                      </button>
-                    </article>
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      variant="standard"
+                      context="agenda"
+                      status={{ label: stats.attendance.label, tone: stats.attendance.tone, icon: StatusIcon }}
+                      stats={[
+                        { value: `+${stats.earnedXp} XP`, label: 'Guadagnati' },
+                        { value: `${stats.trainedMinutes} min`, label: 'Allenati' },
+                        { value: stats.reliability, label: 'Affidabilità' },
+                        { value: `${stats.presentCount}/${stats.totalCount}`, label: 'Presenti' }
+                      ]}
+                      showProgress={false}
+                      detailsLabel="Riepilogo"
+                    />
                   );
                 }
 
                 const isOrganizer = event.created_by === 'me';
                 const ActionIcon = isOrganizer ? Settings2 : MessageCircle;
                 return (
-                  <article key={event.id} className={`${styles.sheetEventCard} ${styles.futureEventCard}`}>
-                    <div className={styles.sheetEventTopline}>
-                      <span className={`${styles.eventState} ${styles.eventState_success}`}>Da svolgere</span>
-                      <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
-                    </div>
-                    <h3>{event.title || event.sport_name || 'Evento Motrice'}</h3>
-                    <p>{event.location_name || event.city || 'Luogo da definire'}</p>
-                    <div className={styles.futureEventMeta}>
-                      <span><Clock3 size={16} aria-hidden="true" /> {Number(event.duration_minutes || 0)} min</span>
-                      <span><Users size={16} aria-hidden="true" /> {participants}/{capacity || '—'}</span>
-                      {isOrganizer ? <span><ShieldCheck size={16} aria-hidden="true" /> Organizer</span> : null}
-                    </div>
-                    <div className={styles.eventActionRow}>
-                      <button type="button" className={styles.eventDetailAction} onClick={() => openEvent(event)}>Dettagli</button>
-                      <button type="button" className={styles.eventPrimaryAction} onClick={() => openFutureAction(event)}>
-                        <ActionIcon size={17} aria-hidden="true" /> {isOrganizer ? 'Gestisci' : 'Chat'}
-                      </button>
-                    </div>
-                  </article>
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    variant="standard"
+                    context="agenda"
+                    status={{ label: 'Da svolgere', tone: 'success' }}
+                    primaryAction={{
+                      label: isOrganizer ? 'Gestisci' : 'Chat',
+                      icon: ActionIcon,
+                      onClick: openFutureAction
+                    }}
+                    showProgress
+                    detailsLabel="Dettagli"
+                  />
                 );
               })}
             </div>

@@ -407,7 +407,8 @@ function ExplorePage() {
                 <div key={event.id} className={styles.eventItem}>
                   <EventCard
                     event={event}
-                    variant="compact"
+                    variant="standard"
+                    context="explore"
                     className={styles.uniformCard}
                     onToggleSave={toggleSaveEvent}
                     onBookGroup={(selectedEvent) => {
