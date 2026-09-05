@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import {
   Check,
-  Crosshair,
   LocateFixed,
   MapPinOff,
   Minus,
@@ -370,6 +369,25 @@ function computeBounds(lat, lng, radiusKm) {
   ];
 }
 
+function getMapFitPadding(map, sheetElement, minimumBottom = 72) {
+  if (typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches) {
+    return 56;
+  }
+
+  const mapRect = map.getContainer().getBoundingClientRect();
+  const sheetRect = sheetElement?.getBoundingClientRect();
+  const sheetOverlap = sheetRect
+    ? Math.max(0, Math.min(mapRect.bottom, sheetRect.bottom) - Math.max(mapRect.top, sheetRect.top))
+    : 0;
+  const top = Math.min(108, Math.max(64, Math.round(mapRect.height * 0.18)));
+  const bottom = Math.min(
+    Math.max(minimumBottom, Math.round(sheetOverlap + 24)),
+    Math.max(minimumBottom, Math.round(mapRect.height - top - 140))
+  );
+
+  return { top, right: 42, bottom, left: 42 };
+}
+
 function buildRadiusPolygon(lat, lng, radiusKm) {
   const ring = [];
   for (let i = 0; i <= 96; i += 1) {
@@ -543,26 +561,16 @@ function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
           <Minus size={18} aria-hidden="true" />
           <span>Zoom indietro</span>
         </button>
-      </div>
-      <div className={styles.locationControlGroup}>
-        <button
-          type="button"
-          className={`${styles.fab} ${styles.fabNeutral}`}
-          onClick={onGps.onCenter}
-          aria-label="Centra sulla mia posizione"
-        >
-          <Crosshair size={18} aria-hidden="true" />
-          <span>Centra posizione</span>
-        </button>
         <button
           type="button"
           className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
-          onClick={onGps.onFollow}
+          onClick={onGps.onAction}
+          disabled={onGps.requesting}
           aria-label={onGps.active ? 'Disattiva Segui posizione' : 'Attiva Segui posizione'}
           aria-pressed={onGps.active}
         >
           <LocateFixed size={18} aria-hidden="true" />
-          <span>{onGps.active ? 'Segui attivo' : 'Segui posizione'}</span>
+          <span>{onGps.requesting ? 'Cerco posizione' : onGps.active ? 'Segui attivo' : 'Centra posizione'}</span>
         </button>
       </div>
     </div>
@@ -630,23 +638,22 @@ function MapFiltersDrawer({
     };
   }, [open]);
 
+  if (!open) return null;
+
   return (
     <>
       <button
         type="button"
-        className={`${styles.filtersBackdrop} ${open ? styles.filtersBackdropOpen : ''}`}
+        className={`${styles.filtersBackdrop} ${styles.filtersBackdropOpen}`}
         aria-label="Chiudi filtri"
-        tabIndex={open ? 0 : -1}
         onClick={onClose}
       />
       <div
         ref={drawerRef}
-        className={`${styles.filtersDrawer} ${open ? styles.filtersDrawerOpen : styles.filtersDrawerClosed}`}
+        className={`${styles.filtersDrawer} ${styles.filtersDrawerOpen}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="map-filters-title"
-        aria-hidden={!open}
-        inert={open ? undefined : ''}
       >
         <div className={styles.sheetHandle} aria-hidden="true" />
         <div className={styles.sheetHeaderRow}>
@@ -783,7 +790,7 @@ function MapPage() {
   const [resolvingCoordinates, setResolvingCoordinates] = useState(false);
   const [savingIds, setSavingIds] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
-  const [sheetSnap, setSheetSnap] = useState('medium');
+  const [sheetSnap, setSheetSnap] = useState('compact');
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
   const [mapTheme, setMapTheme] = useState(() => {
@@ -1044,29 +1051,23 @@ function MapPage() {
     setFilters((prev) => ({ ...prev, [filterKey]: baseFilters[filterKey] }));
   }
 
-  function centerOnUser() {
-    if (!coords) {
-      requestLocation();
+  async function handleGpsAction() {
+    let nextCoords = coords;
+    if (!nextCoords) nextCoords = await requestLocation();
+    if (!nextCoords) {
+      showToast('Posizione non disponibile. Controlla il permesso e riprova.', 'info');
       return;
     }
-    const map = mapRef.current;
-    if (!map) return;
-    shouldRecenterRef.current = true;
-    setFollowUser(false);
-    map.flyTo({ center: [coords.lng, coords.lat], zoom: Math.max(11.4, map.getZoom()), duration: 280, essential: true });
-  }
 
-  function toggleFollowUser() {
-    if (!coords) {
-      requestLocation();
-      showToast('Attiva la posizione per utilizzare Segui posizione', 'info');
+    if (followUser) {
+      setFollowUser(false);
+      showToast('Segui posizione disattivato', 'info');
       return;
     }
-    setFollowUser((current) => {
-      const next = !current;
-      showToast(next ? 'Segui posizione attivato' : 'Segui posizione disattivato', 'info');
-      return next;
-    });
+
+    shouldRecenterRef.current = true;
+    setFollowUser(true);
+    showToast('Posizione centrata e aggiornamento attivo', 'success');
   }
 
   function getSheetSnapHeights() {
@@ -1074,8 +1075,9 @@ function MapPage() {
     const stage = sheet?.parentElement;
     const rootFontSize = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
     const compact = 6.3 * rootFontSize;
-    const medium = 20.6 * rootFontSize;
-    const full = Math.max(medium, (stage?.getBoundingClientRect().height || window.innerHeight) - 5.2 * rootFontSize);
+    const stageHeight = stage?.getBoundingClientRect().height || window.innerHeight;
+    const medium = Math.min(19 * rootFontSize, Math.max(compact, stageHeight - 14 * rootFontSize));
+    const full = Math.max(medium, stageHeight - 5.2 * rootFontSize);
     return { compact, medium, full };
   }
 
@@ -1128,7 +1130,7 @@ function MapPage() {
     if (event.type === 'pointercancel') {
       nextSnap = sheetSnap;
     } else if (!drag.moved) {
-      nextSnap = sheetSnap === 'full' ? 'medium' : 'full';
+      nextSnap = sheetSnap === 'compact' ? 'medium' : sheetSnap === 'medium' ? 'full' : 'medium';
     } else {
       const projectedHeight = drag.currentHeight - drag.velocity * 150;
       nextSnap = snaps.reduce((best, candidate) =>
@@ -1197,6 +1199,11 @@ function MapPage() {
       // zoom the event list updates automatically without an extra CTA.
       syncViewport();
     };
+    const handleMoveStart = (event) => {
+      if (!event.originalEvent || window.matchMedia('(min-width: 768px)').matches) return;
+      setSelectedEventId(null);
+      setSheetSnap('compact');
+    };
     const getInteractiveMarkerLayers = () =>
       [EVENT_PINS_LAYER, EVENT_CLUSTERS_LAYER].filter((layerId) => Boolean(map.getLayer(layerId)));
     const handleMapClick = (event) => {
@@ -1242,6 +1249,7 @@ function MapPage() {
 
     mapStyleThemeRef.current = mapTheme;
     map.on('load', handleMapLoad);
+    map.on('movestart', handleMoveStart);
     map.on('moveend', handleMoveEnd);
     map.on('click', handleMapClick);
     map.on('mousemove', handleMapMouseMove);
@@ -1284,6 +1292,7 @@ function MapPage() {
         userMarkerRef.current = null;
       }
       map.off('load', handleMapLoad);
+      map.off('movestart', handleMoveStart);
       map.off('moveend', handleMoveEnd);
       map.off('click', handleMapClick);
       map.off('mousemove', handleMapMouseMove);
@@ -1334,6 +1343,10 @@ function MapPage() {
   }, []);
 
   useEffect(() => {
+    hasAutoFitEventsRef.current = false;
+  }, [filters.dateRange, filters.distance, filters.q, filters.sortBy, filters.sport]);
+
+  useEffect(() => {
     if (!requestedEventId) return;
     const requestedEvent = withCoords.find((event) => String(event.id) === String(requestedEventId));
     if (!requestedEvent || !mapRef.current) return;
@@ -1343,18 +1356,22 @@ function MapPage() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !withCoords.length || hasAutoFitEventsRef.current) return;
+    if (!map || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
     hasAutoFitEventsRef.current = true;
 
-    if (withCoords.length === 1) {
-      map.flyTo({ center: [withCoords[0].lng, withCoords[0].lat], zoom: 12.4, duration: 420, essential: true });
+    if (eventsInRadius.length === 1) {
+      map.flyTo({ center: [eventsInRadius[0].lng, eventsInRadius[0].lat], zoom: 12.4, duration: 420, essential: true });
       return;
     }
 
     const bounds = new maplibregl.LngLatBounds();
-    withCoords.forEach((event) => bounds.extend([event.lng, event.lat]));
-    map.fitBounds(bounds, { padding: 72, duration: 420, maxZoom: 13 });
-  }, [withCoords]);
+    eventsInRadius.forEach((event) => bounds.extend([event.lng, event.lat]));
+    map.fitBounds(bounds, {
+      padding: getMapFitPadding(map, resultsSheetRef.current),
+      duration: 420,
+      maxZoom: 13
+    });
+  }, [eventsInRadius]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1380,7 +1397,7 @@ function MapPage() {
       const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
       if (shouldRecenterRef.current || followUser) {
         map.fitBounds(computeBounds(coords.lat, coords.lng, focusRadius), {
-          padding: 32,
+          padding: getMapFitPadding(map, resultsSheetRef.current, 48),
           duration: followUser ? 220 : 340,
           maxZoom: 13
         });
@@ -1397,7 +1414,7 @@ function MapPage() {
     const map = mapRef.current;
     if (!map || !coords || !selectedRadiusKm) return;
     map.fitBounds(computeBounds(coords.lat, coords.lng, selectedRadiusKm), {
-      padding: 32,
+      padding: getMapFitPadding(map, resultsSheetRef.current, 48),
       duration: 280,
       maxZoom: 13
     });
@@ -1439,7 +1456,7 @@ function MapPage() {
   return (
     <section className={`${styles.page} ${mapTheme === 'light' ? styles.themeLight : styles.themeDark}`}>
       <div className={styles.pageInner}>
-        <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi">
+        <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi" data-sheet-snap={sheetSnap}>
           <div className={styles.mapViewport}>
             <div ref={mapNodeRef} className={styles.mapCanvas} />
             <div className={styles.mapShade} aria-hidden="true" />
@@ -1454,6 +1471,21 @@ function MapPage() {
                 filterButtonRef={filterButtonRef}
               />
               <ActiveFilterPills items={activeFilterPills} onRemove={removeActiveFilter} />
+              {!hasLocation && (permission === 'denied' || locationError) ? (
+                <button
+                  type="button"
+                  className={styles.locationNotice}
+                  onClick={handleGpsAction}
+                  disabled={requesting}
+                >
+                  <LocateFixed size={18} aria-hidden="true" />
+                  <span>
+                    <strong>Posizione disattivata</strong>
+                    <small>{permission === 'denied' ? 'Abilita il permesso e riprova' : locationError}</small>
+                  </span>
+                  <b>{requesting ? 'Attendo…' : 'Riprova'}</b>
+                </button>
+              ) : null}
             </div>
 
             {resolvingCoordinates ? <span className={styles.mapSyncBadge}>Aggiorno posizioni…</span> : null}
@@ -1461,7 +1493,7 @@ function MapPage() {
             <MapFloatingControls
               onZoomIn={() => zoomMap('in')}
               onZoomOut={() => zoomMap('out')}
-              onGps={{ onCenter: centerOnUser, onFollow: toggleFollowUser, active: followUser }}
+              onGps={{ onAction: handleGpsAction, active: followUser, requesting }}
             />
           </div>
 

@@ -433,8 +433,11 @@
 }
 
 .zoomControlGroup .fab:first-child {
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
   border-radius: 999px 999px 0.7rem 0.7rem;
+}
+
+.zoomControlGroup .fab:not(:last-child) {
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
 }
 
 .zoomControlGroup .fab:last-child {
@@ -498,6 +501,11 @@
 .fab:hover,
 .fab:focus-visible {
   border-color: color-mix(in srgb, var(--map-neon) 52%, rgb(255 255 255 / 13%));
+}
+
+.fab:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .fab:hover > span,
@@ -800,16 +808,22 @@
 .filtersBackdropOpen {
   opacity: 1;
   pointer-events: auto;
+  animation: mapBackdropIn var(--dur-fast) var(--ease) both;
 }
 
 .filtersDrawer {
   position: fixed;
   z-index: var(--z-modal-max);
-  top: max(0.55rem, env(safe-area-inset-top, 0px));
+  top: calc(var(--nav-h) + max(0.55rem, env(safe-area-inset-top, 0px)));
   left: var(--s-3);
   right: var(--s-3);
   bottom: auto;
-  max-height: calc(100dvh - max(1.1rem, env(safe-area-inset-top, 0px) + 0.55rem));
+  max-height: calc(
+    100dvh
+    - var(--nav-h)
+    - var(--bottom-nav-h)
+    - max(1.1rem, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 0.55rem)
+  );
   overflow: auto;
   padding: var(--s-4) var(--s-4) var(--s-3);
   border: 1px solid rgb(255 255 255 / 13%);
@@ -836,6 +850,23 @@
 .filtersDrawerOpen {
   transform: translateY(0);
   opacity: 1;
+  animation: mapFilterDropIn var(--dur-med) var(--ease) both;
+}
+
+@keyframes mapFilterDropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-1.25rem) scaleY(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes mapBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .sheetHandle {
@@ -1373,6 +1404,69 @@
   padding: 0;
 }
 
+.locationNotice {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.55rem 0.62rem;
+  border: 1px solid rgb(199 255 0 / 34%);
+  border-radius: 1rem;
+  background: rgb(13 17 13 / 94%);
+  color: #f5f7f2;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 34%);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.62rem;
+  text-align: left;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.locationNotice > svg,
+.locationNotice > b {
+  color: var(--map-neon);
+}
+
+.locationNotice > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.locationNotice strong,
+.locationNotice small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locationNotice strong {
+  font-size: 0.74rem;
+}
+
+.locationNotice small {
+  color: #aeb5aa;
+  font-size: 0.61rem;
+}
+
+.locationNotice > b {
+  font-size: 0.68rem;
+}
+
+.locationNotice:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.themeLight .locationNotice {
+  background: rgb(255 255 255 / 96%);
+  color: #171a15;
+}
+
+.themeLight .locationNotice small {
+  color: #63695f;
+}
+
 .mapSyncBadge {
   position: absolute;
   z-index: calc(var(--z-overlay-mid) + 1);
@@ -1392,8 +1486,9 @@
 }
 
 .zoomControlGroup {
-  top: 7.35rem;
+  top: auto;
   right: 0.8rem;
+  bottom: 7.15rem;
 }
 
 .locationControlGroup {
@@ -1402,6 +1497,22 @@
   top: 13.72rem;
   right: 0.8rem;
   bottom: auto;
+}
+
+.fabStack {
+  opacity: 1;
+  transition: opacity 160ms var(--ease);
+}
+
+.mapStage[data-sheet-snap='medium'] .fabStack,
+.mapStage[data-sheet-snap='full'] .fabStack {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mapStage[data-sheet-snap='medium'] .fab,
+.mapStage[data-sheet-snap='full'] .fab {
+  pointer-events: none;
 }
 
 .resultsSheet {
@@ -1453,7 +1564,7 @@
 }
 
 .resultsSheetMedium {
-  height: 20.6rem;
+  height: min(19rem, calc(100% - 14rem));
 }
 
 .resultsSheetFull {
@@ -1781,16 +1892,19 @@
 
 .sheetEventList {
   min-height: 0;
-  padding: 0.55rem 0 0.2rem;
+  padding: 0.55rem 0.08rem calc(1rem + env(safe-area-inset-bottom, 0px));
   display: grid;
   flex: 1 1 auto;
   align-content: start;
-  gap: 0.48rem;
+  gap: 0.55rem;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-block: 0.55rem calc(1rem + env(safe-area-inset-bottom, 0px));
   scrollbar-color: rgb(199 255 0 / 46%) transparent;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 1.15rem), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 1.15rem), transparent 100%);
 }
 
 .sheetEventList::-webkit-scrollbar {
@@ -2138,12 +2252,21 @@
   }
 
   .mapTopOverlay {
-    right: 27rem;
+    right: auto;
+    width: min(30rem, calc(100% - 2rem));
   }
 
   .zoomControlGroup,
   .locationControlGroup {
-    right: calc(26rem + var(--s-3));
+    right: var(--s-3);
+  }
+
+  .mapStage[data-sheet-snap] .fabStack {
+    opacity: 1;
+  }
+
+  .mapStage[data-sheet-snap] .fab {
+    pointer-events: auto;
   }
 
   .resultsSheet,
@@ -2183,8 +2306,9 @@
     left: 50%;
     right: auto;
     width: min(32rem, calc(100% - var(--s-8)));
-    top: calc(var(--nav-h) + 4.45rem);
+    top: calc(var(--nav-h) + 1rem);
     bottom: auto;
+    max-height: calc(100dvh - var(--nav-h) - 2rem);
     transform: translate(-50%, 0);
   }
 
@@ -2194,6 +2318,18 @@
 
   .filtersDrawerOpen {
     transform: translate(-50%, 0);
+    animation-name: mapFilterDropInDesktop;
+  }
+}
+
+@keyframes mapFilterDropInDesktop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -1.25rem) scaleY(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scaleY(1);
   }
 }
 

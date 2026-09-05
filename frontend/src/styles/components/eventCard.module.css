@@ -434,6 +434,197 @@
   background: #222521;
 }
 
+/*
+ * Map cards have less horizontal room than the reusable compact card used in
+ * the other sections. Keep the same component and design language, but give
+ * this context a predictable mobile layout and two unambiguous action zones.
+ */
+.context_map {
+  min-height: 5.9rem;
+  border-color: rgb(255 255 255 / 14%);
+  border-radius: 1rem;
+  background:
+    linear-gradient(100deg, rgb(255 255 255 / 3%), transparent 62%),
+    rgb(15 18 15 / 88%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 5%),
+    0 8px 20px rgb(0 0 0 / 20%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.context_map:hover {
+  border-color: rgb(198 255 0 / 34%);
+}
+
+.context_map.selected {
+  border: 2px solid var(--event-accent);
+  background:
+    linear-gradient(100deg, rgb(198 255 0 / 15%), rgb(198 255 0 / 4%) 60%, transparent),
+    rgb(14 18 13 / 94%);
+  box-shadow:
+    0 0 0 1px rgb(198 255 0 / 18%),
+    0 10px 26px rgb(0 0 0 / 28%),
+    0 0 22px rgb(198 255 0 / 11%);
+  transform: none;
+}
+
+.context_map.variant_compact .main {
+  grid-template-columns: 5.45rem minmax(0, 1fr);
+  min-height: 5.9rem;
+}
+
+.context_map.variant_compact .imageWrap {
+  min-height: 5.9rem;
+}
+
+.context_map .image {
+  filter: brightness(0.92) saturate(1.08) contrast(1.02);
+}
+
+.context_map.selected .image {
+  filter: brightness(1) saturate(1.12) contrast(1.03);
+}
+
+.context_map .imageShade {
+  background: linear-gradient(180deg, rgb(0 0 0 / 2%) 40%, rgb(0 0 0 / 50%) 100%);
+}
+
+.context_map.variant_compact .sportBadge {
+  top: 0.45rem;
+  right: auto;
+  bottom: auto;
+  left: 0.45rem;
+  justify-content: flex-start;
+  min-height: 1.3rem;
+  max-width: calc(100% - 0.9rem);
+  padding: 0.2rem 0.4rem;
+  border-color: rgb(255 255 255 / 18%);
+  background: rgb(8 10 8 / 76%);
+  font-size: 0.54rem;
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
+}
+
+.context_map.variant_compact .content {
+  align-content: center;
+  gap: 0.28rem;
+  padding: 0.58rem 3.05rem 0.58rem 0.68rem;
+}
+
+.context_map .dateLine {
+  gap: 0.38rem;
+}
+
+.context_map .dateLine strong {
+  font-size: 0.8rem;
+}
+
+.context_map .dateLine small {
+  font-size: 0.64rem;
+}
+
+.context_map .title {
+  font-size: 0.9rem;
+  line-height: 1.12;
+}
+
+.context_map .location {
+  gap: 0.24rem;
+  font-size: 0.68rem;
+}
+
+.context_map .location svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.context_map .metaRow {
+  flex-wrap: nowrap;
+  gap: 0.26rem;
+  overflow: hidden;
+}
+
+.context_map .metaRow > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 1.35rem;
+  overflow: hidden;
+  padding: 0.16rem 0.36rem;
+  border-color: rgb(255 255 255 / 10%);
+  background: rgb(8 10 8 / 58%);
+  font-size: 0.59rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context_map .metaRow > span svg {
+  flex: 0 0 auto;
+  width: 0.7rem;
+  height: 0.7rem;
+  color: #c6ff00;
+}
+
+.context_map .saveButton,
+.context_map.variant_compact .detailsAction {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  border-color: rgb(255 255 255 / 17%);
+  background: rgb(8 10 8 / 78%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+}
+
+.context_map .saveButton {
+  top: 0.42rem;
+  right: 0.42rem;
+}
+
+.context_map.variant_compact .actions {
+  right: 0.42rem;
+  bottom: 0.42rem;
+}
+
+.context_map .saveButton::after,
+.context_map.variant_compact .detailsAction::after {
+  position: absolute;
+  inset: -0.25rem;
+  content: '';
+}
+
+.context_map.variant_compact .detailsAction {
+  position: relative;
+  color: #c6ff00;
+}
+
+.context_map .saveButtonActive {
+  border-color: rgb(198 255 0 / 55%);
+  background: rgb(198 255 0 / 13%);
+  color: #c6ff00;
+}
+
+.context_map .saveButton:focus-visible,
+.context_map.variant_compact .detailsAction:focus-visible {
+  border-color: #c6ff00;
+  outline: 2px solid rgb(198 255 0 / 34%);
+  outline-offset: 2px;
+}
+
+@media (max-width: 360px) {
+  .context_map.variant_compact .main {
+    grid-template-columns: 4.9rem minmax(0, 1fr);
+  }
+
+  .context_map.variant_compact .content {
+    padding-left: 0.58rem;
+  }
+
+  .context_map .location {
+    font-size: 0.64rem;
+  }
+}
+
 .variant_standard .imageWrap {
   aspect-ratio: 16 / 7;
 }
