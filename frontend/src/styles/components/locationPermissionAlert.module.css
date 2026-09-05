@@ -42,3 +42,132 @@
   display: grid;
   gap: var(--s-1);
 }
+
+.wrap {
+  width: min(100%, 64rem);
+  min-height: 6.2rem;
+  margin-inline: auto;
+  padding: 1.1rem 1.35rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  border-color: rgb(255 255 255 / 0.09);
+  border-radius: 1.65rem;
+  background: #1a1c1a;
+}
+
+.head {
+  align-items: center;
+}
+
+.iconBubble {
+  width: 3rem;
+  height: 3rem;
+  border-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  border-radius: 50%;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, #202220);
+}
+
+.denied .iconBubble {
+  border-color: color-mix(in srgb, var(--primary) 22%, transparent);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, #202220);
+}
+
+.copy strong {
+  font-size: clamp(1rem, 2.4vw, 1.2rem);
+}
+
+.copy p {
+  max-width: 38rem;
+  margin: 0;
+  color: rgb(255 255 255 / 0.45);
+  line-height: 1.35;
+}
+
+.wrap > button {
+  min-width: 7rem;
+  min-height: 3.2rem;
+  border-radius: 999px;
+}
+
+.compact {
+  min-height: 4.25rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 1.2rem;
+}
+
+.compact .iconBubble {
+  width: 2.4rem;
+  height: 2.4rem;
+}
+
+.compact .copy {
+  gap: 0;
+}
+
+.compact .copy strong {
+  font-size: 0.85rem;
+}
+
+.compact .copy p {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.compact > button {
+  min-width: 4.9rem;
+  min-height: 2.35rem;
+  padding-inline: 0.72rem;
+}
+
+@media (max-width: 42rem) {
+  .wrap {
+    min-height: 5.35rem;
+    padding: 0.85rem 1rem;
+    gap: 0.65rem;
+    border-radius: 1.35rem;
+  }
+
+  .head {
+    gap: 0.75rem;
+  }
+
+  .iconBubble {
+    width: 2.7rem;
+    height: 2.7rem;
+  }
+
+  .copy strong {
+    font-size: 0.93rem;
+  }
+
+  .copy p {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.75rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .wrap > button {
+    min-width: 5.5rem;
+    min-height: 2.65rem;
+    padding-inline: 0.8rem;
+  }
+
+  .compact {
+    min-height: 3.9rem;
+    padding: 0.55rem 0.7rem;
+  }
+
+  .compact .copy p {
+    display: none;
+  }
+
+  .compact > button {
+    min-width: 4.65rem;
+    min-height: 2.25rem;
+  }
+}

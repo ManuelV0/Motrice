@@ -97,8 +97,8 @@ function NotificationsPage() {
               imageAlt="Icona notifiche"
               title="Nessuna notifica"
               description="Sei aggiornato. Quando ci saranno novita le vedrai qui."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
+              primaryActionLabel="Apri la mappa"
+              onPrimaryAction={() => navigate('/map')}
             />
           ) : (
             notifications.map((item) => {
@@ -110,7 +110,6 @@ function NotificationsPage() {
                   <p className="muted">{new Date(item.created_at).toLocaleString('it-IT')}</p>
                   <div className="inline-actions">
                     {item.event_id && <Link to={`/events/${item.event_id}`}>Apri evento</Link>}
-                    {item.plan_id && <Link to="/dashboard/plans">Apri schede</Link>}
                     {item.action_path && <Link to={item.action_path}>Apri dettaglio</Link>}
                     {!item.read && (
                       <button type="button" className="secondary" onClick={() => markAsRead(item.id)}>

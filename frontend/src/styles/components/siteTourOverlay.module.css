@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   background: rgb(5 10 20 / 45%);
-  z-index: var(--z-overlay-mid);
+  z-index: var(--z-modal-max);
   pointer-events: none;
 }
 
@@ -11,14 +11,14 @@
   border-radius: var(--r-lg);
   border: 2px solid color-mix(in srgb, var(--accent) 70%, white);
   box-shadow: 0 0 0 9999px rgb(0 0 0 / 18%);
-  z-index: calc(var(--z-overlay-mid) + 1);
+  z-index: calc(var(--z-modal-max) + 1);
   pointer-events: none;
   animation: pulse 1.3s ease-in-out infinite;
 }
 
 .guideBubble {
   position: fixed;
-  z-index: calc(var(--z-overlay-mid) + 2);
+  z-index: calc(var(--z-modal-max) + 2);
   border-radius: var(--r-lg);
   border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
   background: color-mix(in srgb, var(--surface) 92%, var(--surface-2));
@@ -28,6 +28,7 @@
   gap: var(--s-2);
   max-height: calc(100vh - 1.5rem);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .guideBubble::before {
@@ -110,6 +111,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: var(--s-1);
+  padding-top: var(--s-2);
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--surface) 96%, var(--surface-2)) var(--s-2)
+  );
 }
 
 .hintFooter {
@@ -151,8 +162,38 @@
 
 @media (max-width: 42rem) {
   .guideBubble {
-    width: calc(100vw - 1rem) !important;
+    top: auto !important;
+    right: .5rem !important;
+    bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + .5rem) !important;
     left: .5rem !important;
+    width: auto !important;
+    max-height: calc(
+      100dvh
+      - var(--nav-h)
+      - var(--bottom-nav-h)
+      - env(safe-area-inset-top, 0px)
+      - env(safe-area-inset-bottom, 0px)
+      - 1rem
+    );
+  }
+
+  .guideBubble::before,
+  .guideBubble::after {
+    display: none;
+  }
+
+  .guideActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guideActions > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .guideActions > :last-child {
+    grid-column: 1 / -1;
   }
 }
 

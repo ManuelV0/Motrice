@@ -12,7 +12,6 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import PaywallModal from '../components/PaywallModal';
 import ExploreHero from '../components/explore/ExploreHero';
-import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import ExploreFiltersToolbar from '../components/explore/ExploreFiltersToolbar';
 import ExploreFeaturedRow from '../components/explore/ExploreFeaturedRow';
 import ExploreHowItWorks from '../components/explore/ExploreHowItWorks';
@@ -59,6 +58,10 @@ function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return !window.matchMedia('(max-width: 767px)').matches;
+  });
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showHowItWorksModal, setShowHowItWorksModal] = useState(false);
   const [showMapPanel, setShowMapPanel] = useState(false);
@@ -213,14 +216,14 @@ function ExplorePage() {
     try {
       if (event.is_saved) {
         await api.unsaveEvent(eventId);
-        showToast('Evento rimosso dall agenda', 'info');
+        showToast('Evento rimosso dai tuoi eventi', 'info');
       } else {
         await api.saveEvent(eventId);
-        showToast('Evento salvato in agenda', 'success');
+        showToast('Evento salvato nei tuoi eventi', 'success');
       }
       await reloadEvents();
     } catch (error) {
-      showToast(error.message || 'Impossibile aggiornare agenda', 'error');
+      showToast(error.message || 'Impossibile aggiornare i tuoi eventi', 'error');
     } finally {
       setSavingIds((prev) => prev.filter((id) => id !== eventId));
     }
@@ -283,17 +286,18 @@ function ExplorePage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleFiltersPanel() {
+    if (filtersOpen) setShowAdvancedFilters(false);
+    setFiltersOpen((prev) => !prev);
+  }
+
+  function collapseFiltersPanel() {
+    setFiltersOpen(false);
+    setShowAdvancedFilters(false);
+  }
+
   return (
     <div className={styles.page}>
-      <ExploreMapToggle
-        activeView="explore"
-        leftLabel="Esplora"
-        rightLabel="Mappa"
-        thirdLabel="Crea"
-        leftTo="/explore"
-        rightTo={mapSearch ? `/map?${mapSearch}` : '/map'}
-        thirdTo="/create"
-      />
       <ExploreHero onPrimaryAction={handleNearMe} onSecondaryAction={() => setShowHowItWorksModal(true)} />
 
       <LocationPermissionAlert
@@ -318,10 +322,13 @@ function ExplorePage() {
           onReset={resetFilters}
           onToggleAdvanced={() => setShowAdvancedFilters((prev) => !prev)}
           advancedOpen={showAdvancedFilters}
+          open={filtersOpen}
+          onToggle={toggleFiltersPanel}
+          onCollapse={collapseFiltersPanel}
         />
       </Card>
 
-      {showAdvancedFilters ? (
+      {filtersOpen && showAdvancedFilters ? (
         <Card className={styles.advancedCard}>
           <FilterBar
             filters={{ ...filters, q: qInput }}
@@ -400,7 +407,8 @@ function ExplorePage() {
                 <div key={event.id} className={styles.eventItem}>
                   <EventCard
                     event={event}
-                    variant="compact"
+                    variant="standard"
+                    context="explore"
                     className={styles.uniformCard}
                     onToggleSave={toggleSaveEvent}
                     onBookGroup={(selectedEvent) => {

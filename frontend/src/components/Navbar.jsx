@@ -2,63 +2,53 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
-  Compass,
   Map,
   PlusCircle,
   Handshake,
   UserRound,
   MessageCircle,
-  Lock,
   Menu,
   Target,
-  LocateFixed
+  LocateFixed,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  TrendingUp,
+  X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
-import { api } from '../services/api';
 import { useBilling } from '../context/BillingContext';
+import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
-import PaywallModal from './PaywallModal';
+import { getAuthSession, signOutFromSupabase } from '../services/authSession';
+import { isProfileVerificationAdmin } from '../services/profileVerification';
 import IconButton from './IconButton';
+import BrandLogo from './BrandLogo';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
-  { to: '/explore', label: 'Esplora', icon: Compass },
-  { to: '/account', label: 'Account', icon: UserRound },
-  { to: '/coach', label: 'Coach', icon: Target },
+  { to: '/agenda', label: 'Eventi', icon: CalendarDays },
+  { to: '/map', label: 'Mappa', icon: Map },
+  { to: '/create', label: 'Crea', icon: PlusCircle, primary: true },
   { to: '/chat', label: 'Chat', icon: MessageCircle },
-  { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+  { to: '/account', label: 'Profilo', icon: UserRound }
 ];
 
 const drawerSections = [
   {
-    title: 'Scopri',
+    title: 'La tua attività',
     items: [
-      { to: '/explore', label: 'Esplora', icon: Compass },
-      { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+      { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays },
+      { to: '/dashboard/progress', label: 'Progressi esercizi', icon: TrendingUp }
     ]
   },
   {
-    title: 'Gestisci',
+    title: 'Altro',
     items: [
-      { to: '/create', label: 'Crea evento', icon: PlusCircle },
-      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-      { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
-    ]
-  },
-  {
-    title: 'Profilo',
-    items: [
-      { to: '/account', label: 'Account', icon: UserRound },
       { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/chat', label: 'Chat', icon: MessageCircle }
+      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
     ]
   }
-];
-
-const drawerQuickActions = [
-  { to: '/map', label: 'Mappa', icon: Map },
-  { to: '/create', label: 'Crea', icon: PlusCircle },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays }
 ];
 
 function Navbar({ forceMobile = false }) {
@@ -66,12 +56,36 @@ function Navbar({ forceMobile = false }) {
   const navigate = useNavigate();
   const { isOpen, setIsOpen } = useMobileMenu();
   const { entitlements } = useBilling();
+  const { showToast } = useToast();
 
   const [query, setQuery] = useState('');
   const [unread, setUnread] = useState(0);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const { hasLocation, requesting, requestLocation } = useUserLocation();
+  const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const [authActionBusy, setAuthActionBusy] = useState(false);
+  const visibleDrawerSections = isProfileVerificationAdmin(authSession)
+    ? [
+        ...drawerSections,
+        {
+          title: 'Amministrazione',
+          items: [{ to: '/admin/verifiche', label: 'Centro verifiche', icon: ShieldCheck }]
+        }
+      ]
+    : drawerSections;
+  const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
+
+  useEffect(() => {
+    function refreshAuthSession() {
+      setAuthSession(getAuthSession());
+    }
+
+    window.addEventListener('motrice-auth-changed', refreshAuthSession);
+    window.addEventListener('storage', refreshAuthSession);
+    return () => {
+      window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+      window.removeEventListener('storage', refreshAuthSession);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -83,8 +97,8 @@ function Navbar({ forceMobile = false }) {
       };
     }
 
-    api
-      .getUnreadCount()
+    import('../services/api')
+      .then(({ api }) => api.getUnreadCount())
       .then((count) => {
         if (!active) return;
         setUnread(Number.isFinite(count) ? count : 0);
@@ -97,6 +111,10 @@ function Navbar({ forceMobile = false }) {
       active = false;
     };
   }, [location.pathname, entitlements.canUseNotifications]);
+
+  useEffect(() => {
+    if (locationError) showToast(locationError, 'error');
+  }, [locationError, showToast]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -157,8 +175,29 @@ function Navbar({ forceMobile = false }) {
 
   function onSearchSubmit(event) {
     event.preventDefault();
-    navigate(`/explore?q=${encodeURIComponent(query)}`);
+    navigate(`/map?q=${encodeURIComponent(query)}`);
     setIsOpen(false);
+  }
+
+  async function onAuthAction() {
+    if (!authSession.isAuthenticated) {
+      setIsOpen(false);
+      navigate('/login');
+      return;
+    }
+
+    setAuthActionBusy(true);
+    try {
+      await signOutFromSupabase();
+      setAuthSession(getAuthSession());
+      setIsOpen(false);
+      showToast('Sei uscito da Motrice', 'success');
+      navigate('/login');
+    } catch (error) {
+      showToast(error?.message || 'Impossibile uscire dall’app', 'error');
+    } finally {
+      setAuthActionBusy(false);
+    }
   }
 
   return (
@@ -180,7 +219,8 @@ function Navbar({ forceMobile = false }) {
           />
 
           <NavLink className={styles.brand} to="/">
-            Motrice
+            <BrandLogo className={styles.brandMark} decorative />
+            <span>MOTRICE</span>
           </NavLink>
         </div>
 
@@ -203,7 +243,7 @@ function Navbar({ forceMobile = false }) {
               if (!hasLocation) requestLocation();
             }}
             aria-label={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione posizione in corso' : 'Attiva posizione'}
-            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Attiva posizione'}
+            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : locationError || 'Attiva posizione'}
           >
             <LocateFixed size={15} aria-hidden="true" />
           </button>
@@ -230,7 +270,7 @@ function Navbar({ forceMobile = false }) {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
-                    `${styles.link} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
+                    `${styles.link} ${link.primary ? styles.createLink : ''} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
                   }
                 >
                   <Icon size={18} aria-hidden="true" />
@@ -252,8 +292,21 @@ function Navbar({ forceMobile = false }) {
       <div id="mobile-nav" className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`} aria-hidden={!isOpen}>
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
           <div className={styles.mobileHeader}>
-            <p className={styles.mobileKicker}>Navigazione</p>
-            <h2 className={styles.mobileTitle}>Vai dove ti serve</h2>
+            <div className={styles.mobileHeaderCopy}>
+              <div className={styles.mobileBrandRow}>
+                <BrandLogo className={styles.mobileBrandLogo} decorative />
+                <p className={styles.mobileKicker}>MOTRICE</p>
+              </div>
+              <h2 className={styles.mobileTitle}>Tutto il resto, qui.</h2>
+            </div>
+            <button
+              type="button"
+              className={styles.drawerClose}
+              onClick={() => setIsOpen(false)}
+              aria-label="Chiudi menu"
+            >
+              <X size={22} strokeWidth={2.2} aria-hidden="true" />
+            </button>
           </div>
 
           <form className={styles.search} onSubmit={onSearchSubmit}>
@@ -267,25 +320,7 @@ function Navbar({ forceMobile = false }) {
             />
           </form>
 
-          <div className={styles.quickActions} role="list" aria-label="Azioni rapide">
-            {drawerQuickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <NavLink
-                  key={action.to}
-                  to={action.to}
-                  role="listitem"
-                  className={({ isActive }) => `${styles.quickAction} ${isActive ? styles.quickActionActive : ''}`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  <span>{action.label}</span>
-                </NavLink>
-              );
-            })}
-          </div>
-
-          {drawerSections.map((section) => (
+          {visibleDrawerSections.map((section) => (
             <section key={section.title} className={styles.mobileSection} aria-label={section.title}>
               <p className={styles.mobileSectionTitle}>{section.title}</p>
               <div className={styles.mobileSectionList}>
@@ -305,6 +340,27 @@ function Navbar({ forceMobile = false }) {
                     </NavLink>
                   );
                 })}
+                {section.title === 'Altro' ? (
+                  <button
+                    type="button"
+                    className={`${styles.link} ${styles.drawerLink} ${styles.authLink}`}
+                    onClick={onAuthAction}
+                    disabled={authActionBusy}
+                  >
+                    {authSession.isAuthenticated ? (
+                      <LogOut size={18} aria-hidden="true" />
+                    ) : (
+                      <LogIn size={18} aria-hidden="true" />
+                    )}
+                    <span>
+                      {authActionBusy
+                        ? 'Uscita in corso…'
+                        : authSession.isAuthenticated
+                          ? 'Esci dall’app'
+                          : 'Accedi all’app'}
+                    </span>
+                  </button>
+                ) : null}
               </div>
             </section>
           ))}
@@ -321,7 +377,6 @@ function Navbar({ forceMobile = false }) {
         </nav>
       </div>
 
-      <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Upgrade" />
     </header>
   );
 }

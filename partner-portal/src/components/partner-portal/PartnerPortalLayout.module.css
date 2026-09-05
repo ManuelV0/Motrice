@@ -23,12 +23,21 @@
 }
 
 .brand {
-  display: grid;
-  gap: 0.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 .brand p {
   margin: 0;
+}
+
+.brandLogo {
+  width: 2.75rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
+  display: block;
+  flex: 0 0 auto;
 }
 
 .title {

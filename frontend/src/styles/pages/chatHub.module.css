@@ -1,13 +1,22 @@
 .page {
   display: grid;
+  align-content: start;
   gap: var(--s-5);
-  min-height: calc(100dvh - var(--nav-h));
+  min-height: calc(
+    100dvh
+    - var(--nav-h)
+    - var(--main-top-gap, var(--s-4))
+    - var(--bottom-nav-h)
+    - env(safe-area-inset-bottom, 0px)
+    - var(--vv-bottom, 0px)
+    - var(--android-nav-extra, 0px)
+  );
   padding: var(--s-4);
-  padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
+  padding-bottom: var(--s-4);
   background:
     radial-gradient(110% 60% at 20% 10%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 55%),
-    radial-gradient(80% 50% at 80% 80%, color-mix(in srgb, var(--primary) 5%, transparent) 0%, transparent 60%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
+    radial-gradient(80% 50% at 80% 80%, color-mix(in srgb, var(--primary) 4%, transparent) 0%, transparent 60%),
+    transparent;
 }
 
 .header {
@@ -32,6 +41,12 @@
 @media (min-width: 640px) {
   .page {
     padding: var(--s-5);
+  }
+}
+
+@media (min-width: 768px) {
+  .page {
+    min-height: calc(100dvh - var(--nav-h) - var(--main-top-gap, var(--s-6)) - var(--section-gap));
   }
 }
 

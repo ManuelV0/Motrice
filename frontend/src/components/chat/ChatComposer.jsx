@@ -1,6 +1,8 @@
-import { Paperclip, Send } from 'lucide-react';
-import { useRef } from 'react';
+import { Send, Smile } from 'lucide-react';
+import { useRef, useState } from 'react';
 import styles from '../../styles/components/chat/chatComposer.module.css';
+
+const QUICK_EMOJIS = ['👍', '💪', '🔥', '🙌', '😄', '⚡', '🏃', '⚽', '🏋️', '✅'];
 
 function resizeTextarea(node) {
   if (!node) return;
@@ -14,24 +16,46 @@ function resizeTextarea(node) {
 
 function ChatComposer({ value, onChange, onSend, disabled = false, sending = false }) {
   const textareaRef = useRef(null);
+  const [showEmojis, setShowEmojis] = useState(false);
 
   return (
     <form
       className={styles.composer}
       onSubmit={(event) => {
         event.preventDefault();
+        setShowEmojis(false);
         onSend();
       }}
     >
-      <button
-        type="button"
-        className={styles.attach}
-        aria-label="Allega file (presto disponibile)"
-        title="Allegati presto disponibili"
-        disabled
-      >
-        <Paperclip size={18} aria-hidden="true" />
-      </button>
+      <div className={styles.emojiWrap}>
+        <button
+          type="button"
+          className={styles.emojiButton}
+          aria-label="Apri emoji"
+          aria-expanded={showEmojis}
+          onClick={() => setShowEmojis((valueOpen) => !valueOpen)}
+          disabled={disabled}
+        >
+          <Smile size={21} aria-hidden="true" />
+        </button>
+        {showEmojis ? (
+          <div className={styles.emojiPanel} aria-label="Emoji rapide">
+            {QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  onChange(`${String(value || '')}${emoji}`.slice(0, 1000));
+                  textareaRef.current?.focus();
+                }}
+                aria-label={`Inserisci ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <label htmlFor="chat-composer-input" className={styles.srOnly}>Scrivi messaggio</label>
       <textarea
@@ -45,6 +69,7 @@ function ChatComposer({ value, onChange, onSend, disabled = false, sending = fal
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
+            setShowEmojis(false);
             onSend();
           }
         }}

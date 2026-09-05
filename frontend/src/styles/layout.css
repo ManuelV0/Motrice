@@ -10,9 +10,10 @@
 }
 
 .mainContent {
+  --main-top-gap: clamp(var(--s-4), 3vw, var(--s-6));
   flex: 1;
   padding:
-    calc(var(--nav-h) + clamp(var(--s-4), 3vw, var(--s-6)))
+    calc(var(--nav-h) + var(--main-top-gap))
     0
     calc(var(--section-gap) + var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--vv-bottom, 0px) + var(--android-nav-extra, 0px));
 }
@@ -20,6 +21,36 @@
 .mainContentMap {
   padding-top: var(--nav-h);
   padding-bottom: 0;
+}
+
+.mainContentLanding {
+  min-height: 100dvh;
+  padding: var(--nav-h) 0 0;
+  overflow: hidden;
+}
+
+.mainContentStartupAuth {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mainContentWorkout {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.mainContentFirstAccessIntro {
+  background: #050705;
 }
 
 .mainContentAccountMobile {
@@ -33,7 +64,31 @@
 }
 
 .mainContentChat {
+  --chat-page-surface: #080b08;
   padding-inline: var(--s-2);
+  padding-bottom: calc(
+    var(--bottom-nav-h)
+    + env(safe-area-inset-bottom, 0px)
+    + var(--vv-bottom, 0px)
+    + var(--android-nav-extra, 0px)
+  );
+  background:
+    radial-gradient(80% 38% at 5% 0%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 72%),
+    var(--chat-page-surface);
+}
+
+.appShell.chat-shell {
+  background: var(--chat-page-surface, #080b08);
+}
+
+html.chat-surface-lock,
+html.chat-surface-lock body,
+html.chat-surface-lock #root {
+  background: #080b08;
+}
+
+html.chat-surface-lock body::before {
+  opacity: 0;
 }
 
 .embedMain {
@@ -112,7 +167,16 @@
 
 @media (max-width: 42rem) {
   .mainContent {
+    --main-top-gap: var(--s-3);
     padding-top: calc(var(--nav-h) + var(--s-3));
+  }
+
+  .mainContentLanding {
+    padding-top: var(--nav-h);
+  }
+
+  .mainContentStartupAuth {
+    padding-top: 0;
   }
 
   .mainContentChat {
@@ -123,6 +187,14 @@
 @media (min-width: 768px) {
   .mainContent {
     padding-bottom: var(--section-gap);
+  }
+
+  .mainContentChat {
+    padding-bottom: var(--section-gap);
+  }
+
+  .mainContentLanding {
+    padding-bottom: 0;
   }
 
   .appShell.account-mobile-only .mainContent {

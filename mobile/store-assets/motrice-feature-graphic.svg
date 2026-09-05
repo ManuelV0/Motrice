@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050605"/>
+      <stop offset="0.58" stop-color="#0A0D09"/>
+      <stop offset="1" stop-color="#11170C"/>
+    </linearGradient>
+    <linearGradient id="lime" x1="620" y1="48" x2="940" y2="451" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CBFF2C"/>
+      <stop offset="0.5" stop-color="#A8F000"/>
+      <stop offset="1" stop-color="#79C600"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(820 238) rotate(180) scale(366 313)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A8F000" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#A8F000" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#glow)"/>
+
+  <g opacity="0.13" fill="none" stroke="#A8F000">
+    <path d="M-100 435 239 96 470 327 760 37 1130 407" stroke-width="1"/>
+    <path d="M-45 500 250 205 456 411 811 56 1082 327" stroke-width="2"/>
+    <path d="M637 -28 1060 395" stroke-width="1"/>
+  </g>
+
+  <g transform="translate(78 83)">
+    <rect x="0" y="0" width="10" height="72" rx="5" fill="url(#lime)"/>
+    <text x="34" y="59" fill="#F6F8F3" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="800" letter-spacing="6">MOTRICE</text>
+    <text x="3" y="142" fill="#F6F8F3" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800">Lo sport locale.</text>
+    <text x="3" y="194" fill="#F6F8F3" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800">Finalmente organizzato.</text>
+    <text x="3" y="256" fill="#A8F000" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" letter-spacing="3">ALLENATI  ·  CONNETTITI  ·  MIGLIORA</text>
+  </g>
+
+  <g transform="translate(708 124)" filter="url(#shadow)">
+    <rect width="252" height="252" rx="58" fill="#101214"/>
+    <rect x="10" y="10" width="232" height="232" rx="50" fill="#1B1E1E" stroke="#303435" stroke-width="4"/>
+    <path d="M58 70 159 167 146 180 78 115v65H58V70Zm84 55 52-55v110h-20v-65l-21 22-11-12Z" fill="#D8FF35"/>
+  </g>
+
+  <path d="M0 468h574l32 32H0v-32Z" fill="#A8F000" opacity="0.92"/>
+</svg>

@@ -1,6 +1,6 @@
 import styles from '../../styles/components/chat/chatTabs.module.css';
 
-function ChatTabs({ value, onChange }) {
+function ChatTabs({ value, counts = {}, onChange }) {
   return (
     <div className={styles.wrap} role="tablist" aria-label="Filtra chat">
       <span
@@ -14,7 +14,7 @@ function ChatTabs({ value, onChange }) {
         aria-selected={value === 'event'}
         onClick={() => onChange('event')}
       >
-        Eventi
+        Eventi <span>{Number(counts.event || 0)}</span>
       </button>
       <button
         type="button"
@@ -23,7 +23,7 @@ function ChatTabs({ value, onChange }) {
         aria-selected={value === 'dm'}
         onClick={() => onChange('dm')}
       >
-        DM
+        DM <span>{Number(counts.dm || 0)}</span>
       </button>
     </div>
   );

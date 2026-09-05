@@ -1,18 +1,51 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
-import { CalendarPlus, Share2, ClipboardCopy, UserPlus, UserMinus, Bookmark, BookmarkCheck, MessageCircle, Send, Sparkles, X, QrCode, Timer } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Ban,
+  Bookmark,
+  BookmarkCheck,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  ChevronDown,
+  CircleDollarSign,
+  ClipboardCopy,
+  Clock3,
+  Dumbbell,
+  MapPin,
+  MessageCircle,
+  Navigation,
+  Play,
+  Send,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+  Trophy,
+  UserMinus,
+  UserPlus,
+  UserRound,
+  Users,
+  X
+} from 'lucide-react';
 import { api } from '../services/api';
+import { chatApi } from '../services/chatApi';
+import ChatUserProfileCard from '../components/chat/ChatUserProfileCard';
 import EventBadge from '../components/EventBadge';
 import Modal from '../components/Modal';
 import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
+import EventCard from '../components/EventCard';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { downloadEventIcs } from '../utils/ics';
+import { getEventPhaseLabel, getEventTiming } from '../utils/eventLifecycle';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
 import { calculateCompatibility, getCoachProfile } from '../features/coach/services/coach';
@@ -22,7 +55,101 @@ import { getAuthSession } from '../services/authSession';
 import { markStepByAction } from '../services/tutorialMode';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
+import EventParticipationFlow from '../components/event/EventParticipationFlow';
+import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
+import { resolveEventParticipationState } from '../utils/eventParticipationState';
 import styles from '../styles/pages/eventDetail.module.css';
+
+const SPORT_DETAIL_VISUALS = [
+  {
+    pattern: /palestra|fitness|forza|functional|workout|hiit/i,
+    image: '/images/hero-palestra-v2.jpg',
+    label: 'Forza'
+  },
+  {
+    pattern: /padel|tennis|racchetta/i,
+    image: '/images/hero-padel-v2.jpg',
+    label: 'Racchetta'
+  },
+  {
+    pattern: /calcio|calcetto|football|futsal/i,
+    image: '/images/hero-calcio-v2.jpg',
+    label: 'Squadra'
+  },
+  {
+    pattern: /running|corsa|jogging/i,
+    image: '/images/hero-running-v2.jpg',
+    label: 'Running'
+  },
+  {
+    pattern: /bici|bike|cycling|ciclismo|mtb/i,
+    image: '/images/hero-bici-v2.jpg',
+    label: 'Ciclismo'
+  },
+  {
+    pattern: /trekking|trail|hiking|camminata/i,
+    image: '/images/hero-trekking-v2.jpg',
+    label: 'Outdoor'
+  }
+];
+
+const EVENT_CANCELLATION_REASONS = [
+  { value: 'personal', label: 'Motivi personali' },
+  { value: 'weather', label: 'Condizioni meteo' },
+  { value: 'venue_unavailable', label: 'Luogo non disponibile' },
+  { value: 'insufficient_participants', label: 'Partecipanti insufficienti' },
+  { value: 'emergency', label: 'Emergenza' },
+  { value: 'other', label: 'Altro motivo' }
+];
+
+function getCancellationReasonLabel(value) {
+  return EVENT_CANCELLATION_REASONS.find((reason) => reason.value === value)?.label || 'Motivo non specificato';
+}
+
+function getSportDetailVisual(event) {
+  const source = `${event?.sport_name || ''} ${event?.title || ''}`;
+  return (
+    SPORT_DETAIL_VISUALS.find((item) => item.pattern.test(source)) || {
+      image: '/images/hero-sport-default-v2.jpg',
+      label: String(event?.sport_name || 'Sport')
+    }
+  );
+}
+
+function formatEventDay(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Data da definire';
+  return new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short'
+  })
+    .format(date)
+    .replaceAll('.', '')
+    .toUpperCase();
+}
+
+function formatEventTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--:--';
+  return new Intl.DateTimeFormat('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function formatCurrencyFromCents(value) {
+  return (Number(value || 0) / 100).toLocaleString('it-IT', {
+    style: 'currency',
+    currency: 'EUR'
+  });
+}
+
+function hasMeaningfulDescription(value) {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  return (text.match(/[\p{L}\p{N}]/gu) || []).length >= 3;
+}
 
 function EventDetailPage() {
   ensureLeafletIcons();
@@ -43,8 +170,13 @@ function EventDetailPage() {
   }
 
   const { id } = useParams();
-  const currentUserId = Number(getAuthSession().userId) || 1;
-  const [searchParams, setSearchParams] = useSearchParams();
+  const authSession = getAuthSession();
+  const currentUserId = Number(authSession.userId) || 1;
+  const currentUser = {
+    id: String(authSession.authUserId || authSession.userId || '')
+  };
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { entitlements } = useBilling();
@@ -55,10 +187,14 @@ function EventDetailPage() {
   const [error, setError] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelCountdown, setCancelCountdown] = useState(3);
   const [cancelReady, setCancelReady] = useState(false);
   const [cancelKaboom, setCancelKaboom] = useState(false);
+  const [organizerCancelOpen, setOrganizerCancelOpen] = useState(false);
+  const [organizerCancelSubmitting, setOrganizerCancelSubmitting] = useState(false);
+  const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '' });
   const [rsvpForm, setRsvpForm] = useState({
     name: '',
     skill_level: 'beginner',
@@ -74,21 +210,91 @@ function EventDetailPage() {
   const [groupChatCanSend, setGroupChatCanSend] = useState(false);
   const [groupChatDraft, setGroupChatDraft] = useState('');
   const [groupChatSending, setGroupChatSending] = useState(false);
+  const [chatProfileCard, setChatProfileCard] = useState({
+    open: false,
+    loading: false,
+    profile: null,
+    error: ''
+  });
   const [checkedInParticipants, setCheckedInParticipants] = useState([]);
   const [friendRequestBusyById, setFriendRequestBusyById] = useState({});
-  const [checkInSession, setCheckInSession] = useState(null);
-  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [personalEventBusy, setPersonalEventBusy] = useState(false);
+  const [workoutPlanSaving, setWorkoutPlanSaving] = useState(false);
+  const [workoutPlanSaved, setWorkoutPlanSaved] = useState(false);
+  const [workoutPlanOpen, setWorkoutPlanOpen] = useState(false);
+  const [participantListOpen, setParticipantListOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
-  const [checkInTokenInput, setCheckInTokenInput] = useState('');
-  const [checkInSubmitting, setCheckInSubmitting] = useState(false);
-  const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '' });
+  const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '', avatar_url: '' });
   const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
   const [groupChatAiLoading, setGroupChatAiLoading] = useState(false);
   const groupChatBodyRef = useRef(null);
-  const { hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
+  const participationFlowRef = useRef(null);
+  const lastParticipationStateRef = useRef('');
+  const {
+    coords,
+    hasLocation,
+    permission,
+    error: locationError,
+    requesting,
+    requestLocation,
+    originParams
+  } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
+
+  useEffect(() => {
+    setWorkoutPlanOpen(false);
+    setParticipantListOpen(false);
+    setActionsOpen(false);
+    setRulesOpen(false);
+    setOrganizerCancelOpen(false);
+    setOrganizerCancelForm({ reasonCode: '', note: '' });
+  }, [event?.id]);
+
+  useEffect(() => {
+    if (!event?.id || !event?.workout_plan || location.hash !== '#workout-plan') return undefined;
+    setWorkoutPlanOpen(true);
+    const timer = window.setTimeout(() => {
+      document.getElementById('workout-plan')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    return () => window.clearTimeout(timer);
+  }, [event?.id, event?.workout_plan, location.hash]);
+
+  useEffect(() => {
+    if (!event?.id || location.hash !== '#verify-presence') return undefined;
+    const timer = window.setTimeout(() => {
+      document.getElementById('verify-presence')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [event?.id, location.hash]);
+
+  async function openChatParticipantProfile(identity) {
+    const fallback = {
+      userId: identity?.userId || null,
+      authUserId: identity?.authUserId || '',
+      display_name: identity?.displayName || 'Partecipante',
+      avatar_url: identity?.avatarUrl || '',
+      bio: '',
+      city: '',
+      level: '',
+      reliability: 0
+    };
+    setChatProfileCard({ open: true, loading: true, profile: fallback, error: '' });
+    try {
+      const profile = await chatApi.getParticipantProfile(identity);
+      setChatProfileCard({ open: true, loading: false, profile, error: '' });
+    } catch (profileError) {
+      setChatProfileCard({
+        open: true,
+        loading: false,
+        profile: fallback,
+        error: profileError?.message || 'Profilo non disponibile'
+      });
+    }
+  }
 
   usePageMeta({
     title: event ? `${event.sport_name} a ${event.location_name} | Motrice` : 'Dettaglio Evento | Motrice',
@@ -100,10 +306,17 @@ function EventDetailPage() {
     api.getLocalProfile()
       .then((profile) => {
         if (!active) return;
+        const displayName = String(profile?.display_name || profile?.name || '').trim();
         setLocalProfile({
-          display_name: String(profile?.display_name || profile?.name || '').trim(),
+          display_name: displayName,
           avatar_url: String(profile?.avatar_url || '').trim()
         });
+        if (displayName.length >= 2) {
+          setRsvpForm((current) => ({
+            ...current,
+            name: displayName
+          }));
+        }
       })
       .catch(() => {
         if (!active) return;
@@ -123,7 +336,7 @@ function EventDetailPage() {
       .then(([eventData, allEvents]) => {
         setEvent(eventData);
         setSimilarEvents(
-          allEvents.filter((item) => item.id !== Number(id) && item.sport_id === eventData.sport_id).slice(0, 3)
+          allEvents.filter((item) => String(item.id) !== String(id) && item.sport_id === eventData.sport_id).slice(0, 3)
         );
       })
       .catch((err) => setError(err.message))
@@ -140,7 +353,11 @@ function EventDetailPage() {
       ? Number(currentUserId)
       : Number(organizerRawId);
     if (!Number.isFinite(organizerId)) {
-      setOrganizerIntro({ name: fallbackName, bio: '' });
+      setOrganizerIntro({
+        name: fallbackName,
+        bio: String(event.organizer?.bio || '').trim(),
+        avatar_url: String(event.organizer?.avatar_url || '').trim()
+      });
       return undefined;
     }
 
@@ -149,12 +366,17 @@ function EventDetailPage() {
         if (!active) return;
         setOrganizerIntro({
           name: String(profile?.display_name || fallbackName || 'Organizzatore').trim(),
-          bio: String(profile?.bio || '').trim()
+          bio: String(profile?.bio || event.organizer?.bio || '').trim(),
+          avatar_url: String(profile?.avatar_url || event.organizer?.avatar_url || '').trim()
         });
       })
       .catch(() => {
         if (!active) return;
-        setOrganizerIntro({ name: fallbackName, bio: '' });
+        setOrganizerIntro({
+          name: fallbackName,
+          bio: String(event.organizer?.bio || '').trim(),
+          avatar_url: String(event.organizer?.avatar_url || '').trim()
+        });
       });
 
     return () => {
@@ -165,13 +387,6 @@ function EventDetailPage() {
   async function reload() {
     const fresh = await api.getEvent(id, originParams);
     setEvent(fresh);
-  }
-
-  function formatCountdown(ms) {
-    const safe = Math.max(0, Number(ms || 0));
-    const minutes = Math.floor(safe / 60000);
-    const seconds = Math.floor((safe % 60000) / 1000);
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
 
   function isNearBottom(node) {
@@ -300,28 +515,63 @@ function EventDetailPage() {
   }
 
   async function confirmRsvp() {
-    if (!rsvpForm.name || rsvpForm.name.length < 2) {
-      showToast('Inserisci un nome valido', 'error');
+    if (rsvpSubmitting) return;
+    const participantName = String(rsvpForm.name || localProfile.display_name || '').trim();
+    if (participantName.length < 2) {
+      showToast('Completa il nome utente nel profilo prima di partecipare', 'error');
       return;
     }
 
+    setRsvpSubmitting(true);
     try {
-      await api.joinEvent(id, rsvpForm);
-      await reload();
-      showToast('RSVP confermato', 'success');
-      markStepByAction('rsvp_confirmed');
-      setModalOpen(false);
+      const result = await api.joinEvent(id, {
+        ...rsvpForm,
+        name: participantName
+      });
+      if (result?.pending) {
+        setEvent((current) => current ? {
+          ...current,
+          is_join_pending: true,
+          join_request_status: 'pending'
+        } : current);
+        setModalOpen(false);
+        showToast('Richiesta inviata all organizer', 'success');
+      } else {
+        setEvent((current) => current ? {
+          ...current,
+          is_going: true,
+          user_rsvp: result?.rsvp || current.user_rsvp
+        } : current);
+        setModalOpen(false);
+        showToast('RSVP confermato', 'success');
+        markStepByAction('rsvp_confirmed');
+      }
+      reload().catch(() => {
+        // La conferma ricevuta dal backend resta valida anche se il refresh tarda.
+      });
     } catch (err) {
+      if (err?.code === 'PROFILE_VERIFICATION_REQUIRED' || String(err?.message || '').includes('PROFILE_VERIFICATION_REQUIRED')) {
+        setModalOpen(false);
+        showToast('Verifica il profilo prima di partecipare', 'info');
+        navigate('/verify-profile');
+        return;
+      }
       showToast(err.message, 'error');
+    } finally {
+      setRsvpSubmitting(false);
     }
   }
 
   async function cancelRsvp() {
     if (!cancelReady) return;
     try {
+      const stakeCents = Number(event?.user_rsvp?.stake_cents ?? event?.deposit_cents ?? 0);
+      const hasDeposit = event?.participation_protection !== false && stakeCents > 0;
       const result = await api.leaveEvent(id);
       await reload();
-      if (result?.penalty_applied) {
+      if (!hasDeposit) {
+        showToast('Partecipazione annullata. Nessun deposito previsto.', 'success');
+      } else if (result?.penalty_applied) {
         showToast(
           result?.penalty_note || 'Penale applicata: quota congelata fino alla prossima partecipazione.',
           'info'
@@ -340,6 +590,48 @@ function EventDetailPage() {
     }
   }
 
+  async function cancelOrganizedEvent() {
+    if (!organizerCancelForm.reasonCode || organizerCancelSubmitting) return;
+    setOrganizerCancelSubmitting(true);
+    try {
+      const result = await api.cancelEvent(id, organizerCancelForm);
+      await reload();
+      setOrganizerCancelOpen(false);
+      setActionsOpen(false);
+      setGroupChatCanSend(false);
+      const refundedCents = Number(result?.refunded_cents || 0);
+      const refundedParticipants = Number(result?.refunded_participants || 0);
+      showToast(
+        refundedCents > 0
+          ? `Evento annullato · ${refundedParticipants} ${refundedParticipants === 1 ? 'rimborso eseguito' : 'rimborsi eseguiti'}`
+          : 'Evento annullato. I partecipanti sono stati avvisati.',
+        'success'
+      );
+    } catch (cancelError) {
+      showToast(cancelError.message || 'Impossibile annullare l evento', 'error');
+    } finally {
+      setOrganizerCancelSubmitting(false);
+    }
+  }
+
+  async function completePersonalEvent() {
+    setPersonalEventBusy(true);
+    try {
+      const result = await api.completePersonalEvent(id);
+      await reload();
+      showToast(
+        result?.already_completed
+          ? 'Allenamento gia registrato'
+          : `Allenamento registrato · +${result?.xp_awarded || event?.completion_xp || 5} PX`,
+        result?.already_completed ? 'info' : 'success'
+      );
+    } catch (err) {
+      showToast(err.message || 'Impossibile completare il promemoria', 'error');
+    } finally {
+      setPersonalEventBusy(false);
+    }
+  }
+
   async function onAttendance(choice) {
     try {
       await api.confirmAttendance(id, choice);
@@ -352,58 +644,6 @@ function EventDetailPage() {
       );
     } catch (err) {
       showToast(err.message, 'error');
-    }
-  }
-
-  async function refreshCheckInSession() {
-    try {
-      const session = await api.getEventCheckInSession(id);
-      setCheckInSession(session);
-    } catch (err) {
-      showToast(err.message || 'Impossibile caricare sessione check-in', 'error');
-    }
-  }
-
-  async function startCheckInSession() {
-    setCheckInBusy(true);
-    try {
-      const session = await api.startEventCheckInSession(id);
-      setCheckInSession(session);
-      showToast('Check-in avviato: mostra il QR ai partecipanti.', 'success');
-    } catch (err) {
-      showToast(err.message || 'Impossibile avviare check-in', 'error');
-    } finally {
-      setCheckInBusy(false);
-    }
-  }
-
-  async function submitParticipantCheckIn() {
-    const token = String(checkInTokenInput || '').trim();
-    if (!token) {
-      showToast('Inserisci o incolla il token check-in', 'error');
-      return;
-    }
-
-    setCheckInSubmitting(true);
-    try {
-      const result = await api.checkInToEvent({ eventId: id, token });
-      await reload();
-      await refreshCheckInSession();
-      if (result?.alreadyChecked) {
-        showToast('Check-in gia registrato per questo evento.', 'info');
-      } else {
-        const participantXp = Number(result?.xpAwarded?.participant || 0);
-        const organizerXp = Number(result?.xpAwarded?.organizer || 0);
-        showToast(
-          `Presenza confermata, deposito sbloccato, +${participantXp} XP${organizerXp > 0 ? ` · organizer +${organizerXp} XP` : ''}.`,
-          'success'
-        );
-      }
-      setCheckInTokenInput('');
-    } catch (err) {
-      showToast(err.message || 'Check-in non riuscito', 'error');
-    } finally {
-      setCheckInSubmitting(false);
     }
   }
 
@@ -430,10 +670,10 @@ function EventDetailPage() {
     try {
       if (event.is_saved) {
         await api.unsaveEvent(id);
-        showToast('Evento rimosso dall agenda', 'info');
+        showToast('Evento rimosso dai tuoi eventi', 'info');
       } else {
         await api.saveEvent(id);
-        showToast('Evento salvato in agenda', 'success');
+        showToast('Evento salvato nei tuoi eventi', 'success');
       }
       await reload();
     } catch (err) {
@@ -447,7 +687,7 @@ function EventDetailPage() {
     const tempId = `tmp_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
     const optimistic = {
       id: tempId,
-      event_id: Number(id),
+      event_id: id,
       sender_user_id: Number(currentUserId),
       sender_name: normalizeDisplayName(localProfile.display_name || 'Me', 'Me'),
       sender_avatar_url: String(localProfile.avatar_url || '').trim(),
@@ -537,10 +777,9 @@ function EventDetailPage() {
     }
   }
 
-  const canAccessGroupChat =
-    Boolean(event?.is_going) &&
-    (entitlements.canUseCoachChat || [500, 1000].includes(Number(event?.user_rsvp?.participation_fee_cents || 0)));
+  const isOrganizer = Boolean(event && currentUser?.id === String(event.organizerId || ''));
   const isOrganizerForEvent = Boolean(
+    isOrganizer ||
     event &&
     (
       String(event.organizer?.id || '') === 'me' ||
@@ -548,27 +787,22 @@ function EventDetailPage() {
       normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
     )
   );
-  const sessionStartsMs = Date.parse(checkInSession?.starts_at || '');
-  const sessionExpiresMs = Date.parse(checkInSession?.expires_at || '');
-  const sessionIsScheduled = Number.isFinite(sessionStartsMs) && checkInNowMs < sessionStartsMs;
-  const sessionIsActive =
-    Number.isFinite(sessionStartsMs) &&
-    Number.isFinite(sessionExpiresMs) &&
-    checkInNowMs >= sessionStartsMs &&
-    checkInNowMs <= sessionExpiresMs;
-  const sessionIsExpired = Number.isFinite(sessionExpiresMs) && checkInNowMs > sessionExpiresMs;
+  const participationIsFull = Number(event?.max_participants || 0) > 0 &&
+    Number(event?.participants_count || 0) >= Number(event?.max_participants || 0);
+  const participationState = resolveEventParticipationState({
+    event,
+    isOrganizer: isOrganizerForEvent,
+    isFull: participationIsFull
+  });
+  const canAccessGroupChat = Boolean(participationState.canAccessChat || isOrganizerForEvent);
   const eventStartsMs = Date.parse(event?.event_datetime || '');
-  const eventDurationMinutes = Number.isFinite(Number(event?.duration_minutes))
-    ? Math.max(30, Number(event.duration_minutes))
-    : Number.isFinite(Number(event?.duration_hours))
-      ? Math.max(1, Number(event.duration_hours)) * 60
-      : 120;
-  const eventEndedWithoutSession = !checkInSession && Number.isFinite(eventStartsMs)
-    ? checkInNowMs > (eventStartsMs + eventDurationMinutes * 60 * 1000)
-    : false;
-  const canInviteFriendsFromGroupChat = Boolean(sessionIsExpired || eventEndedWithoutSession);
-  const sessionStartsInLabel = sessionIsScheduled ? formatCountdown(sessionStartsMs - checkInNowMs) : '00:00';
-  const sessionExpiresInLabel = sessionIsActive ? formatCountdown(sessionExpiresMs - checkInNowMs) : '00:00';
+  const eventTiming = getEventTiming(event || {}, checkInNowMs);
+  const eventHasEnded = eventTiming.hasEnded;
+  const canInviteFriendsFromGroupChat = Boolean(
+    eventHasEnded ||
+    Number(event?.user_rsvp?.cashback_percent || 0) >= 100 ||
+    String(event?.user_rsvp?.attendance || '') === 'attended'
+  );
   const requestedParticipants = useMemo(
     () => checkedInParticipants.filter((item) => String(item.friendship_status || '') === 'requested'),
     [checkedInParticipants]
@@ -586,12 +820,49 @@ function EventDetailPage() {
     if (!event) return;
     if (searchParams.get('chat') !== 'group') return;
     if (!canAccessGroupChat) return;
-    setGroupChatOpen(true);
-    loadGroupChatMessages({ forceStick: true });
-    const next = new URLSearchParams(searchParams);
-    next.delete('chat');
-    setSearchParams(next, { replace: true });
-  }, [event, canAccessGroupChat, searchParams, setSearchParams]);
+    navigate(`/chat/event_${event.id}`, { replace: true });
+  }, [event, canAccessGroupChat, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!event?.id || !participationState.shouldPoll || isOrganizerForEvent) return undefined;
+    let active = true;
+
+    async function refreshParticipationState() {
+      try {
+        const fresh = await api.getEvent(id, originParams);
+        if (!active) return;
+        const nextIsFull = Number(fresh?.max_participants || 0) > 0 &&
+          Number(fresh?.participants_count || 0) >= Number(fresh?.max_participants || 0);
+        const nextState = resolveEventParticipationState({ event: fresh, isFull: nextIsFull });
+        const previousStateId = lastParticipationStateRef.current || participationState.id;
+
+        setEvent(fresh);
+        lastParticipationStateRef.current = nextState.id;
+
+        if (previousStateId === 'pending' && nextState.id === 'confirmed') {
+          showToast('Richiesta approvata: il posto è confermato e il QR è pronto.', 'success');
+          markStepByAction('rsvp_confirmed');
+        } else if (previousStateId === 'pending' && nextState.id === 'declined') {
+          showToast('La richiesta non è stata approvata.', 'info');
+        } else if (previousStateId === 'confirmed' && nextState.id === 'checked_in') {
+          showToast('Check-in verificato: presenza registrata.', 'success');
+        } else if (previousStateId === 'checked_in' && nextState.id === 'completed') {
+          showToast('Partecipazione completata: deposito e ricompense aggiornati.', 'success');
+        }
+      } catch {
+        // Il polling è silenzioso: la richiesta resta valida e verrà ritentata.
+      }
+    }
+
+    lastParticipationStateRef.current = participationState.id;
+    const firstRefreshId = window.setTimeout(refreshParticipationState, 1500);
+    const intervalId = window.setInterval(refreshParticipationState, 5000);
+    return () => {
+      active = false;
+      window.clearTimeout(firstRefreshId);
+      window.clearInterval(intervalId);
+    };
+  }, [event?.id, id, isOrganizerForEvent, originParams, participationState.id, participationState.shouldPoll, showToast]);
 
   useEffect(() => {
     if (!groupChatOpen) return undefined;
@@ -630,18 +901,10 @@ function EventDetailPage() {
   }, [groupChatOpen, groupChatMessages.length]);
 
   useEffect(() => {
-    if (!checkInSession) return undefined;
-    const intervalId = window.setInterval(() => setCheckInNowMs(Date.now()), 1000);
+    if (!event) return undefined;
+    const intervalId = window.setInterval(() => setCheckInNowMs(Date.now()), 60 * 1000);
     return () => window.clearInterval(intervalId);
-  }, [checkInSession]);
-
-  useEffect(() => {
-    if (!event || (!isOrganizerForEvent && !event?.is_going)) {
-      setCheckInSession(null);
-      return;
-    }
-    refreshCheckInSession();
-  }, [event?.id, isOrganizerForEvent, event?.is_going]);
+  }, [event]);
 
   useEffect(() => {
     if (!cancelConfirmOpen) return undefined;
@@ -672,6 +935,20 @@ function EventDetailPage() {
     setCancelKaboom(false);
   }
 
+  async function saveAttachedWorkoutPlan() {
+    if (!event?.workout_plan || workoutPlanSaving || workoutPlanSaved) return;
+    setWorkoutPlanSaving(true);
+    try {
+      await saveSharedWorkoutPlanToLibrary(event.workout_plan);
+      setWorkoutPlanSaved(true);
+      showToast('Scheda salvata nelle tue Schede personali', 'success');
+    } catch (saveError) {
+      showToast(saveError.message || 'Impossibile salvare la scheda', 'error');
+    } finally {
+      setWorkoutPlanSaving(false);
+    }
+  }
+
   if (loading) return <LoadingSkeleton rows={2} />;
   if (error)
     return (
@@ -680,8 +957,8 @@ function EventDetailPage() {
         description={error}
         imageSrc="/images/default-sport.svg"
         imageAlt="Icona sport"
-        primaryActionLabel="Explore nearby"
-        onPrimaryAction={() => navigate('/explore')}
+        primaryActionLabel="Apri la mappa"
+        onPrimaryAction={() => navigate('/map')}
       />
     );
 
@@ -692,6 +969,131 @@ function EventDetailPage() {
         .map((pair) => [Number(pair[0]), Number(pair[1])])
         .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
     : [];
+  const sportVisual = getSportDetailVisual(event);
+  const eventTitle = String(event.title || event.sport_name || 'Evento');
+  const eventDescription = String(event.description || '').trim();
+  const showHeroDescription = hasMeaningfulDescription(eventDescription);
+  const showHeroDateSport = normalizeName(eventTitle) !== normalizeName(event.sport_name);
+  const durationMinutes = Number(event.duration_minutes || 120);
+  const minimumPresenceMinutes = Number(event.minimum_presence_minutes || 45);
+  const completionXp = Number(event.completion_xp || (event.is_personal ? 5 : 50));
+  const reviewBonusXp = event.is_personal ? 0 : Number(event.review_bonus_xp || 0);
+  const totalAvailableXp = completionXp + reviewBonusXp;
+  const routeDistance = Number(event.route_info?.distance_km);
+  const hasRouteDistance = Number.isFinite(routeDistance) && routeDistance > 0;
+  const participantsCount = Number(event.participants_count || 0);
+  const maxParticipants = Number(event.max_participants || 0);
+  const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
+  const rewardProgressCurrent = Math.min(
+    rewardProgressTotal,
+    Math.max(0, Number(event.participants_checked_in_count || 0))
+  );
+  const rewardProgressPercent = Math.min(100, (rewardProgressCurrent / rewardProgressTotal) * 100);
+  const organizerReliability = Number(event.organizer?.reliability_score || 100);
+  const organizerName = String(organizerIntro.name || event.organizer?.name || 'Organizer');
+  const organizerInitial = organizerName.slice(0, 1).toUpperCase();
+  const organizerAvatarUrl = String(organizerIntro.avatar_url || event.organizer?.avatar_url || '').trim();
+  const organizerBio = String(organizerIntro.bio || event.organizer?.bio || '').trim();
+  const organizerProfileId = event.organizer?.auth_user_id || event.organizer?.id;
+  const organizerProfileState = {
+    publicProfile: {
+      id: organizerProfileId,
+      display_name: organizerName,
+      name: organizerName,
+      bio: organizerBio,
+      avatar_url: organizerAvatarUrl,
+      city: event.city || '',
+      reliability_score: organizerReliability
+    }
+  };
+  const audienceLabel = event.audience === 'male' ? 'Maschile' : event.audience === 'female' ? 'Femminile' : 'Misto';
+  const mapParams = new URLSearchParams({
+    eventId: String(event.id),
+    focus: String(event.location_name || event.city || '')
+  });
+  if (event.lat != null) mapParams.set('lat', String(event.lat));
+  if (event.lng != null) mapParams.set('lng', String(event.lng));
+  const mapPath = `/map?${mapParams.toString()}`;
+  const directionsDestination =
+    event.lat != null && event.lng != null
+      ? `${event.lat},${event.lng}`
+      : String(event.location_name || event.city || '');
+  const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(directionsDestination)}`;
+  const participantPreview = Array.from(
+    new Set(
+      (Array.isArray(event.participants_preview) ? event.participants_preview : [])
+        .map((name) => String(name || '').trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 5);
+  const eventIsCancelled = event.status === 'cancelled';
+  const isClosedEvent = Boolean(!eventIsCancelled && (event.status === 'completed' || event.has_passed || eventHasEnded));
+  const canCancelOrganizedEvent = Boolean(
+    isOrganizerForEvent &&
+    !event.is_personal &&
+    event.status === 'scheduled' &&
+    Number.isFinite(eventStartsMs) &&
+    eventStartsMs > Date.now()
+  );
+  const cancellationIsLatePreview = Boolean(
+    Number.isFinite(eventStartsMs) && eventStartsMs < Date.now() + 24 * 60 * 60 * 1000
+  );
+  const refundableParticipantsCount = Math.max(0, Number(event.refundable_participants_count || 0));
+  const refundableDepositCents = Math.max(0, Number(event.refundable_deposit_cents || 0));
+  const participantAttendance = String(event.user_rsvp?.attendance || '').toLowerCase();
+  const participantWasPresent = Boolean(
+    participantAttendance === 'attended' || Number(event.user_rsvp?.cashback_percent || 0) >= 60
+  );
+  const participantWasNoShow = participantAttendance === 'no_show';
+  const recordedPresenceMinutes = Number(
+    event.user_rsvp?.elapsed_minutes ?? event.user_rsvp?.presence_minutes
+  );
+  const closedPresenceMinutes = Number.isFinite(recordedPresenceMinutes)
+    ? Math.max(0, Math.min(durationMinutes, Math.round(recordedPresenceMinutes)))
+    : participantWasPresent
+      ? minimumPresenceMinutes
+      : 0;
+  const closedEarnedXp = Number(
+    event.user_rsvp?.xp_earned ??
+      event.user_rsvp?.awarded_xp ??
+      (participantWasPresent
+        ? completionXp + (event.user_rsvp?.review_submitted ? reviewBonusXp : 0)
+        : 0)
+  );
+  const closedPresentCount = Number(
+    event.participant_stats?.present ??
+      event.participants_present_count ??
+      event.participants_checked_in_count ??
+      0
+  );
+  const closedTotalCount = Math.max(
+    closedPresentCount,
+    Number(event.participant_stats?.total ?? event.participants_total_count ?? participantsCount ?? 0)
+  );
+  const closedAttendanceLabel = participantWasPresent
+    ? 'Presente'
+    : participantWasNoShow
+      ? 'No-show'
+      : 'Da verificare';
+  const reliabilityImpactLabel = participantWasPresent
+    ? 'Positivo'
+    : participantWasNoShow
+      ? 'Negativo'
+      : 'Neutro';
+  const checkInWindowLabel = eventTiming.checkInOpensAtMs != null && eventTiming.checkInClosesAtMs != null
+    ? `${formatEventTime(eventTiming.checkInOpensAtMs)} – ${formatEventTime(eventTiming.checkInClosesAtMs)}`
+    : 'Orario non disponibile';
+  const checkInStatusLabel = getEventPhaseLabel(eventTiming);
+  const canOpenAgendaCheckIn = Boolean(
+    isOrganizerForEvent ||
+    ['confirmed', 'checked_in', 'completed'].includes(participationState.id)
+  );
+  const agendaCheckInPath = `/agenda?verifyEvent=${encodeURIComponent(String(event.id))}`;
+  const checkInActionLabel = isClosedEvent
+    ? 'Vedi stato check-in'
+    : isOrganizerForEvent
+      ? 'Gestisci check-in'
+      : 'Verifica presenza';
 
   return (
     <div className={styles.page}>
@@ -701,320 +1103,672 @@ function EventDetailPage() {
         error={locationError}
         requesting={requesting}
         onRequest={requestLocation}
+        compact
       />
-      <div className={styles.detailGrid}>
-        <Card as="article" className={styles.detailCard}>
-          <div className="row">
-            <h1>{event.sport_name}</h1>
-            <div className={styles.metaRow}>
-              <EventBadge label={event.level} type="level" />
-              <EventBadge label={`${event.participants_count}/${event.max_participants}`} type="status" />
-              {event.is_going && <EventBadge label="You're going" type="status" />}
-              {event.creator_plan === 'premium' && <EventBadge label="Premium" type="premium" />}
+      <main className={styles.eventShell}>
+        <article className={styles.detailCard}>
+          <header
+            className={styles.eventHero}
+            style={{ '--event-hero-image': `url("${sportVisual.image}")` }}
+          >
+            <div className={styles.heroControls}>
+              <button type="button" className={`${styles.heroIconButton} ${styles.heroBackButton}`} onClick={() => navigate(-1)} aria-label="Torna indietro">
+                <ArrowLeft size={22} aria-hidden="true" />
+              </button>
+              <div className={styles.heroControlsRight}>
+                <button
+                  type="button"
+                  className={`${styles.heroIconButton} ${event.is_saved ? styles.heroIconButtonActive : ''}`}
+                  onClick={toggleSaveAgenda}
+                  aria-label={event.is_saved ? 'Rimuovi dai tuoi eventi' : 'Salva nei tuoi eventi'}
+                >
+                  {event.is_saved ? <BookmarkCheck size={21} aria-hidden="true" /> : <Bookmark size={21} aria-hidden="true" />}
+                </button>
+                <button type="button" className={`${styles.heroIconButton} ${styles.heroShareButton}`} onClick={shareLink} aria-label="Condividi evento">
+                  <Share2 size={21} aria-hidden="true" />
+                </button>
+              </div>
             </div>
-          </div>
 
-          <p>{event.description}</p>
-          <p>
-            <strong>Quando:</strong> {new Date(event.event_datetime).toLocaleString('it-IT')}
-          </p>
-          <p>
-            <strong>Durata:</strong> {Number(event.duration_minutes || 120)} min
-          </p>
-          <p>
-            <strong>Dove:</strong> {event.location_name}
-          </p>
-          {event.route_info ? (
-            <Card subtle>
-              <h2>Informazioni percorso</h2>
-              <p>
-                <strong>Nome:</strong> {event.route_info.name}
-              </p>
-              <p>
-                <strong>Tratta:</strong> {event.route_info.from_label || 'Via X'} → {event.route_info.to_label || 'Via Y'}
-              </p>
-              <p>
-                <strong>Distanza:</strong> {event.route_info.distance_km} km
-              </p>
-              {event.route_info.elevation_gain_m ? (
-                <p>
-                  <strong>Dislivello positivo:</strong> +{event.route_info.elevation_gain_m} m
-                </p>
+            <div className={styles.heroContent}>
+              <div className={styles.heroBadges}>
+                <span className={styles.heroCategory}>{sportVisual.label}</span>
+              </div>
+              <div className={styles.heroText}>
+                <div className={styles.heroOrganizer}>
+                  <span aria-hidden="true">{organizerInitial}</span>
+                  <p>Organizzato da <strong>{organizerName}</strong></p>
+                </div>
+                <h1>{eventTitle}</h1>
+                {showHeroDescription ? <p className={styles.heroDescription}>{eventDescription}</p> : null}
+                <div className={styles.heroDate}>
+                  <span className={styles.heroDateIcon}><CalendarDays size={21} aria-hidden="true" /></span>
+                  <span className={styles.heroDateCopy}>
+                    <small>Data evento</small>
+                    <strong>{formatEventDay(event.event_datetime)} · {formatEventTime(event.event_datetime)}</strong>
+                  </span>
+                  {showHeroDateSport ? <small className={styles.heroDateSport}>• {event.sport_name}</small> : null}
+                </div>
+              </div>
+            </div>
+          </header>
+
+          {eventIsCancelled ? (
+            <Card as="section" className={styles.cancelledEventBanner}>
+              <span className={styles.cancelledEventIcon}><Ban size={23} aria-hidden="true" /></span>
+              <div>
+                <p>Evento annullato</p>
+                <h2>{getCancellationReasonLabel(event.cancellation_reason)}</h2>
+                <span>
+                  {event.cancellation_note || 'Le iscrizioni sono chiuse, i QR sono stati disattivati e la chat resta in sola lettura.'}
+                </span>
+              </div>
+              <strong>{event.cancelled_at ? new Date(event.cancelled_at).toLocaleDateString('it-IT') : 'Annullato'}</strong>
+            </Card>
+          ) : null}
+
+          <Card as="section" className={styles.locationCard}>
+            <div className={styles.mapStage}>
+              {routePoints.length >= 2 ? (
+                <MapContainer center={routePoints[0]} zoom={11} className={styles.mapFrame}>
+                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Polyline positions={routePoints} />
+                  <Marker position={routePoints[0]}>
+                    <Popup>Partenza: {event.route_info?.from_label || 'Punto di partenza'}</Popup>
+                  </Marker>
+                  <Marker position={routePoints[routePoints.length - 1]}>
+                    <Popup>Arrivo: {event.route_info?.to_label || 'Punto di arrivo'}</Popup>
+                  </Marker>
+                </MapContainer>
+              ) : event.lat != null && event.lng != null ? (
+                <MapContainer center={[event.lat, event.lng]} zoom={13} className={styles.mapFrame}>
+                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <Marker position={[event.lat, event.lng]}>
+                    <Popup>{event.location_name}</Popup>
+                  </Marker>
+                </MapContainer>
+              ) : (
+                <div className={styles.mapFallback}>
+                  <MapPin size={34} aria-hidden="true" />
+                  <span>Coordinate non disponibili</span>
+                </div>
+              )}
+            </div>
+            <div className={styles.locationBody}>
+              <div className={styles.locationHeading}>
+                <span className={styles.locationIcon}><MapPin size={20} aria-hidden="true" /></span>
+                <div>
+                  <h2>{event.location_name || 'Luogo da definire'}</h2>
+                  <p>{event.distance_km != null ? `${Number(event.distance_km).toLocaleString('it-IT')} km da te` : event.city || 'Posizione evento'}</p>
+                </div>
+              </div>
+              <div className={styles.locationActions}>
+                <Link to={mapPath} className={styles.locationButton}>
+                  <MapPin size={18} aria-hidden="true" />
+                  Mostra sulla mappa
+                </Link>
+                <a href={directionsHref} target="_blank" rel="noreferrer" className={`${styles.locationButton} ${styles.locationButtonPrimary}`}>
+                  <Navigation size={18} aria-hidden="true" />
+                  Portami lì
+                </a>
+              </div>
+              {event.route_info ? (
+                <div className={styles.routeInlineFacts} aria-label="Riepilogo percorso">
+                  <span><small>Partenza</small><strong>{event.route_info.from_label || event.location_name}</strong></span>
+                  <span><small>Arrivo</small><strong>{event.route_info.to_label || event.location_name}</strong></span>
+                  {hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
+                  {event.route_info.elevation_gain_m ? <span><small>Dislivello</small><strong>+{event.route_info.elevation_gain_m} m</strong></span> : null}
+                </div>
               ) : null}
-              {event.route_info.map_url ? (
-                <p>
-                  <a href={event.route_info.map_url} target="_blank" rel="noreferrer">
-                    Apri rotta su mappa
-                  </a>
-                </p>
+            </div>
+          </Card>
+
+          {event.workout_plan ? (
+            <Card id="workout-plan" as="section" className={`${styles.workoutPlanCard} ${workoutPlanOpen ? styles.workoutPlanCardOpen : ''}`}>
+              <button
+                type="button"
+                className={styles.workoutPlanToggle}
+                aria-expanded={workoutPlanOpen}
+                aria-controls={`event-workout-plan-${event.id}`}
+                onClick={() => setWorkoutPlanOpen((open) => !open)}
+              >
+                <span className={styles.workoutPlanIcon}><Dumbbell size={23} aria-hidden="true" /></span>
+                <span className={styles.workoutPlanHeading}>
+                  <span className={styles.workoutPlanEyebrow}>Scheda allenamento</span>
+                  <strong>{event.workout_plan.title}</strong>
+                  <small>{event.workout_plan.exercises?.length || 0} esercizi · {event.workout_plan.duration || 60} min</small>
+                </span>
+                <span className={styles.workoutPlanToggleAction}>
+                  <span>{workoutPlanOpen ? 'Nascondi dettagli' : 'Visualizza dettagli'}</span>
+                  <ChevronDown
+                    size={20}
+                    className={workoutPlanOpen ? styles.workoutPlanChevronOpen : ''}
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+              {workoutPlanOpen ? (
+                <div id={`event-workout-plan-${event.id}`} className={styles.workoutPlanDetails}>
+                  <div className={styles.workoutPlanExercises}>
+                    {(event.workout_plan.exercises || []).map((exercise, index) => (
+                      <article key={exercise.instanceId || `${exercise.name}-${index}`}>
+                        <span>{String(index + 1).padStart(2, '0')}</span>
+                        <div>
+                          <strong>{exercise.name}</strong>
+                          <small>{exercise.sets || 1} serie × {exercise.reps || '10'} ripetizioni</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  {!isOrganizerForEvent && event.is_going ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={workoutPlanSaved ? CheckCircle2 : Bookmark}
+                      onClick={saveAttachedWorkoutPlan}
+                      disabled={workoutPlanSaving || workoutPlanSaved}
+                    >
+                      {workoutPlanSaved
+                        ? 'Salvata nelle Schede personali'
+                        : workoutPlanSaving
+                          ? 'Salvataggio...'
+                          : 'Salva nelle mie schede'}
+                    </Button>
+                  ) : null}
+                  {(event.is_personal || Number(event?.user_rsvp?.cashback_percent || 0) >= 60 || Boolean(event?.user_rsvp?.checked_in_at) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
+                    <Button
+                      type="button"
+                      fullWidth
+                      icon={Play}
+                      onClick={() => navigate(`/events/${event.id}/workout`)}
+                    >
+                      Avvia allenamento
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </Card>
           ) : null}
 
-          <div className={styles.actions}>
-            {!event.is_going ? (
-              <Button type="button" onClick={() => setModalOpen(true)} icon={UserPlus}>
-                Partecipa
-              </Button>
-            ) : (
-              <Button type="button" variant="secondary" onClick={openCancelDialog} icon={UserMinus}>
-                Annulla partecipazione
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant={event.is_saved ? 'secondary' : 'ghost'}
-              onClick={toggleSaveAgenda}
-              icon={event.is_saved ? BookmarkCheck : Bookmark}
-            >
-              {event.is_saved ? 'Salvato in agenda' : 'Salva in agenda'}
-            </Button>
+          <section className={styles.statGrid} aria-label="Riepilogo evento">
+            <div className={styles.statCard}>
+              <Clock3 size={22} aria-hidden="true" />
+              <strong>{durationMinutes} min</strong>
+              <span>Durata</span>
+            </div>
+            <div className={styles.statCard}>
+              <ShieldCheck size={22} aria-hidden="true" />
+              <strong>{minimumPresenceMinutes} min</strong>
+              <span>Presenza minima</span>
+            </div>
+            <div className={styles.statCard}>
+              <CircleDollarSign size={22} aria-hidden="true" />
+              <strong>
+                {event.is_personal || event.participation_protection === false
+                  ? '0 €'
+                  : formatCurrencyFromCents(event.deposit_cents)}
+              </strong>
+              <span>Deposito</span>
+            </div>
+            <div className={`${styles.statCard} ${styles.statCardAccent}`}>
+              <Trophy size={22} aria-hidden="true" />
+              <strong>{totalAvailableXp} PX</strong>
+              <span>Ricompensa</span>
+            </div>
+          </section>
 
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (!entitlements.canExportICS) {
-                  setPaywallOpen(true);
-                  return;
-                }
-                downloadEventIcs(event);
-              }}
-              icon={CalendarPlus}
+          {!event.is_personal ? (
+            <Card as="section" className={`${styles.organizerProfileCard} ${isOrganizerForEvent ? styles.organizerProfileCardSelf : ''}`}>
+              <div className={styles.organizerProfileTopline}>
+                <span>{isOrganizerForEvent ? 'Il tuo profilo organizzatore' : 'Profilo organizzatore'}</span>
+                <strong><i aria-hidden="true" /> Verificato</strong>
+              </div>
+              <div className={styles.organizerProfileMain}>
+                <span className={styles.organizerProfileAvatar} aria-hidden="true">
+                  {organizerAvatarUrl ? <img src={organizerAvatarUrl} alt="" /> : organizerInitial}
+                </span>
+                <div className={styles.organizerProfileIdentity}>
+                  <h2>{organizerName}</h2>
+                  <div className={styles.organizerProfileMeta}>
+                    <span><MapPin size={15} aria-hidden="true" /> {event.city || event.location_name || 'Località evento'}</span>
+                    <span className={styles.organizerProfileReliability}>
+                      <i aria-hidden="true" /> Affidabilità {organizerReliability}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              {!isOrganizerForEvent ? (
+                <p className={styles.organizerProfileBio}>
+                  {organizerBio || 'Apri il profilo pubblico per conoscere esperienza, attività e reputazione verificata dell’organizzatore.'}
+                </p>
+              ) : null}
+              <Link
+                className={styles.organizerProfileLink}
+                to={`/profile/${organizerProfileId}?event=${event.id}`}
+                state={organizerProfileState}
+              >
+                <UserRound size={19} aria-hidden="true" />
+                {isOrganizerForEvent ? 'Vedi il tuo profilo' : 'Vedi profilo pubblico'}
+                <span aria-hidden="true">→</span>
+              </Link>
+            </Card>
+          ) : null}
+
+          {!event.is_personal && !isOrganizerForEvent ? (
+            <section className={styles.participantPreviewCard} aria-label="Partecipanti iscritti">
+              <div className={styles.participantPreviewCopy}>
+                <span>Partecipanti</span>
+                <strong>{participantsCount}/{maxParticipants || '∞'} iscritti</strong>
+              </div>
+              <div className={styles.participantAvatarStack} aria-label={participantPreview.length ? participantPreview.join(', ') : 'Nessun iscritto'}>
+                {participantPreview.length ? participantPreview.map((name, index) => (
+                  <span key={`${name}-${index}`} title={name}>
+                    {name.slice(0, 1).toUpperCase()}
+                  </span>
+                )) : <span className={styles.participantAvatarEmpty}><Users size={17} aria-hidden="true" /></span>}
+              </div>
+              <button
+                type="button"
+                className={styles.participantPreviewAction}
+                aria-expanded={participantListOpen}
+                aria-controls={`event-participant-preview-${event.id}`}
+                onClick={() => setParticipantListOpen((open) => !open)}
+              >
+                {participantListOpen ? 'Nascondi' : 'Vedi tutti'}
+                <ChevronDown className={participantListOpen ? styles.participantPreviewChevronOpen : ''} size={17} aria-hidden="true" />
+              </button>
+              {participantListOpen ? (
+                <div id={`event-participant-preview-${event.id}`} className={styles.participantPreviewList}>
+                  {participantPreview.length ? participantPreview.map((name, index) => (
+                    <div key={`${name}-detail-${index}`}>
+                      <span aria-hidden="true">{name.slice(0, 1).toUpperCase()}</span>
+                      <strong>{name}</strong>
+                      <small>{normalizeName(name) === normalizeName(organizerName) ? 'Organizer' : 'Iscritto'}</small>
+                    </div>
+                  )) : <p>Nessun partecipante registrato.</p>}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isClosedEvent && !event.is_personal ? (
+            <Card as="section" className={styles.closedSummaryCard}>
+              <div className={styles.closedSummaryHeading}>
+                <span><CheckCircle2 size={19} aria-hidden="true" /></span>
+                <div>
+                  <p>Evento concluso</p>
+                  <h2>Riepilogo verificato</h2>
+                </div>
+                <strong>{closedPresentCount}/{closedTotalCount || participantsCount || 0} presenti</strong>
+              </div>
+              <div className={styles.closedSummaryGrid}>
+                {isOrganizerForEvent ? (
+                  <>
+                    <div><span>Stato</span><strong>Svolto</strong></div>
+                    <div><span>Presenti</span><strong>{closedPresentCount}</strong></div>
+                    <div><span>Assenti</span><strong>{Math.max(0, closedTotalCount - closedPresentCount)}</strong></div>
+                    <div><span>Durata</span><strong>{durationMinutes} min</strong></div>
+                  </>
+                ) : (
+                  <>
+                    <div><span>Stato</span><strong>{closedAttendanceLabel}</strong></div>
+                    <div><span>PX ottenuti</span><strong>{closedEarnedXp}</strong></div>
+                    <div><span>Allenamento</span><strong>{closedPresenceMinutes} min</strong></div>
+                    <div><span>Affidabilità</span><strong>{reliabilityImpactLabel}</strong></div>
+                  </>
+                )}
+              </div>
+            </Card>
+          ) : null}
+
+          {!event.is_personal && !eventIsCancelled ? (
+            <Card
+              id="verify-presence"
+              ref={participationFlowRef}
+              as="section"
+              className={styles.checkInBridgeCard}
+              data-open={eventTiming.isCheckInOpen ? 'true' : 'false'}
             >
-              Aggiungi a Calendario
-            </Button>
-            <Button type="button" variant="ghost" onClick={copyDetails} icon={ClipboardCopy}>
-              Copia dettagli
-            </Button>
-            <Button type="button" variant="ghost" onClick={shareLink} icon={Share2}>
-              Condividi link
-            </Button>
-            {canAccessGroupChat ? (
+              <div className={styles.checkInBridgeIcon} aria-hidden="true">
+                <ShieldCheck size={23} />
+              </div>
+              <div className={styles.checkInBridgeCopy}>
+                <span>Presenza evento</span>
+                <h2>{checkInStatusLabel}</h2>
+                <p>
+                  {canOpenAgendaCheckIn
+                    ? isOrganizerForEvent
+                      ? 'Scansiona i QR, verifica la posizione e gestisci la tolleranza da I miei eventi.'
+                      : 'Mostra il tuo QR o verifica la posizione dalla sezione I miei eventi.'
+                    : 'Il check-in sarà disponibile in I miei eventi dopo la conferma della partecipazione.'}
+                </p>
+                <small><Clock3 size={14} aria-hidden="true" /> Finestra check-in {checkInWindowLabel}</small>
+              </div>
+              {canOpenAgendaCheckIn ? (
+                <Link className={styles.checkInBridgeAction} to={agendaCheckInPath}>
+                  {checkInActionLabel}
+                  <ArrowRight size={18} aria-hidden="true" />
+                </Link>
+              ) : (
+                <span className={styles.checkInBridgeLocked}>Prima partecipa</span>
+              )}
+            </Card>
+          ) : null}
+
+          {!event.is_personal && isOrganizerForEvent && !eventIsCancelled ? (
+            <div className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
+              <EventParticipationFlow
+                event={event}
+                isOrganizer
+                currentUser={currentUser}
+                coords={coords}
+                requestingLocation={requesting}
+                requestLocation={requestLocation}
+                showToast={showToast}
+                onEventRefresh={reload}
+                managementOnly
+              />
+            </div>
+          ) : null}
+
+          {!isOrganizerForEvent || event.is_personal ? (
+            <Card as="section" className={styles.rewardCard}>
+              <div className={styles.rewardHeading}>
+                <div>
+                  <h2>Come ottieni fino a {totalAvailableXp} PX</h2>
+                  <p>Ricompensa verificata</p>
+                </div>
+              </div>
+              <p className={styles.rewardBreakdown}>
+                {event.is_personal
+                  ? `+${completionXp} PX al completamento del promemoria personale.`
+                  : reviewBonusXp > 0
+                    ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
+                    : `+${completionXp} PX al completamento della partecipazione.`}
+              </p>
+              <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} check-in verificati`}>
+                <span className={styles.rewardProgressTrack}>
+                  <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
+                </span>
+                <strong>{rewardProgressCurrent} di {rewardProgressTotal} check-in</strong>
+                <span>+{completionXp} completamento{reviewBonusXp > 0 ? ` · +${reviewBonusXp} verifica` : ''}</span>
+              </div>
+            </Card>
+          ) : null}
+
+          <div className={styles.summaryGrid}>
+            <Card subtle className={`${styles.infoCard} ${styles.compactDetailsCard}`}>
+              <button
+                type="button"
+                className={styles.compactDetailsToggle}
+                aria-expanded={rulesOpen}
+                aria-controls={`event-details-${event.id}`}
+                onClick={() => setRulesOpen((open) => !open)}
+              >
+                <span className={styles.sectionTitleRow}>
+                  <span className={styles.sectionIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
+                  <span>
+                    <small>Informazioni</small>
+                    <strong>Dettagli e regole</strong>
+                  </span>
+                </span>
+                <span className={styles.rulesToggleAction}>
+                  {rulesOpen ? 'Nascondi' : 'Visualizza'}
+                  <ChevronDown className={rulesOpen ? styles.rulesChevronOpen : ''} size={20} aria-hidden="true" />
+                </span>
+              </button>
+              {rulesOpen ? (
+                <div id={`event-details-${event.id}`} className={styles.compactDetailsBody}>
+                  <dl className={styles.detailList}>
+                    <div><dt>Livello</dt><dd>{event.level || 'Aperto'}</dd></div>
+                    <div><dt>Categoria</dt><dd>{audienceLabel}</dd></div>
+                    <div><dt>Visibilità</dt><dd>{event.visibility === 'private' ? 'Privato' : 'Pubblico'}</dd></div>
+                    {!event.is_personal ? <div><dt>Accesso</dt><dd>{event.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</dd></div> : null}
+                    {!event.is_personal ? <div><dt>Verifica</dt><dd>{event.verification_mode === 'qr' ? 'QR Code' : event.verification_mode === 'gps' ? 'GPS' : 'QR + GPS'}</dd></div> : null}
+                  </dl>
+                  {(event.etiquette || []).length ? (
+                    <div className={styles.inlineRules}>
+                      <span>Regole della sessione</span>
+                      <ul>
+                        {(event.etiquette || []).map((rule) => <li key={rule}>{rule}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </Card>
+
+          </div>
+
+          <Card subtle className={styles.actionCard}>
+            <h2 className={styles.actionTitle}>
+              {eventIsCancelled ? 'Evento annullato' : isOrganizerForEvent ? 'Azioni evento' : 'Gestisci la partecipazione'}
+            </h2>
+            {!event.is_personal && !isOrganizerForEvent ? (
+              <section
+                className={`${styles.participationStateBox} ${styles[`participationState_${participationState.tone}`] || ''}`}
+                aria-live="polite"
+              >
+                <div className={styles.participationStateHeader}>
+                  <span className={styles.participationStateIcon} aria-hidden="true">
+                    {participationState.id === 'pending' ? <Clock3 size={21} /> :
+                      participationState.tone === 'danger' ? <X size={21} /> :
+                        participationState.id === 'joinable' ? <UserPlus size={21} /> :
+                          <CheckCircle2 size={21} />}
+                  </span>
+                  <div>
+                    <strong>{participationState.title}</strong>
+                    <p>{participationState.description}</p>
+                  </div>
+                  <span className={styles.participationStateBadge}>{participationState.badge}</span>
+                </div>
+
+                <ol className={styles.participationSteps} aria-label="Avanzamento partecipazione">
+                  {[
+                    event.join_policy === 'approval' ? 'Richiesta' : 'Iscrizione',
+                    'Confermata',
+                    'Check-in',
+                    'Completata'
+                  ].map((label, index) => {
+                    const stepNumber = index + 1;
+                    const isReached = stepNumber <= participationState.stepIndex;
+                    const isCurrent = stepNumber === participationState.stepIndex;
+                    return (
+                      <li
+                        key={label}
+                        className={`${isReached ? styles.participationStepReached : ''} ${isCurrent ? styles.participationStepCurrent : ''}`}
+                        aria-current={isCurrent ? 'step' : undefined}
+                      >
+                        <i aria-hidden="true">{isReached ? '✓' : stepNumber}</i>
+                        <span>{label}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            ) : null}
+            <div className={styles.primaryParticipationAction}>
+              {isOrganizerForEvent && event.is_personal ? (
+                <Button
+                  type="button"
+                  onClick={completePersonalEvent}
+                  icon={CheckCircle2}
+                  disabled={personalEventBusy || !event.has_passed || event.status === 'completed'}
+                >
+                  {event.status === 'completed'
+                    ? 'Allenamento completato'
+                    : personalEventBusy
+                      ? 'Registrazione...'
+                      : event.has_passed
+                        ? `Completa e ottieni +${event.completion_xp || 5} PX`
+                        : 'Disponibile al termine'}
+                </Button>
+              ) : null}
+              {!event.is_personal && !isOrganizerForEvent ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant={participationState.action === 'cancel' || participationState.action === 'none' ? 'secondary' : 'primary'}
+                  icon={participationState.action === 'join' ? UserPlus : participationState.action === 'cancel' ? UserMinus : participationState.id === 'pending' ? Clock3 : ShieldCheck}
+                  disabled={participationState.action === 'none'}
+                  onClick={() => {
+                    if (participationState.action === 'join') {
+                      setModalOpen(true);
+                    } else if (participationState.action === 'cancel') {
+                      openCancelDialog();
+                    } else if (participationState.action === 'progress') {
+                      participationFlowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                >
+                  {participationState.actionLabel || participationState.badge}
+                </Button>
+              ) : null}
+              {canCancelOrganizedEvent ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant="secondary"
+                  className={styles.organizerCancelButton}
+                  icon={Ban}
+                  onClick={() => setOrganizerCancelOpen(true)}
+                >
+                  Cancella evento
+                </Button>
+              ) : null}
+            </div>
+            {!eventIsCancelled ? <button
+              type="button"
+              className={styles.secondaryActionsToggle}
+              aria-expanded={actionsOpen}
+              aria-controls={`event-secondary-actions-${event.id}`}
+              onClick={() => setActionsOpen((open) => !open)}
+            >
+              <span>
+                <strong>Altre azioni</strong>
+                <small>Salva, calendario, copia, condividi e chat</small>
+              </span>
+              <ChevronDown className={actionsOpen ? styles.secondaryActionsChevronOpen : ''} size={20} aria-hidden="true" />
+            </button> : null}
+            {actionsOpen ? (
+            <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
+              <Button
+                type="button"
+                variant={event.is_saved ? 'secondary' : 'ghost'}
+                onClick={toggleSaveAgenda}
+                icon={event.is_saved ? BookmarkCheck : Bookmark}
+              >
+                {event.is_saved ? 'Salvato nei tuoi eventi' : 'Salva nei tuoi eventi'}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
-                icon={MessageCircle}
-                onClick={async () => {
-                  setGroupChatOpen(true);
-                  await loadGroupChatMessages({ forceStick: true });
-                  await loadCheckedInParticipants();
+                onClick={() => {
+                  if (!entitlements.canExportICS) {
+                    setPaywallOpen(true);
+                    return;
+                  }
+                  downloadEventIcs(event);
                 }}
+                icon={CalendarPlus}
               >
-                Apri chat di gruppo
+                Aggiungi a Calendario
               </Button>
+              <Button type="button" variant="ghost" onClick={copyDetails} icon={ClipboardCopy}>Copia dettagli</Button>
+              <Button type="button" variant="ghost" onClick={shareLink} icon={Share2}>Condividi link</Button>
+              {canAccessGroupChat ? (
+                <Button type="button" variant="secondary" icon={MessageCircle} onClick={() => navigate(`/chat/event_${event.id}`)}>
+                  Apri chat evento
+                </Button>
+              ) : <span className={styles.disabledAction}><MessageCircle size={23} aria-hidden="true" />Apri chat evento</span>}
+            </div>
             ) : null}
-          </div>
-
-          {event.is_going && !canAccessGroupChat ? (
-            <Card subtle>
-              <p className="muted">
-                La chat di gruppo si sblocca dopo prenotazione valida: quota 5/10 EUR oppure accesso Premium.
-              </p>
-            </Card>
-          ) : null}
+          </Card>
 
           {event.can_confirm_attendance && (
             <Card subtle>
               <h2>Conferma presenza</h2>
               <div className="row">
-                <Button type="button" onClick={() => onAttendance('attended')}>
-                  Conferma presenza
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => onAttendance('no_show')}>
-                  Non mi sono presentato
-                </Button>
+                <Button type="button" onClick={() => onAttendance('attended')}>Conferma presenza</Button>
+                <Button type="button" variant="secondary" onClick={() => onAttendance('no_show')}>Non mi sono presentato</Button>
               </div>
             </Card>
           )}
 
-          {isOrganizerForEvent ? (
-            <Card subtle className={styles.checkInCard}>
-              <div className={styles.checkInHead}>
-                <h2>Check-in QR evento</h2>
-                <Button type="button" variant="secondary" icon={QrCode} onClick={startCheckInSession} disabled={checkInBusy}>
-                  {checkInBusy ? 'Avvio...' : 'Avvia check-in'}
-                </Button>
-              </div>
-              <p className="muted">
-                Finestra valida da 15 min prima dell inizio evento fino a fine sessione + 15 min (fallback 90 min).
-              </p>
-
-              {!checkInSession ? (
-                <p className="muted">Nessuna sessione attiva. Avvia il check-in quando il gruppo e pronto.</p>
-              ) : (
-                <div className={styles.checkInBody}>
-                  <div className={styles.checkInMeta}>
-                    <p><strong>Inizio validita:</strong> {new Date(checkInSession.starts_at).toLocaleString('it-IT')}</p>
-                    <p><strong>Scadenza:</strong> {new Date(checkInSession.expires_at).toLocaleString('it-IT')}</p>
-                    {sessionIsScheduled ? <p><strong>Stato:</strong> programmato · apre tra {sessionStartsInLabel}</p> : null}
-                    {sessionIsActive ? (
-                      <p className={styles.checkInCountdown}><Timer size={14} aria-hidden="true" /> Attivo · scade tra {sessionExpiresInLabel}</p>
-                    ) : null}
-                    {sessionIsExpired ? <p><strong>Stato:</strong> scaduto</p> : null}
-                    {checkInSession.token ? <p><strong>Token:</strong> <code>{checkInSession.token}</code></p> : null}
-                  </div>
-                  <img
-                    className={styles.checkInQr}
-                    src={checkInSession.qr_url}
-                    alt={`QR check-in evento ${event.sport_name}`}
-                    loading="lazy"
-                  />
-                </div>
-              )}
-            </Card>
-          ) : null}
-
-          {event.is_going && !isOrganizerForEvent ? (
-            <Card subtle className={styles.checkInCard}>
-              <div className={styles.checkInHead}>
-                <h2>Check-in partecipante</h2>
-              </div>
-              <p className="muted">
-                Scansiona o incolla il token QR mostrato dall organizzatore per confermare presenza e sbloccare deposito.
-              </p>
-
-              <div className={styles.checkInBody}>
-                <div className={styles.checkInMeta}>
-                  {checkInSession ? (
-                    <>
-                      <p><strong>Inizio validita:</strong> {new Date(checkInSession.starts_at).toLocaleString('it-IT')}</p>
-                      <p><strong>Scadenza:</strong> {new Date(checkInSession.expires_at).toLocaleString('it-IT')}</p>
-                      {sessionIsScheduled ? <p><strong>Stato:</strong> programmato · apre tra {sessionStartsInLabel}</p> : null}
-                      {sessionIsActive ? (
-                        <p className={styles.checkInCountdown}><Timer size={14} aria-hidden="true" /> Attivo · scade tra {sessionExpiresInLabel}</p>
-                      ) : null}
-                      {sessionIsExpired ? <p><strong>Stato:</strong> scaduto</p> : null}
-                    </>
-                  ) : (
-                    <p className="muted">Nessuna sessione attiva al momento. Attendi l organizzatore.</p>
-                  )}
-                </div>
-                <label className={styles.checkInTokenField}>
-                  Token check-in
-                  <input
-                    value={checkInTokenInput}
-                    onChange={(eventInput) => setCheckInTokenInput(eventInput.target.value)}
-                    placeholder="Incolla token o payload QR"
-                    aria-label="Token check-in evento"
-                  />
-                </label>
-                <div className={styles.checkInActions}>
-                  <Button type="button" onClick={submitParticipantCheckIn} disabled={checkInSubmitting || !checkInSession}>
-                    {checkInSubmitting ? 'Verifica...' : 'Conferma check-in'}
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ) : null}
-
           {event.is_going && String(event?.user_rsvp?.attendance || '') === 'attended' ? (
             <Card subtle className={styles.postWorkoutCard}>
               <h2>Allenamento completato ✅</h2>
-              <p className="muted">
-                Ora puoi aggiungere i compagni con cui hai completato l allenamento in questo evento.
-              </p>
+              <p className="muted">Ora puoi aggiungere i compagni con cui hai completato l allenamento in questo evento.</p>
               <div className="row">
-                <Button type="button" icon={UserPlus} onClick={() => navigate(`/chat/met-people/${event.id}`)}>
-                  Aggiungi compagni
-                </Button>
+                <Button type="button" icon={UserPlus} onClick={() => navigate(`/chat/met-people/${event.id}`)}>Aggiungi compagni</Button>
               </div>
             </Card>
           ) : null}
 
-          <Card subtle>
-            <h2>Coach insight</h2>
+          <Card subtle className={styles.coachCtaCard}>
             {!coachProfile ? (
-              <EmptyState
-                title="Attiva Coach"
-                description="Ricevi una valutazione di compatibilita personalizzata per ogni sessione."
-                imageSrc="/images/palestra.svg"
-                imageAlt="Icona coach"
-                primaryActionLabel="Attiva Coach"
-                onPrimaryAction={() => navigate('/coach')}
-              />
-            ) : (
               <>
+                <div className={styles.coachCtaCopy}>
+                  <p>Ricevi una valutazione di compatibilità personalizzata per ogni sessione</p>
+                  <Button type="button" size="sm" onClick={() => navigate('/coach')}>Attiva Coach</Button>
+                </div>
+                <span className={styles.coachCtaIcon}><Sparkles size={35} aria-hidden="true" /></span>
+              </>
+            ) : (
+              <div className={styles.coachInsightActive}>
                 <div className={styles.metaRow}>
                   <EventBadge label={`${coachInsight.score}% compatibilita`} type="level" />
                   {coachInsight.recommended && <EventBadge label="Consigliato dal Coach" type="premium" />}
                 </div>
                 <p className="muted">{coachInsight.explanation}</p>
-              </>
+              </div>
             )}
           </Card>
 
-          <Card subtle>
-            <h2>Organizer</h2>
-            <p>{event.organizer.name}</p>
-            <p className="muted">Affidabilita {event.organizer.reliability_score}%</p>
-            <Link to={`/profile/${event.organizer.id}`}>Vedi profilo pubblico</Link>
-          </Card>
+        </article>
 
-          <Card subtle>
-            <h2>Regole della sessione</h2>
-            <ul>
-              {event.etiquette.map((rule) => (
-                <li key={rule}>{rule}</li>
+        {similarEvents.length > 0 ? (
+          <section className={styles.list}>
+            <div className={styles.listHeading}>
+              <p>Continua a muoverti</p>
+              <h2>Eventi simili</h2>
+            </div>
+            <div className={styles.similarGrid} role="list" aria-label="Eventi simili">
+              {similarEvents.map((item) => (
+                <EventCard
+                  key={item.id}
+                  event={item}
+                  variant="featured"
+                  context="similar"
+                  showProgress={false}
+                  detailsLabel="Apri dettaglio"
+                />
               ))}
-            </ul>
-          </Card>
-        </Card>
-
-        <Card className={styles.mapCard}>
-          <h2>Mappa</h2>
-          {routePoints.length >= 2 ? (
-            <MapContainer center={routePoints[0]} zoom={11} className={styles.mapFrame}>
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Polyline positions={routePoints} />
-              <Marker position={routePoints[0]}>
-                <Popup>Partenza: {event.route_info?.from_label || 'Via X'}</Popup>
-              </Marker>
-              <Marker position={routePoints[routePoints.length - 1]}>
-                <Popup>Arrivo: {event.route_info?.to_label || 'Via Y'}</Popup>
-              </Marker>
-            </MapContainer>
-          ) : event.lat != null && event.lng != null ? (
-            <MapContainer center={[event.lat, event.lng]} zoom={12} className={styles.mapFrame}>
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker position={[event.lat, event.lng]}>
-                <Popup>{event.location_name}</Popup>
-              </Marker>
-            </MapContainer>
-          ) : (
-            <Card subtle>
-              <p className="muted">Coordinate non disponibili per questo evento.</p>
-            </Card>
-          )}
-        </Card>
-      </div>
-
-      <section className={styles.list}>
-        <h2>Eventi simili</h2>
-        <div className="grid2">
-          {similarEvents.map((item) => (
-            <Card key={item.id}>
-              <h3>{item.location_name}</h3>
-              <p className="muted">{new Date(item.event_datetime).toLocaleString('it-IT')}</p>
-              <Link to={`/events/${item.id}`}>Apri dettaglio</Link>
-            </Card>
-          ))}
-        </div>
-      </section>
+            </div>
+          </section>
+        ) : null}
+      </main>
 
       <Modal
         open={modalOpen}
-        title="Partecipa alla sessione"
-        onClose={() => setModalOpen(false)}
+        title={event?.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa alla sessione'}
+        onClose={() => {
+          if (!rsvpSubmitting) setModalOpen(false);
+        }}
         onConfirm={confirmRsvp}
-        confirmText="Conferma RSVP"
+        confirmText={rsvpSubmitting
+          ? 'Invio in corso...'
+          : event?.join_policy === 'approval'
+            ? 'Invia richiesta'
+            : 'Blocca deposito e partecipa'}
+        confirmDisabled={rsvpSubmitting}
       >
         <label>
-          Nome
+          Nome dal profilo
           <input
-            value={rsvpForm.name}
-            onChange={(event) => setRsvpForm((prev) => ({ ...prev, name: event.target.value }))}
-            placeholder="Inserisci il tuo nome"
+            value={rsvpForm.name || localProfile.display_name}
+            readOnly
+            placeholder="Completa il nome nel profilo"
           />
         </label>
         <label>
@@ -1036,25 +1790,20 @@ function EventDetailPage() {
             onChange={(event) => setRsvpForm((prev) => ({ ...prev, note: event.target.value }))}
           />
         </label>
-        <label>
-          Quota partecipazione gruppo
-          {entitlements.canUseCoachChat ? (
-            <p className="muted">Esente quota con abbonamento Premium attivo.</p>
-          ) : (
-            <select
-              value={rsvpForm.participation_fee_cents}
-              onChange={(event) =>
-                setRsvpForm((prev) => ({
-                  ...prev,
-                  participation_fee_cents: Number(event.target.value)
-                }))
-              }
-            >
-              <option value={500}>5 EUR</option>
-              <option value={1000}>10 EUR</option>
-            </select>
-          )}
-        </label>
+        <Card subtle>
+          <p>
+            <strong>Deposito deciso dall’organizzatore:</strong>{' '}
+            {(Number(event?.deposit_cents || 0) / 100).toLocaleString('it-IT', {
+              style: 'currency',
+              currency: 'EUR'
+            })}
+          </p>
+          <p className="muted">
+            {event?.join_policy === 'approval'
+              ? `Il deposito verra bloccato soltanto dopo l approvazione. Riceverai quindi il QR personale.`
+              : `Viene bloccato nel wallet, non addebitato. Il cashback passa al 60% con il QR e al 100% dopo ${Number(event?.minimum_presence_minutes || 45)} minuti verificati.`}
+          </p>
+        </Card>
       </Modal>
 
       <Modal
@@ -1081,6 +1830,74 @@ function EventDetailPage() {
         </div>
       </Modal>
 
+      <Modal
+        open={organizerCancelOpen}
+        title="Cancella definitivamente l evento"
+        onClose={() => {
+          if (!organizerCancelSubmitting) setOrganizerCancelOpen(false);
+        }}
+        onConfirm={cancelOrganizedEvent}
+        confirmText={organizerCancelSubmitting ? 'Annullamento in corso...' : 'Conferma cancellazione'}
+        confirmDisabled={!organizerCancelForm.reasonCode || organizerCancelSubmitting}
+        confirmClassName={styles.organizerCancelConfirm}
+        closeText="Mantieni evento"
+      >
+        <div className={styles.organizerCancelModal}>
+          <div className={styles.organizerCancelWarning}>
+            <AlertTriangle size={22} aria-hidden="true" />
+            <div>
+              <strong>Azione permanente</strong>
+              <p>Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.</p>
+            </div>
+          </div>
+
+          <div className={styles.organizerCancelSummary}>
+            <div><span>Evento</span><strong>{event?.title || event?.sport_name}</strong></div>
+            <div><span>Partecipanti da rimborsare</span><strong>{refundableParticipantsCount}</strong></div>
+            <div><span>Depositi restituiti</span><strong>{formatCurrencyFromCents(refundableDepositCents)}</strong></div>
+          </div>
+
+          {cancellationIsLatePreview ? (
+            <p className={styles.organizerLateWarning}>
+              <AlertTriangle size={17} aria-hidden="true" /> Mancano meno di 24 ore: la cancellazione sarà registrata come tardiva.
+            </p>
+          ) : null}
+
+          <label className={styles.organizerCancelField}>
+            Motivo <span>obbligatorio</span>
+            <select
+              value={organizerCancelForm.reasonCode}
+              onChange={(changeEvent) => setOrganizerCancelForm((current) => ({
+                ...current,
+                reasonCode: changeEvent.target.value
+              }))}
+              disabled={organizerCancelSubmitting}
+            >
+              <option value="">Seleziona un motivo</option>
+              {EVENT_CANCELLATION_REASONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>{reason.label}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className={styles.organizerCancelField}>
+            Messaggio ai partecipanti <span>facoltativo</span>
+            <textarea
+              rows="3"
+              maxLength="500"
+              value={organizerCancelForm.note}
+              onChange={(changeEvent) => setOrganizerCancelForm((current) => ({
+                ...current,
+                note: changeEvent.target.value
+              }))}
+              placeholder="Aggiungi una breve spiegazione..."
+              disabled={organizerCancelSubmitting}
+            />
+            <small>{organizerCancelForm.note.length}/500</small>
+          </label>
+        </div>
+      </Modal>
+
       <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Add to Calendar (ICS)" />
 
       {groupChatOpen ? (
@@ -1093,7 +1910,7 @@ function EventDetailPage() {
               </div>
               <div className={styles.groupChatHeaderActions}>
                 <Button type="button" variant="secondary" size="sm" onClick={() => navigate('/agenda')}>
-                  Agenda
+                  Eventi
                 </Button>
                 <Button type="button" variant="ghost" size="sm" icon={X} onClick={() => setGroupChatOpen(false)}>
                   Chiudi
@@ -1191,6 +2008,7 @@ function EventDetailPage() {
                     'Partecipante'
                   );
                   const avatarUrl = String(profile.avatar_url || msg.sender_avatar_url || '').trim();
+                  const isMine = senderUserId === Number(currentUserId);
                   const isOrganizerMessage =
                     (Number.isFinite(Number(event?.organizer?.id)) &&
                       Number(event?.organizer?.id) === senderUserId) ||
@@ -1200,12 +2018,28 @@ function EventDetailPage() {
                     <div
                       key={msg.id}
                       className={`${styles.groupChatBubble} ${
-                        senderUserId === Number(currentUserId)
+                        isMine
                           ? styles.groupChatBubbleMine
                           : styles.groupChatBubbleOther
                       }`}
                     >
-                      <div className={styles.groupChatSenderRow}>
+                      <button
+                        type="button"
+                        className={styles.groupChatSenderRow}
+                        onClick={
+                          isMine
+                            ? undefined
+                            : () =>
+                                openChatParticipantProfile({
+                                  userId: senderUserId,
+                                  authUserId: msg.sender_auth_user_id || '',
+                                  displayName,
+                                  avatarUrl
+                                })
+                        }
+                        disabled={isMine}
+                        aria-label={!isMine ? `Apri profilo di ${displayName}` : undefined}
+                      >
                         <span className={styles.groupChatAvatarWrap}>
                           {avatarUrl ? (
                             <img src={avatarUrl} alt={`Avatar ${displayName}`} className={styles.groupChatAvatar} />
@@ -1215,11 +2049,11 @@ function EventDetailPage() {
                           {isOrganizerMessage ? <span className={styles.groupChatCrown}>👑</span> : null}
                         </span>
                         <p className={styles.groupChatSenderName}>{displayName}</p>
-                      </div>
+                      </button>
                       <p>{msg.text}</p>
                       <small>
                         {new Date(msg.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                        {senderUserId === Number(currentUserId)
+                        {isMine
                           ? ` · ${
                             msg.delivery_status === 'seen'
                               ? 'Letto'
@@ -1274,6 +2108,13 @@ function EventDetailPage() {
           </div>
         </div>
       ) : null}
+      <ChatUserProfileCard
+        open={chatProfileCard.open}
+        loading={chatProfileCard.loading}
+        profile={chatProfileCard.profile}
+        error={chatProfileCard.error}
+        onClose={() => setChatProfileCard((current) => ({ ...current, open: false }))}
+      />
     </div>
   );
 }

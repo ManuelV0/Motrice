@@ -13,13 +13,1331 @@
 }
 
 .head {
+  padding: var(--s-2) var(--s-1) 0;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 3rem);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.head p {
+  margin: var(--s-3) 0 0;
+  color: var(--muted);
+  font-size: var(--text-base);
+}
+
+.eventFilters {
+  position: relative;
+  width: min(100%, 48rem);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  justify-self: center;
+  overflow: hidden;
+  padding: 0.3rem;
+  border: 1px solid #2b2e2b;
+  border-radius: var(--r-pill);
+  background: #050605;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 2%), var(--sh-card);
+  isolation: isolate;
+}
+
+.eventFilterGlider {
+  position: absolute;
+  z-index: 0;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: 0.3rem;
+  width: calc((100% - 0.6rem) / 3);
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  box-shadow: 0 0 1.15rem color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform 280ms var(--ease);
+}
+
+.eventFilterGlider[data-active='participating'] {
+  transform: translateX(100%);
+}
+
+.eventFilterGlider[data-active='created'] {
+  transform: translateX(200%);
+}
+
+.eventFilters button {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 3.15rem;
+  padding: 0 var(--s-2);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: clamp(0.76rem, 3.6vw, var(--text-sm));
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.eventFilters button span {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  display: inline-grid;
+  place-items: center;
+  margin-left: 0.28rem;
+  padding-inline: 0.28rem;
+  border: 1px solid #303330;
+  border-radius: var(--r-pill);
+  background: #151715;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 0.63rem;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.eventFilters button:hover,
+.eventFilters button:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+
+.eventFilters .filterActive {
+  background: transparent;
+  color: var(--primary-contrast);
+  box-shadow: none;
+}
+
+.eventFilters .filterActive span {
+  border-color: rgb(0 0 0 / 18%);
+  background: rgb(0 0 0 / 16%);
+  color: var(--primary-contrast);
+}
+
+.eventFilters .filterActive:hover,
+.eventFilters .filterActive:focus-visible {
+  color: var(--primary-contrast);
+  transform: none;
+}
+
+.todayWorkoutCard {
+  width: min(100%, 48rem);
+  display: grid;
+  gap: var(--s-3);
+  justify-self: center;
+  overflow: hidden;
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, #2a2d2a);
+  border-radius: var(--r-2xl);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 34%),
+    linear-gradient(145deg, #181b18, #0d0f0d);
+  box-shadow: var(--sh-card), 0 0 1.8rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.todayWorkoutCard_locked {
+  border-color: #343734;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 255 255 / 4%), transparent 34%),
+    linear-gradient(145deg, #181a18, #0d0f0d);
+}
+
+.todayWorkoutCard_ready {
+  border-color: color-mix(in srgb, var(--accent) 44%, #2a2d2a);
+}
+
+.todayWorkoutCard_organizer {
+  border-color: color-mix(in srgb, var(--accent) 38%, #2a2d2a);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 38%),
+    linear-gradient(145deg, #181b18, #0d0f0d);
+}
+
+.todayWorkoutCard_completed {
+  border-color: color-mix(in srgb, var(--accent) 50%, #2a2d2a);
+}
+
+.todayWorkoutTopline {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.todayWorkoutIcon {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, #2a2d2a);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--accent) 13%, #111311);
+  color: var(--accent);
+}
+
+.todayWorkoutTopline > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.todayWorkoutTopline small {
+  color: var(--accent);
+  font-size: 0.61rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+}
+
+.todayWorkoutTopline strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(1rem, 4.4vw, 1.25rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayWorkoutTopline time {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.75rem;
+  border: 1px solid #303330;
+  border-radius: var(--r-pill);
+  background: #111311;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.todayWorkoutStatus {
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0.65rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, #2a2d2a);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--accent) 7%, #111311);
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.todayWorkoutCard_locked .todayWorkoutStatus {
+  border-color: #303330;
+  background: #111311;
+  color: var(--muted);
+}
+
+.todayWorkoutStatus svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.todayWorkoutCard_locked .todayWorkoutStatus svg {
+  color: var(--muted);
+}
+
+.todayWorkoutMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.todayWorkoutMeta span {
+  min-height: 1.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid #2a2d2a;
+  border-radius: var(--r-pill);
+  background: #111311;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+}
+
+.todayWorkoutMeta span:last-child {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todayWorkoutProgress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.todayWorkoutProgress > div {
+  height: 0.38rem;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: #292c29;
+}
+
+.todayWorkoutProgress > div span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 0.75rem color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: width 360ms var(--ease);
+}
+
+.todayWorkoutProgress small,
+.todayWorkoutProgress strong {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+}
+
+.todayWorkoutProgress strong {
+  color: var(--accent);
+}
+
+.todayWorkoutAction {
+  min-height: 3.45rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  place-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-4);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--primary-contrast);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  box-shadow: 0 0 1.4rem color-mix(in srgb, var(--accent) 22%, transparent);
+  cursor: pointer;
+  transition: filter var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.todayWorkoutAction:hover,
+.todayWorkoutAction:focus-visible {
+  filter: brightness(1.06);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.calendarPanel {
+  width: min(100%, 48rem);
+  justify-self: center;
+  overflow: hidden;
   padding: var(--s-4);
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--r-2xl);
-  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background:
+    radial-gradient(circle at 95% 0%, color-mix(in srgb, var(--accent) 4%, transparent), transparent 27%),
+    #111311;
+  box-shadow: var(--sh-card), var(--glass-highlight);
+}
+
+.calendarHeader {
+  display: grid;
+  grid-template-columns: 2.85rem minmax(0, 1fr) 2.85rem;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.calendarHeading {
+  min-width: 0;
+  text-align: center;
+}
+
+.calendarHeading h2 {
+  margin: 0;
+}
+
+.calendarHeading h2 {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(1.35rem, 6vw, 2rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarHeading small {
+  display: block;
+  margin-top: 0.22rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarNavButton {
+  width: 2.55rem;
+  height: 2.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #363a36;
+  border-radius: 50%;
+  background: #101210;
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 7%);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.calendarNavGlyph {
+  display: block;
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 0.8;
+  transform: translateY(-0.08rem);
+}
+
+.calendarNavButton:hover,
+.calendarNavButton:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--glass-border));
+  color: var(--accent);
+  outline: none;
+  transform: scale(1.04);
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  column-gap: clamp(0.08rem, 1vw, 0.45rem);
+  row-gap: clamp(0.22rem, 1.2vw, 0.55rem);
+  padding: var(--s-3) 0;
+}
+
+.calendarWeekday {
+  display: grid;
+  place-items: center;
+  min-height: 1.8rem;
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.calendarDay,
+.calendarEmpty {
+  width: min(100%, 3.5rem);
+  min-height: 3.55rem;
+  justify-self: center;
+}
+
+.calendarDay {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.12rem 0 0;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  font: inherit;
+  font-size: clamp(0.78rem, 3.8vw, 1rem);
+  cursor: default;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.calendarDay:disabled {
+  opacity: 1;
+}
+
+.calendarDayWithEvents {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.calendarDayWithEvents:hover,
+.calendarDayWithEvents:focus-visible {
+  color: var(--accent);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.calendarDayInRange:not(.calendarDaySelected) .calendarDayNumber {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface-3));
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.calendarDaySelected {
+  color: var(--text);
+}
+
+.calendarDaySelected:hover,
+.calendarDaySelected:focus-visible {
+  color: var(--text);
+}
+
+.calendarDayNumber {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.calendarDaySelected .calendarDayNumber {
+  background: var(--accent);
+  color: var(--primary-contrast);
+  font-weight: var(--weight-bold);
+  box-shadow: 0 0 0 0.22rem color-mix(in srgb, var(--accent) 10%, transparent), 0 0 0.95rem color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.calendarDayToday:not(.calendarDaySelected) .calendarDayNumber {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 62%, transparent);
+}
+
+.calendarTodayLabel {
+  position: absolute;
+  top: 2.23rem;
+  color: color-mix(in srgb, var(--accent) 78%, var(--muted));
+  font-size: 0.42rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.calendarEventDots {
+  min-height: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.22rem;
+}
+
+.calendarEventDots i {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+}
+
+.eventDotFuture {
+  background: var(--accent);
+  box-shadow: 0 0 0.48rem color-mix(in srgb, var(--accent) 68%, transparent);
+}
+
+.eventDotPast {
+  border: 1px solid color-mix(in srgb, white 35%, transparent);
+  background: color-mix(in srgb, var(--muted) 78%, #202220);
+}
+
+.eventDotCancelled {
+  background: color-mix(in srgb, var(--danger) 82%, white);
+  box-shadow: 0 0 0.48rem color-mix(in srgb, var(--danger) 50%, transparent);
+}
+
+.calendarLegend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+  padding: 0.72rem 0.78rem;
+  border: 1px solid #292c29;
+  border-radius: var(--r-lg);
+  background: #090a09;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.calendarLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.calendarLegend small {
+  margin-left: auto;
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  font-size: inherit;
+}
+
+.calendarLegend i {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.calendarState {
+  display: flex;
+  min-height: 3rem;
+  margin: var(--s-4) 0 0;
+  padding: 0 var(--s-3);
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  border: 1px solid #292c29;
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  background: #050605;
+  font-size: var(--text-sm);
+}
+
+.legendFuture {
+  background: var(--accent);
+  box-shadow: 0 0 0.6rem color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.legendPast {
+  border: 1px solid color-mix(in srgb, white 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--muted) 75%, #202220);
+}
+
+.legendCancelled {
+  background: color-mix(in srgb, var(--danger) 82%, white);
+  box-shadow: 0 0 0.45rem color-mix(in srgb, var(--danger) 38%, transparent);
+}
+
+.calendarDetails {
+  display: grid;
+  gap: var(--s-3);
+  margin: var(--s-4) calc(var(--s-4) * -1) calc(var(--s-4) * -1);
+  padding: var(--s-4);
+  border-top: 1px solid var(--glass-border-strong);
+  background: #090a09;
+  animation: calendarDetailsIn var(--dur-med) var(--ease-out);
+}
+
+.calendarDetailsHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.calendarDetailsHeader strong {
+  letter-spacing: 0.09em;
+}
+
+.calendarDetailsHeader::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--glass-border);
+}
+
+.calendarDetailsHeader span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.calendarEventList {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.calendarEventCard {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 5.6rem minmax(0, 1fr) auto;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface-2) 92%, black);
+  color: var(--text);
+  text-align: left;
   box-shadow: var(--sh-card);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.calendarEventCard:hover,
+.calendarEventCard:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--glass-border-strong));
+  box-shadow: var(--sh-card-hover);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.calendarEventCard > img {
+  width: 100%;
+  height: 100%;
+  min-height: 8.7rem;
+  object-fit: cover;
+}
+
+.calendarEventContent {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 0.38rem;
+  padding: var(--s-3);
+}
+
+.calendarEventTopline,
+.calendarEventBottomline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.calendarEventTopline > strong {
+  font-size: var(--text-base);
+}
+
+.calendarEventTopline small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.calendarEventTopline b,
+.calendarEventBottomline em {
+  flex: 0 0 auto;
+  border-radius: var(--r-pill);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: var(--weight-bold);
+  white-space: nowrap;
+}
+
+.calendarEventTopline b {
+  padding: 0.28rem 0.5rem;
+  background: var(--accent);
+  color: var(--primary-contrast);
+}
+
+.calendarEventTitle {
+  overflow: hidden;
+  font-size: var(--text-base);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarEventLocation,
+.calendarEventBottomline > span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.calendarEventLocation {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarEventLocation svg,
+.calendarEventBottomline svg {
+  flex: 0 0 auto;
+}
+
+.calendarEventBottomline em {
+  padding: 0.24rem 0.48rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--glass-border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+
+.calendarEventArrow {
+  align-self: center;
+  margin-right: var(--s-3);
+  color: var(--muted);
+}
+
+@keyframes calendarDetailsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.calendarDetails {
+  position: relative;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 28%, var(--glass-border-strong));
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 32%),
+    #090a09;
+  box-shadow: 0 -1.25rem 3rem rgb(0 0 0 / 28%);
+}
+
+.sheetHandle {
+  width: 2.8rem;
+  height: 0.24rem;
+  justify-self: center;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+}
+
+.calendarDetailsHeader {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendarDetailsHeader::after {
+  content: none;
+}
+
+.calendarDetailsHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.calendarDetailsHeader small {
+  color: var(--accent);
+  font-size: 0.65rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.13em;
+}
+
+.calendarDetailsHeader strong {
+  overflow: hidden;
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendarDetailsHeader span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.calendarDetailsHeader > button {
+  width: 2.45rem;
+  height: 2.45rem;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.calendarDetailsHeader > button:hover,
+.calendarDetailsHeader > button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--glass-border));
+  color: var(--accent);
+  outline: none;
+}
+
+.closeGlyph {
+  display: block;
+  font-size: 1.65rem;
+  font-weight: 400;
+  line-height: 0.8;
+  transform: translateY(-0.04rem);
+}
+
+.sheetEventCard {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  overflow: hidden;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background: #151715;
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.futureEventCard {
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--glass-border-strong));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 38%),
+    #151715;
+}
+
+.closedEventCard {
+  background: color-mix(in srgb, #151715 92%, black);
+}
+
+.cancelledEventCard {
+  border-color: color-mix(in srgb, var(--danger) 28%, var(--glass-border-strong));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--danger) 8%, transparent), transparent 42%),
+    #151515;
+}
+
+.cancelledEventMeta {
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--danger) 6%, #0b0c0b);
+}
+
+.cancelledEventMeta span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cancelledEventMeta strong {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--accent) 74%, white);
+  font-size: 0.68rem;
+}
+
+.sheetEventTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.sheetEventTopline time {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+}
+
+.eventState {
+  min-height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  font-size: 0.68rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.eventState_success {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--glass-border));
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  color: var(--accent);
+}
+
+.eventState_danger {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--glass-border));
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: color-mix(in srgb, var(--danger) 82%, white);
+}
+
+.eventState_neutral {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.sheetEventCard h3 {
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(1.05rem, 4.5vw, 1.3rem);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheetEventCard > p {
+  margin: calc(var(--s-2) * -0.6) 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.futureEventMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.futureEventMeta span {
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  background: #0c0d0c;
+  color: color-mix(in srgb, var(--text) 88%, var(--muted));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.closedStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.closedStatsGrid > span {
+  min-width: 0;
+  min-height: 4.2rem;
+  display: grid;
+  align-content: center;
+  gap: 0.18rem;
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: #0b0c0b;
+}
+
+.closedStatsGrid b {
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(0.78rem, 3.4vw, 0.95rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closedStatsGrid small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.eventActionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--s-2);
+}
+
+.eventDetailAction,
+.eventPrimaryAction {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 var(--s-3);
+  border-radius: var(--r-pill);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  line-height: 1.15;
+  text-align: center;
+  cursor: pointer;
+}
+
+.eventDetailAction {
+  border: 1px solid var(--glass-border-strong);
+  background: #0b0c0b;
+  color: var(--text);
+}
+
+.eventPrimaryAction {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--primary-contrast);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.eventDetailAction:hover,
+.eventDetailAction:focus-visible,
+.eventPrimaryAction:hover,
+.eventPrimaryAction:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.sectionCount {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.3rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-3) 74%, transparent);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.eventSection {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-inline: var(--s-1);
+}
+
+.sectionHeader h2 {
+  margin: 0.2rem 0 0;
+}
+
+.sectionCount {
+  min-width: 2.3rem;
+  justify-content: center;
+  color: var(--text);
+  font-weight: var(--weight-bold);
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ownedList {
+  position: relative;
+  display: grid;
+  gap: var(--s-4);
+}
+
+.ownedCard {
+  position: relative;
+  display: grid;
+  gap: var(--s-4);
+  overflow: hidden;
+  padding: var(--s-5);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  background:
+    radial-gradient(circle at 96% 5%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 36%),
+    color-mix(in srgb, var(--surface-2) 88%, black);
+  box-shadow: var(--sh-card), var(--glass-highlight);
+  cursor: pointer;
+  isolation: isolate;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.ownedCard::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.28rem;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 1.25rem color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.ownedCard:hover,
+.ownedCard:focus-visible {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--glass-border-strong));
+  box-shadow: var(--sh-2), 0 0 1.75rem color-mix(in srgb, var(--accent) 8%, transparent);
+  outline: none;
+}
+
+.cardTopline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.sportIcon {
+  width: 3.35rem;
+  height: 3.35rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface));
+  color: var(--accent);
+  box-shadow: inset 0 0 1rem color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.cardTitle {
+  min-width: 0;
+}
+
+.cardTitle h2 {
+  margin: 0 0 0.3rem;
+  overflow: hidden;
+  color: var(--text);
+  font-size: clamp(1.08rem, 4.6vw, 1.35rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardTitle span,
+.cardMeta span,
+.qrEventTime {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+.cardTitle span {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qrShortcut {
+  width: 2.85rem;
+  height: 2.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--surface-3) 86%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.qrShortcut:hover,
+.qrShortcut:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--glass-border));
+  color: var(--accent);
+  transform: scale(1.04);
+  outline: none;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.cardMeta span {
+  min-height: 2rem;
+  padding: 0 var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-3) 70%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.cardMeta .deposit {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, var(--surface));
+  color: var(--accent);
+}
+
+.capacityTrack {
+  width: 100%;
+  height: 0.32rem;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--text) 15%, transparent);
+}
+
+.capacityTrack span {
+  display: block;
+  height: 100%;
+  min-width: 0.35rem;
+  border-radius: inherit;
+  background: var(--accent);
+  box-shadow: 0 0 0.8rem color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: width var(--dur-med) var(--ease-out);
+}
+
+.qrSheetContent {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-3);
+  text-align: center;
+}
+
+.qrSheetContent > p {
+  margin: 0 0 var(--s-2);
+  color: var(--muted);
+}
+
+.qrCanvas {
+  width: min(100%, 20rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--s-5);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-2xl);
+  background: #fff;
+  box-shadow: var(--sh-inner);
+}
+
+.qrCanvas img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.qrCanvas span {
+  color: #111;
+}
+
+.qrSheetContent > strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-lg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qrStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.15rem;
+  padding: 0 var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--glass-border));
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.qrStatus i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0.7rem var(--accent);
 }
 
 .groups {
@@ -89,9 +1407,180 @@
     padding: var(--s-5);
   }
 
+  .calendarPanel {
+    padding: var(--s-5);
+  }
+
+  .calendarDetails {
+    margin: var(--s-5) calc(var(--s-5) * -1) calc(var(--s-5) * -1);
+    padding: var(--s-5);
+  }
+
+  .calendarEventCard {
+    grid-template-columns: 8.5rem minmax(0, 1fr) auto;
+  }
+
   .item {
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .ownedList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ownedCard {
+    min-height: 14rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .page {
+    gap: var(--s-4);
+  }
+
+  .eventFilters button {
+    min-height: 2.85rem;
+    font-size: clamp(0.68rem, 3.25vw, 0.82rem);
+  }
+
+  .todayWorkoutCard {
+    padding: var(--s-3);
+  }
+
+  .todayWorkoutTopline {
+    grid-template-columns: 2.65rem minmax(0, 1fr) auto;
+    gap: var(--s-2);
+  }
+
+  .todayWorkoutIcon {
+    width: 2.65rem;
+    height: 2.65rem;
+  }
+
+  .todayWorkoutTopline time {
+    min-height: 2rem;
+    padding-inline: 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .todayWorkoutStatus {
+    align-items: flex-start;
+    font-size: 0.76rem;
+  }
+
+  .todayWorkoutMeta span {
+    font-size: 0.67rem;
+  }
+
+  .calendarPanel {
+    padding: var(--s-3);
+  }
+
+  .calendarHeader {
+    grid-template-columns: 2.55rem minmax(0, 1fr) 2.55rem;
+    gap: var(--s-2);
+  }
+
+  .calendarNavButton {
+    width: 2.55rem;
+    height: 2.55rem;
+  }
+
+  .calendarGrid {
+    margin-inline: -0.15rem;
+  }
+
+  .calendarDay,
+  .calendarEmpty {
+    min-height: 3.25rem;
+  }
+
+  .calendarDayNumber {
+    width: 1.95rem;
+    height: 1.95rem;
+  }
+
+  .calendarLegend {
+    gap: var(--s-2) var(--s-3);
+  }
+
+  .cancelledEventMeta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cancelledEventMeta span {
+    width: 100%;
+  }
+
+  .cancelledEventCard > .eventDetailAction {
+    padding-inline: var(--s-2);
+    font-size: 0.78rem;
+    white-space: normal;
+  }
+
+  .calendarDetails {
+    margin: var(--s-4) calc(var(--s-3) * -1) calc(var(--s-3) * -1);
+    padding: var(--s-3);
+  }
+
+  .calendarEventCard {
+    grid-template-columns: 4.8rem minmax(0, 1fr);
+  }
+
+  .calendarEventCard > img {
+    min-height: 8rem;
+  }
+
+  .calendarEventArrow {
+    display: none;
+  }
+
+  .calendarEventTopline > strong,
+  .calendarEventTitle {
+    font-size: var(--text-sm);
+  }
+
+  .calendarEventBottomline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cardMeta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cardMeta span {
+    min-width: 0;
+    justify-content: center;
+    padding: 0 var(--s-2);
+    font-size: 0.78rem;
+  }
+
+  .cardMeta .deposit {
+    grid-column: 1 / -1;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ownedCard,
+  .eventFilters button,
+  .eventFilterGlider,
+  .todayWorkoutAction,
+  .todayWorkoutProgress > div span,
+  .calendarNavButton,
+  .calendarDay,
+  .calendarEventCard,
+  .qrShortcut,
+  .capacityTrack span {
+    transition: none;
+  }
+
+  .calendarDetails {
+    animation: none;
   }
 }

@@ -1,107 +1,88 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../services/api';
-import EmptyState from '../components/EmptyState';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import MotriceProfileV3 from '../components/profile/MotriceProfileV3';
+import EmptyState from '../components/EmptyState';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { CalendarX2, Trophy } from 'lucide-react';
+import { api } from '../services/api';
+import { createEmptyProfileV3, getPublicProfileV3State } from '../services/profileV3';
 
 function ProfilePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const sourceEventId = String(searchParams.get('event') || '').trim();
   const [profile, setProfile] = useState(null);
+  const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const displayName = profile?.display_name || profile?.name || '';
+
   usePageMeta({
-    title: profile ? `${profile.name} | Profilo Motrice` : 'Profilo | Motrice',
-    description: 'Profilo pubblico atleta con sport praticati, disponibilita e affidabilita.'
+    title: displayName ? `${displayName} | Profilo pubblico Motrice` : 'Profilo pubblico | Motrice',
+    description: 'Carta identità sportiva pubblica con presenza verificata, reputazione, MOT e progressione.'
   });
 
   useEffect(() => {
-    api
-      .getProfile(id)
-      .then(setProfile)
-      .catch((err) => setError(err.message));
-  }, [id]);
+    let active = true;
+    setLoading(true);
+    setError('');
 
-  if (error) {
-    return <EmptyState title="Profilo non trovato" description={error} imageSrc="/images/default-sport.svg" imageAlt="Sport" />;
-  }
+    api.getProfile(id)
+      .catch((identityError) => {
+        const fallback = location.state?.publicProfile;
+        if (fallback && String(fallback.id || '') === String(id || '')) return fallback;
+        throw identityError;
+      })
+      .then(async (identity) => {
+        const state = await getPublicProfileV3State(id, identity);
+        if (!active) return;
+        setProfile(identity);
+        setProfileV3(state);
+      })
+      .catch((loadError) => {
+        if (!active) return;
+        setError(loadError?.message || 'Profilo non disponibile');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
 
-  if (!profile) {
-    return <LoadingSkeleton rows={2} variant="detail" />;
+    return () => {
+      active = false;
+    };
+  }, [id, location.state]);
+
+  if (loading) return <LoadingSkeleton rows={6} variant="detail" />;
+
+  if (error || !profile) {
+    return (
+      <EmptyState
+        title="Profilo non trovato"
+        description={error || 'Il profilo pubblico non è disponibile.'}
+        imageSrc="/images/default-sport.svg"
+        imageAlt="Profilo Motrice"
+        primaryActionLabel={sourceEventId ? 'Torna all’evento' : 'Apri i miei eventi'}
+        onPrimaryAction={() => navigate(sourceEventId ? `/events/${sourceEventId}` : '/agenda')}
+      />
+    );
   }
 
   return (
-    <section className="card">
-      <h1>{profile.name}</h1>
-      <p className="muted">{profile.city}</p>
-      <p>{profile.bio}</p>
-
-      <div className="grid two">
-        <article className="card subtle">
-          <h2>Sport e livelli</h2>
-          {profile.sports_practiced.length === 0 ? (
-            <EmptyState
-              icon={Trophy}
-              imageSrc="/images/palestra.svg"
-              imageAlt="Icona palestra"
-              title="Nessuno sport configurato"
-              description="Questo atleta non ha ancora aggiunto sport al profilo."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
-            />
-          ) : (
-            <ul>
-              {profile.sports_practiced.map((sport) => (
-                <li key={`${sport.sport_id}-${sport.level}`}>
-                  {sport.sport_name} - {sport.level}
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-
-        <article className="card subtle">
-          <h2>Disponibilita</h2>
-          {profile.availability.length === 0 ? (
-            <EmptyState
-              icon={CalendarX2}
-              imageSrc="/images/running.svg"
-              imageAlt="Icona running"
-              title="Nessuna disponibilita"
-              description="Nessuna fascia oraria impostata."
-              primaryActionLabel="Explore nearby"
-              onPrimaryAction={() => navigate('/explore')}
-            />
-          ) : (
-            <ul>
-              {profile.availability.map((slot) => (
-                <li key={`${slot.day}-${slot.start}`}>
-                  {slot.day}: {slot.start} - {slot.end}
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      </div>
-
-      <div className="grid two">
-        <article className="card subtle">
-          <h3>Goal</h3>
-          <p>{profile.goal}</p>
-        </article>
-        <article className="card subtle">
-          <h3>Reliability</h3>
-          <p>{profile.reliability_score}%</p>
-          <p className="muted">No show: {profile.no_show_count}</p>
-        </article>
-      </div>
-
-      <button type="button" disabled aria-disabled="true" className="secondary">
-        Modifica profilo (Disponibile presto)
-      </button>
-    </section>
+    <MotriceProfileV3
+      profile={profile}
+      state={profileV3}
+      mode="public"
+      onModeChange={(nextMode) => {
+        if (nextMode === 'mine') navigate('/account');
+      }}
+      onSaveProfile={() => false}
+      isPremium={profile?.plan === 'premium' || profile?.subscription_plan === 'premium'}
+      onInvite={() => navigate(sourceEventId ? `/events/${sourceEventId}` : '/agenda')}
+      publicActionLabel={sourceEventId ? 'TORNA ALL’EVENTO' : 'INVITA AD EVENTO'}
+    />
   );
 }
 

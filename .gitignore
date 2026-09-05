@@ -1,8 +1,14 @@
 node_modules/
 frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+supabase/.temp/
 backend/motrice.db
 backend/motrice_dev.db
 backend/.env
+*.jks
+*.keystore
 npm-debug.log*
 .DS_Store
 
@@ -10,3 +16,11 @@ npm-debug.log*
 backend/uploads/
 # build outputs
 partner-portal/dist/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/app/release.keystore
+mobile/android/app/src/main/assets/capacitor.config.json
+mobile/android/app/src/main/assets/capacitor.plugins.json
+mobile/android/app/src/main/assets/public/

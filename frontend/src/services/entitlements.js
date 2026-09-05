@@ -7,7 +7,7 @@ export const PLAN_DEFINITIONS = {
     canUseAdvancedFilters: false,
     canUseAgendaWeekMonth: false,
     canExportICS: false,
-    canUseNotifications: false,
+    canUseNotifications: true,
     canUseCoachChat: false
   },
   free_only: {
@@ -18,7 +18,7 @@ export const PLAN_DEFINITIONS = {
     canUseAdvancedFilters: false,
     canUseAgendaWeekMonth: false,
     canExportICS: false,
-    canUseNotifications: false,
+    canUseNotifications: true,
     canUseCoachChat: false
   },
   premium: {

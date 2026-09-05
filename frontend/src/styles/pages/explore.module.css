@@ -48,7 +48,7 @@
 
 .eventsGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-2);
 }
 
@@ -63,24 +63,6 @@
 
 .uniformCard {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.uniformCard > :last-child {
-  margin-top: auto;
-}
-
-.uniformCard h3 {
-  margin: 0;
-}
-
-.uniformCard h3 a,
-.uniformCard p strong {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .pagination {
@@ -304,6 +286,7 @@
   }
 
   .eventsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s-3);
   }
 

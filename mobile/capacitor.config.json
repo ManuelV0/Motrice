@@ -1,0 +1,8 @@
+{
+  "appId": "com.motrice.app",
+  "appName": "Motrice",
+  "webDir": "../frontend/dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

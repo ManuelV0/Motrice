@@ -4,289 +4,115 @@
   right: 0;
   bottom: 0;
   z-index: var(--z-nav);
-  height: var(--bottom-nav-h);
-  padding: var(--s-2) var(--s-5) calc(var(--s-2) + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid color-mix(in srgb, var(--border) 70%, rgb(255 255 255 / 12%));
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 4%) 0%, rgb(255 255 255 / 0%) 100%),
-    color-mix(in srgb, var(--surface) 88%, #05080f);
-  backdrop-filter: blur(10px) saturate(1.08);
-  -webkit-backdrop-filter: blur(10px) saturate(1.08);
-  box-shadow: 0 -10px 24px rgb(0 0 0 / 26%);
+  min-height: var(--bottom-nav-h);
+  padding: 0.45rem var(--s-2) calc(0.4rem + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(9 11 9 / 94%);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow: 0 -12px 30px rgb(0 0 0 / 42%);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: var(--s-3);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.1rem;
+}
+
+.chatSurface {
+  border-top-color: color-mix(in srgb, var(--accent) 10%, rgb(255 255 255 / 8%));
+  background: rgb(8 11 8 / 98%);
+  box-shadow: 0 -10px 26px rgb(0 0 0 / 34%);
 }
 
 .tab {
-  min-height: 2.8rem;
+  min-width: 0;
+  min-height: 3.35rem;
+  padding: 0.25rem 0.15rem 0.1rem;
   border-radius: var(--r-lg);
-  border: 1px solid transparent;
-  background: transparent;
-  color: color-mix(in srgb, var(--muted) 92%, var(--text));
+  color: #70776d;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: var(--s-1);
-  font-size: 0.72rem;
+  justify-content: flex-end;
+  gap: 0.24rem;
+  font-size: 0.64rem;
   font-weight: var(--weight-semibold);
   line-height: 1;
-  position: relative;
-  top: 0;
-  transition:
-    transform var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease),
-    border-color var(--dur-fast) var(--ease);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 
-.tab::after {
-  content: '';
-  position: absolute;
-  bottom: -0.3rem;
-  left: 50%;
-  width: 1.1rem;
-  height: 2px;
-  border-radius: 999px;
-  background: transparent;
-  transform: translateX(-50%);
+.iconWrap {
+  width: 2rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  transition:
+    width var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
 }
 
 .tabActive {
   color: var(--primary);
-  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.tabActive .iconWrap {
+  width: 2.8rem;
   background: color-mix(in srgb, var(--primary) 14%, transparent);
-  text-shadow: 0 0 0.5rem color-mix(in srgb, var(--primary) 34%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
-.tabActive::after {
-  background: color-mix(in srgb, var(--primary) 82%, #ffffff);
+.primaryTab {
+  position: relative;
+  color: var(--text);
 }
 
-.tab:active,
-.tab:hover {
+.primaryTab .iconWrap {
+  width: 3.1rem;
+  height: 3.1rem;
+  margin-top: -1.2rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 74%, #ffffff);
+  background: var(--card-grad-cta);
+  color: var(--primary-contrast);
+  box-shadow:
+    0 0 0 0.28rem #090b09,
+    0 0.55rem 1.4rem rgb(0 0 0 / 48%),
+    0 0 1.15rem rgb(168 240 0 / 18%);
+}
+
+.primaryTab.tabActive .iconWrap {
+  width: 3.1rem;
+  background: var(--card-grad-cta);
+  box-shadow:
+    0 0 0 0.28rem #090b09,
+    0 0.55rem 1.4rem rgb(0 0 0 / 48%),
+    0 0 1.4rem rgb(168 240 0 / 30%);
+}
+
+.tab:hover,
+.tab:active {
+  color: var(--primary);
   text-decoration: none;
-  transform: translateY(calc(var(--micro-gap) * -1));
-  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  transform: translateY(-1px);
 }
 
-.tab:focus-visible,
-.fab:focus-visible,
-.sheetAction:focus-visible,
-.sheetBackdrop:focus-visible {
+.tab:focus-visible {
   outline: none;
   box-shadow: var(--focus);
 }
 
-.fab {
-  width: 3.75rem;
-  height: 3.75rem;
-  border-radius: 999px;
-  margin-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
-  border: 1px solid color-mix(in srgb, var(--accent) 64%, var(--border));
-  background: var(--card-grad-cta);
-  color: var(--primary-contrast);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow:
-    0 0 1rem color-mix(in srgb, var(--accent) 36%, transparent),
-    0 0.9rem 1.6rem rgb(0 0 0 / 36%);
-  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
-}
-
-.fab:hover,
-.fab:active {
-  transform: translateY(calc(var(--micro-gap-2) * -1));
-  box-shadow:
-    0 0 1.2rem color-mix(in srgb, var(--accent) 44%, transparent),
-    0 1rem 1.8rem rgb(0 0 0 / 40%);
-  filter: brightness(1.03);
-}
-
-.sheetBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: calc(var(--z-nav) - 2);
-  background: rgb(4 7 12 / 0%);
-  pointer-events: none;
-  border: 0;
-  transition: background var(--dur-med) var(--ease);
-}
-
-.sheetBackdropOpen {
-  pointer-events: auto;
-  background: rgb(4 7 12 / 52%);
-}
-
-.sheet {
-  position: fixed;
-  left: var(--s-3);
-  right: var(--s-3);
-  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2));
-  z-index: calc(var(--z-nav) - 1);
-  border: 1px solid color-mix(in srgb, var(--border) 76%, rgb(255 255 255 / 12%));
-  border-radius: var(--r-xl);
-  background:
-    linear-gradient(170deg, rgb(255 255 255 / 6%) 0%, rgb(255 255 255 / 0%) 55%),
-    color-mix(in srgb, var(--surface) 94%, #070b14);
-  box-shadow: 0 1rem 2rem rgb(0 0 0 / 34%);
-  padding: var(--s-3);
-  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
-  backdrop-filter: blur(8px) saturate(1.05);
-  -webkit-backdrop-filter: blur(8px) saturate(1.05);
-  transition: transform var(--dur-med) var(--ease), opacity var(--dur-fast) var(--ease);
-}
-
-.sheetClosed {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(1rem);
-}
-
-.sheetOpen {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.sheetHandle {
-  width: 2.8rem;
-  height: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 82%, var(--text));
-  margin: 0 auto var(--s-2);
-}
-
-.sheet h2 {
-  font-size: var(--text-sm);
-  margin-bottom: var(--s-3);
-  color: var(--text);
-}
-
-.sheetGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
-}
-
-.sheetAction {
-  min-height: 3rem;
-  border-radius: var(--r-lg);
-  border: 1px solid color-mix(in srgb, var(--border) 74%, rgb(255 255 255 / 10%));
-  background: color-mix(in srgb, var(--surface-2) 82%, #0b1220);
-  color: var(--text);
-  padding: var(--s-2) var(--s-3);
-  box-shadow: none;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  justify-content: flex-start;
-  font-size: 0.76rem;
-  text-align: left;
-}
-
-.sheetIconWrap {
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.sheetAction:hover,
-.sheetAction:active {
-  transform: translateY(calc(var(--micro-gap) * -1));
-  background: color-mix(in srgb, var(--surface-2) 88%, #111b2d);
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-}
-
-:global(html[data-theme='light']) .bottomNav {
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 76%) 0%, rgb(255 255 255 / 68%) 100%),
-    color-mix(in srgb, var(--surface) 8%, #ffffff);
-  border-top-color: color-mix(in srgb, var(--border) 38%, #ffffff);
-}
-
-:global(html[data-theme='light']) .tab {
-  color: color-mix(in srgb, var(--muted) 72%, var(--surface));
-}
-
-:global(html[data-theme='light']) .sheet {
-  background:
-    linear-gradient(170deg, rgb(255 255 255 / 96%) 0%, rgb(246 250 255 / 94%) 100%),
-    #f8fbff;
-  border-color: color-mix(in srgb, var(--surface) 22%, #ffffff);
-  box-shadow: 0 14px 28px rgb(15 23 42 / 18%);
-}
-
-:global(html[data-theme='light']) .sheet h2 {
-  color: #0f172a;
-}
-
-:global(html[data-theme='light']) .sheetHandle {
-  background: color-mix(in srgb, var(--surface) 42%, #ffffff);
-}
-
-:global(html[data-theme='light']) .sheetAction {
-  background: #ffffff;
-  border-color: color-mix(in srgb, var(--surface) 28%, #ffffff);
-  color: #0f172a;
-  box-shadow: 0 4px 12px rgb(15 23 42 / 12%);
-  font-weight: var(--weight-semibold);
-}
-
-:global(html[data-theme='light']) .sheetAction:hover,
-:global(html[data-theme='light']) .sheetAction:active {
-  background: color-mix(in srgb, var(--primary) 14%, #ffffff);
-  border-color: color-mix(in srgb, var(--primary) 46%, var(--border));
-}
-
-:global(html[data-theme='light']) .sheetIconWrap {
-  background: color-mix(in srgb, var(--primary) 22%, #ffffff);
-  color: color-mix(in srgb, var(--primary) 88%, #0f172a);
-}
-
 @media (min-width: 768px) {
-  .bottomNav,
-  .sheet,
-  .sheetBackdrop {
+  .bottomNav {
     display: none;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .tab,
-  .fab,
-  .sheet,
-  .sheetBackdrop,
-  .sheetAction {
-    transition: none;
+  .forceVisible {
+    display: grid;
+    left: 50%;
+    width: min(100%, 30rem);
+    transform: translateX(-50%);
+    border-left: 1px solid rgb(255 255 255 / 6%);
+    border-right: 1px solid rgb(255 255 255 / 6%);
   }
-}
-
-:global(.appShell.account-mobile-only) .bottomNav {
-  display: grid !important;
-}
-
-:global(.appShell.account-mobile-only) .sheet,
-:global(.appShell.account-mobile-only) .sheetBackdrop {
-  display: block !important;
-}
-
-:global(html.account-mobile-lock) .bottomNav {
-  display: grid !important;
-}
-
-.forceVisible {
-  display: grid !important;
-}
-
-.forceVisibleSheet {
-  display: block !important;
 }

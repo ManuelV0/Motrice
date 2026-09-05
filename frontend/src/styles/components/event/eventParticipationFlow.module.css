@@ -1,0 +1,1132 @@
+.flowCard,
+.reviewCard {
+  display: grid;
+  gap: var(--s-4);
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--glass-border-strong));
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 66%),
+    color-mix(in srgb, var(--surface-2) 48%, var(--surface));
+}
+
+.flowHeader,
+.progressCopy,
+.monitorHead,
+.reviewTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.flowHeader h2,
+.reviewTitle h2,
+.participantQr h3 {
+  margin: 0;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lifecycleStatus,
+.checkInUnavailable {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+}
+
+.lifecycleStatus[data-open='true'] {
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--glass-border));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+}
+
+.lifecycleStatus > div,
+.checkInUnavailable > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.lifecycleStatus strong,
+.checkInUnavailable strong {
+  color: currentColor;
+  font-size: var(--text-sm);
+}
+
+.lifecycleStatus span,
+.checkInUnavailable span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.checkInUnavailable {
+  align-items: flex-start;
+}
+
+.checkInUnavailable > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.extensionActions {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.checkInUnavailable:has(.extensionActions) {
+  flex-wrap: wrap;
+}
+
+.extensionActions button {
+  min-height: 2.4rem;
+  padding: 0 var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--glass-border));
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+}
+
+.extensionActions button:disabled {
+  opacity: 0.5;
+}
+
+.ruleGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.ruleGrid > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-2));
+}
+
+.ruleGrid svg {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--primary);
+}
+
+.ruleGrid span,
+.ruleGrid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ruleGrid span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.ruleGrid strong {
+  font-size: var(--text-sm);
+}
+
+.progressBlock,
+.monitorCard,
+.participantQr,
+.completedBox {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--glass-border-strong);
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-2));
+  box-shadow: var(--sh-inner);
+}
+
+.verificationChoice {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, var(--glass-border-strong));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.verificationChoice h3,
+.verificationChoice p {
+  margin: 0;
+}
+
+.verificationChoice p {
+  margin-top: var(--s-1);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.verificationChoiceButtons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+@media (max-width: 460px) {
+  .verificationChoiceButtons {
+    grid-template-columns: 1fr;
+  }
+}
+
+.progressCopy span {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-weight: var(--weight-bold);
+}
+
+.progressTrack,
+.presenceRail {
+  position: relative;
+  height: 0.75rem;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--surface-2) 68%, var(--surface));
+}
+
+.progressTrack > span,
+.presenceRail > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary) 72%, #fff), var(--primary));
+  box-shadow: 0 0 1.25rem color-mix(in srgb, var(--primary) 45%, transparent);
+  transition: width var(--dur-med) var(--ease-out);
+}
+
+.progressLegend,
+.monitorMeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.progressLegend .reached {
+  color: var(--primary);
+  font-weight: var(--weight-semibold);
+}
+
+.participantQr {
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, 10rem);
+  align-items: center;
+}
+
+.participantQr p,
+.reviewTitle p {
+  margin: var(--s-1) 0 0;
+  color: var(--muted);
+}
+
+.participantQr img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--r-lg);
+  padding: var(--s-2);
+  background: #fff;
+}
+
+.qrDetails {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.qrDetails p {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface-2) 58%, var(--surface));
+}
+
+.qrDetails span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.qrDetails code {
+  display: block;
+  min-width: 0;
+  color: var(--text);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.qrDetails .qrCountdown {
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--glass-border));
+}
+
+.monitorHead {
+  justify-content: flex-start;
+}
+
+.monitorHead svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.monitorHead div {
+  display: grid;
+}
+
+.monitorHead span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.completedBox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  border-color: color-mix(in srgb, var(--success) 38%, var(--glass-border));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.completedBox svg {
+  color: var(--success);
+}
+
+.completedBox div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.completedBox span {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.organizerStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.organizerHero {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 38%, var(--glass-border-strong));
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(100% 150% at 0% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 58%),
+    color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+  box-shadow: var(--sh-card), var(--sh-inner);
+}
+
+.organizerHeroTitle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.organizerHeroTitle h2,
+.organizerHeroTitle p,
+.participantSectionTitle h3 {
+  margin: 0;
+}
+
+.organizerHeroTitle p {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.organizerCrown {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 1rem;
+  color: #111;
+  background: var(--primary);
+  box-shadow: 0 0 1.4rem color-mix(in srgb, var(--primary) 35%, transparent);
+}
+
+.organizerEventMeta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.organizerEventMeta p {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.15rem var(--s-2);
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface-2) 64%, var(--surface));
+}
+
+.organizerEventMeta svg {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--primary);
+}
+
+.organizerEventMeta span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.organizerEventMeta strong {
+  min-width: 0;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.organizerScanButton {
+  min-height: 5rem !important;
+  width: min(100%, 42rem);
+  justify-self: center;
+  border-radius: 1.25rem !important;
+  font-size: clamp(0.92rem, 2.8vw, 1.1rem) !important;
+  letter-spacing: 0.04em !important;
+  box-shadow:
+    0 1rem 2.5rem color-mix(in srgb, var(--primary) 22%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--primary) 62%, transparent),
+    var(--sh-inner) !important;
+}
+
+.participantSection {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+}
+
+.requestSection {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--glass-border-strong));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.requestList { display: grid; gap: var(--s-2); }
+
+.requestRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+}
+
+.requestCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.requestCopy span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.requestActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.emptyRequests {
+  margin: 0;
+  padding: var(--s-4);
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.participantSectionTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.participantSectionTitle > span {
+  min-width: 3rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  font-weight: var(--weight-bold);
+  text-align: center;
+}
+
+.organizerStats > div {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 86%, var(--surface-2));
+}
+
+.organizerStats svg {
+  color: var(--primary);
+}
+
+.organizerStats strong {
+  font-size: var(--text-xl);
+}
+
+.organizerStats span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.participantList {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.participantRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-2));
+}
+
+.participantRow > div {
+  min-width: 0;
+  display: grid;
+}
+
+.participantRow strong,
+.participantRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.participantRow > div span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.participantRow b {
+  color: var(--primary);
+}
+
+.participantRow time {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.participantRow .present {
+  color: var(--success);
+}
+
+.participantRow .waiting {
+  color: color-mix(in srgb, var(--primary) 78%, #fff);
+}
+
+.participantRow .absent {
+  color: var(--danger);
+}
+
+.emptyParticipants {
+  margin: 0;
+  padding: var(--s-4);
+  border: 1px dashed var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.organizerQrButton {
+  width: min(100%, 28rem) !important;
+  justify-self: center;
+  color: var(--muted) !important;
+}
+
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
+  color: var(--primary);
+  font-weight: var(--weight-bold);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reviewCard form {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.reviewTitle {
+  justify-content: flex-start;
+}
+
+.reviewTitle svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.reviewField {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.reviewField :is(select, textarea) {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--surface-2) 48%, var(--surface));
+}
+
+.reviewField textarea {
+  padding: var(--s-3);
+  resize: vertical;
+}
+
+.scannerBody {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.videoFrame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background: #050607;
+}
+
+.videoFrame video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.videoFrame > span {
+  position: absolute;
+  inset: 16%;
+  border: 0.2rem solid var(--primary);
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.28);
+  pointer-events: none;
+}
+
+.scannerBody > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.scannerError {
+  color: var(--danger) !important;
+}
+
+.scanResult {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface) 90%, var(--surface-2));
+  box-shadow: var(--sh-card), var(--sh-inner);
+}
+
+.scanResult > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.scanResult > div strong {
+  font-size: var(--text-lg);
+}
+
+.scanResult > div span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.scanResult button {
+  grid-column: 1 / -1;
+}
+
+.scanResult_success {
+  border-color: color-mix(in srgb, var(--success) 52%, var(--glass-border));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.scanResult_success > svg {
+  color: var(--success);
+}
+
+.scanResult_warning {
+  border-color: color-mix(in srgb, #f5b942 58%, var(--glass-border));
+  background: color-mix(in srgb, #f5b942 10%, var(--surface));
+}
+
+.scanResult_warning > svg {
+  color: #f5b942;
+}
+
+.scanResult_error {
+  border-color: color-mix(in srgb, var(--danger) 52%, var(--glass-border));
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+
+.scanResult_error > svg {
+  color: var(--danger);
+}
+
+.organizerQrModal {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-3);
+  text-align: center;
+}
+
+.organizerQrModal p,
+.organizerQrModal small {
+  margin: 0;
+  color: var(--muted);
+}
+
+.organizerQrModal img {
+  width: min(20rem, 100%);
+  aspect-ratio: 1;
+  display: block;
+  padding: var(--s-2);
+  border-radius: var(--r-xl);
+  background: #fff;
+  box-shadow: 0 0 2rem color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+.manualField {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.manualField input {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 42rem) {
+  .flowHeader {
+    align-items: flex-start;
+  }
+
+  .flowHeader button {
+    flex: 0 0 auto;
+  }
+
+  .ruleGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .participantQr {
+    grid-template-columns: 1fr;
+  }
+
+  .participantQr img {
+    width: min(17rem, 100%);
+    justify-self: center;
+  }
+
+  .qrDetails,
+  .organizerEventMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .qrDetails .qrCountdown {
+    grid-column: auto;
+  }
+
+  .organizerHeroTitle {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .organizerHeroTitle > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .progressCopy {
+    align-items: flex-start;
+  }
+
+  .progressLegend,
+  .monitorMeta {
+    display: grid;
+    justify-content: stretch;
+  }
+
+  .requestRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .requestActions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .requestActions > * { width: 100%; }
+}
+
+@media (max-width: 24rem) {
+  .ruleGrid,
+  .organizerStats {
+    grid-template-columns: 1fr;
+  }
+
+  .participantRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .participantRow time {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressTrack > span,
+  .presenceRail > span {
+    transition: none;
+  }
+}
+
+/* Organizer dashboard aligned with the Event Detail visual language. */
+.organizerFlowCard {
+  gap: 0.9rem;
+  padding: 1.25rem;
+  border: 2px solid var(--primary);
+  border-radius: 1.85rem;
+  background: #191b19;
+  box-shadow:
+    0 0 0 1px rgb(184 255 0 / 0.08),
+    0 1.25rem 3rem rgb(0 0 0 / 0.28),
+    inset 0 1px rgb(255 255 255 / 0.05);
+}
+
+.organizerFlowCard .organizerHero {
+  gap: 1rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.organizerFlowCard .organizerHeroTitle {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
+  gap: 0.8rem;
+}
+
+.organizerFlowCard .organizerHeroTitle h2 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.15rem, 3.4vw, 1.55rem);
+  line-height: 0.88;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .organizerHeroTitle p {
+  grid-column: 1 / -1;
+  margin-top: 0.65rem;
+  color: rgb(255 255 255 / 0.36);
+  font-size: 0.82rem;
+}
+
+.organizerCount {
+  min-width: 9rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 999px;
+  color: #fff;
+  background: #1d1f1d;
+  font-size: 0.78rem;
+  line-height: 1.05;
+  text-align: center;
+}
+
+.organizerFlowCard .organizerHeroTitle > button {
+  min-height: 2.85rem;
+  padding-inline: 1.15rem;
+  border-radius: 999px;
+}
+
+.organizerFlowCard .organizerEventMeta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 1.2rem;
+  background: #0f110f;
+}
+
+.organizerFlowCard .organizerEventMeta p {
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.28rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.organizerFlowCard .organizerEventMeta span {
+  color: rgb(255 255 255 / 0.34);
+  font-size: 0.69rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .organizerEventMeta strong {
+  color: #fff;
+  font-size: 0.93rem;
+}
+
+.organizerFlowCard .requestSection {
+  border-color: color-mix(in srgb, var(--primary) 34%, rgb(255 255 255 / 0.08));
+  background: #121512;
+}
+
+.organizerFlowCard .organizerScanButton {
+  width: 100%;
+  min-height: 5.2rem !important;
+  border-radius: 1.15rem !important;
+  color: #080a08 !important;
+  font-size: clamp(0.96rem, 3.2vw, 1.25rem) !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0.75rem 2rem rgb(184 255 0 / 0.16) !important;
+}
+
+.organizerQrActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.organizerQrActions > button {
+  width: 100%;
+  min-height: 3.5rem;
+  padding-inline: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 999px !important;
+  color: rgb(255 255 255 / 0.78) !important;
+  background: #1d1f1d !important;
+  font-size: 0.78rem !important;
+}
+
+.organizerFlowCard .participantSection {
+  gap: 1rem;
+  padding: 1rem;
+  border-color: rgb(255 255 255 / 0.08);
+  border-radius: 1.2rem;
+  background: #0d0f0d;
+}
+
+.organizerFlowCard .participantSectionTitle h3 {
+  color: #fff;
+  font-size: 0.88rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.organizerFlowCard .participantSectionTitle > span {
+  min-width: 0;
+  padding: 0;
+  color: rgb(255 255 255 / 0.3);
+  background: transparent;
+  font-size: 0.73rem;
+  font-weight: 700;
+}
+
+.organizerFlowCard .emptyParticipants {
+  min-height: 9rem;
+  padding: 1rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  border: 0;
+  background: transparent;
+}
+
+.organizerFlowCard .emptyParticipants > span {
+  width: 3.5rem;
+  height: 3.5rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 50%;
+  color: rgb(255 255 255 / 0.18);
+  background: #151715;
+}
+
+.organizerFlowCard .emptyParticipants p {
+  margin: 0;
+  color: rgb(255 255 255 / 0.28);
+}
+
+.organizerFlowCard .organizerQrButton {
+  width: 100% !important;
+  min-height: 3.5rem;
+  color: rgb(255 255 255 / 0.78) !important;
+  border: 1px solid rgb(255 255 255 / 0.08) !important;
+  border-radius: 1rem !important;
+  background: #1d1f1d !important;
+}
+
+@media (max-width: 42rem) {
+  .organizerFlowCard {
+    padding: 1rem;
+    border-radius: 1.6rem;
+  }
+
+  .organizerFlowCard .organizerHeroTitle {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .organizerCount {
+    min-width: 0;
+    font-size: 0.68rem;
+  }
+
+  .organizerFlowCard .organizerHeroTitle > button {
+    grid-column: 2;
+    width: auto;
+  }
+
+  .organizerFlowCard .organizerHeroTitle > div {
+    grid-row: 1 / span 2;
+  }
+
+  .organizerFlowCard .organizerHeroTitle p {
+    font-size: 0.7rem;
+  }
+
+  .organizerFlowCard .organizerEventMeta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .organizerFlowCard .organizerScanButton {
+    min-height: 4.75rem !important;
+  }
+
+  .organizerQrActions > button {
+    min-height: 3.2rem;
+    font-size: 0.69rem !important;
+  }
+
+  .organizerFlowCard .participantSectionTitle {
+    align-items: flex-start;
+  }
+
+  .organizerFlowCard .participantSectionTitle > span {
+    max-width: 8rem;
+    text-align: right;
+  }
+}
+
+@media (max-width: 24rem) {
+  .organizerQrActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+.managementOnlyCard {
+  border-color: color-mix(in srgb, #ff8a2b 55%, rgb(255 255 255 / 0.08));
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 138 43 / 0.09), transparent 34%),
+    #191a19;
+}
+
+.managementOnlyCard .organizerHeroTitle h2 {
+  color: #ff8a2b;
+  line-height: 1;
+}
+
+.managementOnlyCard .organizerHeroTitle > button {
+  color: #111 !important;
+  background: #ff8a2b !important;
+}

@@ -1,14 +1,22 @@
 .page {
   display: grid;
-  gap: var(--s-4);
-  width: min(100%, 44rem);
+  align-content: start;
+  gap: var(--s-3);
+  width: min(100%, 27.5rem);
   margin-inline: auto;
   padding: var(--s-4);
-  min-height: calc(100dvh - var(--nav-h));
-  padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom, 0px) + var(--bottom-nav-height, var(--bottom-nav-h, 64px)));
+  min-height: calc(
+    100dvh
+    - var(--nav-h)
+    - var(--main-top-gap, var(--s-4))
+    - var(--bottom-nav-h)
+    - env(safe-area-inset-bottom, 0px)
+    - var(--vv-bottom, 0px)
+    - var(--android-nav-extra, 0px)
+  );
   background:
-    radial-gradient(90% 50% at 10% 10%, color-mix(in srgb, var(--accent) 5%, transparent) 0%, transparent 55%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #060a12) 0%, color-mix(in srgb, var(--surface) 98%, #05080f) 100%);
+    radial-gradient(70% 30% at 5% 0%, color-mix(in srgb, var(--accent) 8%, transparent) 0%, transparent 70%),
+    transparent;
 }
 
 .header {
@@ -23,20 +31,31 @@
 }
 
 .headerCopy h1,
-.headerCopy p {
+.headerCopy p,
+.eyebrow {
   margin: 0;
 }
 
+.eyebrow {
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--accent);
+  font-size: 0.68rem;
+  line-height: 1;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+}
+
 .headerCopy h1 {
-  font-size: clamp(1.05rem, 0.98rem + 0.35vw, 1.2rem);
+  font-size: clamp(1.65rem, 1.45rem + 0.8vw, 2rem);
   line-height: var(--lh-tight);
   font-weight: var(--weight-bold);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.035em;
 }
 
 .headerCopy p {
-  margin-top: var(--micro-gap-2);
-  font-size: var(--text-xs);
+  margin-top: 0.25rem;
+  font-size: var(--text-sm);
   line-height: 1.4;
   color: var(--muted);
   overflow: hidden;
@@ -45,11 +64,11 @@
 }
 
 .searchWrap {
-  min-height: 2.75rem;
-  border-radius: var(--r-xl);
-  border: 1px solid var(--glass-border-strong);
-  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface));
-  padding: 0 var(--s-3);
+  min-height: 2.9rem;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 8%, var(--glass-border-strong));
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
+  padding: 0 0.9rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -80,44 +99,85 @@
 }
 
 .searchWrap:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-border-strong));
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--glass-border-strong));
   box-shadow: var(--focus);
 }
 
-.metPillWrap {
-  display: flex;
+.tabsWrap {
   min-width: 0;
 }
 
-.list {
+.statusTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+  margin-top: 0.05rem;
+}
+
+.statusTabs button {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.85rem;
   border: 1px solid var(--glass-border-strong);
-  border-radius: var(--r-2xl);
-  background:
-    var(--card-glass-overlay),
-    color-mix(in srgb, var(--surface) 94%, #05080d);
-  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--surface-2) 84%, var(--surface));
+  color: var(--muted);
+  font-size: var(--text-xs);
+  box-shadow: none;
+}
+
+.statusTabs button span {
+  margin-left: 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusTabs button.statusTabActive {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--glass-border));
+  background: var(--accent);
+  color: #0a0d07;
+}
+
+.statusTabs button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.list {
+  display: grid;
+  gap: 0.55rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
   min-height: 0;
-  box-shadow: var(--sh-card);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  box-shadow: none;
 }
 
 .empty {
-  min-height: 10rem;
+  min-height: 18rem;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: 1rem;
   display: grid;
   place-items: center;
   text-align: center;
-  gap: var(--s-3);
+  align-content: center;
+  gap: var(--s-2);
   color: var(--muted);
-  padding: var(--s-6);
+  padding: var(--s-6) var(--s-5);
+  background: color-mix(in srgb, var(--surface) 98%, #070a07);
 }
 
-.emptyImage {
-  width: min(5rem, 60%);
-  height: auto;
-  object-fit: contain;
-  opacity: 0.7;
-  filter: saturate(1.1);
+.emptyIcon {
+  width: 3.4rem;
+  height: 3.4rem;
+  margin-bottom: 0.2rem;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--glass-border));
 }
 
 .empty h2,
@@ -134,22 +194,109 @@
 .empty p {
   font-size: var(--text-sm);
   line-height: var(--lh-normal);
+  max-width: 25rem;
+}
+
+.emptyCta {
+  min-height: 2.75rem;
+  margin-top: var(--s-2);
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 0.55rem var(--s-4);
+  background: var(--accent);
+  color: #0a0d07;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.emptyCta:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+.deleteDialog {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-3);
+}
+
+.deleteDialogIcon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(217 47 61 / 14%);
+  border: 1px solid rgb(255 94 107 / 28%);
+  color: #ff6572;
+}
+
+.deleteDialog div {
+  min-width: 0;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.deleteDialog p,
+.deleteDialog small { margin: 0; }
+
+.deleteDialog p {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.deleteDialog small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.deleteConfirmButton.deleteConfirmButton {
+  --_bg: linear-gradient(135deg, #e13b49, #bd2432);
+  --_fg: #fff;
+  --_border: rgb(255 110 122 / 42%);
 }
 
 @media (max-width: 420px) {
   .page {
-    padding: var(--s-3);
+    padding: var(--s-3) 0 0;
     gap: var(--s-3);
   }
 
   .header {
-    grid-template-columns: 1fr;
+    padding-inline: var(--s-3);
+  }
+
+  .searchWrap,
+  .tabsWrap,
+  .statusTabs,
+  .list {
+    margin-inline: var(--s-3);
+  }
+
+  .list {
+    border-radius: 0;
+    border-inline: 0;
+  }
+
+  .headerCopy p {
+    max-width: 13rem;
   }
 }
 
 @media (min-width: 980px) {
   .page {
-    width: min(38rem, 100%);
-    padding-inline: var(--s-5);
+    width: min(27.5rem, 100%);
+    padding-inline: var(--s-4);
+  }
+}
+
+@media (min-width: 768px) {
+  .page {
+    min-height: calc(100dvh - var(--nav-h) - var(--main-top-gap, var(--s-6)) - var(--section-gap));
   }
 }

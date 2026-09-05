@@ -13,7 +13,7 @@ function ErrorFallback({ message = 'Si e verificato un errore imprevisto.', debu
           Riprova
         </Button>
       ) : null}
-      <CTAButton to="/explore">Vai a Esplora</CTAButton>
+      <CTAButton to="/agenda">Vai ai miei eventi</CTAButton>
     </Card>
   );
 }

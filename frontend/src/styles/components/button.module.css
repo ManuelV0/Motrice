@@ -84,7 +84,7 @@
 }
 
 .sm {
-  min-height: max(var(--s-7), 2.25rem);
+  min-height: 2.75rem;
   padding-inline: var(--s-3);
   font-size: var(--text-xs);
   border-radius: var(--r-md);

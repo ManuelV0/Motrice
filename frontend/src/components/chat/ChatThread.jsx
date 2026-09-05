@@ -1,10 +1,11 @@
-import { MoreVertical, ChevronLeft } from 'lucide-react';
+import { Archive, CalendarDays, ChevronLeft, MapPin, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatComposer from './ChatComposer';
 import DayDivider from './DayDivider';
 import MessageBubble from './MessageBubble';
 import LoadingSkeleton from '../LoadingSkeleton';
 import styles from '../../styles/components/chat/chatThread.module.css';
+import { getChatSportGlyph } from '../../utils/chatSport';
 
 function initialsFromTitle(title = '') {
   const clean = String(title || '').trim();
@@ -38,6 +39,26 @@ function isNearBottom(node) {
   return node.scrollHeight - node.scrollTop - node.clientHeight < threshold;
 }
 
+function formatEventStart(value) {
+  const ms = parseMs(value);
+  if (!ms) return '';
+  return new Intl.DateTimeFormat('it-IT', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(new Date(ms));
+}
+
+function isArchivedThread(thread) {
+  if (String(thread?.type || '') !== 'event') return false;
+  const status = String(thread?.meta?.eventStatus || '').trim().toLowerCase();
+  if (['completed', 'cancelled', 'closed', 'archived'].includes(status)) return true;
+  const startsAtMs = parseMs(thread?.meta?.startsAt);
+  return Boolean(startsAtMs && startsAtMs < Date.now() - 24 * 60 * 60 * 1000);
+}
+
 function ChatThread({
   thread,
   messages,
@@ -51,7 +72,7 @@ function ChatThread({
   currentUserId,
   onBack,
   onOpenProfile,
-  mobile = false,
+  onOpenEvent,
   fullScreenMobile = false
 }) {
   const bodyRef = useRef(null);
@@ -59,6 +80,9 @@ function ChatThread({
   const prevLengthRef = useRef(0);
   const wasNearBottomRef = useRef(true);
   const [showNewIndicator, setShowNewIndicator] = useState(false);
+  const archived = isArchivedThread(thread);
+  const eventStartLabel = formatEventStart(thread?.meta?.startsAt);
+  const eventLocation = String(thread?.meta?.locationName || thread?.meta?.city || '').trim();
 
   const timeline = useMemo(() => {
     const rows = [];
@@ -129,37 +153,74 @@ function ChatThread({
   return (
     <section className={`${styles.threadPane} ${fullScreenMobile ? styles.threadFullscreen : ''}`} aria-label={`Conversazione ${thread.title}`}>
       <header className={styles.head}>
-        {mobile ? (
+        {typeof onBack === 'function' ? (
           <button type="button" className={styles.backBtn} onClick={onBack} aria-label="Torna alla lista chat">
             <ChevronLeft size={18} aria-hidden="true" />
           </button>
         ) : null}
 
-        <span className={styles.avatar} aria-hidden="true">{initialsFromTitle(thread.title)}</span>
+        <span className={styles.avatar} aria-hidden="true">
+          {thread.type !== 'event' && thread.avatarUrl ? (
+            <img
+              src={thread.avatarUrl}
+              alt=""
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
+            />
+          ) : null}
+          <span className={thread.type === 'event' ? styles.sportGlyph : ''}>
+            {thread.type === 'event' ? getChatSportGlyph(thread) : initialsFromTitle(thread.title)}
+          </span>
+        </span>
 
         <div className={styles.headMeta}>
           {thread.type === 'dm' && Number(thread?.otherUserId || 0) > 0 && typeof onOpenProfile === 'function' ? (
             <button
               type="button"
               className={styles.profileLink}
-              onClick={() => onOpenProfile(Number(thread.otherUserId))}
+              onClick={() =>
+                onOpenProfile({
+                  userId: Number(thread.otherUserId),
+                  authUserId: thread.otherAuthUserId || '',
+                  displayName: thread.title,
+                  avatarUrl: thread.avatarUrl
+                })
+              }
               aria-label={`Apri profilo di ${thread.title}`}
             >
+              {thread.title}
+            </button>
+          ) : thread.type === 'event' && typeof onOpenEvent === 'function' ? (
+            <button type="button" className={styles.profileLink} onClick={() => onOpenEvent(thread.eventId)}>
               {thread.title}
             </button>
           ) : (
             <h2>{thread.title}</h2>
           )}
           {thread.type === 'event' ? (
-            <p>{Number(thread?.meta?.participantsCount || 0)} partecipanti</p>
+            <p>
+              {Number(thread?.meta?.participantsCount || 0)} partecipanti
+              {eventStartLabel ? ` · ${eventStartLabel}` : thread?.meta?.city ? ` · ${thread.meta.city}` : ''}
+            </p>
           ) : (
             <p>{String(thread?.meta?.status || 'online')}</p>
           )}
         </div>
 
-        <button type="button" className={styles.menuBtn} aria-label="Opzioni chat">
-          <MoreVertical size={18} aria-hidden="true" />
-        </button>
+        {thread.type === 'event' && typeof onOpenEvent === 'function' ? (
+          <button
+            type="button"
+            className={styles.menuBtn}
+            onClick={() => onOpenEvent(thread.eventId)}
+            aria-label="Apri dettagli evento"
+          >
+            <CalendarDays size={18} aria-hidden="true" />
+            <span>Evento</span>
+          </button>
+        ) : (
+          <span className={styles.headSpacer} aria-hidden="true" />
+        )}
       </header>
 
       {loading ? (
@@ -185,15 +246,62 @@ function ChatThread({
               </button>
             ) : null}
 
+            {thread.type === 'event' ? (
+              <div className={styles.securityNote}>
+                {archived ? <Archive size={15} aria-hidden="true" /> : <ShieldCheck size={15} aria-hidden="true" />}
+                <span>{archived ? 'Evento concluso · Chat in sola lettura' : 'Solo partecipanti confermati'}</span>
+              </div>
+            ) : null}
+
+            {thread.type === 'event' && (eventLocation || eventStartLabel) ? (
+              <article className={styles.eventContext}>
+                <span className={styles.eventContextIcon} aria-hidden="true"><MapPin size={17} /></span>
+                <span className={styles.eventContextCopy}>
+                  <strong>{eventLocation || thread.title}</strong>
+                  {eventStartLabel ? <small>{eventStartLabel}</small> : null}
+                </span>
+                {typeof onOpenEvent === 'function' ? (
+                  <button type="button" onClick={() => onOpenEvent(thread.eventId)}>Dettagli</button>
+                ) : null}
+              </article>
+            ) : null}
+
             {timeline.map((row) => {
               if (row.type === 'day') {
                 return <DayDivider key={row.id} label={row.label} />;
               }
               const message = row.message;
               const mine = Number(message?.senderId || 0) === Number(currentUserId);
-              const senderLabel = thread.type === 'event' && !mine ? `Utente ${message.senderId}` : '';
-              return <MessageBubble key={row.id} message={message} mine={mine} senderLabel={senderLabel} />;
+              const senderLabel = thread.type === 'event' && !mine
+                ? String(message?.senderName || `Utente ${message.senderId}`)
+                : '';
+              return (
+                <MessageBubble
+                  key={row.id}
+                  message={message}
+                  mine={mine}
+                  senderLabel={senderLabel}
+                  onSenderClick={
+                    !mine && senderLabel && typeof onOpenProfile === 'function'
+                      ? () =>
+                          onOpenProfile({
+                            userId: Number(message?.senderId || 0),
+                            authUserId: message?.senderAuthUserId || '',
+                            displayName: message?.senderName || senderLabel,
+                            avatarUrl: message?.senderAvatarUrl || ''
+                          })
+                      : undefined
+                  }
+                />
+              );
             })}
+
+            {!timeline.length ? (
+              <div className={styles.emptyMessages}>
+                <strong>La chat è pronta</strong>
+                <span>Scrivi il primo messaggio al gruppo.</span>
+              </div>
+            ) : null}
           </div>
 
           {showNewIndicator ? (
@@ -202,7 +310,14 @@ function ChatThread({
             </button>
           ) : null}
 
-          <ChatComposer value={draft} onChange={onDraftChange} onSend={onSend} disabled={false} sending={sending} />
+          {archived ? (
+            <div className={styles.readOnlyBar}>
+              <Archive size={17} aria-hidden="true" />
+              <span>Evento concluso · messaggi conservati in sola lettura</span>
+            </div>
+          ) : (
+            <ChatComposer value={draft} onChange={onDraftChange} onSend={onSend} disabled={false} sending={sending} />
+          )}
         </>
       )}
     </section>

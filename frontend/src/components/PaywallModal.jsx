@@ -70,7 +70,7 @@ function PaywallModal({ open, onClose, feature }) {
       <ul>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Eventi illimitati</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Filtri avanzati</li>
-        <li className="row"><Sparkles size={14} aria-hidden="true" /> Agenda Settimana/Mese</li>
+        <li className="row"><Sparkles size={14} aria-hidden="true" /> Eventi Settimana/Mese</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Add to Calendar (ICS)</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Upgrade notifiche</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Chatta con il coach (solo Premium)</li>

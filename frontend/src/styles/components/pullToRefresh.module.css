@@ -1,0 +1,70 @@
+.indicator {
+  --pull-distance: 0px;
+  --pull-opacity: 0;
+  position: fixed;
+  z-index: 10020;
+  top: calc(var(--nav-h) + env(safe-area-inset-top) + 0.4rem);
+  left: 50%;
+  min-height: 2.7rem;
+  max-width: calc(100vw - 2rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.85rem 0.45rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 46%, rgb(255 255 255 / 12%));
+  border-radius: 999px;
+  background: rgb(12 15 12 / 88%);
+  color: var(--text);
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 36%), 0 0 1.2rem color-mix(in srgb, var(--primary) 16%, transparent);
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, calc(var(--pull-distance) - 4.9rem), 0) scale(0.94);
+  transition: opacity 140ms ease, transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, opacity;
+}
+
+.visible {
+  opacity: var(--pull-opacity);
+  transform: translate3d(-50%, calc(var(--pull-distance) - 3.7rem), 0) scale(1);
+}
+
+.fullscreen {
+  top: calc(env(safe-area-inset-top) + 0.5rem);
+}
+
+.icon {
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+.spinning svg {
+  animation: spin 720ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    transition-duration: 1ms;
+  }
+
+  .spinning svg {
+    animation: none;
+  }
+}

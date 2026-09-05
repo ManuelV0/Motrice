@@ -1,5 +1,6 @@
-import { getAuthSession } from './authSession';
+import { getAuthSession, legacyIdFromAuthUserId } from './authSession';
 import { api } from './api';
+import { isSupabaseConfigured, requireSupabase, supabase } from './supabaseClient';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 
 const STORAGE_KEY = 'motrice_chat_store_v1';
@@ -45,6 +46,67 @@ function getDmThreadId(userA, userB) {
   return `dm_${min}_${max}`;
 }
 
+function canUseRemoteEventChat() {
+  const session = getAuthSession();
+  return Boolean(isSupabaseConfigured && supabase && session?.isAuthenticated && session?.authUserId);
+}
+
+function parseEventThreadId(threadId) {
+  const raw = String(threadId || '').trim();
+  if (!raw.startsWith('event_')) return null;
+  const eventId = raw.slice('event_'.length);
+  return eventId || null;
+}
+
+function normalizeRemoteMessage(raw, threadId) {
+  return normalizeMessage({
+    id: raw.id,
+    threadId,
+    senderId: legacyIdFromAuthUserId(raw.sender_id),
+    senderAuthUserId: raw.sender_id,
+    senderName: raw.sender?.display_name || 'Partecipante',
+    senderAvatarUrl: raw.sender?.avatar_url || '',
+    text: raw.body,
+    ts: raw.created_at,
+    status: 'sent'
+  });
+}
+
+async function listRemoteEventThreads() {
+  const client = requireSupabase();
+  const session = getAuthSession();
+  const currentUserId = resolveUserId();
+  const { data, error } = await client.rpc('get_event_chat_inbox');
+  if (error) throw error;
+
+  return (Array.isArray(data) ? data : []).map((row) => {
+    const eventId = String(row.event_id);
+    const sportSlug = String(row.sport_slug || '').trim();
+    return {
+      id: `event_${eventId}`,
+      type: 'event',
+      title: String(row.title || 'Chat evento').trim() || 'Chat evento',
+      avatarUrl: sportSlug ? `/images/${sportSlug}.svg` : '',
+      participants: [currentUserId],
+      eventId,
+      meta: {
+        participantsCount: Number(row.participants_count || 0),
+        startsAt: row.starts_at,
+        city: row.city || '',
+        locationName: row.location_name || '',
+        eventStatus: row.event_status || 'scheduled',
+        sportName: row.sport_name || 'Sport',
+        sportSlug
+      },
+      lastMessage: String(row.last_message || '').trim(),
+      lastMessageSenderName: row.last_sender_id === session.authUserId ? 'Tu' : row.last_sender_name || '',
+      lastMessageSenderId: row.last_sender_id ? legacyIdFromAuthUserId(row.last_sender_id) : null,
+      lastTs: row.last_message_at || row.joined_at || row.starts_at || nowIso(),
+      unreadCount: Number(row.unread_count || 0)
+    };
+  });
+}
+
 function ensureThreadMeta(thread, store) {
   const threadId = String(thread.id);
   const items = Array.isArray(store.messagesByThread?.[threadId]) ? store.messagesByThread[threadId] : [];
@@ -54,7 +116,9 @@ function ensureThreadMeta(thread, store) {
   return {
     ...thread,
     lastMessage,
-    lastTs
+    lastTs,
+    lastMessageSenderName: latest?.senderName || thread.lastMessageSenderName || '',
+    lastMessageSenderId: latest?.senderId || thread.lastMessageSenderId || null
   };
 }
 
@@ -78,9 +142,33 @@ function buildSeedStore(currentUserId) {
 
   const messagesByThread = {
     event_101: [
-      { id: 'm_ev_1', threadId: 'event_101', senderId: 4, text: 'Ragazzi oggi campo 2.', ts: ts(25 * 60 * 1000), status: 'sent' },
-      { id: 'm_ev_2', threadId: 'event_101', senderId: 2, text: 'Io arrivo 10 min prima.', ts: ts(22 * 60 * 1000), status: 'sent' },
-      { id: 'm_ev_3', threadId: 'event_101', senderId: currentUserId, text: 'Perfetto, ci vediamo li.', ts: ts(20 * 60 * 1000), status: 'sent' }
+      {
+        id: 'm_ev_1',
+        threadId: 'event_101',
+        senderId: 4,
+        senderName: 'Luca',
+        text: 'Ragazzi oggi campo 2.',
+        ts: ts(25 * 60 * 1000),
+        status: 'sent'
+      },
+      {
+        id: 'm_ev_2',
+        threadId: 'event_101',
+        senderId: 2,
+        senderName: 'Andrea',
+        text: 'Io arrivo 10 min prima.',
+        ts: ts(22 * 60 * 1000),
+        status: 'sent'
+      },
+      {
+        id: 'm_ev_3',
+        threadId: 'event_101',
+        senderId: currentUserId,
+        senderName: 'Tu',
+        text: 'Perfetto, ci vediamo li.',
+        ts: ts(20 * 60 * 1000),
+        status: 'sent'
+      }
     ]
   };
 
@@ -90,7 +178,7 @@ function buildSeedStore(currentUserId) {
     }
   };
 
-  return { threads, messagesByThread, lastReadByUserThread };
+  return { threads, messagesByThread, lastReadByUserThread, deletedThreadsByUser: {} };
 }
 
 function loadStore() {
@@ -108,7 +196,11 @@ function loadStore() {
     const merged = {
       threads: Array.isArray(parsed.threads) ? parsed.threads : [],
       messagesByThread: parsed.messagesByThread && typeof parsed.messagesByThread === 'object' ? parsed.messagesByThread : {},
-      lastReadByUserThread: parsed.lastReadByUserThread && typeof parsed.lastReadByUserThread === 'object' ? parsed.lastReadByUserThread : {}
+      lastReadByUserThread: parsed.lastReadByUserThread && typeof parsed.lastReadByUserThread === 'object' ? parsed.lastReadByUserThread : {},
+      deletedThreadsByUser:
+        parsed.deletedThreadsByUser && typeof parsed.deletedThreadsByUser === 'object'
+          ? parsed.deletedThreadsByUser
+          : {}
     };
 
     return merged;
@@ -128,10 +220,77 @@ function normalizeMessage(raw) {
     id: String(raw.id || `msg_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`),
     threadId: String(raw.threadId || ''),
     senderId: Number(raw.senderId || 0),
+    senderAuthUserId: String(raw.senderAuthUserId || ''),
+    senderName: String(raw.senderName || ''),
+    senderAvatarUrl: String(raw.senderAvatarUrl || ''),
     text: String(raw.text || ''),
     ts: String(raw.ts || nowIso()),
     status: String(raw.status || 'sent')
   };
+}
+
+function normalizeParticipantProfile(profile = {}, fallback = {}) {
+  const userId = Number(profile?.userId || fallback?.userId || 0);
+  const authUserId = String(
+    profile?.authUserId || profile?.id || fallback?.authUserId || ''
+  ).trim();
+  const displayName = String(
+    profile?.display_name ||
+      profile?.name ||
+      fallback?.displayName ||
+      (userId > 0 ? `Utente ${userId}` : 'Partecipante')
+  ).trim();
+
+  return {
+    userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+    authUserId,
+    display_name: displayName || 'Partecipante',
+    avatar_url: String(profile?.avatar_url || fallback?.avatarUrl || '').trim(),
+    bio: String(profile?.bio || '').trim(),
+    city: String(profile?.city || '').trim(),
+    level: String(profile?.level || '').trim(),
+    reliability: Number(profile?.reliability ?? profile?.reliability_score ?? 0)
+  };
+}
+
+async function hydrateLocalMessageProfiles(messages, currentUserId) {
+  const items = Array.isArray(messages) ? messages : [];
+  const senderIds = Array.from(
+    new Set(
+      items
+        .map((message) => Number(message?.senderId || 0))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )
+  );
+  const profiles = new Map();
+
+  await Promise.all(
+    senderIds.map(async (senderId) => {
+      try {
+        const profile =
+          senderId === Number(currentUserId)
+            ? await api.getLocalProfile()
+            : await api.getAccountProfileByUserId(senderId);
+        const configuredName = String(profile?.display_name || profile?.name || '').trim();
+        if (senderId !== Number(currentUserId) && !configuredName && !profile?.avatar_url) {
+          return;
+        }
+        profiles.set(senderId, normalizeParticipantProfile(profile, { userId: senderId }));
+      } catch {
+        // Mantiene il nome storico del messaggio se il profilo non è disponibile.
+      }
+    })
+  );
+
+  return items.map((message) => {
+    const profile = profiles.get(Number(message?.senderId || 0));
+    if (!profile) return message;
+    return {
+      ...message,
+      senderName: profile.display_name || message.senderName,
+      senderAvatarUrl: profile.avatar_url || message.senderAvatarUrl
+    };
+  });
 }
 
 function computeUnreadCount(store, threadId, currentUserId) {
@@ -202,7 +361,32 @@ async function ensureDmThreadsFromFriends(store, currentUserId) {
   store.threads = filtered;
 }
 
-function getVisibleThreads(store, currentUserId) {
+function isThreadDeletedLocally(store, thread, currentUserId) {
+  const record = store.deletedThreadsByUser?.[String(currentUserId)]?.[String(thread?.id || '')];
+  if (!record || typeof record !== 'object') return false;
+
+  return (
+    String(record.lastTs || '') === String(thread?.lastTs || '') &&
+    String(record.lastMessage || '') === String(thread?.lastMessage || '')
+  );
+}
+
+function restoreThreadVisibility(store, threadId, currentUserId) {
+  const userKey = String(currentUserId);
+  const threadKey = String(threadId || '');
+  const userRecords = store.deletedThreadsByUser?.[userKey];
+  if (!userRecords?.[threadKey]) return false;
+
+  const nextUserRecords = { ...userRecords };
+  delete nextUserRecords[threadKey];
+  store.deletedThreadsByUser = {
+    ...(store.deletedThreadsByUser || {}),
+    [userKey]: nextUserRecords
+  };
+  return true;
+}
+
+function getVisibleThreads(store, currentUserId, { includeDeleted = false } = {}) {
   return (Array.isArray(store.threads) ? store.threads : [])
     .filter((thread) => (Array.isArray(thread.participants) ? thread.participants : []).some((id) => Number(id) === Number(currentUserId)))
     .map((thread) => {
@@ -212,11 +396,12 @@ function getVisibleThreads(store, currentUserId) {
         unreadCount: computeUnreadCount(store, withMeta.id, currentUserId)
       };
     })
+    .filter((thread) => includeDeleted || !isThreadDeletedLocally(store, thread, currentUserId))
     .sort((a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs));
 }
 
 function getThreadById(store, threadId, currentUserId) {
-  const threads = getVisibleThreads(store, currentUserId);
+  const threads = getVisibleThreads(store, currentUserId, { includeDeleted: true });
   return threads.find((thread) => String(thread.id) === String(threadId)) || null;
 }
 
@@ -224,23 +409,87 @@ export const chatApi = {
   async listThreads() {
     const store = loadStore();
     const currentUserId = resolveUserId();
-    await ensureDmThreadsFromFriends(store, currentUserId);
+    try {
+      await ensureDmThreadsFromFriends(store, currentUserId);
+    } catch {
+      // La chat eventi resta disponibile anche se la rubrica locale non risponde.
+    }
     saveStore(store);
-    const items = getVisibleThreads(store, currentUserId);
-    return wait(clone(items));
+    const localItems = getVisibleThreads(store, currentUserId);
+
+    if (!canUseRemoteEventChat()) {
+      return wait(clone(localItems));
+    }
+
+    const remoteEvents = await listRemoteEventThreads();
+    const localDirectMessages = localItems.filter((thread) => String(thread.type) === 'dm');
+    const items = [...remoteEvents, ...localDirectMessages]
+      .filter((thread) => !isThreadDeletedLocally(store, thread, currentUserId))
+      .sort((a, b) => parseIsoMs(b.lastTs) - parseIsoMs(a.lastTs));
+    return clone(items);
   },
 
   async getThread(threadId) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const remoteThreads = await listRemoteEventThreads();
+      const thread = remoteThreads.find((item) => String(item.eventId) === String(remoteEventId));
+      if (!thread) {
+        throw new Error('Partecipa all’evento per accedere alla chat');
+      }
+      const store = loadStore();
+      if (restoreThreadVisibility(store, threadId, resolveUserId())) saveStore(store);
+      return clone(thread);
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
     saveStore(store);
     const thread = getThreadById(store, threadId, currentUserId);
     if (!thread) throw new Error('Chat non trovata');
+    if (restoreThreadVisibility(store, threadId, currentUserId)) saveStore(store);
     return wait(clone(thread));
   },
 
   async listMessages(threadId, options = {}) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const thread = await this.getThread(threadId);
+      const limit = Number.isInteger(Number(options.limit))
+        ? Math.max(1, Math.min(200, Number(options.limit)))
+        : DEFAULT_PAGE_LIMIT;
+      let query = client
+        .from('event_messages')
+        .select(
+          'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
+        )
+        .eq('event_id', remoteEventId)
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit);
+
+      if (options.before) {
+        query = query.lt('created_at', String(options.before));
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const descending = Array.isArray(data) ? data : [];
+      const items = descending
+        .slice()
+        .reverse()
+        .map((message) => normalizeRemoteMessage(message, String(threadId)));
+
+      return {
+        thread,
+        items,
+        hasMore: descending.length === limit,
+        nextBefore: descending.length === limit && items.length ? items[0].ts : null
+      };
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
@@ -256,7 +505,7 @@ export const chatApi = {
 
     const filtered = beforeMs ? all.filter((item) => parseIsoMs(item.ts) < beforeMs) : all;
     const sliceStart = Math.max(0, filtered.length - limit);
-    const items = filtered.slice(sliceStart);
+    const items = await hydrateLocalMessageProfiles(filtered.slice(sliceStart), currentUserId);
     const hasMore = sliceStart > 0;
     const nextBefore = hasMore && items.length ? items[0].ts : null;
 
@@ -271,6 +520,30 @@ export const chatApi = {
   },
 
   async sendMessage(threadId, text) {
+    const body = String(text || '').trim();
+    if (!body) throw new Error('Messaggio vuoto');
+    if (body.length > 1000) throw new Error('Messaggio troppo lungo (max 1000 caratteri)');
+
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const session = getAuthSession();
+      await this.getThread(threadId);
+      const { data, error } = await client
+        .from('event_messages')
+        .insert({
+          event_id: remoteEventId,
+          sender_id: session.authUserId,
+          body
+        })
+        .select(
+          'id,event_id,sender_id,body,created_at,sender:profiles!event_messages_sender_id_fkey(id,display_name,avatar_url)'
+        )
+        .single();
+      if (error) throw error;
+      return normalizeRemoteMessage(data, String(threadId));
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     await ensureDmThreadsFromFriends(store, currentUserId);
@@ -286,14 +559,22 @@ export const chatApi = {
       }
     }
 
-    const body = String(text || '').trim();
-    if (!body) throw new Error('Messaggio vuoto');
-    if (body.length > 1000) throw new Error('Messaggio troppo lungo (max 1000 caratteri)');
-
+    let localProfile = null;
+    try {
+      localProfile = await api.getLocalProfile();
+    } catch {
+      localProfile = null;
+    }
+    const senderProfile = normalizeParticipantProfile(localProfile, {
+      userId: currentUserId,
+      displayName: 'Tu'
+    });
     const created = normalizeMessage({
       id: `m_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
       threadId: String(threadId),
       senderId: currentUserId,
+      senderName: senderProfile.display_name,
+      senderAvatarUrl: senderProfile.avatar_url,
       text: body,
       ts: nowIso(),
       status: 'sent'
@@ -328,12 +609,88 @@ export const chatApi = {
     return wait(clone(created));
   },
 
-  async markThreadRead(threadId) {
+  async deleteThread(threadId, threadSnapshot = null) {
+    const key = String(threadId || '').trim();
+    if (!key) throw new Error('Chat non valida');
+
+    const store = loadStore();
+    const currentUserId = resolveUserId();
+    let thread =
+      threadSnapshot && String(threadSnapshot?.id || '') === key
+        ? threadSnapshot
+        : null;
+
+    if (!thread) {
+      const remoteEventId = parseEventThreadId(key);
+      if (canUseRemoteEventChat() && remoteEventId) {
+        const remoteThreads = await listRemoteEventThreads();
+        thread = remoteThreads.find((item) => String(item.id) === key) || null;
+      } else {
+        await ensureDmThreadsFromFriends(store, currentUserId);
+        thread = getThreadById(store, key, currentUserId);
+      }
+    }
+
+    if (!thread) throw new Error('Chat non trovata');
+
+    store.deletedThreadsByUser = {
+      ...(store.deletedThreadsByUser || {}),
+      [String(currentUserId)]: {
+        ...(store.deletedThreadsByUser?.[String(currentUserId)] || {}),
+        [key]: {
+          deletedAt: nowIso(),
+          lastTs: String(thread.lastTs || ''),
+          lastMessage: String(thread.lastMessage || '')
+        }
+      }
+    };
+
+    saveStore(store);
+    return wait({ ok: true, threadId: key });
+  },
+
+  async getCurrentUserProfile() {
+    const profile = await api.getLocalProfile();
+    return normalizeParticipantProfile(profile, { userId: resolveUserId(), displayName: 'Tu' });
+  },
+
+  async getParticipantProfile(identity = {}) {
+    const fallback = {
+      userId: identity?.userId,
+      authUserId: identity?.authUserId,
+      displayName: identity?.displayName,
+      avatarUrl: identity?.avatarUrl
+    };
+    const authUserId = String(identity?.authUserId || '').trim();
+    const userId = Number(identity?.userId || 0);
+
+    try {
+      const profile = authUserId
+        ? await api.getProfile(authUserId)
+        : await api.getFocusProfile(userId);
+      return normalizeParticipantProfile(profile, fallback);
+    } catch {
+      return normalizeParticipantProfile({}, fallback);
+    }
+  },
+
+  async markThreadRead(threadId, readThrough = null) {
+    const remoteEventId = parseEventThreadId(threadId);
+    if (canUseRemoteEventChat() && remoteEventId) {
+      const client = requireSupabase();
+      const { error } = await client.rpc('mark_event_chat_read', {
+        target_event_id: remoteEventId,
+        read_through: readThrough || nowIso()
+      });
+      if (error) throw error;
+      return { ok: true };
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     const key = String(threadId);
     const messages = Array.isArray(store.messagesByThread?.[key]) ? store.messagesByThread[key] : [];
-    const latestTs = messages.length ? messages[messages.length - 1].ts : nowIso();
+    const latestTs = readThrough || (messages.length ? messages[messages.length - 1].ts : nowIso());
 
     store.lastReadByUserThread = {
       ...(store.lastReadByUserThread || {}),
@@ -348,6 +705,15 @@ export const chatApi = {
   },
 
   async createEventThread({ eventId, title, participants = [] }) {
+    if (canUseRemoteEventChat()) {
+      const remoteThreads = await listRemoteEventThreads();
+      const thread = remoteThreads.find((item) => String(item.eventId) === String(eventId));
+      if (!thread) {
+        throw new Error('Partecipa all’evento per accedere alla chat');
+      }
+      return clone(thread);
+    }
+
     const store = loadStore();
     const currentUserId = resolveUserId();
     const safeEventId = Number(eventId || 0);
@@ -378,5 +744,31 @@ export const chatApi = {
     store.threads = [thread, ...(Array.isArray(store.threads) ? store.threads : [])];
     saveStore(store);
     return wait(clone(thread));
+  },
+
+  subscribe(onChange) {
+    if (!canUseRemoteEventChat() || typeof onChange !== 'function') {
+      return () => {};
+    }
+
+    const client = requireSupabase();
+    const session = getAuthSession();
+    const channel = client
+      .channel(`motrice-event-chat-${session.authUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'event_messages' },
+        (payload) => onChange({ kind: 'message', payload })
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_participants' },
+        (payload) => onChange({ kind: 'participants', payload })
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
   }
 };

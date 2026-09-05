@@ -399,14 +399,37 @@
 .mobileNav {
   position: relative;
   z-index: var(--z-raised);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
   padding: var(--s-4);
   display: grid;
+  align-content: start;
   gap: var(--s-3);
-  max-height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .mobileHeader {
+  position: sticky;
+  top: calc(var(--s-4) * -1);
+  z-index: calc(var(--z-raised) + 1);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin: calc(var(--s-4) * -1) calc(var(--s-4) * -1) 0;
+  padding: var(--s-4);
+  background: linear-gradient(180deg, #0c0f0c 78%, rgb(12 15 12 / 94%));
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+}
+
+.mobileHeaderCopy {
+  min-width: 0;
   display: grid;
   gap: var(--s-1);
 }
@@ -426,6 +449,35 @@
 .mobileTitle {
   font-size: var(--text-lg);
   color: var(--menu-metal-text);
+}
+
+.drawerClose {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: var(--r-pill);
+  background: #171b16;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.drawerClose:hover,
+.drawerClose:active {
+  transform: none;
+  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, #171b16);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.drawerClose:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
 }
 
 .quickActions {
@@ -484,6 +536,16 @@
 
 .drawerLink {
   width: 100%;
+}
+
+.authLink {
+  font: inherit;
+  cursor: pointer;
+}
+
+.authLink:disabled {
+  cursor: wait;
+  opacity: 0.62;
 }
 
 .toggle::before,
@@ -742,4 +804,229 @@
   max-width: 7.8rem !important;
   min-width: 0 !important;
   flex: 1 1 auto !important;
+}
+
+/* Motrice black/lime system */
+.header {
+  background: rgb(9 11 9 / 94%);
+  border-bottom-color: rgb(255 255 255 / 8%);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(18px) saturate(1.12);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+  overflow: visible;
+  --menu-metal-text: var(--text);
+  --menu-metal-border: rgb(255 255 255 / 10%);
+  --menu-metal-bg: #151915;
+  --menu-metal-bg-hover: #1d231a;
+  --menu-metal-bg-active: color-mix(in srgb, var(--primary) 14%, #111410);
+}
+
+.header::before,
+.header::after {
+  display: none;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #ffffff;
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  font-family: var(--font-display);
+  font-size: 0.93rem;
+  letter-spacing: 0.12em;
+}
+
+.brandMark {
+  width: 2.12rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.mobileBrandRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: fit-content;
+}
+
+.mobileBrandLogo {
+  width: 2.15rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.toggle,
+.brandLocationIcon,
+.locationPill {
+  border-color: rgb(255 255 255 / 10%);
+  background: #151915;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.brandLocationOn,
+.locationOn {
+  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
+  background: color-mix(in srgb, var(--primary) 13%, #111410);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.link {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+  font-size: var(--text-sm);
+}
+
+.link:hover {
+  background: #171b16;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.active {
+  border-color: color-mix(in srgb, var(--primary) 24%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, #111410);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.createLink,
+.createLink:hover,
+.createLink.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-contrast);
+  box-shadow: 0 0.5rem 1.2rem rgb(0 0 0 / 28%);
+}
+
+.chatriceLink,
+.chatriceLink:hover {
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+
+.chatriceLink.active {
+  border-color: color-mix(in srgb, var(--primary) 24%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, #111410);
+  color: var(--primary);
+}
+
+.drawer {
+  top: 0;
+  right: auto;
+  width: min(88vw, 22rem);
+  height: 100dvh;
+  box-sizing: border-box;
+  padding-top: var(--nav-h);
+  background: #0c0f0c;
+  border-right: 1px solid rgb(255 255 255 / 8%);
+  border-bottom: 0;
+  transform: translateX(-102%);
+  box-shadow: 18px 0 44px rgb(0 0 0 / 48%);
+}
+
+.drawer::before,
+.drawer::after {
+  display: none;
+}
+
+.drawerOpen {
+  transform: translateX(0);
+}
+
+.mobileNav {
+  gap: var(--s-5);
+  padding: var(--s-5) var(--s-5) calc(var(--s-8) + env(safe-area-inset-bottom));
+}
+
+.mobileHeader {
+  top: calc(var(--s-5) * -1);
+  margin: calc(var(--s-5) * -1) calc(var(--s-5) * -1) 0;
+  padding: var(--s-5);
+}
+
+.mobileKicker {
+  color: var(--primary);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.14em;
+}
+
+.mobileTitle {
+  color: var(--text);
+}
+
+.mobileNav .search {
+  display: block;
+}
+
+.drawer .searchInput {
+  border-color: rgb(255 255 255 / 9%);
+  background: #151915;
+  color: var(--text);
+  box-shadow: none;
+}
+
+.drawer .searchInput::placeholder {
+  color: var(--muted);
+}
+
+.mobileNav .link {
+  min-height: 3rem;
+  border-color: rgb(255 255 255 / 7%);
+  background: #121512;
+  box-shadow: none;
+}
+
+.mobileNav .link:hover,
+.mobileNav .link.active {
+  border-color: color-mix(in srgb, var(--primary) 26%, transparent);
+  background: color-mix(in srgb, var(--primary) 9%, #121512);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.backdrop {
+  top: 0;
+  background: rgb(0 0 0 / 68%);
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 767px) {
+  .toggle,
+  .brandLocationIcon {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .brand {
+    min-height: 2.75rem;
+  }
+
+  .locationPill {
+    display: none;
+  }
+
+  .inner,
+  .forceMobile .inner,
+  :global(.appShell.account-mobile-only) .inner {
+    grid-template-columns: auto 1fr auto !important;
+  }
+
+  .brand {
+    justify-self: start;
+  }
 }
