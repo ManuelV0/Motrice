@@ -501,7 +501,7 @@ function CreateEventPage() {
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
-  const [activeWhenPanel, setActiveWhenPanel] = useState('date');
+  const [activeWhenPanel, setActiveWhenPanel] = useState(null);
   const [workoutPlans, setWorkoutPlans] = useState([]);
   const [workoutPlansLoading, setWorkoutPlansLoading] = useState(false);
   const [workoutPlanPickerOpen, setWorkoutPlanPickerOpen] = useState(false);
@@ -1628,7 +1628,7 @@ function CreateEventPage() {
                 <small>Completa in ordine</small>
               </div>
               <div className={`${styles.whenAccordion} ${errors.event_datetime || errors.duration_minutes ? styles.invalidCard : ''}`}>
-                <div className={`${styles.whenItem} ${activeWhenPanel === 'date' ? styles.whenItemOpen : ''}`}>
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'date' ? styles.whenItemOpen : ''} ${eventDate ? styles.whenItemComplete : ''}`}>
                   <button
                     type="button"
                     className={styles.whenHeader}
@@ -1680,7 +1680,7 @@ function CreateEventPage() {
                   ) : null}
                 </div>
 
-                <div className={`${styles.whenItem} ${activeWhenPanel === 'time' ? styles.whenItemOpen : ''}`}>
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'time' ? styles.whenItemOpen : ''} ${eventTime ? styles.whenItemComplete : ''}`}>
                   <button
                     type="button"
                     className={styles.whenHeader}
@@ -1728,7 +1728,7 @@ function CreateEventPage() {
                   ) : null}
                 </div>
 
-                <div className={`${styles.whenItem} ${activeWhenPanel === 'duration' ? styles.whenItemOpen : ''}`}>
+                <div className={`${styles.whenItem} ${activeWhenPanel === 'duration' ? styles.whenItemOpen : ''} ${eventTime && Number(form.duration_minutes) >= 15 ? styles.whenItemComplete : ''}`}>
                   <button
                     type="button"
                     className={styles.whenHeader}

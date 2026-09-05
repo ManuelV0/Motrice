@@ -203,7 +203,7 @@
   padding: 0;
   display: grid;
   border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--glass-border));
-  border-radius: 24px;
+  border-radius: var(--r-2xl);
   background: #151515;
   box-shadow: var(--sh-card), inset 0 1px 0 rgb(255 255 255 / 4%);
   overflow: hidden;
@@ -971,7 +971,7 @@
   min-height: 0;
   padding: 1rem;
   border-color: rgb(255 255 255 / 0.12);
-  border-radius: 2rem;
+  border-radius: var(--r-3xl);
   background-image:
     linear-gradient(180deg, rgb(0 0 0 / 0.06) 0%, rgb(0 0 0 / 0.08) 34%, rgb(10 11 10 / 0.72) 62%, #111311 84%, #111311 100%),
     var(--event-hero-image);
@@ -1131,7 +1131,7 @@
   gap: 0;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 1.65rem;
+  border-radius: var(--r-2xl);
   background: #171917;
 }
 
@@ -1171,7 +1171,7 @@
 .locationCard {
   overflow: hidden;
   border-color: rgb(255 255 255 / 0.1);
-  border-radius: 1.75rem;
+  border-radius: var(--r-3xl);
   background: #171917;
 }
 
@@ -1232,7 +1232,7 @@
   padding: 1.25rem;
   color: var(--primary);
   border: 1px solid color-mix(in srgb, var(--primary) 48%, transparent);
-  border-radius: 1.65rem;
+  border-radius: var(--r-2xl);
   background: #182e00;
   box-shadow: inset 0 0 2.5rem rgb(184 255 0 / 0.04);
 }
@@ -1317,7 +1317,7 @@
 .actionCard,
 .rulesCard {
   border-color: rgb(255 255 255 / 0.09);
-  border-radius: 1.65rem;
+  border-radius: var(--r-2xl);
   background: #1a1c1a;
 }
 
@@ -1422,7 +1422,7 @@
   padding: 1rem;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--participation-state-color) 34%, rgb(255 255 255 / 0.08));
-  border-radius: 1.2rem;
+  border-radius: var(--r-xl);
   background:
     radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--participation-state-color) 12%, transparent), transparent 44%),
     #111311;
@@ -1618,7 +1618,7 @@
   align-items: center;
   gap: 1rem;
   border-color: rgb(255 255 255 / 0.09);
-  border-radius: 1.65rem;
+  border-radius: var(--r-2xl);
   background: #1a1c1a;
 }
 
@@ -1658,7 +1658,7 @@
     aspect-ratio: 1.28 / 1;
     min-height: 0;
     padding: 0.8rem;
-    border-radius: 1.7rem;
+    border-radius: var(--r-3xl);
   }
 
   .heroBackButton,
@@ -2328,7 +2328,7 @@
   align-items: center;
   gap: 0.8rem;
   border: 1px solid color-mix(in srgb, var(--danger) 42%, rgb(255 255 255 / 0.08));
-  border-radius: 1.35rem;
+  border-radius: var(--r-xl);
   background:
     radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--danger) 10%, transparent), transparent 48%),
     #171717;
@@ -2517,7 +2517,7 @@
   align-items: center;
   gap: 1rem;
   border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 1.4rem;
+  border-radius: var(--r-xl);
   background: #171917;
 }
 
@@ -2655,7 +2655,7 @@
   display: grid;
   gap: 1rem;
   border: 1px solid color-mix(in srgb, var(--primary) 24%, rgb(255 255 255 / 0.08));
-  border-radius: 1.55rem;
+  border-radius: var(--r-2xl);
   background:
     radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 44%),
     #171917;
@@ -3244,7 +3244,7 @@
   gap: 0.9rem;
   scroll-margin-top: 1rem;
   border: 1px solid rgb(255 255 255 / 0.09);
-  border-radius: 1.45rem;
+  border-radius: var(--r-xl);
   background:
     radial-gradient(circle at 0% 50%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 42%),
     #171917;
@@ -3413,7 +3413,7 @@
   gap: 0;
   overflow: hidden;
   scroll-snap-align: start;
-  border-radius: 1.35rem;
+  border-radius: var(--r-xl);
   background: #171917;
 }
 

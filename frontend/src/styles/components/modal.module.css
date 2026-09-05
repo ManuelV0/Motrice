@@ -24,7 +24,7 @@
   overflow: hidden;
   background: var(--card-grad-base);
   border: 1px solid var(--glass-border-strong);
-  border-radius: var(--r-2xl);
+  border-radius: var(--r-modal);
   box-shadow: var(--sh-3), var(--glass-highlight);
   backdrop-filter: blur(var(--glass-blur-heavy));
   -webkit-backdrop-filter: blur(var(--glass-blur-heavy));
@@ -56,7 +56,7 @@
   .panel {
     width: 100%;
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - (var(--s-2) * 2));
-    border-radius: var(--r-2xl) var(--r-2xl) 0 0;
+    border-radius: var(--r-modal) var(--r-modal) 0 0;
   }
 
   .actions {

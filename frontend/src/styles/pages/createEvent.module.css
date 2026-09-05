@@ -5,7 +5,7 @@
   width: min(100%, 54rem);
   margin-inline: auto;
   display: grid;
-  gap: var(--s-4);
+  gap: var(--s-3);
   min-width: 0;
 }
 
@@ -54,7 +54,7 @@
 .formCard {
   position: relative;
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-4);
   margin: 0;
   padding: var(--s-5) var(--s-5) 10rem;
   overflow: visible;
@@ -112,7 +112,7 @@
 
 .wizardStep {
   display: grid;
-  gap: clamp(var(--s-5), 5vw, var(--s-7));
+  gap: clamp(var(--s-4), 3vw, var(--s-5));
   margin: 0;
   padding: 0;
   border: 0;
@@ -146,8 +146,8 @@
 .field :is(input, select, textarea),
 .advancedDetails input {
   width: 100%;
-  min-height: 3.25rem;
-  padding: 0.85rem var(--s-4);
+  min-height: 3rem;
+  padding: 0.7rem var(--s-3);
   border: 1px solid var(--create-border);
   border-radius: var(--r-lg);
   background: var(--create-panel-2);
@@ -183,7 +183,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  margin-bottom: var(--s-1);
+  margin-bottom: 0;
 }
 
 .sectionLabelRow small {
@@ -340,11 +340,11 @@
 .levelGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 .levelGrid button {
-  min-height: 3.35rem;
+  min-height: 3rem;
   border: 1px solid var(--create-border);
   border-radius: var(--r-pill);
   background: var(--create-panel-2);
@@ -368,8 +368,8 @@
 }
 
 .audienceGrid button {
-  min-height: 6.8rem;
-  padding: var(--s-3) var(--s-2);
+  min-height: 4.75rem;
+  padding: var(--s-2);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -396,8 +396,8 @@
 .choiceHelper {
   margin: 0;
   color: var(--muted);
-  font-size: var(--text-sm);
-  line-height: 1.5;
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .controlGrid,
@@ -410,7 +410,7 @@
 
 .whenSection {
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 .controlCard,
@@ -424,24 +424,43 @@
 .participantsCard { grid-column: 1 / -1; }
 
 .whenAccordion {
-  overflow: hidden;
-  border: 1px solid var(--create-border);
-  border-radius: var(--r-xl);
-  background: var(--create-panel-2);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
-  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  display: grid;
+  gap: var(--s-2);
 }
 
-.whenItem + .whenItem { border-top: 1px solid var(--create-border); }
+.whenItem {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: var(--r-xl);
+  background: #121412;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.whenItemOpen {
+  border-color: rgb(255 255 255 / 46%);
+  background: #151715;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.whenItemComplete {
+  border-color: color-mix(in srgb, var(--primary) 68%, rgb(255 255 255 / 18%));
+  background: linear-gradient(100deg, rgb(168 240 0 / 7%), #121412 68%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%), 0 0 18px rgb(168 240 0 / 5%);
+}
+
+.whenAccordion.invalidCard .whenItem {
+  border-color: color-mix(in srgb, var(--danger) 72%, var(--create-border));
+}
 
 .whenHeader {
   width: 100%;
-  min-height: 5.35rem;
-  padding: var(--s-3) var(--s-4);
+  min-height: 4rem;
+  padding: 0.65rem var(--s-3);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s-3);
+  gap: 0.65rem;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -454,7 +473,7 @@
 .whenHeader:active { transform: scale(0.992); }
 
 .whenItemOpen .whenHeader {
-  background: linear-gradient(100deg, rgb(168 240 0 / 10%), transparent 64%);
+  background: linear-gradient(100deg, rgb(255 255 255 / 4%), transparent 64%);
 }
 
 .whenIcon,
@@ -468,9 +487,9 @@
 }
 
 .whenIcon {
-  width: 2.7rem;
-  height: 2.7rem;
-  color: var(--primary);
+  width: 2.35rem;
+  height: 2.35rem;
+  color: rgb(255 255 255 / 86%);
 }
 
 .whenSummary {
@@ -480,7 +499,8 @@
 
 .whenSummary strong {
   overflow: hidden;
-  font-size: clamp(1rem, 4.5vw, 1.18rem);
+  color: #fff;
+  font-size: clamp(0.95rem, 4vw, 1.08rem);
   font-weight: var(--weight-black);
   line-height: 1.22;
   text-overflow: ellipsis;
@@ -488,30 +508,37 @@
 }
 
 .whenState {
-  width: 2rem;
-  height: 2rem;
-  color: var(--primary);
+  width: 1.9rem;
+  height: 1.9rem;
+  color: rgb(255 255 255 / 72%);
   transition: transform var(--dur-med) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
 .whenStateOpen {
   transform: rotate(180deg);
-  border-color: rgb(168 240 0 / 32%);
+  border-color: rgb(255 255 255 / 34%);
+  background: rgb(255 255 255 / 6%);
+}
+
+.whenItemComplete .whenIcon,
+.whenItemComplete .whenState {
+  border-color: rgb(168 240 0 / 38%);
   background: rgb(168 240 0 / 8%);
+  color: var(--primary);
 }
 
 .whenBody {
-  padding: 0 var(--s-4) var(--s-4);
+  padding: 0 var(--s-3) var(--s-3);
   display: grid;
-  gap: var(--s-3);
+  gap: var(--s-2);
   animation: when-body-in var(--dur-med) var(--ease) both;
 }
 
 .whenBody > p {
   margin: 0;
   color: var(--muted);
-  font-size: 0.73rem;
-  line-height: 1.45;
+  font-size: 0.69rem;
+  line-height: 1.35;
 }
 
 @keyframes when-body-in {
@@ -554,7 +581,7 @@
 }
 
 .dateQuickOptions button {
-  min-height: 4.2rem;
+  min-height: 3.5rem;
   padding: var(--s-2);
   display: grid;
   place-content: center;
@@ -585,16 +612,16 @@
 .dateQuickOptions .pickerOptionSelected small { color: rgb(6 9 5 / 64%); }
 
 .nativePickerField {
-  min-height: 5.2rem;
-  padding: var(--s-3) var(--s-4);
+  min-height: 4rem;
+  padding: 0.65rem var(--s-3);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s-3);
-  border: 1px solid rgb(168 240 0 / 34%);
+  border: 1px solid rgb(255 255 255 / 26%);
   border-radius: var(--r-xl);
-  background: linear-gradient(145deg, rgb(168 240 0 / 8%), #111311 58%);
-  color: var(--primary);
+  background: linear-gradient(145deg, rgb(255 255 255 / 5%), #111311 58%);
+  color: rgb(255 255 255 / 86%);
 }
 
 .nativePickerField > span {
@@ -647,10 +674,10 @@
 
 .controlCard,
 .ruleCard {
-  padding: var(--s-4);
+  padding: var(--s-3);
   display: grid;
   align-content: start;
-  gap: var(--s-3);
+  gap: var(--s-2);
 }
 
 .ruleCard > small {
@@ -2263,7 +2290,7 @@
   }
 
   .formCard {
-    gap: var(--s-4);
+    gap: var(--s-3);
     margin-inline: calc(var(--container-pad-x) * -0.45);
     padding: var(--s-4) var(--s-4) 10rem;
     border-radius: var(--r-xl);
@@ -2355,7 +2382,7 @@
 @media (min-width: 48rem) {
   .sportGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sportCard { min-height: 9rem; }
-  .formCard { padding: var(--s-7); }
+  .formCard { padding: var(--s-5); }
 
   .wizardFooter {
     position: static;
