@@ -6,6 +6,7 @@ import EmptyState from '../components/EmptyState';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
 import { createEmptyProfileV3, getPublicProfileV3State } from '../services/profileV3';
+import { getProfileMoments } from '../services/profileMoments';
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ function ProfilePage() {
   const sourceEventId = String(searchParams.get('event') || '').trim();
   const [profile, setProfile] = useState(null);
   const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
+  const [moments, setMoments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -37,10 +39,14 @@ function ProfilePage() {
         throw identityError;
       })
       .then(async (identity) => {
-        const state = await getPublicProfileV3State(id, identity);
+        const [state, publicMoments] = await Promise.all([
+          getPublicProfileV3State(id, identity),
+          getProfileMoments(identity?.id || id)
+        ]);
         if (!active) return;
         setProfile(identity);
         setProfileV3(state);
+        setMoments(publicMoments);
       })
       .catch((loadError) => {
         if (!active) return;
@@ -79,6 +85,7 @@ function ProfilePage() {
         if (nextMode === 'mine') navigate('/account');
       }}
       onSaveProfile={() => false}
+      moments={moments}
       isPremium={profile?.plan === 'premium' || profile?.subscription_plan === 'premium'}
       onInvite={() => navigate(sourceEventId ? `/events/${sourceEventId}` : '/agenda')}
       publicActionLabel={sourceEventId ? 'TORNA ALL’EVENTO' : 'INVITA AD EVENTO'}

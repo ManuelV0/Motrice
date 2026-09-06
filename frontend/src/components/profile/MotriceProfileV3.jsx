@@ -15,8 +15,10 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   UserRoundPlus,
   WalletCards,
+  X,
   Zap
 } from 'lucide-react';
 import styles from '../../styles/components/profile/motriceProfileV3.module.css';
@@ -43,6 +45,9 @@ function MotriceProfileV3({
   onModeChange,
   onSaveProfile,
   onUploadMedia,
+  moments = [],
+  onUploadMoment,
+  onDeleteMoment,
   photoReview = { status: 'none' },
   onVerify,
   onInvite,
@@ -52,9 +57,14 @@ function MotriceProfileV3({
   const [identityOpen, setIdentityOpen] = useState(false);
   const [ratingsOpen, setRatingsOpen] = useState(false);
   const [activeMetric, setActiveMetric] = useState('');
+  const [activeProfileSection, setActiveProfileSection] = useState('identity');
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState('');
+  const [uploadingMoment, setUploadingMoment] = useState(false);
+  const [deletingMomentId, setDeletingMomentId] = useState('');
+  const [selectedMoment, setSelectedMoment] = useState(null);
   const [mediaError, setMediaError] = useState('');
+  const [momentError, setMomentError] = useState('');
   const [avatarConsentOpen, setAvatarConsentOpen] = useState(false);
   const [form, setForm] = useState({
     display_name: '',
@@ -65,6 +75,7 @@ function MotriceProfileV3({
   });
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
+  const momentInputRef = useRef(null);
 
   useEffect(() => {
     setForm({
@@ -195,6 +206,45 @@ function MotriceProfileV3({
     setActiveMetric((current) => current === metric ? '' : metric);
   }
 
+  function selectProfileSection(section) {
+    setActiveProfileSection(section);
+    if (section === 'moments') {
+      setActiveMetric('');
+      setIdentityOpen(false);
+    }
+  }
+
+  async function selectMoments(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!files.length || !isPrivate || !onUploadMoment) return;
+
+    setMomentError('');
+    setUploadingMoment(true);
+    try {
+      for (const file of files) await onUploadMoment(file);
+    } catch (error) {
+      setMomentError(error?.message || 'Caricamento del momento non riuscito');
+    } finally {
+      setUploadingMoment(false);
+    }
+  }
+
+  async function removeMoment(event, moment) {
+    event.stopPropagation();
+    if (!isPrivate || !onDeleteMoment || deletingMomentId) return;
+    setMomentError('');
+    setDeletingMomentId(moment.id);
+    try {
+      await onDeleteMoment(moment);
+      if (selectedMoment?.id === moment.id) setSelectedMoment(null);
+    } catch (error) {
+      setMomentError(error?.message || 'Eliminazione del momento non riuscita');
+    } finally {
+      setDeletingMomentId('');
+    }
+  }
+
   const activeMetricDetail = activeMetric ? metricDetails[activeMetric] : null;
 
   return (
@@ -304,7 +354,28 @@ function MotriceProfileV3({
             <span className={styles.sportPills}>{identity.sports.map((sport) => <small key={sport}>{sport}</small>)}</span>
           </div>
 
-          {avatarConsentOpen ? (
+          <div className={styles.profileSectionTabs} role="tablist" aria-label="Contenuto del profilo">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeProfileSection === 'identity'}
+              className={activeProfileSection === 'identity' ? styles.profileSectionActive : ''}
+              onClick={() => selectProfileSection('identity')}
+            >
+              Identità sportiva
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeProfileSection === 'moments'}
+              className={activeProfileSection === 'moments' ? styles.profileSectionActive : ''}
+              onClick={() => selectProfileSection('moments')}
+            >
+              Momenti
+            </button>
+          </div>
+
+          {activeProfileSection === 'identity' && avatarConsentOpen ? (
             <section className={styles.avatarConsent} role="dialog" aria-label="Consenso confronto foto profilo">
               <span><ShieldCheck size={19} /></span>
               <div>
@@ -318,14 +389,14 @@ function MotriceProfileV3({
             </section>
           ) : null}
 
-          {isPrivate && avatarReviewPending ? (
+          {activeProfileSection === 'identity' && isPrivate && avatarReviewPending ? (
             <p className={styles.photoReviewStatus} role="status"><ShieldCheck size={16} /><span><strong>Nuova foto in verifica</strong>L’avatar attuale resta pubblico fino all’esito.</span></p>
           ) : null}
-          {isPrivate && photoReviewStatus === 'rejected' ? (
+          {activeProfileSection === 'identity' && isPrivate && photoReviewStatus === 'rejected' ? (
             <p className={`${styles.photoReviewStatus} ${styles.photoReviewRejected}`} role="status"><ImagePlus size={16} /><span><strong>Foto non approvata</strong>{photoReview.rejection_reason || 'Scegli una foto frontale più nitida.'}</span></p>
           ) : null}
 
-          <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
+          {activeProfileSection === 'identity' ? <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
             <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>
               <strong>{state.host.events}</strong><span>Eventi</span><ChevronDown size={15} />
             </button>
@@ -335,9 +406,9 @@ function MotriceProfileV3({
             <button type="button" aria-expanded={activeMetric === 'trust'} className={activeMetric === 'trust' ? styles.metricActive : ''} onClick={() => toggleMetric('trust')}>
               <strong>{reliability.score}%</strong><span>Affidabilità</span><ChevronDown size={15} />
             </button>
-          </div>
+          </div> : null}
 
-          {activeMetricDetail ? (
+          {activeProfileSection === 'identity' && activeMetricDetail ? (
             <section className={styles.metricAccordion} aria-live="polite">
               <header>
                 <div><small>{activeMetricDetail.label}</small><strong>{activeMetricDetail.title}</strong></div>
@@ -352,7 +423,7 @@ function MotriceProfileV3({
 
           {mediaError ? <p className={styles.mediaError}>{mediaError}</p> : null}
 
-          {identityOpen ? (
+          {activeProfileSection === 'identity' && identityOpen ? (
             <div id="profile-v3-identity" className={styles.identityAccordion}>
               <form onSubmit={saveIdentity}>
                 <div className={styles.accordionTitle}><Pencil size={16} aria-hidden="true" /><div><strong>Bio e dati personali</strong><span>Unica identità per eventi e chat.</span></div></div>
@@ -366,6 +437,81 @@ function MotriceProfileV3({
         </div>
       </section>
 
+      {activeProfileSection === 'moments' ? (
+        <section className={styles.momentsPanel} role="tabpanel" aria-label="Momenti sportivi">
+          <header className={styles.momentsHeader}>
+            <div>
+              <span>MOMENTI SPORTIVI</span>
+              <h2>Il tuo percorso</h2>
+              <p>Foto di allenamenti ed esperienze vissute.</p>
+            </div>
+            {isPrivate ? (
+              <button
+                type="button"
+                onClick={() => momentInputRef.current?.click()}
+                disabled={uploadingMoment}
+                aria-label="Aggiungi foto dalla galleria"
+              >
+                {uploadingMoment ? <span className={styles.mediaSpinner} /> : <ImagePlus size={19} />}
+              </button>
+            ) : null}
+          </header>
+
+          <div className={styles.momentsGrid}>
+            {moments.map((moment) => (
+              <article
+                className={styles.momentTile}
+                key={moment.id}
+              >
+                <button type="button" className={styles.openMomentButton} onClick={() => setSelectedMoment(moment)} aria-label="Apri momento sportivo">
+                  <img src={moment.image_url} alt="Momento sportivo" loading="lazy" />
+                </button>
+                <span>FOTO PERSONALE</span>
+                {isPrivate ? (
+                  <button
+                    type="button"
+                    className={styles.deleteMomentButton}
+                    onClick={(event) => removeMoment(event, moment)}
+                    disabled={deletingMomentId === moment.id}
+                    aria-label="Rimuovi foto"
+                  >
+                    {deletingMomentId === moment.id ? <span className={styles.mediaSpinner} /> : <Trash2 size={14} />}
+                  </button>
+                ) : null}
+              </article>
+            ))}
+
+            {isPrivate ? (
+              <button
+                type="button"
+                className={`${styles.momentTile} ${styles.addMomentTile}`}
+                onClick={() => momentInputRef.current?.click()}
+                disabled={uploadingMoment}
+              >
+                {uploadingMoment ? <span className={styles.mediaSpinner} /> : <ImagePlus size={25} />}
+                <strong>{uploadingMoment ? 'CARICAMENTO...' : 'AGGIUNGI FOTO'}</strong>
+              </button>
+            ) : null}
+          </div>
+
+          {!moments.length && !isPrivate ? (
+            <div className={styles.emptyMoments}><ImagePlus size={26} /><strong>Nessun momento pubblicato</strong></div>
+          ) : null}
+
+          {isPrivate ? (
+            <input
+              ref={momentInputRef}
+              className={styles.mediaInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              onChange={selectMoments}
+            />
+          ) : null}
+          {momentError ? <p className={styles.momentsError}>{momentError}</p> : null}
+        </section>
+      ) : (
+        <>
       {!hasHistory ? (
         <section className={styles.firstEventCard}>
           <span><Sparkles size={20} /></span>
@@ -431,8 +577,19 @@ function MotriceProfileV3({
         <p><Coins size={16} /><strong>MOT</strong><span>presenza QR</span></p>
         <p><Zap size={16} /><strong>XP</strong><span>progressione</span></p>
       </section>
+        </>
+      )}
 
       {!isPrivate ? <div className={styles.publicSticky}><button type="button" onClick={onInvite}><UserRoundPlus size={20} /> {publicActionLabel}</button></div> : null}
+
+      {selectedMoment ? (
+        <div className={styles.momentLightbox} role="dialog" aria-modal="true" aria-label="Momento sportivo" onClick={() => setSelectedMoment(null)}>
+          <div onClick={(event) => event.stopPropagation()}>
+            <button type="button" onClick={() => setSelectedMoment(null)} aria-label="Chiudi foto"><X size={21} /></button>
+            <img src={selectedMoment.image_url} alt="Momento sportivo ingrandito" />
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

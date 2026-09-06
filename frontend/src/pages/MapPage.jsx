@@ -48,8 +48,9 @@ const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
 const EVENT_PINS_LAYER = 'motrice-event-pins';
 const EVENT_CLUSTERS_LAYER = 'motrice-event-clusters';
 const EVENT_SELECTED_LABEL_LAYER = 'motrice-event-selected-label';
-const EVENT_PIN_FILL = '#ccff00';
-const EVENT_PIN_SAVED_FILL = '#ffffff';
+const EVENT_PIN_FILL = '#a8f000';
+const EVENT_PIN_SAVED_FILL = '#c7f75a';
+const EVENT_PIN_PATH = 'M24 2.5C12.5 2.5 3.5 11.1 3.5 22.2c0 8.3 5.1 15 11.9 19.2L24 54.2l8.6-12.8c6.8-4.2 11.9-10.9 11.9-19.2C44.5 11.1 35.5 2.5 24 2.5Z';
 const EMPTY_EVENT_MARKERS = { type: 'FeatureCollection', features: [] };
 const eventMarkerImageCache = new Map();
 
@@ -161,14 +162,14 @@ function createEventPinSvg(activityType, { saved = false, selected = false, clus
   const pinFill = saved ? EVENT_PIN_SAVED_FILL : EVENT_PIN_FILL;
   const activityNodes = cluster ? '' : renderEventActivityNodes(activityType, pinFill);
   const selectedOutline = selected
-    ? '<path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="none" stroke="#ffffff" stroke-width="4.6"/>'
-    : '<path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="3.4"/>';
+    ? `<path d="${EVENT_PIN_PATH}" fill="none" stroke="#ffffff" stroke-width="4.6" stroke-linejoin="round"/>`
+    : `<path d="${EVENT_PIN_PATH}" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="3.4" stroke-linejoin="round"/>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="112" viewBox="0 0 48 56">
-    <ellipse cx="24" cy="53.1" rx="7.4" ry="2.2" fill="rgba(0,0,0,.34)"/>
+    <ellipse cx="24" cy="53.7" rx="6.5" ry="1.65" fill="rgba(0,0,0,.32)"/>
     ${selectedOutline}
-    <path d="M24 2.5C12.7 2.5 3.5 11.4 3.5 22.4c0 13.7 15.2 27.6 20.5 32.4 5.3-4.8 20.5-18.7 20.5-32.4C44.5 11.4 35.3 2.5 24 2.5Z" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
-    ${cluster ? '' : `<g transform="translate(12 9)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
+    <path d="${EVENT_PIN_PATH}" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
+    ${cluster ? '' : `<g transform="translate(12 10)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
   </svg>`;
 }
 
@@ -264,7 +265,7 @@ async function ensureEventMarkerLayers(map, events = [], selectedEventId = null)
         'text-size': 15,
         'text-font': ['Open Sans Bold'],
         'text-anchor': 'center',
-        'text-offset': [0, -1.72],
+        'text-offset': [0, -2.18],
         'text-allow-overlap': true,
         'text-ignore-placement': true
       },

@@ -9,7 +9,6 @@ import {
   MessageCircle,
   Menu,
   Target,
-  LocateFixed,
   LogIn,
   LogOut,
   ShieldCheck,
@@ -24,6 +23,7 @@ import { getAuthSession, signOutFromSupabase } from '../services/authSession';
 import { isProfileVerificationAdmin } from '../services/profileVerification';
 import IconButton from './IconButton';
 import BrandLogo from './BrandLogo';
+import HeaderWallet from './HeaderWallet';
 import styles from '../styles/components/navbar.module.css';
 
 const links = [
@@ -62,6 +62,7 @@ function Navbar({ forceMobile = false }) {
   const [unread, setUnread] = useState(0);
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const [authActionBusy, setAuthActionBusy] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
   const visibleDrawerSections = isProfileVerificationAdmin(authSession)
     ? [
         ...drawerSections,
@@ -206,7 +207,7 @@ function Navbar({ forceMobile = false }) {
         Vai al contenuto
       </a>
 
-      <div className={`${styles.inner} container`}>
+      <div className={`${styles.inner} ${walletOpen ? styles.walletExpanded : ''} container`}>
         <div className={styles.leftGroup}>
           <IconButton
             icon={Menu}
@@ -215,7 +216,10 @@ function Navbar({ forceMobile = false }) {
             iconSize={20}
             aria-expanded={isOpen}
             aria-controls="mobile-nav"
-            onClick={() => setIsOpen((prev) => !prev)}
+            onClick={() => {
+              setWalletOpen(false);
+              setIsOpen((prev) => !prev);
+            }}
           />
 
           <NavLink className={styles.brand} to="/">
@@ -236,29 +240,14 @@ function Navbar({ forceMobile = false }) {
         </form>
 
         <div className={styles.rightGroup}>
-          <button
-            type="button"
-            className={`${styles.brandLocationIcon} ${hasLocation ? styles.brandLocationOn : styles.brandLocationOff}`}
-            onClick={() => {
-              if (!hasLocation) requestLocation();
+          <HeaderWallet
+            open={walletOpen}
+            onOpenChange={(nextOpen) => {
+              setIsOpen(false);
+              setWalletOpen(nextOpen);
             }}
-            aria-label={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione posizione in corso' : 'Attiva posizione'}
-            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : locationError || 'Attiva posizione'}
-          >
-            <LocateFixed size={15} aria-hidden="true" />
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.locationPill} ${hasLocation ? styles.locationOn : styles.locationOff}`}
-            onClick={() => {
-              if (!hasLocation) requestLocation();
-            }}
-            aria-live="polite"
-          >
-            <span className={styles.locationLabelFull}>{hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Posizione off'}</span>
-            <span className={styles.locationLabelCompact}>{hasLocation ? 'Posizione' : requesting ? 'Attiva...' : 'Off'}</span>
-          </button>
+            authenticated={authSession.isAuthenticated}
+          />
         </div>
 
         {!forceMobile ? (

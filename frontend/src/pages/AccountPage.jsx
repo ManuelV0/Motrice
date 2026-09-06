@@ -12,6 +12,11 @@ import {
 } from '../services/profileV3';
 import { uploadProfileMedia } from '../services/profileMedia';
 import {
+  deleteProfileMoment,
+  getProfileMoments,
+  uploadProfileMoment
+} from '../services/profileMoments';
+import {
   getMyProfilePhotoChange,
   submitProfilePhotoChange
 } from '../services/profilePhotoVerification';
@@ -24,6 +29,7 @@ function AccountPage() {
   const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
   const [mode, setMode] = useState('mine');
   const [photoReview, setPhotoReview] = useState({ status: 'none' });
+  const [moments, setMoments] = useState([]);
   const [loading, setLoading] = useState(true);
 
   usePageMeta({
@@ -36,12 +42,14 @@ function AccountPage() {
     try {
       const identity = await api.getLocalProfile();
       setProfile(identity);
-      const [nextProfileV3, nextPhotoReview] = await Promise.all([
+      const [nextProfileV3, nextPhotoReview, nextMoments] = await Promise.all([
         getProfileV3State(identity),
-        getMyProfilePhotoChange()
+        getMyProfilePhotoChange(),
+        getProfileMoments(identity?.id)
       ]);
       setProfileV3(nextProfileV3);
       setPhotoReview(nextPhotoReview);
+      setMoments(nextMoments);
     } catch (error) {
       showToast(error.message || 'Impossibile caricare il profilo', 'error');
     } finally {
@@ -91,6 +99,20 @@ function AccountPage() {
     return result;
   }
 
+  async function addMoment(file) {
+    const created = await uploadProfileMoment(file);
+    setMoments((current) => [created, ...current.filter((item) => item.id !== created.id)]);
+    showToast('Momento aggiunto al profilo', 'success');
+    return created;
+  }
+
+  async function removeMoment(moment) {
+    await deleteProfileMoment(moment);
+    setMoments((current) => current.filter((item) => item.id !== moment.id));
+    showToast('Momento rimosso', 'success');
+    return true;
+  }
+
   if (loading || !profile) {
     return <LoadingSkeleton rows={6} variant="detail" />;
   }
@@ -104,6 +126,9 @@ function AccountPage() {
       onSaveProfile={saveProfile}
       onUploadMedia={uploadMedia}
       photoReview={photoReview}
+      moments={moments}
+      onUploadMoment={addMoment}
+      onDeleteMoment={removeMoment}
       isPremium={isPremium}
       onVerify={() => navigate('/verify-profile')}
       onInvite={() => {
