@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppShell from './layout/AppShell';
 import AppErrorBoundary from './components/AppErrorBoundary';
@@ -53,12 +53,27 @@ const EXPLORE_SECTION_ENABLED = false;
 
 function App() {
   const location = useLocation();
+  const isMapRoute = location.pathname === '/map';
+  const [hasMountedMap, setHasMountedMap] = useState(isMapRoute);
+
+  useEffect(() => {
+    if (isMapRoute) setHasMountedMap(true);
+  }, [isMapRoute]);
+
+  const shouldRenderMap = hasMountedMap || isMapRoute;
+  const persistentMap = shouldRenderMap ? (
+    <Suspense fallback={isMapRoute ? <RouteLoadingSkeleton pathname={location.pathname} /> : null}>
+      <div data-persistent-map hidden={!isMapRoute} aria-hidden={!isMapRoute}>
+        <MapPage active={isMapRoute} />
+      </div>
+    </Suspense>
+  ) : null;
 
   return (
     <AppErrorBoundary resetKey={location.pathname}>
-      <AppShell>
+      <AppShell persistentContent={persistentMap}>
         <Suspense fallback={<RouteLoadingSkeleton pathname={location.pathname} />}>
-          <Routes>
+          {!isMapRoute ? <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route
             path="/explore"
@@ -85,7 +100,6 @@ function App() {
           <Route path="/community" element={<CommunityPage />} />
           <Route path="/chatrice" element={<Navigate to="/chat" replace />} />
           <Route path="/chatrice/:threadId" element={<ChatThreadPage />} />
-          <Route path="/map" element={<MapPage />} />
           <Route path="/game" element={<GameMapPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/convenzioni" element={<ConvenzioniPage />} />
@@ -112,7 +126,7 @@ function App() {
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/404" element={<NotFoundPage />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
-          </Routes>
+          </Routes> : null}
         </Suspense>
       </AppShell>
     </AppErrorBoundary>

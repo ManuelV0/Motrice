@@ -200,7 +200,7 @@ function ChatThread({
           )}
           {thread.type === 'event' ? (
             <p>
-              {Number(thread?.meta?.participantsCount || 0)} partecipanti
+              {Number(thread?.meta?.participantsCount || 0)} {Number(thread?.meta?.participantsCount || 0) === 1 ? 'partecipante' : 'partecipanti'}
               {eventStartLabel ? ` · ${eventStartLabel}` : thread?.meta?.city ? ` · ${thread.meta.city}` : ''}
             </p>
           ) : (

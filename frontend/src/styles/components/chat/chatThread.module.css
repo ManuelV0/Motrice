@@ -38,8 +38,8 @@
 
 .backBtn,
 .menuBtn {
-  min-width: 2.55rem;
-  min-height: 2.55rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   padding: 0;
   border-radius: var(--r-pill);
   border: 0;
@@ -65,7 +65,7 @@
 }
 
 .backBtn {
-  width: 2.55rem;
+  width: 2.75rem;
 }
 
 .backBtn:hover,
@@ -158,8 +158,8 @@
 }
 
 .headSpacer {
-  width: 2.55rem;
-  height: 2.55rem;
+  width: 2.75rem;
+  height: 2.75rem;
 }
 
 .messages {
@@ -375,7 +375,7 @@
   }
 
   .menuBtn {
-    width: 2.55rem;
+    width: 2.75rem;
     padding: 0;
   }
 }

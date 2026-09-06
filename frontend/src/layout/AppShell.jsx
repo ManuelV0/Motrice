@@ -3,13 +3,14 @@ import Footer from '../components/Footer';
 import BottomNav from '../components/BottomNav';
 import SiteTourOverlay from '../components/SiteTourOverlay';
 import PullToRefresh from '../components/PullToRefresh';
-import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useState } from 'react';
+import ActiveEventLocationMonitor from '../components/ActiveEventLocationMonitor';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
 import { hasCompletedAppIntro } from '../services/appIntro';
 
-function AppShell({ children }) {
+function AppShell({ children, persistentContent = null }) {
   const location = useLocation();
   const [soonNotification, setSoonNotification] = useState(null);
   const [authSession, setAuthSession] = useState(getAuthSession);
@@ -21,6 +22,7 @@ function AppShell({ children }) {
   const isVerificationRoute = location.pathname === '/verify-profile';
   const isPasswordResetRoute = location.pathname === '/reset-password';
   const isWorkoutRoute = /^\/events\/[^/]+\/workout$/.test(location.pathname);
+  const isChatThreadRoute = /^\/chat\/[^/]+$/.test(location.pathname);
   const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute;
   const isFixedFullscreenRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
@@ -69,9 +71,9 @@ function AppShell({ children }) {
     );
   }, [location.pathname]);
 
-  const refreshedChildren = isValidElement(children)
-    ? cloneElement(children, { key: `${location.pathname}:${refreshVersion}` })
-    : children;
+  // Only the active routed page is remounted on navigation/pull-to-refresh.
+  // Persistent surfaces such as the map/WebGL canvas live outside this key.
+  const refreshedChildren = <Fragment key={`${location.pathname}:${refreshVersion}`}>{children}</Fragment>;
 
   useEffect(() => {
     const refreshAuthSession = () => setAuthSession(getAuthSession());
@@ -137,8 +139,9 @@ function AppShell({ children }) {
 
   return (
     <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
+      <ActiveEventLocationMonitor enabled={authSession.isAuthenticated} />
       <PullToRefresh
-        enabled={authSession.isAuthenticated && isRefreshableRoute && !isFullscreenEntryRoute}
+        enabled={authSession.isAuthenticated && isRefreshableRoute && !isFullscreenEntryRoute && !isChatThreadRoute}
         edgeOnly={isMapSurfaceRoute}
         fullscreen={isMapSurfaceRoute || isChatRoute}
         routeKey={`${location.pathname}${location.search}`}
@@ -146,9 +149,8 @@ function AppShell({ children }) {
       />
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
       <main
-        key={location.pathname}
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent mainContentRouteEnter ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isChatThreadRoute ? '' : 'mainContentRouteEnter'} ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''} ${isChatThreadRoute ? 'mainContentChatThread' : ''}`}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">
@@ -162,6 +164,7 @@ function AppShell({ children }) {
             </p>
           </section>
         )}
+        {persistentContent}
         {refreshedChildren}
       </main>
       {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}

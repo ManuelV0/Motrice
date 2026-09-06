@@ -1,6 +1,6 @@
 .wrap {
   position: relative;
-  min-height: 2.65rem;
+  min-height: 2.9rem;
   border-radius: var(--r-pill);
   border: 0;
   background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
@@ -39,7 +39,7 @@
 .tab {
   position: relative;
   z-index: 1;
-  min-height: 2.3rem;
+  min-height: 2.55rem;
   padding: 0;
   border-radius: var(--r-pill);
   border: 0;

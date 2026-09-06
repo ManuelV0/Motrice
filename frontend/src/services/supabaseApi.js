@@ -3,6 +3,7 @@ import { getAuthSession, legacyIdFromAuthUserId } from './authSession';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 import { assertProfileVerified } from './profileVerification';
 import { getEventTiming } from '../utils/eventLifecycle';
+import { resolveParticipantOutcome } from '../utils/eventParticipationState';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -226,7 +227,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
     client
       .from('event_participants')
       .select(
-        'event_id,user_id,status,skill_level,note,joined_at,stake_cents,stake_status,cashback_percent,checked_in_at,minimum_reached_at,completed_at,review_bonus_awarded,profile:profiles!event_participants_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
+        'event_id,user_id,status,lifecycle_state,lifecycle_updated_at,skill_level,note,joined_at,stake_cents,stake_status,cashback_percent,checked_in_at,minimum_reached_at,completed_at,review_bonus_awarded,profile:profiles!event_participants_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
       )
       .in('event_id', eventIds),
     client
@@ -300,10 +301,13 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   );
   const ownParticipation =
     eventParticipants.find((participant) => String(participant.user_id) === authUserId) || null;
-  const presentParticipants = eventParticipants.filter((participant) => participant.status === 'completed');
-  const concludedParticipants = eventParticipants.filter((participant) =>
-    ['completed', 'no_show'].includes(String(participant.status || ''))
+  const presentParticipants = eventParticipants.filter(
+    (participant) => resolveParticipantOutcome(participant).id === 'completed'
   );
+  const concludedParticipants = eventParticipants.filter((participant) =>
+    ['completed', 'no_show'].includes(resolveParticipantOutcome(participant).id)
+  );
+  const ownOutcome = resolveParticipantOutcome(ownParticipation);
   const refundableParticipants = eventParticipants.filter((participant) =>
     ['going', 'completed'].includes(String(participant.status || '')) &&
     Number(participant.stake_cents || 0) > 0 &&
@@ -319,8 +323,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
       : null;
   const startsAt = rawEvent.starts_at;
   const durationMinutes = Number(rawEvent.duration_minutes || 120);
-  const hasPassed =
-    Date.parse(startsAt) + durationMinutes * 60 * 1000 < Date.now();
+  const hasPassed = getEventTiming(rawEvent).hasEnded;
 
   return {
     id: rawEvent.id,
@@ -367,6 +370,13 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     verification_mode: rawEvent.verification_mode || 'both',
     geofence_radius_m: Number(rawEvent.geofence_radius_m ?? 250),
     checkin_grace_minutes: Number(rawEvent.checkin_grace_minutes ?? 15),
+    lifecycle_state: rawEvent.lifecycle_state || null,
+    lifecycle_version: Number(rawEvent.lifecycle_version || 0),
+    lifecycle_updated_at: rawEvent.lifecycle_updated_at || null,
+    checkin_opens_at: rawEvent.checkin_opens_at || null,
+    checkin_closes_at: rawEvent.checkin_closes_at || null,
+    ends_at: rawEvent.ends_at || null,
+    archived_at: rawEvent.archived_at || null,
     completed_at: rawEvent.completed_at || null,
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
@@ -391,7 +401,8 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     featured_boost: false,
     distance_km: distanceKm,
     participant_status: ownParticipation?.status || null,
-    is_going: ['going', 'completed'].includes(String(ownParticipation?.status || '')),
+    participant_lifecycle_state: ownParticipation?.lifecycle_state || null,
+    is_going: ['confirmed', 'checked_in', 'completed'].includes(ownOutcome.id),
     is_join_pending: ownJoinRequest?.status === 'pending',
     join_request_status: ownJoinRequest?.status || null,
     is_saved: context.savedEventIds.has(String(rawEvent.id)),
@@ -401,14 +412,9 @@ function normalizeEvent(rawEvent, context, filters = {}) {
           participation_fee_cents: Number(ownParticipation.stake_cents ?? rawEvent.deposit_cents ?? 500),
           participation_fee_status: ownParticipation.stake_status || 'locked',
           cashback_percent: Number(ownParticipation.cashback_percent || 0),
-          attendance:
-            ownParticipation.status === 'completed'
-              ? 'attended'
-              : ownParticipation.status === 'no_show'
-                ? 'no_show'
-                : null,
+          attendance: ownOutcome.attendance,
           earned_xp:
-            ownParticipation.status === 'completed'
+            ownOutcome.id === 'completed'
               ? Number(rawEvent.completion_xp ?? 50) + (ownParticipation.review_bonus_awarded ? Number(rawEvent.review_bonus_xp ?? 25) : 0)
               : 0
         }
@@ -824,6 +830,56 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
+    async startEventLocationTracking({ eventId, verificationMethod = 'gps', devicePlatform = 'web' }) {
+      const client = requireSupabase();
+      await assertProfileVerified('monitorare la presenza durante l evento.');
+      const { data, error } = await client.rpc('start_event_location_tracking', {
+        target_event_id: String(eventId),
+        verification_method_value: verificationMethod === 'qr_gps' ? 'qr_gps' : 'gps',
+        device_platform_value: String(devicePlatform || 'web')
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async recordEventTrackingPing({
+      eventId,
+      pingId,
+      lat,
+      lng,
+      accuracyM = null,
+      speedMps = null,
+      recordedAt = null,
+      source = 'foreground'
+    }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('record_event_tracking_ping', {
+        target_event_id: String(eventId),
+        client_ping_id_value: String(pingId),
+        sample_lat: Number(lat),
+        sample_lng: Number(lng),
+        sample_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null,
+        sample_speed_mps: Number.isFinite(Number(speedMps)) ? Number(speedMps) : null,
+        client_recorded_at_value: recordedAt || new Date().toISOString(),
+        sample_source_value: ['foreground', 'background', 'resume', 'offline'].includes(source)
+          ? source
+          : 'foreground'
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async stopEventLocationTracking({ eventId, status = 'interrupted', reason = null }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('stop_event_location_tracking', {
+        target_event_id: String(eventId),
+        final_status_value: status,
+        reason_value: reason
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async startEventWorkout(eventId) {
       const client = requireSupabase();
       await assertProfileVerified('avviare l allenamento.');
@@ -1032,6 +1088,26 @@ function createRemoteMethods(localApi) {
       }
       const client = requireSupabase();
       const userId = requireAuthUserId();
+      const quotaResult = await client.rpc('get_my_event_creation_quota');
+      if (!quotaResult.error && quotaResult.data?.[0]) {
+        const quota = quotaResult.data[0];
+        return {
+          month: quota.month,
+          created_this_month: Number(quota.created_this_month || 0),
+          max_events_per_month: quota.max_events_per_month == null
+            ? Number.POSITIVE_INFINITY
+            : Number(quota.max_events_per_month),
+          is_unlimited: Boolean(quota.is_unlimited),
+          plan: quota.plan || 'free'
+        };
+      }
+
+      // Compatibilita temporanea con ambienti che non hanno ancora ricevuto
+      // la migration della quota. L'inserimento resta comunque protetto appena
+      // la migration viene applicata.
+      if (!['42883', 'PGRST202'].includes(String(quotaResult.error?.code || ''))) {
+        throwIfError(quotaResult.error);
+      }
       const start = new Date();
       start.setDate(1);
       start.setHours(0, 0, 0, 0);
@@ -1223,6 +1299,9 @@ export function createSupabaseApi(localApi) {
       scanEventParticipantQr: requireSecureBackend,
       recordEventPresence: requireSecureBackend,
       startEventGpsCheckIn: requireSecureBackend,
+      startEventLocationTracking: requireSecureBackend,
+      recordEventTrackingPing: requireSecureBackend,
+      stopEventLocationTracking: requireSecureBackend,
       startEventWorkout: requireSecureBackend,
       recordEventWorkoutProgress: requireSecureBackend,
       completeEventWorkout: requireSecureBackend,

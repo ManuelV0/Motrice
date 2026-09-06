@@ -116,7 +116,7 @@
 }
 
 .statusTabs button {
-  min-height: 2.2rem;
+  min-height: 2.75rem;
   padding: 0.35rem 0.85rem;
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--r-pill);

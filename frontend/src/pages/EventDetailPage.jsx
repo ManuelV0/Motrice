@@ -57,7 +57,7 @@ import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
-import { resolveEventParticipationState } from '../utils/eventParticipationState';
+import { resolveEventParticipationState, resolveParticipantOutcome } from '../utils/eventParticipationState';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const SPORT_DETAIL_VISUALS = [
@@ -798,10 +798,9 @@ function EventDetailPage() {
   const eventStartsMs = Date.parse(event?.event_datetime || '');
   const eventTiming = getEventTiming(event || {}, checkInNowMs);
   const eventHasEnded = eventTiming.hasEnded;
+  const participantOutcome = resolveParticipantOutcome(event);
   const canInviteFriendsFromGroupChat = Boolean(
-    eventHasEnded ||
-    Number(event?.user_rsvp?.cashback_percent || 0) >= 100 ||
-    String(event?.user_rsvp?.attendance || '') === 'attended'
+    participantOutcome.id === 'completed'
   );
   const requestedParticipants = useMemo(
     () => checkedInParticipants.filter((item) => String(item.friendship_status || '') === 'requested'),
@@ -1040,11 +1039,8 @@ function EventDetailPage() {
   );
   const refundableParticipantsCount = Math.max(0, Number(event.refundable_participants_count || 0));
   const refundableDepositCents = Math.max(0, Number(event.refundable_deposit_cents || 0));
-  const participantAttendance = String(event.user_rsvp?.attendance || '').toLowerCase();
-  const participantWasPresent = Boolean(
-    participantAttendance === 'attended' || Number(event.user_rsvp?.cashback_percent || 0) >= 60
-  );
-  const participantWasNoShow = participantAttendance === 'no_show';
+  const participantWasPresent = participantOutcome.id === 'completed';
+  const participantWasNoShow = participantOutcome.id === 'no_show';
   const recordedPresenceMinutes = Number(
     event.user_rsvp?.elapsed_minutes ?? event.user_rsvp?.presence_minutes
   );
@@ -1063,7 +1059,6 @@ function EventDetailPage() {
   const closedPresentCount = Number(
     event.participant_stats?.present ??
       event.participants_present_count ??
-      event.participants_checked_in_count ??
       0
   );
   const closedTotalCount = Math.max(
@@ -1275,7 +1270,7 @@ function EventDetailPage() {
                           : 'Salva nelle mie schede'}
                     </Button>
                   ) : null}
-                  {(event.is_personal || Number(event?.user_rsvp?.cashback_percent || 0) >= 60 || Boolean(event?.user_rsvp?.checked_in_at) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
+                  {(event.is_personal || ['checked_in', 'completed'].includes(participantOutcome.id) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
                     <Button
                       type="button"
                       fullWidth

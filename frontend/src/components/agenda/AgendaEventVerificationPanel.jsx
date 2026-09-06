@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserQRCodeReader } from '@zxing/browser';
 import QRCode from 'qrcode';
 import {
+  ArrowRight,
   Camera,
   Check,
   CheckCircle2,
@@ -22,6 +23,8 @@ import {
   getEventTiming,
   getMaximumCheckInGraceMinutes
 } from '../../utils/eventLifecycle';
+import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
+import { startEventLocationTracking } from '../../services/eventLocationTracking';
 
 function decodeQrPayload(rawValue) {
   const raw = String(rawValue || '').trim();
@@ -87,8 +90,10 @@ function AgendaEventVerificationPanel({
   onClose,
   onVerified,
   onStartWorkout,
+  onOpenEvent,
   showToast
 }) {
+  const hasWorkout = Boolean(event?.workout_plan);
   const mode = String(event?.verification_mode || 'both').toLowerCase();
   const usesQr = mode === 'qr' || mode === 'both';
   const usesGeo = mode === 'geo' || mode === 'gps' || mode === 'both';
@@ -112,12 +117,29 @@ function AgendaEventVerificationPanel({
   const scanBusyRef = useRef(false);
   const lastScanRef = useRef({ fingerprint: '', at: 0 });
   const verifiedNotifiedRef = useRef(false);
+  const trackingStartedRef = useRef(false);
   const { coords, requesting, requestLocation, error: locationError } = useUserLocation();
   const timing = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs);
   const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
   const extensionOptions = [10, 15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
+
+  const activateLocationTracking = useCallback(async (location, source = 'gps') => {
+    if (!usesGeo || !location || trackingStartedRef.current || !event?.id) return;
+    trackingStartedRef.current = true;
+    try {
+      await startEventLocationTracking({
+        event,
+        role: isOrganizer ? 'organizer' : 'participant',
+        verificationSource: source,
+        initialCoords: location
+      });
+    } catch (error) {
+      trackingStartedRef.current = false;
+      showToast(error?.message || 'Monitoraggio presenza non avviato', 'error');
+    }
+  }, [event, isOrganizer, showToast, usesGeo]);
 
   useEffect(() => {
     setGraceMinutes(Number(event?.checkin_grace_minutes ?? 15));
@@ -141,10 +163,17 @@ function AgendaEventVerificationPanel({
     try {
       const nextProgress = await api.getEventParticipationProgress(event.id);
       setProgress(nextProgress);
-      const presenceVerified = Boolean(
-        nextProgress?.checked_in_at || Number(nextProgress?.cashback_percent || 0) >= 60
-      );
-      if (presenceVerified) await notifyVerified();
+      const progressOutcome = resolveParticipantOutcome(nextProgress);
+      const presenceVerified = ['checked_in', 'completed'].includes(progressOutcome.id);
+      if (presenceVerified) {
+        if (coords) {
+          await activateLocationTracking(
+            coords,
+            String(nextProgress?.verification_source || '') === 'gps' ? 'gps' : 'qr'
+          );
+        }
+        await notifyVerified();
+      }
       return nextProgress;
     } catch (error) {
       if (!silent) showToast(error?.message || 'Dati di verifica non disponibili', 'error');
@@ -152,7 +181,7 @@ function AgendaEventVerificationPanel({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [event?.id, isOrganizer, notifyVerified, showToast]);
+  }, [activateLocationTracking, coords, event?.id, isOrganizer, notifyVerified, showToast]);
 
   useEffect(() => {
     loadParticipantProgress();
@@ -235,6 +264,7 @@ function AgendaEventVerificationPanel({
       setScanFeedback({ tone: 'success', title: 'Check-in valido', detail: `${participantName} · +${mot} MOT · +${xp} XP` });
       playFeedback(true);
       showToast(`Check-in valido · ${participantName}`, 'success');
+      await activateLocationTracking(location, 'qr');
       await notifyVerified();
     } catch (error) {
       const feedback = feedbackFromError(error);
@@ -245,7 +275,12 @@ function AgendaEventVerificationPanel({
       scanBusyRef.current = false;
       setBusy(false);
     }
-  }, [coords, event?.id, notifyVerified, requestLocation, showToast, usesGeo]);
+  }, [activateLocationTracking, coords, event?.id, notifyVerified, requestLocation, showToast, usesGeo]);
+
+  useEffect(() => {
+    if (isOrganizer || !verified || !coords) return;
+    activateLocationTracking(coords, String(progress?.verification_source || '') === 'gps' ? 'gps' : 'qr');
+  }, [activateLocationTracking, coords, isOrganizer, progress?.verification_source, verified]);
 
   useEffect(() => {
     if (!scannerOpen || !videoRef.current || scanFeedback) return undefined;
@@ -336,8 +371,12 @@ function AgendaEventVerificationPanel({
             ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
             : 'Posizione confermata nell’area dell’evento.'
         });
-        showToast('Geolocalizzazione confermata · allenamento sbloccato', 'success');
+        showToast(
+          hasWorkout ? 'Geolocalizzazione confermata · allenamento sbloccato' : 'Geolocalizzazione confermata · presenza registrata',
+          'success'
+        );
         playFeedback(true);
+        await activateLocationTracking(location, 'gps');
         await notifyVerified();
         return;
       }
@@ -354,8 +393,12 @@ function AgendaEventVerificationPanel({
           ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
           : 'Posizione confermata nell’area dell’evento.'
       });
-      showToast(`Presenza verificata · +${Number(result?.mot_awarded || 2)} MOT · allenamento sbloccato`, 'success');
+      showToast(
+        `Presenza verificata · +${Number(result?.mot_awarded || 2)} MOT${hasWorkout ? ' · allenamento sbloccato' : ''}`,
+        'success'
+      );
       playFeedback(true);
+      await activateLocationTracking(location, 'gps');
       await notifyVerified();
     } catch (error) {
       const message = error?.message || 'Verifica posizione non riuscita';
@@ -390,7 +433,8 @@ function AgendaEventVerificationPanel({
     setScannerCycle((cycle) => cycle + 1);
   }
 
-  const panelVerified = verified || organizerLocationVerified || Boolean(progress?.checked_in_at) || Number(progress?.cashback_percent || 0) >= 60;
+  const progressOutcome = resolveParticipantOutcome(progress);
+  const panelVerified = verified || organizerLocationVerified || ['checked_in', 'completed'].includes(progressOutcome.id);
 
   return (
     <section className={`${styles.panel} ${panelVerified ? styles.panelVerified : ''}`} aria-label="Verifica presenza evento">
@@ -400,7 +444,7 @@ function AgendaEventVerificationPanel({
           <small>{isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
           <h3>{panelVerified ? 'Presenza verificata' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
           <p>{panelVerified
-            ? 'La scheda allenamento è ora sbloccata.'
+            ? hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
             : isOrganizer
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
               : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
@@ -443,8 +487,14 @@ function AgendaEventVerificationPanel({
       ) : panelVerified ? (
         <div className={styles.verifiedState}>
           <span aria-hidden="true"><CheckCircle2 size={25} /></span>
-          <div><strong>Allenamento sbloccato</strong><small>Puoi iniziare la scheda preimpostata.</small></div>
-          <button type="button" onClick={onStartWorkout}><Play size={18} /> Avvia allenamento</button>
+          <div>
+            <strong>{hasWorkout ? 'Allenamento sbloccato' : 'Sessione attiva'}</strong>
+            <small>{hasWorkout ? 'Puoi iniziare la scheda preimpostata.' : 'Puoi seguire durata e stato dalla pagina evento.'}</small>
+          </div>
+          <button type="button" onClick={hasWorkout ? onStartWorkout : onOpenEvent}>
+            {hasWorkout ? <Play size={18} /> : <ArrowRight size={18} />}
+            {hasWorkout ? 'Avvia allenamento' : 'Apri evento'}
+          </button>
         </div>
       ) : isOrganizer ? (
         <div className={styles.organizerActions}>

@@ -510,6 +510,11 @@ function CreateEventPage() {
   const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
   const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const creationLimit = creationStats.is_unlimited
+    ? Number.POSITIVE_INFINITY
+    : Number.isFinite(Number(creationStats.max_events_per_month))
+      ? Number(creationStats.max_events_per_month)
+      : entitlements.maxEventsPerMonth;
   const keyboardVisible = useKeyboardVisibility();
   const groupSettingsRef = useRef(null);
   const protectionSettingsRef = useRef(null);
@@ -1408,7 +1413,7 @@ function CreateEventPage() {
     event.preventDefault();
     if (submitting || !validate()) return;
 
-    if (creationStats.created_this_month >= entitlements.maxEventsPerMonth) {
+    if (creationStats.created_this_month >= creationLimit) {
       setPaywallOpen(true);
       return;
     }
@@ -1530,9 +1535,9 @@ function CreateEventPage() {
           <span className={styles.pageEyebrow}>Nuova sessione</span>
           <h1>Crea il tuo evento</h1>
         </div>
-        {!Number.isFinite(entitlements.maxEventsPerMonth) ? null : (
+        {!Number.isFinite(creationLimit) ? null : (
           <span className={styles.planBadge}>
-            {creationStats.created_this_month}/{entitlements.maxEventsPerMonth} questo mese
+            {creationStats.created_this_month}/{creationLimit} questo mese
           </span>
         )}
       </header>
@@ -2645,7 +2650,7 @@ function CreateEventPage() {
       <PaywallModal
         open={paywallOpen}
         onClose={() => setPaywallOpen(false)}
-        feature={`Limite creazione eventi (${entitlements.maxEventsPerMonth}/mese)`}
+        feature={`Limite creazione eventi (${creationLimit}/mese)`}
       />
       <Modal
         open={workoutPlanPickerOpen}

@@ -303,11 +303,36 @@
 
 .monitorHead div {
   display: grid;
+  min-width: 0;
+  flex: 1;
 }
 
 .monitorHead span {
   color: var(--muted);
   font-size: var(--text-sm);
+}
+
+.trackingDot {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.trackingDot[data-active='true'] {
+  background: var(--primary);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--primary) 14%, transparent), 0 0 0.9rem color-mix(in srgb, var(--primary) 45%, transparent);
+  animation: trackingPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes trackingPulse {
+  50% { opacity: 0.58; transform: scale(0.88); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trackingDot[data-active='true'] { animation: none; }
 }
 
 .completedBox {

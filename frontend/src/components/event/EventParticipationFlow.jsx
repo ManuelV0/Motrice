@@ -26,6 +26,13 @@ import {
   getEventTiming,
   getMaximumCheckInGraceMinutes
 } from '../../utils/eventLifecycle';
+import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
+import {
+  EVENT_LOCATION_TRACKING_STATUS_EVENT,
+  getActiveEventLocationTracking,
+  startEventLocationTracking,
+  stopEventLocationTracking
+} from '../../services/eventLocationTracking';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
@@ -175,6 +182,7 @@ function EventParticipationFlow({
   const [review, setReview] = useState(EMPTY_REVIEW);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [lastPresence, setLastPresence] = useState(null);
+  const [trackingStatus, setTrackingStatus] = useState(() => getActiveEventLocationTracking());
   const [participantVerificationChoice, setParticipantVerificationChoice] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [graceMinutes, setGraceMinutes] = useState(() => Number(event?.checkin_grace_minutes ?? 15));
@@ -184,6 +192,7 @@ function EventParticipationFlow({
   const presenceBusyRef = useRef(false);
   const finalizedRef = useRef(false);
   const lastScanRef = useRef({ fingerprint: '', at: 0 });
+  const trackingStartRef = useRef('');
 
   const canLoad = Boolean(event?.id && (event?.is_going || isOrganizer));
   const verificationMode = event?.verification_mode || 'both';
@@ -197,6 +206,7 @@ function EventParticipationFlow({
   const extensionOptions = [10, 15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
+  const progressOutcome = resolveParticipantOutcome(progress);
 
   useEffect(() => {
     setGraceMinutes(Number(event?.checkin_grace_minutes ?? 15));
@@ -255,6 +265,20 @@ function EventParticipationFlow({
     );
     return () => window.clearInterval(timer);
   }, [canLoad, isOrganizer, loadFlow]);
+
+  useEffect(() => {
+    const refreshTrackingStatus = (statusEvent) => {
+      const next = statusEvent?.detail ?? getActiveEventLocationTracking();
+      setTrackingStatus(
+        next && String(next.eventId) === String(event?.id)
+          ? next
+          : null
+      );
+    };
+    refreshTrackingStatus();
+    window.addEventListener(EVENT_LOCATION_TRACKING_STATUS_EVENT, refreshTrackingStatus);
+    return () => window.removeEventListener(EVENT_LOCATION_TRACKING_STATUS_EVENT, refreshTrackingStatus);
+  }, [event?.id]);
 
   useEffect(() => {
     let active = true;
@@ -401,6 +425,46 @@ function EventParticipationFlow({
   ]);
 
   useEffect(() => {
+    if (!event?.id || !usesGeo || !coords || timing.hasEnded) return undefined;
+    const participantReady = !isOrganizer && progressOutcome.id === 'checked_in';
+    const organizerReady = isOrganizer && timing.startsAtMs != null && Date.now() >= timing.checkInOpensAtMs;
+    if (!participantReady && !organizerReady) return undefined;
+
+    const trackingKey = `${event.id}:${isOrganizer ? 'organizer' : 'participant'}`;
+    const activeTracking = getActiveEventLocationTracking();
+    if (
+      trackingStartRef.current === trackingKey ||
+      (activeTracking?.status === 'active' && String(activeTracking.eventId) === String(event.id))
+    ) return undefined;
+
+    trackingStartRef.current = trackingKey;
+    startEventLocationTracking({
+      event,
+      role: isOrganizer ? 'organizer' : 'participant',
+      verificationSource: String(progress?.verification_source || '') === 'gps' ? 'gps' : 'qr',
+      initialCoords: coords
+    }).catch((trackingError) => {
+      trackingStartRef.current = '';
+      setTrackingStatus((current) => ({
+        ...(current || {}),
+        eventId: String(event.id),
+        status: 'interrupted',
+        lastError: trackingError?.message || 'Monitoraggio non disponibile'
+      }));
+    });
+    return undefined;
+  }, [coords, event, isOrganizer, progress?.verification_source, progressOutcome.id, timing.checkInOpensAtMs, timing.hasEnded, timing.startsAtMs, usesGeo]);
+
+  useEffect(() => {
+    const activeTracking = getActiveEventLocationTracking();
+    if (!activeTracking || String(activeTracking.eventId) !== String(event?.id)) return;
+    const participationCompleted = !isOrganizer && progressOutcome.id === 'completed';
+    if (!timing.hasEnded && !participationCompleted) return;
+    stopEventLocationTracking({ status: 'completed', reason: timing.hasEnded ? 'fine_evento' : 'presenza_completata' })
+      .catch(() => undefined);
+  }, [event?.id, isOrganizer, progressOutcome.id, timing.hasEnded]);
+
+  useEffect(() => {
     if (!scannerOpen || !videoRef.current || scanFeedback) return undefined;
 
     const reader = new BrowserQRCodeReader(undefined, {
@@ -510,8 +574,7 @@ function EventParticipationFlow({
   useEffect(() => {
     const shouldMonitorParticipant =
       !isOrganizer &&
-      Boolean(progress?.checked_in_at) &&
-      Number(progress?.cashback_percent || 0) < 100;
+      progressOutcome.id === 'checked_in';
     const liveTiming = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes });
     const organizerWindow =
       isOrganizer &&
@@ -531,8 +594,7 @@ function EventParticipationFlow({
     event?.status,
     graceMinutes,
     isOrganizer,
-    progress?.cashback_percent,
-    progress?.checked_in_at,
+    progressOutcome.id,
     sendPresence,
     usesGeo
   ]);
@@ -585,8 +647,8 @@ function EventParticipationFlow({
     const items = registeredParticipants;
     return {
       total: items.filter((item) => !['cancelled'].includes(String(item.participant_status))).length,
-      checked: items.filter((item) => Number(item.cashback_percent || 0) >= 60).length,
-      completed: items.filter((item) => Number(item.cashback_percent || 0) >= 100).length
+      checked: items.filter((item) => ['checked_in', 'completed'].includes(resolveParticipantOutcome(item).id)).length,
+      completed: items.filter((item) => resolveParticipantOutcome(item).id === 'completed').length
     };
   }, [registeredParticipants]);
   const qrWindowLabel = timing.checkInOpensAtMs != null && timing.checkInClosesAtMs != null
@@ -810,9 +872,18 @@ function EventParticipationFlow({
                 <div className={styles.monitorHead}>
                   <LocateFixed size={20} />
                   <div>
-                    <strong>Monitoraggio presenza attivo</strong>
-                    <span>{elapsed}/{presenceTarget} minuti verificati</span>
+                    <strong>
+                      {trackingStatus?.status === 'active'
+                        ? 'Monitoraggio presenza attivo'
+                        : 'Monitoraggio da ripristinare'}
+                    </strong>
+                    <span>
+                      {trackingStatus?.status === 'active'
+                        ? `Continua anche a schermo spento · ${elapsed}/${presenceTarget} minuti`
+                        : (trackingStatus?.lastError || 'Riapri il monitoraggio della posizione')}
+                    </span>
                   </div>
+                  <i className={styles.trackingDot} data-active={trackingStatus?.status === 'active' ? 'true' : 'false'} />
                 </div>
                 <div className={styles.presenceRail}>
                   <span style={{ width: `${Math.min(100, (elapsed / Math.max(1, presenceTarget)) * 100)}%` }} />
@@ -820,15 +891,34 @@ function EventParticipationFlow({
                 <div className={styles.monitorMeta}>
                   <span>{progress?.organizer_present ? 'Organizzatore presente' : 'In attesa posizione organizzatore'}</span>
                   {lastPresence?.distance_m != null ? <span>Distanza: {Math.round(lastPresence.distance_m)} m</span> : null}
+                  {trackingStatus?.lastPingAt ? (
+                    <span>Ultimo controllo {new Date(trackingStatus.lastPingAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</span>
+                  ) : null}
                 </div>
                 <Button
                   type="button"
                   icon={LocateFixed}
-                  onClick={() => sendPresence({ interactive: true })}
+                  onClick={async () => {
+                    try {
+                      const location = coords || await requestLocation();
+                      if (!location) return;
+                      await startEventLocationTracking({
+                        event,
+                        role: 'participant',
+                        verificationSource: String(progress?.verification_source || '') === 'gps' ? 'gps' : 'qr',
+                        initialCoords: location
+                      });
+                      await sendPresence({ interactive: true });
+                    } catch (trackingError) {
+                      showToast(trackingError?.message || 'Impossibile riprendere il monitoraggio', 'error');
+                    }
+                  }}
                   disabled={busy || requestingLocation}
                   fullWidth
                 >
-                  {busy || requestingLocation ? 'Verifica posizione...' : 'Aggiorna presenza ora'}
+                  {busy || requestingLocation
+                    ? 'Verifica posizione...'
+                    : trackingStatus?.status === 'active' ? 'Aggiorna presenza ora' : 'Riprendi monitoraggio'}
                 </Button>
               </div>
             ) : null}
@@ -998,11 +1088,11 @@ function EventParticipationFlow({
               </div>
               <div className={styles.participantList} aria-live="polite">
                 {registeredParticipants.length ? registeredParticipants.map((participant) => {
-                  const isPresent = Boolean(participant.checked_in_at) || Number(participant.cashback_percent || 0) >= 60;
-                  const isAbsent = !isPresent && (
-                    String(participant.participant_status || '') === 'no_show' ||
+                  const participantOutcome = resolveParticipantOutcome(participant);
+                  const isPresent = ['checked_in', 'completed'].includes(participantOutcome.id);
+                  const isAbsent = participantOutcome.id === 'no_show' || (!isPresent && (
                     (event.has_passed && !['cancelled'].includes(String(participant.participant_status || '')))
-                  );
+                  ));
                   return (
                     <div key={participant.auth_user_id || participant.user_id} className={styles.participantRow}>
                       <span className={styles.avatar}>

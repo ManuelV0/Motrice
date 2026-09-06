@@ -149,6 +149,13 @@
   border-color: color-mix(in srgb, var(--accent) 44%, #2a2d2a);
 }
 
+.todayWorkoutCard_active {
+  border-color: color-mix(in srgb, var(--accent) 42%, #2a2d2a);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 38%),
+    linear-gradient(145deg, #181b18, #0d0f0d);
+}
+
 .todayWorkoutCard_organizer {
   border-color: color-mix(in srgb, var(--accent) 38%, #2a2d2a);
   background:

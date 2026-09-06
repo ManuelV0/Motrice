@@ -1073,8 +1073,7 @@ function enrichEvent(event, store, origin) {
   const rsvp = store.rsvps[String(event.id)] || null;
   const joinRequest = store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)] || null;
   const isSaved = Boolean(store.savedEvents && store.savedEvents[String(event.id)]);
-  const eventMs = Date.parse(event.event_datetime);
-  const hasPassed = eventMs + getEventDurationMs(event) < nowMs();
+  const hasPassed = getEventTiming(event, nowMs()).hasEnded;
   const distance_km =
     origin && event.lat != null && event.lng != null
       ? Number(haversineKm(origin.lat, origin.lng, event.lat, event.lng).toFixed(1))
@@ -1099,6 +1098,13 @@ function enrichEvent(event, store, origin) {
     verification_mode: String(event.verification_mode || 'both'),
     geofence_radius_m: Number(event.geofence_radius_m ?? 250),
     checkin_grace_minutes: Number(event.checkin_grace_minutes ?? 15),
+    lifecycle_state: event.lifecycle_state || null,
+    lifecycle_version: Number(event.lifecycle_version || 0),
+    lifecycle_updated_at: event.lifecycle_updated_at || null,
+    checkin_opens_at: event.checkin_opens_at || null,
+    checkin_closes_at: event.checkin_closes_at || null,
+    ends_at: event.ends_at || null,
+    archived_at: event.archived_at || null,
     completed_at: event.completed_at || null,
     completion_xp: Number(event.completion_xp ?? 50),
     review_bonus_xp: Number(event.review_bonus_xp ?? 25),
@@ -1110,6 +1116,7 @@ function enrichEvent(event, store, origin) {
     distance_km,
     analytics,
     participant_status: rsvp?.status || null,
+    participant_lifecycle_state: rsvp?.lifecycle_state || null,
     is_going: Boolean(rsvp && ['going', 'completed'].includes(String(rsvp.status || ''))),
     is_join_pending: joinRequest?.status === 'pending',
     join_request_status: joinRequest?.status || null,
@@ -1378,6 +1385,9 @@ const localApi = {
       verification_mode: String(payload.verification_mode || 'both'),
       geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
       checkin_grace_minutes: Number(payload.checkin_grace_minutes ?? 15),
+      lifecycle_state: 'published',
+      lifecycle_version: 1,
+      lifecycle_updated_at: nowIso(),
       completion_xp: Number(payload.completion_xp ?? 50),
       review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
       status: 'scheduled',
@@ -2423,6 +2433,80 @@ const localApi = {
     };
     saveStore(store);
     return withDelay({ ok: true, checked_in_now: !current.checked_in_at, checked_in_at: checkedInAt, mot_awarded: current.checked_in_at ? 0 : 2, cashback_percent: 60 });
+  },
+
+  async startEventLocationTracking({ eventId, verificationMethod = 'gps', devicePlatform = 'web' }) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const flow = store.participationFlowsByEvent?.[eventKey] || {};
+    if (!isOrganizer && !flow.checked_in_at) throw new Error('Verifica prima la presenza');
+    const timing = getEventTiming(event);
+    const next = {
+      event_id: eventKey,
+      user_id: currentUserId,
+      role_key: isOrganizer ? 'organizer' : 'participant',
+      status: 'active',
+      verification_method: verificationMethod === 'qr_gps' ? 'qr_gps' : 'gps',
+      device_platform: devicePlatform,
+      expected_end_at: timing.endsAtMs ? new Date(timing.endsAtMs).toISOString() : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      started_at: store.eventTrackingSessions?.[eventKey]?.started_at || nowIso(),
+      last_ping_at: store.eventTrackingSessions?.[eventKey]?.last_ping_at || null,
+      valid_ping_count: Number(store.eventTrackingSessions?.[eventKey]?.valid_ping_count || 0),
+      outside_ping_count: Number(store.eventTrackingSessions?.[eventKey]?.outside_ping_count || 0)
+    };
+    store.eventTrackingSessions = { ...(store.eventTrackingSessions || {}), [eventKey]: next };
+    saveStore(store);
+    return withDelay(clone(next));
+  },
+
+  async recordEventTrackingPing({ eventId, pingId, lat, lng, accuracyM = null, recordedAt = null }) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const eventKey = String(event.id);
+    const currentUserId = resolveAuthUserId();
+    const session = store.eventTrackingSessions?.[eventKey];
+    if (!session || session.status !== 'active') throw new Error('Monitoraggio evento non attivo');
+    const processed = new Set(store.eventTrackingPingIds || []);
+    if (processed.has(String(pingId))) return withDelay({ ok: true, duplicate: true, tracking_status: session.status });
+    const distanceM = haversineKm(Number(lat), Number(lng), Number(event.lat), Number(event.lng)) * 1000;
+    const insideRadius = Number.isFinite(distanceM) && distanceM <= Number(event.geofence_radius_m ?? 250);
+    processed.add(String(pingId));
+    const next = {
+      ...session,
+      last_ping_at: recordedAt || nowIso(),
+      last_distance_m: Number.isFinite(distanceM) ? Number(distanceM.toFixed(1)) : null,
+      last_accuracy_m: Number.isFinite(Number(accuracyM)) ? Number(accuracyM) : null,
+      valid_ping_count: Number(session.valid_ping_count || 0) + (insideRadius ? 1 : 0),
+      outside_ping_count: Number(session.outside_ping_count || 0) + (insideRadius ? 0 : 1)
+    };
+    store.eventTrackingSessions = { ...(store.eventTrackingSessions || {}), [eventKey]: next };
+    store.eventTrackingPingIds = Array.from(processed).slice(-1000);
+    saveStore(store);
+    const presence = await localApi.recordEventPresence({ eventId, lat, lng, accuracyM });
+    return withDelay({ ...presence, tracking_status: next.status, last_ping_at: next.last_ping_at });
+  },
+
+  async stopEventLocationTracking({ eventId, status = 'interrupted', reason = null }) {
+    const store = loadStore();
+    const eventKey = String(eventId);
+    const current = store.eventTrackingSessions?.[eventKey];
+    if (!current) return withDelay({ ok: true, tracking_status: 'not_started' });
+    const nextStatus = ['completed', 'expired'].includes(status) ? status : 'interrupted';
+    store.eventTrackingSessions = {
+      ...(store.eventTrackingSessions || {}),
+      [eventKey]: {
+        ...current,
+        status: nextStatus,
+        completed_at: nextStatus === 'completed' ? nowIso() : current.completed_at || null,
+        interrupted_at: nextStatus === 'interrupted' ? nowIso() : current.interrupted_at || null,
+        interruption_reason: nextStatus === 'interrupted' ? (reason || 'interrotto_dal_client') : null
+      }
+    };
+    saveStore(store);
+    return withDelay({ ok: true, tracking_status: nextStatus });
   },
 
   async startEventWorkout(eventId) {

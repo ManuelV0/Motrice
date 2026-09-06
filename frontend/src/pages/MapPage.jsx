@@ -198,24 +198,30 @@ function svgToMapImage(svgMarkup) {
   return imagePromise;
 }
 
-async function ensureEventMarkerImages(map) {
-  const imageDefinitions = [];
+function getRequiredEventMarkerImages(events, selectedEventId) {
+  const imageDefinitions = new Map([
+    ['motrice-pin-cluster', createEventPinSvg('activity', { cluster: true })],
+    ['motrice-pin-cluster-selected', createEventPinSvg('activity', { cluster: true, selected: true })]
+  ]);
 
-  Object.keys(EVENT_ACTIVITY_ICON_NODES).forEach((activityType) => {
-    [false, true].forEach((saved) => {
-      [false, true].forEach((selected) => {
-        imageDefinitions.push({
-          id: getEventPinImageId(activityType, saved, selected),
-          svg: createEventPinSvg(activityType, { saved, selected })
-        });
-      });
-    });
+  events.forEach((event) => {
+    const activityType = getEventActivityType(event);
+    const saved = Boolean(event.is_saved);
+    const selected = String(event.id) === String(selectedEventId);
+    imageDefinitions.set(
+      getEventPinImageId(activityType, saved, selected),
+      createEventPinSvg(activityType, { saved, selected })
+    );
   });
 
-  imageDefinitions.push(
-    { id: 'motrice-pin-cluster', svg: createEventPinSvg('activity', { cluster: true }) },
-    { id: 'motrice-pin-cluster-selected', svg: createEventPinSvg('activity', { cluster: true, selected: true }) }
-  );
+  return [...imageDefinitions].map(([id, svg]) => ({ id, svg }));
+}
+
+async function ensureEventMarkerImages(map, events = [], selectedEventId = null) {
+  // Generate only the images actually used by the current result set. The old
+  // implementation decoded every sport/state combination before showing even
+  // the first pin, which made the map look empty during startup.
+  const imageDefinitions = getRequiredEventMarkerImages(events, selectedEventId);
 
   const images = await Promise.all(
     imageDefinitions.map(async ({ id, svg }) => ({ id, data: await svgToMapImage(svg) }))
@@ -226,10 +232,9 @@ async function ensureEventMarkerImages(map) {
   });
 }
 
-async function ensureEventMarkerLayers(map) {
+async function ensureEventMarkerLayers(map, events = [], selectedEventId = null) {
   if (!map?.isStyleLoaded()) return false;
-  await ensureEventMarkerImages(map);
-  if (!map.isStyleLoaded()) return false;
+  await ensureEventMarkerImages(map, events, selectedEventId);
 
   if (!map.getSource(EVENT_MARKERS_SOURCE)) {
     map.addSource(EVENT_MARKERS_SOURCE, {
@@ -758,7 +763,7 @@ function MapFiltersDrawer({
   );
 }
 
-function MapPage() {
+function MapPage({ active = true }) {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -779,6 +784,9 @@ function MapPage() {
   const sheetTransitionTimerRef = useRef(null);
   const mapStyleThemeRef = useRef(null);
   const hasLoadedEventsRef = useRef(false);
+  const wasActiveRef = useRef(active);
+  const [mapReady, setMapReady] = useState(false);
+  const [markersReady, setMarkersReady] = useState(false);
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [searchInput, setSearchInput] = useState(() => filters.q || '');
@@ -810,16 +818,32 @@ function MapPage() {
   const { coords, hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
 
   usePageMeta({
-    title: 'Mappa Eventi | Motrice',
-    description: 'Visualizza sessioni e luoghi consigliati su mappa interattiva.'
+    title: active ? 'Mappa Eventi | Motrice' : '',
+    description: active ? 'Visualizza sessioni e luoghi consigliati su mappa interattiva.' : ''
   });
 
   useEffect(() => {
-    api.listSports().then(setSports);
-  }, []);
+    if (!active || sports.length) return undefined;
+    let requestActive = true;
+    api
+      .listSports()
+      .then((rows) => {
+        if (requestActive) setSports(rows || []);
+      })
+      .catch(() => {
+        // Sport filters remain optional if the catalog is temporarily offline.
+      });
+    return () => {
+      requestActive = false;
+    };
+  }, [active, sports.length]);
 
   useEffect(() => {
-    const refreshLifecycle = () => setLifecycleTick(Date.now());
+    if (!active) return undefined;
+    const refreshLifecycle = () => {
+      if (document.visibilityState === 'hidden') return;
+      setLifecycleTick(Date.now());
+    };
     const timer = window.setInterval(refreshLifecycle, 60 * 1000);
     document.addEventListener('visibilitychange', refreshLifecycle);
     window.addEventListener('focus', refreshLifecycle);
@@ -828,7 +852,7 @@ function MapPage() {
       document.removeEventListener('visibilitychange', refreshLifecycle);
       window.removeEventListener('focus', refreshLifecycle);
     };
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     setSearchInput(filters.q || '');
@@ -842,38 +866,40 @@ function MapPage() {
   }, [searchInput]);
 
   useEffect(() => {
-    let active = true;
+    if (!active) return undefined;
+    let requestActive = true;
     if (!hasLoadedEventsRef.current) setLoading(true);
     setLoadError('');
     api
       .listEvents({ ...filters, ...originParams, activeOnly: true })
       .then((rows) => {
-        if (active) setEvents(rows || []);
+        if (requestActive) setEvents(rows || []);
       })
       .catch((error) => {
-        if (active) {
+        if (requestActive) {
           setEvents([]);
           setLoadError(error?.message || 'Impossibile caricare gli eventi da Supabase');
         }
       })
       .finally(() => {
-        if (active) {
+        if (requestActive) {
           hasLoadedEventsRef.current = true;
           setLoading(false);
         }
       });
 
     return () => {
-      active = false;
+      requestActive = false;
     };
-  }, [filters, lifecycleTick, originParams]);
+  }, [active, filters, lifecycleTick, originParams]);
 
   useEffect(() => {
+    if (!active) return;
     const next = writeFiltersToSearch(searchParams, filters, baseFilters);
     if (next.toString() !== searchParams.toString()) {
       setSearchParams(next, { replace: true });
     }
-  }, [filters, searchParams, setSearchParams]);
+  }, [active, filters, searchParams, setSearchParams]);
 
   useEffect(() => {
     try {
@@ -884,6 +910,7 @@ function MapPage() {
   }, [mapTheme]);
 
   useEffect(() => {
+    if (!active) return undefined;
     const missing = events.filter((event) => {
       if (hasValidCoordinates(event.lat, event.lng)) return false;
       if (Object.prototype.hasOwnProperty.call(resolvedCoordinates, String(event.id))) return false;
@@ -891,18 +918,18 @@ function MapPage() {
     });
     if (!missing.length) return undefined;
 
-    let active = true;
+    let geocodingActive = true;
     const controller = new AbortController();
     setResolvingCoordinates(true);
 
     async function resolveMissingCoordinates() {
       for (const event of missing) {
-        if (!active) return;
+        if (!geocodingActive) return;
         const eventId = String(event.id);
         coordinateAttemptsRef.current.add(eventId);
         try {
           const coordinates = await geocodeEventLocation(event, { signal: controller.signal });
-          if (!active) return;
+          if (!geocodingActive) return;
           setResolvedCoordinates((prev) => ({ ...prev, [eventId]: coordinates }));
 
           if (event.source === 'supabase' && event.created_by === 'me' && typeof api.updateEventCoordinates === 'function') {
@@ -910,20 +937,20 @@ function MapPage() {
           }
         } catch (error) {
           if (error?.name === 'AbortError') return;
-          if (active) setResolvedCoordinates((prev) => ({ ...prev, [eventId]: null }));
+          if (geocodingActive) setResolvedCoordinates((prev) => ({ ...prev, [eventId]: null }));
         }
       }
     }
 
     resolveMissingCoordinates().finally(() => {
-      if (active) setResolvingCoordinates(false);
+      if (geocodingActive) setResolvingCoordinates(false);
     });
 
     return () => {
-      active = false;
+      geocodingActive = false;
       controller.abort();
     };
-  }, [events, resolvedCoordinates]);
+  }, [active, events, resolvedCoordinates]);
 
   const withCoords = useMemo(
     () =>
@@ -1172,6 +1199,30 @@ function MapPage() {
   }, []);
 
   useEffect(() => {
+    const map = mapRef.current;
+
+    if (!active) {
+      wasActiveRef.current = false;
+      setFollowUser(false);
+      map?.stop();
+      return undefined;
+    }
+
+    if (wasActiveRef.current) return undefined;
+    wasActiveRef.current = true;
+
+    // The WebGL canvas stayed mounted while hidden. Resize it only after the
+    // map route has its full-bleed dimensions again, then refresh bounds.
+    const frame = window.requestAnimationFrame(() => {
+      if (mapRef.current !== map || !map) return;
+      map.resize();
+      syncViewport();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [active, syncViewport]);
+
+  useEffect(() => {
     if (!mapNodeRef.current || mapRef.current) return;
 
     const startCenter = coords ? [coords.lng, coords.lat] : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat];
@@ -1192,8 +1243,10 @@ function MapPage() {
     });
 
     const handleMapLoad = () => {
+      setMapReady(true);
       syncViewport();
     };
+    const handleStyleLoad = () => setMapReady(true);
     const handleMoveEnd = () => {
       // The visible bounds are the source of truth: after every pan, pinch or
       // zoom the event list updates automatically without an extra CTA.
@@ -1249,6 +1302,7 @@ function MapPage() {
 
     mapStyleThemeRef.current = mapTheme;
     map.on('load', handleMapLoad);
+    map.on('style.load', handleStyleLoad);
     map.on('movestart', handleMoveStart);
     map.on('moveend', handleMoveEnd);
     map.on('click', handleMapClick);
@@ -1292,6 +1346,7 @@ function MapPage() {
         userMarkerRef.current = null;
       }
       map.off('load', handleMapLoad);
+      map.off('style.load', handleStyleLoad);
       map.off('movestart', handleMoveStart);
       map.off('moveend', handleMoveEnd);
       map.off('click', handleMapClick);
@@ -1300,6 +1355,7 @@ function MapPage() {
       window.removeEventListener('resize', syncResize);
       map.remove();
       mapRef.current = null;
+      setMapReady(false);
     };
   }, [syncViewport]);
 
@@ -1309,33 +1365,52 @@ function MapPage() {
     if (mapStyleThemeRef.current === mapTheme) return;
 
     mapStyleThemeRef.current = mapTheme;
+    setMapReady(false);
+    setMarkersReady(false);
     map.setStyle(mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark);
   }, [mapTheme]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !active) return;
     let cancelled = false;
     const markerData = buildEventMarkerGeoJson(eventsInRadius, selectedEventId);
+    setMarkersReady(false);
 
     const applyMarkerData = async () => {
       try {
-        const ready = await ensureEventMarkerLayers(map);
+        const ready = await ensureEventMarkerLayers(map, eventsInRadius, selectedEventId);
         if (!ready || cancelled || mapRef.current !== map) return;
-        map.getSource(EVENT_MARKERS_SOURCE)?.setData(markerData);
+        window.requestAnimationFrame(() => {
+          if (cancelled || mapRef.current !== map) return;
+          // When the source and its symbol layers are created in the same
+          // frame, WebView can miss the first worker update. Defer the data
+          // assignment by one frame and force a repaint so the first pin is
+          // visible without requiring a second state change.
+          map.getSource(EVENT_MARKERS_SOURCE)?.setData(markerData);
+          map.triggerRepaint();
+          setMarkersReady(true);
+        });
       } catch (error) {
         if (!cancelled) console.error('Errore nel rendering dei segnaposto Motrice', error);
       }
     };
 
-    if (map.isStyleLoaded()) applyMarkerData();
-    else map.once('style.load', applyMarkerData);
+    if (map.isStyleLoaded()) {
+      applyMarkerData();
+    } else {
+      // `load` covers the first mount and `style.load` a theme replacement.
+      // Registering both also closes the narrow readiness/listener race.
+      map.once('load', applyMarkerData);
+      map.once('style.load', applyMarkerData);
+    }
 
     return () => {
       cancelled = true;
+      map.off('load', applyMarkerData);
       map.off('style.load', applyMarkerData);
     };
-  }, [eventsInRadius, mapTheme, selectedEventId]);
+  }, [active, eventsInRadius, mapTheme, selectedEventId]);
 
   useEffect(() => () => {
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
@@ -1347,20 +1422,20 @@ function MapPage() {
   }, [filters.dateRange, filters.distance, filters.q, filters.sortBy, filters.sport]);
 
   useEffect(() => {
-    if (!requestedEventId) return;
+    if (!active || !requestedEventId || !markersReady) return;
     const requestedEvent = withCoords.find((event) => String(event.id) === String(requestedEventId));
     if (!requestedEvent || !mapRef.current) return;
     hasAutoFitEventsRef.current = true;
     focusEvent(requestedEvent);
-  }, [focusEvent, requestedEventId, withCoords]);
+  }, [active, focusEvent, markersReady, requestedEventId, withCoords]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
+    if (!active || !map || !mapReady || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
     hasAutoFitEventsRef.current = true;
 
     if (eventsInRadius.length === 1) {
-      map.flyTo({ center: [eventsInRadius[0].lng, eventsInRadius[0].lat], zoom: 12.4, duration: 420, essential: true });
+      map.flyTo({ center: [eventsInRadius[0].lng, eventsInRadius[0].lat], zoom: 14.2, duration: 320, essential: true });
       return;
     }
 
@@ -1368,14 +1443,14 @@ function MapPage() {
     eventsInRadius.forEach((event) => bounds.extend([event.lng, event.lat]));
     map.fitBounds(bounds, {
       padding: getMapFitPadding(map, resultsSheetRef.current),
-      duration: 420,
+      duration: 280,
       maxZoom: 13
     });
-  }, [eventsInRadius]);
+  }, [active, eventsInRadius, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !coords) return;
+    if (!active || !map || !coords) return;
 
     if (!userMarkerRef.current) {
       const userElement = document.createElement('div');
@@ -1408,18 +1483,18 @@ function MapPage() {
 
     if (map.isStyleLoaded()) applyFocus();
     else map.once('style.load', applyFocus);
-  }, [coords, followUser, mapTheme, selectedRadiusKm, syncViewport]);
+  }, [active, coords, followUser, mapTheme, selectedRadiusKm, syncViewport]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !coords || !selectedRadiusKm) return;
+    if (!active || !map || !coords || !selectedRadiusKm) return;
     map.fitBounds(computeBounds(coords.lat, coords.lng, selectedRadiusKm), {
       padding: getMapFitPadding(map, resultsSheetRef.current, 48),
       duration: 280,
       maxZoom: 13
     });
     syncViewport();
-  }, [coords, selectedRadiusKm, syncViewport]);
+  }, [active, coords, selectedRadiusKm, syncViewport]);
 
   async function toggleSaveEvent(event) {
     const eventId = event.id;
@@ -1456,7 +1531,13 @@ function MapPage() {
   return (
     <section className={`${styles.page} ${mapTheme === 'light' ? styles.themeLight : styles.themeDark}`}>
       <div className={styles.pageInner}>
-        <section className={styles.mapStage} aria-label="Mappa interattiva degli eventi" data-sheet-snap={sheetSnap}>
+        <section
+          className={styles.mapStage}
+          aria-label="Mappa interattiva degli eventi"
+          data-sheet-snap={sheetSnap}
+          data-map-ready={mapReady ? 'true' : 'false'}
+          data-markers-ready={markersReady ? 'true' : 'false'}
+        >
           <div className={styles.mapViewport}>
             <div ref={mapNodeRef} className={styles.mapCanvas} />
             <div className={styles.mapShade} aria-hidden="true" />
@@ -1520,7 +1601,9 @@ function MapPage() {
               <div>
                 <span className={styles.eyebrow}>VICINO A TE · {mapAreaLabel}</span>
                 <h2 id="map-events-title">
-                  {sheetEvents.length} {sheetEvents.length === 1 ? 'evento in questa zona' : 'eventi in questa zona'}
+                  {loading && !hasLoadedEventsRef.current
+                    ? 'Caricamento eventi…'
+                    : `${sheetEvents.length} ${sheetEvents.length === 1 ? 'evento in questa zona' : 'eventi in questa zona'}`}
                 </h2>
               </div>
               <span className={styles.sheetModeLabel}>LISTA</span>

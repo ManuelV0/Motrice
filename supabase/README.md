@@ -100,6 +100,34 @@ vita degli eventi:
 - chiusura automatica ogni minuto tramite Supabase Cron, con consolidamento di
   presenze, no-show e depositi anche se l'organizzatore non riapre l'app.
 
+La migration `20260905120000_canonical_event_lifecycle.sql` aggiunge la macchina
+a stati canonica senza interrompere i client beta che usano ancora `status`:
+
+- evento: `draft -> published -> confirmed -> checkin_open -> active -> completed -> archived`;
+- partecipante: `confirmed -> checked_in -> active -> completed`, con gli esiti
+  alternativi `cancelled`, `rejected` e `no_show`;
+- scadenze di check-in e fine evento persistite dal server;
+- transizioni soltanto in avanti, riconciliazione idempotente ogni minuto e
+  registro consultabile dagli utenti coinvolti;
+- `events.status` e `event_participants.status` restano temporaneamente
+  disponibili per la compatibilità con gli APK precedenti.
+
+La migration `20260906143000_event_background_location_tracking.sql` rende il
+monitoraggio di presenza resistente alla chiusura dell'interfaccia Android:
+
+- una sessione server identifica evento, utente, ruolo e fine prevista;
+- un foreground service Android registra un campione circa ogni minuto e mostra
+  una notifica persistente mentre il controllo è attivo;
+- i campioni rimangono in coda sul dispositivo senza rete e vengono sincronizzati
+  con identificativi idempotenti quando la connessione ritorna;
+- i campioni offline conservano il proprio timestamp, ma soltanto una posizione
+  recente può attestare che l'utente sia ancora presente in quel momento;
+- il servizio termina automaticamente alla fine dell'evento o al completamento
+  della permanenza minima e viene interrotto immediatamente al logout.
+
+Il monitoraggio parte soltanto dopo una verifica QR/GPS valida, per gli eventi
+che richiedono geolocalizzazione, e non modifica i premi già definiti dal flusso.
+
 ## Schede personali
 
 La migration `20260821210000_personal_workout_plans.sql` aggiunge la tabella

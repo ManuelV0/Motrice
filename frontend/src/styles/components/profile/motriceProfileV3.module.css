@@ -27,10 +27,13 @@
 }
 
 .topHeader > button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.38rem;
-  padding: 0;
+  padding: 0 0.1rem;
   border: 0;
   background: transparent;
   color: #9a9a9a;

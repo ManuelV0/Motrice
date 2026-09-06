@@ -23,6 +23,7 @@ import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerifi
 import EventCard from '../components/EventCard';
 import styles from '../styles/pages/agenda.module.css';
 import { getEventTiming } from '../utils/eventLifecycle';
+import { resolveParticipantOutcome } from '../utils/eventParticipationState';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -84,22 +85,21 @@ function formatEventTime(value) {
 }
 
 function getAttendanceState(event) {
-  const attendance = String(event?.user_rsvp?.attendance || '').toLowerCase();
-  const participantStatus = String(event?.user_rsvp?.status || '').toLowerCase();
+  const outcome = resolveParticipantOutcome(event);
 
   if (event?.created_by === 'me') {
     return { key: 'host', label: 'Svolto · Organizer', tone: 'neutral' };
   }
-  if (attendance === 'attended' || participantStatus === 'completed' || event?.user_rsvp?.checked_in_at) {
+  if (outcome.id === 'completed') {
     return { key: 'present', label: 'Presente', tone: 'success' };
   }
-  if (attendance === 'no_show' || participantStatus === 'no_show') {
+  if (outcome.id === 'no_show') {
     return { key: 'no-show', label: 'No-Show', tone: 'danger' };
   }
-  if (attendance === 'cancelled_late') {
+  if (outcome.id === 'cancelled_late') {
     return { key: 'late-cancel', label: 'Cancellazione tardiva', tone: 'danger' };
   }
-  return { key: 'no-show', label: 'No-Show', tone: 'danger' };
+  return { key: 'unverified', label: 'Non verificata', tone: 'neutral' };
 }
 
 function getClosedEventStats(event) {
@@ -133,6 +133,7 @@ function getClosedEventStats(event) {
   if (attendance.key === 'no-show') reliability = '− No-show registrato';
   if (attendance.key === 'late-cancel') reliability = '− Cancellazione tardiva';
   if (attendance.key === 'host') reliability = 'Evento completato';
+  if (attendance.key === 'unverified') reliability = 'In attesa di esito';
 
   return { attendance, earnedXp, trainedMinutes, presentCount, totalCount, reliability };
 }
@@ -146,7 +147,7 @@ function getVerificationCta(event, { isOrganizer = false } = {}) {
       icon: 'qr',
       status: isOrganizer
         ? 'Scansiona il QR del partecipante per verificare il check-in'
-        : 'Mostra il tuo QR all’organizzatore per sbloccare la scheda'
+        : 'Mostra il tuo QR all’organizzatore per verificare la presenza'
     };
   }
 
@@ -165,31 +166,107 @@ function getVerificationCta(event, { isOrganizer = false } = {}) {
     icon: 'both',
     status: isOrganizer
       ? 'Completa QR Code e posizione per verificare la presenza'
-      : 'Completa QR Code e posizione per sbloccare la scheda'
+      : 'Completa QR Code o posizione per verificare la presenza'
   };
 }
 
-function getTodayWorkoutState(event, referenceTime = Date.now()) {
+function getSessionTimeline(timing, referenceTime = Date.now()) {
+  const nowMs = referenceTime instanceof Date ? referenceTime.getTime() : Number(referenceTime);
+  const startsAtMs = Number(timing?.startsAtMs);
+  const endsAtMs = Number(timing?.endsAtMs);
+
+  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs) || endsAtMs <= startsAtMs) {
+    return { progress: 0, label: 'Orario evento' };
+  }
+  if (nowMs < startsAtMs) {
+    return { progress: 0, label: `Inizia alle ${formatEventTime(startsAtMs)}` };
+  }
+  if (nowMs >= endsAtMs) {
+    return { progress: 100, label: 'Sessione conclusa' };
+  }
+
+  const durationMinutes = Math.max(1, Math.round((endsAtMs - startsAtMs) / 60000));
+  const elapsedMinutes = Math.max(0, Math.floor((nowMs - startsAtMs) / 60000));
+  return {
+    progress: Math.max(1, Math.min(99, Math.round(((nowMs - startsAtMs) / (endsAtMs - startsAtMs)) * 100))),
+    label: `${elapsedMinutes} di ${durationMinutes} min`
+  };
+}
+
+function getTodaySessionState(event, referenceTime = Date.now()) {
   const isOrganizer = event?.created_by === 'me' && !event?.is_personal;
   const timing = getEventTiming(event, referenceTime);
-  const participantStatus = String(event?.user_rsvp?.status || '').toLowerCase();
-  const cashbackPercent = Number(event?.user_rsvp?.cashback_percent || 0);
-  const isCompleted =
-    participantStatus === 'completed' ||
-    Boolean(event?.user_rsvp?.minimum_reached_at) ||
-    cashbackPercent >= 100;
+  const timeline = getSessionTimeline(timing, referenceTime);
+  const hasWorkout = Boolean(event?.workout_plan);
+  const participantOutcome = resolveParticipantOutcome(event);
+  const isCompleted = participantOutcome.id === 'completed';
   const isVerified =
     Boolean(event?.is_personal) ||
-    Boolean(event?.user_rsvp?.checked_in_at) ||
-    cashbackPercent >= 60;
+    participantOutcome.id === 'checked_in' ||
+    isCompleted;
+
+  if (participantOutcome.id === 'no_show') {
+    return {
+      key: 'closed',
+      eyebrow: 'EVENTO CHIUSO',
+      status: 'Presenza non verificata · nessuna ricompensa assegnata',
+      action: 'Vedi riepilogo',
+      actionTarget: 'event',
+      progress: timeline.progress,
+      progressLabel: timeline.label,
+      canOpenVerification: false
+    };
+  }
+
+  if (participantOutcome.id === 'cancelled' || participantOutcome.id === 'cancelled_late') {
+    return {
+      key: 'closed',
+      eyebrow: 'PARTECIPAZIONE ANNULLATA',
+      status: 'La partecipazione non è più attiva',
+      action: 'Vedi evento',
+      actionTarget: 'event',
+      progress: timeline.progress,
+      progressLabel: timeline.label,
+      canOpenVerification: false
+    };
+  }
+
+  if (isCompleted) {
+    return {
+      key: 'completed',
+      eyebrow: 'SESSIONE COMPLETATA',
+      status: 'Partecipazione completata · ricompense assegnate',
+      action: 'Vedi riepilogo',
+      actionTarget: 'event',
+      progress: 100,
+      progressLabel: 'Sessione conclusa'
+    };
+  }
+
+  if (timing.hasEnded) {
+    return {
+      key: isOrganizer ? 'completed' : 'closed',
+      eyebrow: 'SESSIONE CONCLUSA',
+      status: isOrganizer
+        ? 'Evento terminato · consulta partecipanti e riepilogo'
+        : 'Evento terminato · esito presenza in aggiornamento',
+      action: 'Vedi riepilogo',
+      actionTarget: 'event',
+      progress: 100,
+      progressLabel: 'Sessione conclusa',
+      canOpenVerification: false
+    };
+  }
 
   if (!event?.is_personal && !isCompleted && !isVerified && timing.phase === 'scheduled') {
     return {
       key: 'scheduled',
-      eyebrow: isOrganizer ? 'EVENTO DI OGGI · ORGANIZER' : 'ALLENAMENTO DI OGGI',
+      eyebrow: isOrganizer ? 'SESSIONE DI OGGI · ORGANIZER' : 'SESSIONE DI OGGI',
       status: `Check-in disponibile dalle ${formatEventTime(timing.checkInOpensAtMs)}`,
       action: 'Vedi evento',
-      progress: 0,
+      actionTarget: 'event',
+      progress: timeline.progress,
+      progressLabel: timeline.label,
       canOpenVerification: false
     };
   }
@@ -203,7 +280,9 @@ function getTodayWorkoutState(event, referenceTime = Date.now()) {
         ? 'Check-in chiuso · puoi prolungare la tolleranza'
         : 'La finestra per registrare la presenza è chiusa',
       action: canExtend ? 'Gestisci check-in' : 'Vedi evento',
-      progress: 0,
+      actionTarget: canExtend ? 'verify' : 'event',
+      progress: timeline.progress,
+      progressLabel: timeline.label,
       canOpenVerification: canExtend
     };
   }
@@ -212,26 +291,19 @@ function getTodayWorkoutState(event, referenceTime = Date.now()) {
     const checkedIn = Math.max(0, Number(event?.participants_checked_in_count || 0));
     const registered = Math.max(checkedIn, Number(event?.participants_count || 0));
     const verificationCta = getVerificationCta(event, { isOrganizer: true });
+    const canVerify = timing.isCheckInOpen || timing.canExtendCheckIn;
     return {
-      key: checkedIn > 0 && event?.workout_plan ? 'ready' : 'organizer',
-      eyebrow: 'EVENTO DI OGGI · ORGANIZER',
+      key: checkedIn > 0 ? (hasWorkout ? 'ready' : 'active') : 'organizer',
+      eyebrow: 'SESSIONE DI OGGI · ORGANIZER',
       status: checkedIn > 0
         ? `${checkedIn}/${registered} partecipanti con check-in verificato`
         : verificationCta.status,
-      action: checkedIn > 0 && event?.workout_plan ? 'Avvia allenamento' : verificationCta.action,
+      action: checkedIn > 0 ? (hasWorkout ? 'Avvia allenamento' : 'Apri evento') : verificationCta.action,
+      actionTarget: checkedIn > 0 ? (hasWorkout ? 'workout' : 'event') : (canVerify ? 'verify' : 'event'),
       verificationIcon: verificationCta.icon,
-      progress: registered > 0 ? Math.round((checkedIn / registered) * 100) : 0,
-      canOpenVerification: timing.isCheckInOpen || timing.canExtendCheckIn
-    };
-  }
-
-  if (isCompleted) {
-    return {
-      key: 'completed',
-      eyebrow: 'ALLENAMENTO COMPLETATO',
-      status: 'Partecipazione completata · ricompense assegnate',
-      action: 'Vedi riepilogo',
-      progress: 100
+      progress: timeline.progress,
+      progressLabel: timeline.label,
+      canOpenVerification: canVerify
     };
   }
 
@@ -239,13 +311,15 @@ function getTodayWorkoutState(event, referenceTime = Date.now()) {
     const checkedInAt = event?.user_rsvp?.checked_in_at;
     const verifiedAt = checkedInAt ? formatEventTime(checkedInAt) : '';
     return {
-      key: 'ready',
-      eyebrow: 'ALLENAMENTO DI OGGI',
+      key: hasWorkout ? 'ready' : 'active',
+      eyebrow: 'SESSIONE DI OGGI',
       status: event?.is_personal
-        ? 'Sessione personale pronta'
-        : `Presenza verificata${verifiedAt ? ` alle ${verifiedAt}` : ''} · scheda sbloccata`,
-      action: 'Avvia allenamento',
-      progress: event?.is_personal ? 0 : 60
+        ? (hasWorkout ? 'Sessione personale pronta' : 'Sessione personale in programma')
+        : `Presenza verificata${verifiedAt ? ` alle ${verifiedAt}` : ''}${hasWorkout ? ' · scheda sbloccata' : ' · sessione attiva'}`,
+      action: hasWorkout ? 'Avvia allenamento' : 'Apri evento',
+      actionTarget: hasWorkout ? 'workout' : 'event',
+      progress: timeline.progress,
+      progressLabel: timeline.label
     };
   }
 
@@ -253,11 +327,13 @@ function getTodayWorkoutState(event, referenceTime = Date.now()) {
 
   return {
     key: 'locked',
-    eyebrow: 'ALLENAMENTO DI OGGI',
+    eyebrow: 'SESSIONE DI OGGI',
     status: verificationCta.status,
     action: verificationCta.action,
+    actionTarget: timing.isCheckInOpen ? 'verify' : 'event',
     verificationIcon: verificationCta.icon,
-    progress: 0,
+    progress: timeline.progress,
+    progressLabel: timeline.label,
     canOpenVerification: timing.isCheckInOpen
   };
 }
@@ -321,15 +397,15 @@ function AgendaPage() {
     [...ownedEvents, ...participatingEvents].forEach((event) => byId.set(String(event.id), event));
     return Array.from(byId.values()).sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
   }, [ownedEvents, participatingEvents]);
-  const todayWorkout = useMemo(() => {
+  const todaySession = useMemo(() => {
     const candidates = calendarEvents
       .filter((event) => {
         if (toDateKey(event?.event_datetime) !== todayKey || event?.status === 'cancelled') return false;
         const isOrganizer = event?.created_by === 'me';
         const isParticipant = !isOrganizer && (event?.is_going || event?.user_rsvp);
-        return Boolean(event?.workout_plan && (isOrganizer || event?.is_personal || isParticipant));
+        return Boolean(isOrganizer || event?.is_personal || isParticipant);
       })
-      .map((event) => ({ event, state: getTodayWorkoutState(event, nowMs) }))
+      .map((event) => ({ event, state: getTodaySessionState(event, nowMs) }))
       .filter(({ event, state }) => {
         if (state.key === 'completed') return true;
         const startsAt = Date.parse(event?.event_datetime || '');
@@ -337,7 +413,7 @@ function AgendaPage() {
         return !Number.isFinite(endsAt) || endsAt >= now.getTime();
       })
       .sort((a, b) => {
-        const priority = { ready: 0, organizer: 0, locked: 1, scheduled: 2, closed: 3, completed: 4 };
+        const priority = { ready: 0, active: 0, organizer: 1, locked: 2, scheduled: 3, closed: 4, completed: 5 };
         const stateDelta = priority[a.state.key] - priority[b.state.key];
         if (stateDelta) return stateDelta;
         return Date.parse(a.event.event_datetime) - Date.parse(b.event.event_datetime);
@@ -353,13 +429,13 @@ function AgendaPage() {
       : null,
     [calendarEvents, requestedEventId]
   );
-  const focusedWorkout = useMemo(() => {
-    if (!requestedAgendaEvent) return todayWorkout;
+  const focusedSession = useMemo(() => {
+    if (!requestedAgendaEvent) return todaySession;
     return {
       event: requestedAgendaEvent,
-      state: getTodayWorkoutState(requestedAgendaEvent, nowMs)
+      state: getTodaySessionState(requestedAgendaEvent, nowMs)
     };
-  }, [nowMs, requestedAgendaEvent, todayWorkout]);
+  }, [nowMs, requestedAgendaEvent, todaySession]);
 
   useEffect(() => {
     if (!requestedEventId || !requestedAgendaEvent) return;
@@ -416,6 +492,30 @@ function AgendaPage() {
   function changeActiveSection(section) {
     setActiveSection(section);
     setSelectedRange(null);
+
+    const targetEvents = section === 'created'
+      ? ownedEvents
+      : section === 'participating'
+        ? participatingEvents
+        : calendarEvents;
+    const monthHasEvents = targetEvents.some((event) => {
+      const eventDate = new Date(event.event_datetime);
+      return !Number.isNaN(eventDate.getTime()) &&
+        eventDate.getFullYear() === calendarCursor.year &&
+        eventDate.getMonth() === calendarCursor.month;
+    });
+    if (!monthHasEvents && targetEvents.length > 0) {
+      const upcoming = targetEvents
+        .filter((event) => Date.parse(event.event_datetime) >= nowMs)
+        .sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
+      const fallback = [...targetEvents]
+        .sort((a, b) => Date.parse(b.event_datetime) - Date.parse(a.event_datetime));
+      const nearest = upcoming[0] || fallback[0];
+      const nearestDate = new Date(nearest.event_datetime);
+      if (!Number.isNaN(nearestDate.getTime())) {
+        setCalendarCursor({ year: nearestDate.getFullYear(), month: nearestDate.getMonth() });
+      }
+    }
   }
 
   function selectCalendarDay(dateKey) {
@@ -441,14 +541,14 @@ function AgendaPage() {
     navigate(`/chat/event_${event.id}`);
   }
 
-  function openTodayWorkout() {
-    if (!focusedWorkout?.event?.id) return;
-    const { event, state } = focusedWorkout;
-    if (state.key === 'ready' && event.workout_plan) {
+  function openTodaySession() {
+    if (!focusedSession?.event?.id) return;
+    const { event, state } = focusedSession;
+    if (state.actionTarget === 'workout' && event.workout_plan) {
       navigate(`/events/${event.id}/workout`);
       return;
     }
-    if ((state.key === 'organizer' || state.key === 'locked') && state.canOpenVerification) {
+    if (state.actionTarget === 'verify' && state.canOpenVerification) {
       setVerificationEventId((current) => current === String(event.id) ? '' : String(event.id));
       return;
     }
@@ -464,24 +564,27 @@ function AgendaPage() {
         </div>
       </div>
 
-      {focusedWorkout ? (() => {
-        const { event, state } = focusedWorkout;
+      {focusedSession ? (() => {
+        const { event, state } = focusedSession;
         const workoutPlan = event.workout_plan;
+        const hasWorkout = Boolean(workoutPlan);
         const exerciseCount = Array.isArray(workoutPlan?.exercises) ? workoutPlan.exercises.length : 0;
         const workoutDuration = Number(workoutPlan?.duration || event.duration_minutes || 0);
-        const workoutTitle = workoutPlan?.title || event.title || event.sport_name || 'Allenamento Motrice';
+        const workoutTitle = event.title || workoutPlan?.title || event.sport_name || 'Sessione Motrice';
         const StatusIcon = state.key === 'locked'
           ? LockKeyhole
           : state.key === 'completed'
             ? CheckCircle2
-            : ShieldCheck;
+            : state.key === 'active'
+              ? Clock3
+              : ShieldCheck;
         const ActionIcon = state.verificationIcon === 'qr'
           ? QrCode
           : state.verificationIcon === 'location'
             ? LocateFixed
             : state.verificationIcon === 'both'
               ? ShieldCheck
-              : state.key === 'ready'
+              : state.actionTarget === 'workout'
                 ? Play
                 : state.key === 'completed'
                   ? CheckCircle2
@@ -494,7 +597,9 @@ function AgendaPage() {
             aria-labelledby="today-workout-title"
           >
             <div className={styles.todayWorkoutTopline}>
-              <span className={styles.todayWorkoutIcon} aria-hidden="true"><Dumbbell size={22} /></span>
+              <span className={styles.todayWorkoutIcon} aria-hidden="true">
+                {hasWorkout ? <Dumbbell size={22} /> : <CalendarDays size={22} />}
+              </span>
               <div>
                 <small>{state.eyebrow}</small>
                 <strong id="today-workout-title">{workoutTitle}</strong>
@@ -509,7 +614,7 @@ function AgendaPage() {
 
             <div className={styles.todayWorkoutMeta}>
               <span><Dumbbell size={15} aria-hidden="true" /> {event.sport_name || 'Sport'}</span>
-              {exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : null}
+              {exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : <span>Sessione libera</span>}
               <span><Clock3 size={15} aria-hidden="true" /> {workoutDuration} min</span>
               <span><MapPin size={15} aria-hidden="true" /> {event.location_name || event.city || 'Luogo evento'}</span>
             </div>
@@ -517,27 +622,21 @@ function AgendaPage() {
             <div className={styles.todayWorkoutProgress}>
               <div
                 role="progressbar"
-                aria-label="Progresso partecipazione"
+                aria-label="Progresso temporale della sessione"
                 aria-valuemin="0"
                 aria-valuemax="100"
                 aria-valuenow={state.progress}
               >
                 <span style={{ width: `${state.progress}%` }} />
               </div>
-              <small>{state.key === 'locked'
-                ? 'Presenza richiesta'
-                : state.key === 'completed'
-                  ? 'Completato'
-                  : state.key === 'organizer'
-                    ? 'Check-in live'
-                    : 'Pronto'}</small>
+              <small>{state.progressLabel}</small>
               <strong>{state.progress}%</strong>
             </div>
 
-            <button type="button" className={styles.todayWorkoutAction} onClick={openTodayWorkout}>
+            <button type="button" className={styles.todayWorkoutAction} onClick={openTodaySession}>
               <ActionIcon size={20} aria-hidden="true" />
               <span>{state.action}</span>
-              {state.key !== 'ready' ? <ArrowRight size={18} aria-hidden="true" /> : null}
+              {state.actionTarget !== 'workout' ? <ArrowRight size={18} aria-hidden="true" /> : null}
             </button>
             {verificationEventId === String(event.id) ? (
               <AgendaEventVerificationPanel
@@ -547,6 +646,7 @@ function AgendaPage() {
                 onClose={() => setVerificationEventId('')}
                 onVerified={() => loadEvents({ silent: true })}
                 onStartWorkout={() => navigate(`/events/${event.id}/workout`)}
+                onOpenEvent={() => navigate(`/events/${event.id}`)}
               />
             ) : null}
           </section>
@@ -621,7 +721,15 @@ function AgendaPage() {
             const isToday = dateKey === todayKey;
             const isSelected = Boolean(selectedRange && (dateKey === selectedRange.start || dateKey === selectedRange.end));
             const isInRange = Boolean(selectedRange && dateKey >= selectedRange.start && dateKey <= selectedRange.end);
-            const isPast = dateKey < todayKey;
+            const dayTimings = dayEvents.map((event) => getEventTiming(event, nowMs));
+            const allPast = hasEvents && dayTimings.every((timing) => timing.hasEnded);
+            const hasPast = dayTimings.some((timing) => timing.hasEnded);
+            const hasFuture = dayTimings.some((timing) => !timing.hasEnded);
+            const timingLabel = allPast
+              ? 'svolto'
+              : hasPast && hasFuture
+                ? 'svolti e da svolgere'
+                : 'da svolgere';
             const label = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(date);
 
             return (
@@ -634,7 +742,7 @@ function AgendaPage() {
                 aria-pressed={isInRange}
                 aria-current={isToday ? 'date' : undefined}
                 aria-label={`${label}${hasEvents
-                  ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${isPast ? 'svolto' : 'da svolgere'}`
+                  ? `, ${dayEvents.length} ${dayEvents.length === 1 ? 'evento' : 'eventi'}, ${timingLabel}`
                   : ', nessun evento'}`}
                 className={[
                   styles.calendarDay,
@@ -653,7 +761,7 @@ function AgendaPage() {
                         key={dotIndex}
                         className={dayEvents[dotIndex]?.status === 'cancelled'
                           ? styles.eventDotCancelled
-                          : isPast ? styles.eventDotPast : styles.eventDotFuture}
+                          : dayTimings[dotIndex]?.hasEnded ? styles.eventDotPast : styles.eventDotFuture}
                       />
                     ))}
                   </span>
@@ -692,8 +800,7 @@ function AgendaPage() {
 
             <div className={styles.calendarEventList}>
               {selectedEvents.map((event) => {
-                const eventKey = toDateKey(event.event_datetime);
-                const isPast = eventKey < todayKey;
+                const isPast = getEventTiming(event, nowMs).hasEnded;
                 const isCancelled = event.status === 'cancelled';
                 const participants = Math.max(0, Number(event.participants_count || 0));
                 const capacity = Math.max(participants, Number(event.max_participants || 0));

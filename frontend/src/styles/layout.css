@@ -23,6 +23,11 @@
   padding-bottom: 0;
 }
 
+.mainContentMap > [data-persistent-map] {
+  width: 100%;
+  min-height: 100%;
+}
+
 .mainContentLanding {
   min-height: 100dvh;
   padding: var(--nav-h) 0 0;
@@ -75,6 +80,12 @@
   background:
     radial-gradient(80% 38% at 5% 0%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 72%),
     var(--chat-page-surface);
+}
+
+.mainContentChatThread {
+  padding: 0;
+  min-height: 100dvh;
+  transform: none;
 }
 
 .appShell.chat-shell {
