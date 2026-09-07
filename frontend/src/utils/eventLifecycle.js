@@ -88,23 +88,19 @@ export function getEffectiveEventLifecycleState(event = {}, referenceTime = Date
 }
 
 export function getMaximumCheckInGraceMinutes(event = {}) {
-  const durationMinutes = Math.max(0, finiteNumber(event.duration_minutes, 120));
-  const minimumPresenceMinutes = Math.max(0, finiteNumber(event.minimum_presence_minutes, 45));
-  return Math.trunc(Math.max(
-    0,
-    Math.min(MAX_CHECK_IN_GRACE_MINUTES, durationMinutes - minimumPresenceMinutes)
-  ));
+  return event?.is_personal ? 0 : MAX_CHECK_IN_GRACE_MINUTES;
 }
 
 export function normalizeCheckInGraceMinutes(event = {}) {
+  if (event?.is_personal) return 0;
   const requested = Math.max(
-    0,
+    DEFAULT_CHECK_IN_GRACE_MINUTES,
     Math.min(
       MAX_CHECK_IN_GRACE_MINUTES,
       finiteNumber(event.checkin_grace_minutes, DEFAULT_CHECK_IN_GRACE_MINUTES)
     )
   );
-  return Math.trunc(Math.min(requested, getMaximumCheckInGraceMinutes(event)));
+  return Math.trunc(requested);
 }
 
 export function getEventTiming(event = {}, referenceTime = Date.now()) {

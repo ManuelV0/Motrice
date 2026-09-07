@@ -19,6 +19,7 @@ import {
   getMaximumCheckInGraceMinutes,
   normalizeCheckInGraceMinutes
 } from '../utils/eventLifecycle';
+import { getSystemEventRules } from '../utils/eventCreationRules';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const EVENT_DURATION_HOURS = 2;
@@ -41,7 +42,7 @@ function nowMs() {
 }
 
 const CHAT_SESSION_MINUTES = 45;
-const EVENT_JOIN_STAKE_CENTS = 500;
+const EVENT_JOIN_STAKE_CENTS = 1000;
 const EVENT_CHECKIN_FALLBACK_MINUTES = 90;
 const CONVENTION_VOUCHER_VALIDITY_MINUTES = 90;
 const CONVENTION_SUBSCRIPTION_DAYS = 365;
@@ -189,7 +190,7 @@ function canAccessEventGroupChat({ rsvp, subscription }) {
   if (!rsvp || rsvp.status !== 'going') return false;
   if (subscription?.plan === 'premium') return true;
   const fee = Number(rsvp.participation_fee_cents || 0);
-  return fee === 500 || fee === 1000;
+  return fee === 1000;
 }
 
 function getEventGroupReadKey(userId, eventId) {
@@ -1350,6 +1351,12 @@ const localApi = {
       throw new Error('Dati percorso non validi');
     }
 
+    const systemRules = getSystemEventRules({
+      durationMinutes: payload.duration_minutes,
+      isPersonal: payload.is_personal,
+      checkInGraceMinutes: payload.checkin_grace_minutes
+    });
+
     const creatorDisplayName = normalizeDisplayName(
       creatorProfile.display_name || store.localUser?.name || '',
       'Me'
@@ -1380,19 +1387,19 @@ const localApi = {
       participants_preview: [creatorDisplayName],
       etiquette: ['Puntualita', 'Comunicazione', 'Rispetto del gruppo'],
       route_info: normalizedRouteInfo,
-      deposit_cents: Number(payload.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
-      minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
-      verification_mode: String(payload.verification_mode || 'both'),
-      geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
-      checkin_grace_minutes: Number(payload.checkin_grace_minutes ?? 15),
+      deposit_cents: Boolean(payload.is_personal) ? 0 : EVENT_JOIN_STAKE_CENTS,
+      minimum_presence_minutes: systemRules.minimumPresenceMinutes,
+      verification_mode: systemRules.verificationMode,
+      geofence_radius_m: systemRules.geofenceRadiusM,
+      checkin_grace_minutes: systemRules.checkInGraceMinutes,
       lifecycle_state: 'published',
       lifecycle_version: 1,
       lifecycle_updated_at: nowIso(),
-      completion_xp: Number(payload.completion_xp ?? 50),
-      review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
+      completion_xp: systemRules.completionXp,
+      review_bonus_xp: systemRules.reviewBonusXp,
       status: 'scheduled',
       audience: String(payload.audience || 'mixed'),
-      participation_protection: payload.participation_protection !== false,
+      participation_protection: !Boolean(payload.is_personal),
       visibility: String(payload.visibility || 'public'),
       join_policy: String(payload.join_policy || 'open'),
       is_personal: Boolean(payload.is_personal),
@@ -2233,7 +2240,7 @@ const localApi = {
       can_manage: isOrganizer,
       is_participant: Boolean(rsvp) || isOrganizer,
       participant_status: next.participant_status,
-      stake_cents: isOrganizer ? 0 : Number(rsvp?.participation_fee_cents ?? event.deposit_cents ?? 500),
+      stake_cents: isOrganizer ? 0 : Number(rsvp?.participation_fee_cents ?? event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
       stake_status: isOrganizer ? 'waived' : (next.cashback_percent >= 100 ? 'released' : next.cashback_percent >= 60 ? 'verified' : 'locked'),
       cashback_percent: next.cashback_percent,
       checked_in_at: next.checked_in_at,
@@ -2591,7 +2598,7 @@ const localApi = {
       display_name: normalizeDisplayName(profile.display_name, 'Partecipante'),
       avatar_url: profile.avatar_url || '',
       participant_status: store.rsvps[eventKey]?.status || 'going',
-      stake_cents: Number(store.rsvps[eventKey]?.participation_fee_cents ?? event.deposit_cents ?? 500),
+      stake_cents: Number(store.rsvps[eventKey]?.participation_fee_cents ?? event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
       stake_status: current.cashback_percent >= 100 ? 'released' : current.cashback_percent >= 60 ? 'verified' : 'locked',
       cashback_percent: Number(current.cashback_percent || 0),
       checked_in_at: current.checked_in_at || null,
@@ -2666,8 +2673,8 @@ const localApi = {
     if (String(event.status || 'scheduled') !== 'scheduled') {
       throw new Error('L’evento non è più attivo');
     }
-    if (!Number.isInteger(requested) || requested <= current || requested > maximum) {
-      throw new Error(`La tolleranza può essere aumentata fino a ${maximum} minuti`);
+    if (![15, 20, 30].includes(requested) || requested <= current || requested > maximum) {
+      throw new Error('La tolleranza può essere aumentata a 15, 20 o 30 minuti');
     }
     if (!Number.isFinite(startsAtMs)) {
       throw new Error('Orario evento non valido');

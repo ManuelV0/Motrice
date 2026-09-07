@@ -4,6 +4,7 @@ import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 import { assertProfileVerified } from './profileVerification';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../utils/eventParticipationState';
+import { getSystemEventRules } from '../utils/eventCreationRules';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -365,7 +366,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
       .slice(0, 8),
     etiquette: ['Puntualita', 'Comunicazione', 'Rispetto del gruppo'],
     route_info: rawEvent.route_info,
-    deposit_cents: Number(rawEvent.deposit_cents ?? 500),
+    deposit_cents: Number(rawEvent.deposit_cents ?? 1000),
     minimum_presence_minutes: Number(rawEvent.minimum_presence_minutes ?? 45),
     verification_mode: rawEvent.verification_mode || 'both',
     geofence_radius_m: Number(rawEvent.geofence_radius_m ?? 250),
@@ -409,7 +410,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     user_rsvp: ownParticipation
       ? {
           ...ownParticipation,
-          participation_fee_cents: Number(ownParticipation.stake_cents ?? rawEvent.deposit_cents ?? 500),
+          participation_fee_cents: Number(ownParticipation.stake_cents ?? rawEvent.deposit_cents ?? 1000),
           participation_fee_status: ownParticipation.stake_status || 'locked',
           cashback_percent: Number(ownParticipation.cashback_percent || 0),
           attendance: ownOutcome.attendance,
@@ -482,11 +483,72 @@ function createRemoteMethods(localApi) {
       return fetchEvent(id, options);
     },
 
+    async getMoneyWallet() {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client.rpc('get_my_money_wallet');
+      throwIfError(error);
+      return data;
+    },
+
+    async listMoneyLedger({ limit = 50 } = {}) {
+      const client = requireSupabase();
+      const userId = requireAuthUserId();
+      const safeLimit = Math.min(100, Math.max(1, Number(limit) || 50));
+      const { data, error } = await client
+        .from('money_ledger')
+        .select('id,event_id,entry_type,available_delta,locked_delta,pending_delta,withdrawable_delta,metadata,created_at')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(safeLimit);
+      throwIfError(error);
+      return data || [];
+    },
+
+    async openEventMoneyDispute(eventId, reason) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client.rpc('open_event_money_dispute', {
+        target_event_id: String(eventId),
+        dispute_reason: normalizeText(reason)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async requestMoneyWithdrawal({ amountCents = null, withdrawAll = false } = {}) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client.rpc('request_money_withdrawal', {
+        requested_amount_cents: amountCents == null ? null : Math.round(Number(amountCents)),
+        withdraw_all: Boolean(withdrawAll)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async createWalletDepositCheckout() {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const clientRequestId = globalThis.crypto?.randomUUID?.() || `deposit-${Date.now()}`;
+      const { data, error } = await client.functions.invoke('create-wallet-deposit', {
+        body: { client_request_id: clientRequestId }
+      });
+      throwIfError(error);
+      if (!data?.checkout_url) throw new Error('Pagina di pagamento non disponibile');
+      return data;
+    },
+
     async createEvent(payload) {
       const client = requireSupabase();
       const creatorId = requireAuthUserId();
       await ensureMyProfile(client);
       await assertProfileVerified('creare un evento.');
+      const systemRules = getSystemEventRules({
+        durationMinutes: payload.duration_minutes,
+        isPersonal: payload.is_personal,
+        checkInGraceMinutes: payload.checkin_grace_minutes
+      });
       const { data, error } = await client
         .from('events')
         .insert({
@@ -503,15 +565,15 @@ function createRemoteMethods(localApi) {
           max_participants: Number(payload.max_participants),
           required_level: payload.level || 'beginner',
           route_info: payload.route_info || null,
-          deposit_cents: Number(payload.deposit_cents ?? 500),
-          minimum_presence_minutes: Number(payload.minimum_presence_minutes ?? 45),
-          verification_mode: payload.verification_mode || 'both',
-          geofence_radius_m: Number(payload.geofence_radius_m ?? 250),
-          checkin_grace_minutes: Number(payload.checkin_grace_minutes ?? 15),
-          completion_xp: Number(payload.completion_xp ?? 50),
-          review_bonus_xp: Number(payload.review_bonus_xp ?? 25),
+          deposit_cents: payload.is_personal ? 0 : 1000,
+          minimum_presence_minutes: systemRules.minimumPresenceMinutes,
+          verification_mode: systemRules.verificationMode,
+          geofence_radius_m: systemRules.geofenceRadiusM,
+          checkin_grace_minutes: systemRules.checkInGraceMinutes,
+          completion_xp: systemRules.completionXp,
+          review_bonus_xp: systemRules.reviewBonusXp,
           audience: payload.audience || 'mixed',
-          participation_protection: payload.participation_protection !== false,
+          participation_protection: !payload.is_personal,
           visibility: payload.visibility || 'public',
           join_policy: payload.join_policy || 'open',
           is_personal: Boolean(payload.is_personal),

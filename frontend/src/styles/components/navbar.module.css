@@ -368,6 +368,8 @@
   transition: transform var(--dur-med) var(--ease), opacity var(--dur-fast) var(--ease);
   box-shadow: 0 16px 32px rgb(15 23 42 / 28%);
   overflow: hidden;
+  touch-action: pan-y;
+  will-change: transform;
 }
 
 .drawer::before {
@@ -394,6 +396,20 @@
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
+}
+
+.drawerGestureActive,
+.drawerGestureSettling {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawerGestureActive {
+  transition: none;
+}
+
+.drawerGestureSettling {
+  transition: transform 220ms var(--ease), opacity 220ms var(--ease);
 }
 
 .mobileNav {
@@ -643,6 +659,29 @@
   padding: 0;
   transform: none;
   box-shadow: none;
+  transition: opacity 220ms var(--ease);
+  will-change: opacity;
+}
+
+.backdropGestureActive {
+  transition: none;
+}
+
+.backdropGestureSettling {
+  transition: opacity 220ms var(--ease);
+}
+
+.drawerEdgeGesture {
+  position: fixed;
+  top: var(--nav-h);
+  height: calc(100dvh - var(--nav-h) - var(--bottom-nav-h) - env(safe-area-inset-bottom, 0px));
+  left: 0;
+  width: 1.5rem;
+  z-index: calc(var(--z-nav) - 1);
+  background: transparent;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .backdrop:hover {
@@ -658,7 +697,8 @@
 @media (min-width: 768px) {
   .toggle,
   .drawer,
-  .backdrop {
+  .backdrop,
+  .drawerEdgeGesture {
     display: none;
   }
 

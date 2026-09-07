@@ -16,6 +16,7 @@ npm-debug.log*
 backend/uploads/
 # build outputs
 partner-portal/dist/
+artifacts/
 mobile/android/.gradle/
 mobile/android/build/
 mobile/android/app/build/

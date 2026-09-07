@@ -584,14 +584,6 @@
 .progress i { display: block; height: 100%; border-radius: inherit; background: var(--v3-lime); transition: width 250ms ease; }
 .xpCard > small { grid-column: 1 / -1; color: #777; }
 
-.walletCard .cardTitleRow svg { color: var(--v3-lime); }
-.walletCard h2 { font-size: 1.35rem; }
-.walletStats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.8rem; }
-.walletStats article { padding: 0.75rem; border: 1px solid #303030; border-radius: 14px; display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.45rem; background: #121212; }
-.walletStats article svg { grid-row: 1 / 3; align-self: center; color: #858585; }
-.walletStats span { color: #838383; font-size: 0.65rem; }
-.walletStats strong { font-size: 1rem; }
-
 .achievementsCard > .cardTitleRow { align-items: center; }
 .achievementsCard > .cardTitleRow small { color: #777; }
 .achievementGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-top: 0.8rem; }

@@ -597,6 +597,18 @@ function MapFiltersDrawer({
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const periodOptions = [
+    { value: 'all', label: 'Sempre' },
+    { value: 'today', label: 'Oggi' },
+    { value: 'week', label: '7 giorni' },
+    { value: 'month', label: '30 giorni' }
+  ];
+  const distanceOptions = [
+    { value: 'all', label: 'Tutte' },
+    { value: '5', label: '5 km' },
+    { value: '15', label: '15 km' },
+    { value: '30', label: '30 km' }
+  ];
   const selectedOptionsCount = [
     filters.sport !== baseFilters.sport,
     filters.dateRange !== baseFilters.dateRange,
@@ -681,78 +693,109 @@ function MapFiltersDrawer({
           </button>
         </div>
 
-        <div className={styles.sheetFiltersGrid}>
-          <label className={styles.mapField}>
-            <span className={styles.fieldLabel}>Sport</span>
-            <select value={filters.sport} onChange={(event) => setFilters((prev) => ({ ...prev, sport: event.target.value }))}>
-              <option value="all">Tutti gli sport</option>
-              {sports.map((sport) => (
-                <option key={sport.id} value={sport.id}>
-                  {sport.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className={styles.mapField}>
-            <span className={styles.fieldLabel}>Periodo</span>
-            <select value={filters.dateRange} onChange={(event) => setFilters((prev) => ({ ...prev, dateRange: event.target.value }))}>
-              <option value="all">Qualsiasi data</option>
-              <option value="today">Oggi</option>
-              <option value="week">Questa settimana</option>
-              <option value="month">Questo mese</option>
-            </select>
-          </label>
-
-          <label className={styles.mapField}>
-            <span className={styles.fieldLabel}>Distanza</span>
-            <select
-              value={filters.distance}
-              onChange={(event) => setFilters((prev) => ({ ...prev, distance: event.target.value }))}
-            >
-              <option value="all">Qualsiasi distanza</option>
-              <option value="5">Entro 5 km</option>
-              <option value="15">Entro 15 km</option>
-              <option value="30">Entro 30 km</option>
-            </select>
-          </label>
-
-          <label className={styles.mapField}>
-            <span className={styles.fieldLabel}>Ordina per</span>
-            <select value={filters.sortBy} onChange={(event) => setFilters((prev) => ({ ...prev, sortBy: event.target.value }))}>
-              <option value="soonest">Prima disponibilità</option>
-              <option value="closest">Più vicini a te</option>
-              <option value="popular">Più popolari</option>
-            </select>
-          </label>
-
-          <fieldset className={styles.mapAppearanceField}>
-            <legend>Aspetto mappa</legend>
-            <div className={styles.mapThemeSwitch}>
+        <div className={styles.compactFilters}>
+          <fieldset className={styles.compactFilterSection}>
+            <legend>Sport</legend>
+            <div className={styles.sportFilterRail}>
               <button
                 type="button"
-                className={mapTheme === 'dark' ? styles.mapThemeActive : ''}
-                aria-pressed={mapTheme === 'dark'}
-                onClick={() => onMapThemeChange('dark')}
+                className={filters.sport === 'all' ? styles.compactChoiceActive : ''}
+                aria-pressed={filters.sport === 'all'}
+                onClick={() => setFilters((prev) => ({ ...prev, sport: 'all' }))}
               >
-                Scura
+                Tutti
               </button>
-              <button
-                type="button"
-                className={mapTheme === 'light' ? styles.mapThemeActive : ''}
-                aria-pressed={mapTheme === 'light'}
-                onClick={() => onMapThemeChange('light')}
-              >
-                Chiara
-              </button>
+              {sports.map((sport) => {
+                const selected = String(filters.sport) === String(sport.id);
+                return (
+                  <button
+                    type="button"
+                    key={sport.id}
+                    className={selected ? styles.compactChoiceActive : ''}
+                    aria-pressed={selected}
+                    onClick={() => setFilters((prev) => ({ ...prev, sport: String(sport.id) }))}
+                  >
+                    {sport.name}
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
+
+          <div className={styles.compactFilterPair}>
+            <fieldset className={styles.compactFilterSection}>
+              <legend>Periodo</legend>
+              <div className={styles.compactChoiceGrid}>
+                {periodOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.value}
+                    className={filters.dateRange === option.value ? styles.compactChoiceActive : ''}
+                    aria-pressed={filters.dateRange === option.value}
+                    onClick={() => setFilters((prev) => ({ ...prev, dateRange: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset className={styles.compactFilterSection}>
+              <legend>Distanza</legend>
+              <div className={styles.compactChoiceGrid}>
+                {distanceOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.value}
+                    className={filters.distance === option.value ? styles.compactChoiceActive : ''}
+                    aria-pressed={filters.distance === option.value}
+                    onClick={() => setFilters((prev) => ({ ...prev, distance: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+
+          <div className={styles.compactUtilityRow}>
+            <label className={styles.mapField}>
+              <span className={styles.fieldLabel}>Ordina</span>
+              <select value={filters.sortBy} onChange={(event) => setFilters((prev) => ({ ...prev, sortBy: event.target.value }))}>
+                <option value="soonest">Prima disponibilità</option>
+                <option value="closest">Più vicini a te</option>
+                <option value="popular">Più popolari</option>
+              </select>
+            </label>
+
+            <fieldset className={styles.mapAppearanceField}>
+              <legend>Tema</legend>
+              <div className={styles.mapThemeSwitch}>
+                <button
+                  type="button"
+                  className={mapTheme === 'dark' ? styles.mapThemeActive : ''}
+                  aria-pressed={mapTheme === 'dark'}
+                  onClick={() => onMapThemeChange('dark')}
+                >
+                  Scura
+                </button>
+                <button
+                  type="button"
+                  className={mapTheme === 'light' ? styles.mapThemeActive : ''}
+                  aria-pressed={mapTheme === 'light'}
+                  onClick={() => onMapThemeChange('light')}
+                >
+                  Chiara
+                </button>
+              </div>
+            </fieldset>
+          </div>
         </div>
 
         <div className={styles.drawerActions}>
           <button type="button" className={styles.drawerGhost} onClick={onReset}>
             <RotateCcw size={16} aria-hidden="true" />
-            Ripristina
+            Azzera
           </button>
           <button type="button" className={styles.drawerApply} onClick={onApply}>
             <Check size={17} aria-hidden="true" />

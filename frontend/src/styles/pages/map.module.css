@@ -825,7 +825,7 @@
     - max(1.1rem, env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px) + 0.55rem)
   );
   overflow: auto;
-  padding: var(--s-4) var(--s-4) var(--s-3);
+  padding: var(--s-3);
   border: 1px solid rgb(255 255 255 / 13%);
   border-radius: 1.5rem;
   background: color-mix(in srgb, var(--map-ui-surface-strong) 98%, #080a08);
@@ -835,7 +835,7 @@
   backdrop-filter: blur(18px) saturate(1.05);
   -webkit-backdrop-filter: blur(18px) saturate(1.05);
   display: grid;
-  gap: var(--s-4);
+  gap: var(--s-3);
   transition: transform var(--dur-med) var(--ease), opacity var(--dur-fast) var(--ease);
   transform-origin: top center;
   overscroll-behavior: contain;
@@ -889,9 +889,9 @@
 
 .sheetTitleIcon {
   display: grid;
-  width: 2.65rem;
-  height: 2.65rem;
-  flex: 0 0 2.65rem;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex: 0 0 2.4rem;
   border: 1px solid rgb(199 255 0 / 28%);
   border-radius: 0.9rem;
   background: rgb(199 255 0 / 9%);
@@ -907,7 +907,7 @@
 }
 
 .sheetTitleGroup p {
-  margin: 0.28rem 0 0;
+  margin: 0.18rem 0 0;
   color: var(--map-ui-muted);
   font-size: 0.72rem;
   line-height: 1.25;
@@ -915,10 +915,10 @@
 
 .sheetToggle {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-width: 2.75rem;
-  min-height: 2.75rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
   padding: 0;
   border: 1px solid var(--map-ui-border);
   border-radius: 50%;
@@ -928,10 +928,92 @@
   place-items: center;
 }
 
-.sheetFiltersGrid {
+.compactFilters {
+  display: grid;
+  gap: 0.72rem;
+}
+
+.compactFilterPair,
+.compactUtilityRow {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3) var(--s-2);
+  gap: var(--s-2);
+}
+
+.compactFilterSection {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.compactFilterSection > legend {
+  min-height: 1.05rem;
+  margin-bottom: 0.3rem;
+  color: var(--map-ui-muted);
+  font-size: 0.66rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.sportFilterRail {
+  display: flex;
+  gap: 0.42rem;
+  margin: 0 -0.1rem;
+  padding: 0.1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+}
+
+.sportFilterRail::-webkit-scrollbar {
+  display: none;
+}
+
+.sportFilterRail > button,
+.compactChoiceGrid > button {
+  min-height: 2.55rem;
+  border: 1px solid var(--map-ui-border);
+  background: rgb(255 255 255 / 4%);
+  color: var(--map-ui-muted);
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.sportFilterRail > button {
+  flex: 0 0 auto;
+  padding: 0 0.8rem;
+  border-radius: 0.78rem;
+  white-space: nowrap;
+}
+
+.compactChoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--map-ui-border);
+  border-radius: 0.9rem;
+  background: rgb(0 0 0 / 24%);
+}
+
+.compactChoiceGrid > button {
+  min-width: 0;
+  padding: 0 0.32rem;
+  border-color: transparent;
+  border-radius: 0.62rem;
+  white-space: nowrap;
+}
+
+.sportFilterRail > button.compactChoiceActive,
+.compactChoiceGrid > button.compactChoiceActive {
+  border-color: var(--map-neon);
+  background: var(--map-neon);
+  color: var(--map-neon-ink);
+  box-shadow: 0 0 16px rgb(199 255 0 / 13%);
 }
 
 .mapField {
@@ -954,7 +1036,7 @@
 
 .mapField > select {
   min-width: 0;
-  min-height: 3.15rem;
+  min-height: 2.8rem;
   padding: 0 2rem 0 var(--s-3);
   border: 1px solid var(--map-ui-border);
   border-radius: 0.9rem;
@@ -981,12 +1063,11 @@
   margin: 0;
   padding: 0;
   border: 0;
-  grid-column: 1 / -1;
 }
 
 .mapAppearanceField > legend {
-  min-height: 1.15rem;
-  margin-bottom: var(--s-1);
+  min-height: 1.05rem;
+  margin-bottom: 0.3rem;
   color: var(--map-ui-muted);
   font-size: 0.68rem;
   font-weight: var(--weight-bold);
@@ -997,15 +1078,16 @@
 .mapThemeSwitch {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 0.22rem;
+  min-height: 2.8rem;
+  padding: 0.2rem;
   border: 1px solid var(--map-ui-border);
   border-radius: 1rem;
   background: rgb(0 0 0 / 26%);
 }
 
 .mapThemeSwitch > button {
-  min-height: 2.7rem;
-  padding: 0 var(--s-3);
+  min-height: 2.3rem;
+  padding: 0 0.45rem;
   border: 0;
   border-radius: 0.78rem;
   background: transparent;
@@ -1030,13 +1112,13 @@
   justify-content: stretch;
   gap: var(--s-2);
   margin: 0 calc(-1 * var(--s-1));
-  padding: var(--s-2) var(--s-1) var(--s-3);
+  padding: 0.45rem var(--s-1) var(--s-3);
   background: linear-gradient(180deg, transparent 0%, var(--map-ui-surface-strong) 22%);
 }
 
 .drawerGhost,
 .drawerApply {
-  min-height: 3.25rem;
+  min-height: 3rem;
   padding: 0 var(--s-3);
   border-radius: 999px;
   font-weight: var(--weight-semibold);
@@ -2147,23 +2229,21 @@
   .filtersDrawer {
     left: 0.65rem;
     right: 0.65rem;
-    padding: 1rem 1rem 0.75rem;
+    padding: 0.85rem 0.85rem 0.65rem;
     border-radius: 1.25rem;
-  }
-
-  .sheetFiltersGrid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.72rem;
-  }
-
-  .mapAppearanceField {
-    grid-column: 1;
   }
 
   .mapField > select {
     width: 100%;
-    min-height: 3rem;
-    font-size: 0.82rem;
+    min-height: 2.8rem;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 23rem) {
+  .compactFilterPair,
+  .compactUtilityRow {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 

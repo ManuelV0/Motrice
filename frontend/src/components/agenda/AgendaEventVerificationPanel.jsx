@@ -121,7 +121,7 @@ function AgendaEventVerificationPanel({
   const { coords, requesting, requestLocation, error: locationError } = useUserLocation();
   const timing = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs);
   const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
-  const extensionOptions = [10, 15, 20, 30].filter(
+  const extensionOptions = [15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
 

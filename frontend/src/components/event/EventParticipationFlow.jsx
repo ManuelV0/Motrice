@@ -203,7 +203,7 @@ function EventParticipationFlow({
     [event, graceMinutes, nowMs]
   );
   const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
-  const extensionOptions = [10, 15, 20, 30].filter(
+  const extensionOptions = [15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
   const progressOutcome = resolveParticipantOutcome(progress);

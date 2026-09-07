@@ -45,7 +45,22 @@ export function createEmptyProfileV3(profile = {}) {
     ratings: { average: 0, verified_count: 0 },
     host: { events: 0, participants: 0 },
     xp: { level: 1, total: 0, next_level_at: 250, logs: [] },
-    credit_wallet: { available_cents: 0, locked_cents: 0 },
+    credit_wallet: {
+      available_cents: 0,
+      locked_cents: 0,
+      pending_cents: 0,
+      withdrawable_cents: 0,
+      total_cents: 0,
+      trial_events_remaining: 2,
+      trial_events_used: 0,
+      can_participate: true,
+      funding_source: 'trial',
+      amount_missing_cents: 0,
+      provider_mode: 'stripe_test',
+      deposits_enabled: false,
+      withdrawals_enabled: false,
+      withdrawal: null
+    },
     achievements: [
       { id: 'costante', icon: '🔥', label: 'Costante', detail: 'Prima serie' },
       { id: 'early', icon: '⚡', label: 'Early', detail: 'Prima puntualità' },
@@ -113,7 +128,28 @@ function normalizeState(raw, profile = {}) {
     },
     credit_wallet: {
       available_cents: number(raw.credit_wallet?.available_cents ?? raw.available_cents),
-      locked_cents: number(raw.credit_wallet?.locked_cents ?? raw.locked_cents)
+      locked_cents: number(raw.credit_wallet?.locked_cents ?? raw.locked_cents),
+      pending_cents: number(raw.credit_wallet?.pending_cents ?? raw.pending_cents),
+      withdrawable_cents: number(raw.credit_wallet?.withdrawable_cents ?? raw.withdrawable_cents),
+      total_cents: number(
+        raw.credit_wallet?.total_cents ??
+          raw.total_cents ??
+          number(raw.credit_wallet?.available_cents ?? raw.available_cents) +
+            number(raw.credit_wallet?.locked_cents ?? raw.locked_cents) +
+            number(raw.credit_wallet?.pending_cents ?? raw.pending_cents) +
+            number(raw.credit_wallet?.withdrawable_cents ?? raw.withdrawable_cents)
+      ),
+      trial_events_remaining: number(raw.credit_wallet?.trial_events_remaining ?? 2),
+      trial_events_used: number(raw.credit_wallet?.trial_events_used),
+      can_participate: raw.credit_wallet?.can_participate !== false,
+      funding_source: String(raw.credit_wallet?.funding_source || 'trial'),
+      amount_missing_cents: number(raw.credit_wallet?.amount_missing_cents),
+      provider_mode: String(raw.credit_wallet?.provider_mode || 'stripe_test'),
+      deposits_enabled: Boolean(raw.credit_wallet?.deposits_enabled),
+      withdrawals_enabled: Boolean(raw.credit_wallet?.withdrawals_enabled),
+      withdrawal: raw.credit_wallet?.withdrawal && typeof raw.credit_wallet.withdrawal === 'object'
+        ? raw.credit_wallet.withdrawal
+        : null
     },
     achievements: Array.isArray(raw.achievements) ? raw.achievements : empty.achievements,
     recent_activity: Array.isArray(raw.recent_activity) ? raw.recent_activity : []
@@ -140,15 +176,23 @@ export async function getProfileV3State(profile = {}) {
   const session = getAuthSession();
   if (!isSupabaseConfigured || !session?.authUserId) return readLocal(profile);
   const client = requireSupabase();
-  const [{ data, error }, verification] = await Promise.all([
+  const [{ data, error }, walletResult, verification] = await Promise.all([
     client.rpc('get_my_profile_v3'),
+    client.rpc('get_my_money_wallet'),
     getMyProfileVerification()
   ]);
   if (error) {
     if (isMissingProfileV3Rpc(error)) return readLocal(profile);
     throw new Error(error.message || 'Impossibile caricare il profilo Motrice');
   }
-  return normalizeState({ ...data, identity_verification: verification }, profile);
+  if (walletResult.error && !isMissingProfileV3Rpc(walletResult.error, 'get_my_money_wallet')) {
+    throw new Error(walletResult.error.message || 'Impossibile caricare il Wallet Motrice');
+  }
+  return normalizeState({
+    ...data,
+    credit_wallet: walletResult.error ? data?.credit_wallet : walletResult.data,
+    identity_verification: verification
+  }, profile);
 }
 
 export async function getPublicProfileV3State(targetUserId, profile = {}) {

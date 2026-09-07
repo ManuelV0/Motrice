@@ -26,6 +26,16 @@ import BrandLogo from './BrandLogo';
 import HeaderWallet from './HeaderWallet';
 import styles from '../styles/components/navbar.module.css';
 
+const DRAWER_OPEN_THRESHOLD = 0.34;
+const DRAWER_CLOSE_THRESHOLD = 0.66;
+const DRAWER_SWIPE_VELOCITY = 0.45;
+const DRAWER_GESTURE_SLOP = 8;
+const DRAWER_SETTLE_MS = 220;
+
+function clampDrawerProgress(value) {
+  return Math.min(1, Math.max(0, value));
+}
+
 const links = [
   { to: '/agenda', label: 'Eventi', icon: CalendarDays },
   { to: '/map', label: 'Mappa', icon: Map },
@@ -74,6 +84,182 @@ function Navbar({ forceMobile = false }) {
     : drawerSections;
   const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
+  const drawerPanelRef = useRef(null);
+  const drawerGestureSessionRef = useRef(null);
+  const drawerGestureStateRef = useRef(null);
+  const drawerSettleTimerRef = useRef(null);
+  const suppressDrawerClickRef = useRef(false);
+  const [drawerGesture, setDrawerGesture] = useState(null);
+
+  function updateDrawerGesture(progress, settling = false) {
+    const nextGesture = { progress: clampDrawerProgress(progress), settling };
+    drawerGestureStateRef.current = nextGesture;
+    setDrawerGesture(nextGesture);
+  }
+
+  function clearDrawerGesture() {
+    drawerGestureSessionRef.current = null;
+    drawerGestureStateRef.current = null;
+    setDrawerGesture(null);
+  }
+
+  function getDrawerWidth() {
+    return drawerPanelRef.current?.getBoundingClientRect().width || Math.min(window.innerWidth * 0.88, 352);
+  }
+
+  function settleDrawerGesture(shouldOpen) {
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    drawerGestureSessionRef.current = null;
+    updateDrawerGesture(shouldOpen ? 1 : 0, true);
+    drawerSettleTimerRef.current = window.setTimeout(() => {
+      setIsOpen(shouldOpen);
+      clearDrawerGesture();
+      drawerSettleTimerRef.current = null;
+    }, DRAWER_SETTLE_MS);
+  }
+
+  function onEdgePointerDown(event) {
+    if (isOpen || drawerGestureStateRef.current || event.button !== 0) return;
+
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    setWalletOpen(false);
+    drawerGestureSessionRef.current = {
+      mode: 'opening',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      width: getDrawerWidth(),
+      recognized: false
+    };
+    updateDrawerGesture(0);
+  }
+
+  function onEdgePointerMove(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'opening' || session.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - session.startX;
+    const deltaY = event.clientY - session.startY;
+
+    if (!session.recognized) {
+      if (Math.abs(deltaX) < DRAWER_GESTURE_SLOP && Math.abs(deltaY) < DRAWER_GESTURE_SLOP) return;
+      if (deltaX <= 0 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.1) {
+        clearDrawerGesture();
+        return;
+      }
+      session.recognized = true;
+    }
+
+    event.preventDefault();
+    updateDrawerGesture(deltaX / session.width);
+  }
+
+  function onEdgePointerEnd(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'opening' || session.pointerId !== event.pointerId) return;
+
+    const progress = drawerGestureStateRef.current?.progress || 0;
+    const elapsed = Math.max(performance.now() - session.startedAt, 1);
+    const velocity = (event.clientX - session.startX) / elapsed;
+    settleDrawerGesture(session.recognized && (progress >= DRAWER_OPEN_THRESHOLD || velocity >= DRAWER_SWIPE_VELOCITY));
+  }
+
+  function onDrawerPointerDown(event) {
+    if (!isOpen || drawerGestureStateRef.current || event.button !== 0) return;
+
+    drawerGestureSessionRef.current = {
+      mode: 'closing',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      width: getDrawerWidth(),
+      recognized: false
+    };
+  }
+
+  function onDrawerPointerMove(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'closing' || session.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - session.startX;
+    const deltaY = event.clientY - session.startY;
+
+    if (!session.recognized) {
+      if (Math.abs(deltaX) < DRAWER_GESTURE_SLOP && Math.abs(deltaY) < DRAWER_GESTURE_SLOP) return;
+      if (deltaX >= 0 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.1) {
+        drawerGestureSessionRef.current = null;
+        return;
+      }
+      session.recognized = true;
+      updateDrawerGesture(1);
+    }
+
+    event.preventDefault();
+    updateDrawerGesture(1 + deltaX / session.width);
+  }
+
+  function onDrawerPointerEnd(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'closing' || session.pointerId !== event.pointerId) return;
+
+    if (!session.recognized) {
+      drawerGestureSessionRef.current = null;
+      return;
+    }
+
+    suppressDrawerClickRef.current = true;
+    window.setTimeout(() => {
+      suppressDrawerClickRef.current = false;
+    }, 350);
+
+    const progress = drawerGestureStateRef.current?.progress ?? 1;
+    const elapsed = Math.max(performance.now() - session.startedAt, 1);
+    const velocity = (event.clientX - session.startX) / elapsed;
+    const shouldRemainOpen = progress > DRAWER_CLOSE_THRESHOLD && velocity > -DRAWER_SWIPE_VELOCITY;
+    settleDrawerGesture(shouldRemainOpen);
+  }
+
+  function onDrawerPointerCancel() {
+    const session = drawerGestureSessionRef.current;
+    if (!session) return;
+    if (session.mode === 'opening') settleDrawerGesture(false);
+    else if (session.recognized) settleDrawerGesture(true);
+    else drawerGestureSessionRef.current = null;
+  }
+
+  useEffect(() => {
+    function onWindowPointerMove(event) {
+      const session = drawerGestureSessionRef.current;
+      if (!session) return;
+      if (session.mode === 'opening') onEdgePointerMove(event);
+      else onDrawerPointerMove(event);
+    }
+
+    function onWindowPointerUp(event) {
+      const session = drawerGestureSessionRef.current;
+      if (!session) return;
+      if (session.mode === 'opening') onEdgePointerEnd(event);
+      else onDrawerPointerEnd(event);
+    }
+
+    function onWindowPointerCancel() {
+      onDrawerPointerCancel();
+    }
+
+    window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerCancel);
+    window.addEventListener('blur', onWindowPointerCancel);
+
+    return () => {
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerCancel);
+      window.removeEventListener('blur', onWindowPointerCancel);
+    };
+  }, []);
 
   useEffect(() => {
     function refreshAuthSession() {
@@ -86,6 +272,14 @@ function Navbar({ forceMobile = false }) {
       window.removeEventListener('motrice-auth-changed', refreshAuthSession);
       window.removeEventListener('storage', refreshAuthSession);
     };
+  }, []);
+
+  useEffect(() => {
+    setWalletOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => () => {
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -276,9 +470,40 @@ function Navbar({ forceMobile = false }) {
         ) : null}
       </div>
 
-      {isOpen && <button type="button" aria-label="Chiudi menu" className={styles.backdrop} onClick={() => setIsOpen(false)} />}
+      {!isOpen ? (
+        <div
+          className={styles.drawerEdgeGesture}
+          data-drawer-edge-gesture="true"
+          aria-hidden="true"
+          onPointerDown={onEdgePointerDown}
+        />
+      ) : null}
 
-      <div id="mobile-nav" className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`} aria-hidden={!isOpen}>
+      {isOpen || drawerGesture ? (
+        <button
+          type="button"
+          aria-label="Chiudi menu"
+          className={`${styles.backdrop} ${drawerGesture ? (drawerGesture.settling ? styles.backdropGestureSettling : styles.backdropGestureActive) : ''}`}
+          style={drawerGesture ? { opacity: drawerGesture.progress } : undefined}
+          onClick={() => {
+            if (!drawerGesture) setIsOpen(false);
+          }}
+        />
+      ) : null}
+
+      <div
+        id="mobile-nav"
+        ref={drawerPanelRef}
+        className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''} ${drawerGesture ? (drawerGesture.settling ? styles.drawerGestureSettling : styles.drawerGestureActive) : ''}`}
+        style={drawerGesture ? { transform: `translate3d(${(drawerGesture.progress - 1) * 102}%, 0, 0)` } : undefined}
+        aria-hidden={!isOpen}
+        onPointerDown={onDrawerPointerDown}
+        onClickCapture={(event) => {
+          if (!suppressDrawerClickRef.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
           <div className={styles.mobileHeader}>
             <div className={styles.mobileHeaderCopy}>

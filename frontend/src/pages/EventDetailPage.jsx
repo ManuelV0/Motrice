@@ -199,7 +199,7 @@ function EventDetailPage() {
     name: '',
     skill_level: 'beginner',
     note: '',
-    participation_fee_cents: 500
+    participation_fee_cents: 1000
   });
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [coachProfile, setCoachProfile] = useState(null);
@@ -554,6 +554,12 @@ function EventDetailPage() {
         setModalOpen(false);
         showToast('Verifica il profilo prima di partecipare', 'info');
         navigate('/verify-profile');
+        return;
+      }
+      if (String(err?.message || '').includes('DEPOSIT_REQUIRED')) {
+        setModalOpen(false);
+        showToast('Hai terminato gli eventi prova. Serve una riserva di 10 € nel Wallet per partecipare.', 'info');
+        navigate('/account');
         return;
       }
       showToast(err.message, 'error');
@@ -1787,7 +1793,7 @@ function EventDetailPage() {
         </label>
         <Card subtle>
           <p>
-            <strong>Deposito deciso dall’organizzatore:</strong>{' '}
+            <strong>Riserva partecipazione Motrice:</strong>{' '}
             {(Number(event?.deposit_cents || 0) / 100).toLocaleString('it-IT', {
               style: 'currency',
               currency: 'EUR'
@@ -1795,8 +1801,8 @@ function EventDetailPage() {
           </p>
           <p className="muted">
             {event?.join_policy === 'approval'
-              ? `Il deposito verra bloccato soltanto dopo l approvazione. Riceverai quindi il QR personale.`
-              : `Viene bloccato nel wallet, non addebitato. Il cashback passa al 60% con il QR e al 100% dopo ${Number(event?.minimum_presence_minutes || 45)} minuti verificati.`}
+              ? 'La riserva viene bloccata all’invio della richiesta e torna disponibile se l’organizzatore la rifiuta.'
+              : `La riserva viene bloccata nel Wallet. Dopo almeno ${Number(event?.minimum_presence_minutes || 45)} minuti verificati torna disponibile al termine delle 48 ore di tutela.`}
           </p>
         </Card>
       </Modal>

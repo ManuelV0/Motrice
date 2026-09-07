@@ -21,6 +21,7 @@ const AgendaPage = lazy(() => import('./pages/AgendaPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
+const CreditWalletPage = lazy(() => import('./pages/CreditWalletPage'));
 const AccountAiPage = lazy(() => import('./pages/AccountAiPage'));
 const ConvenzioniPage = lazy(() => import('./pages/ConvenzioniPage'));
 const ConvenzioneVoucherPage = lazy(() => import('./pages/ConvenzioneVoucherPage'));
@@ -106,6 +107,7 @@ function App() {
           <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/wallet/credit" element={<CreditWalletPage />} />
           <Route path="/verify-profile" element={<ProfileVerificationPage />} />
           <Route path="/account/xp" element={<Navigate to="/account" replace />} />
           <Route path="/account/ai" element={<AccountAiPage />} />

@@ -16,7 +16,7 @@ function BottomNav({ forceVisible = false, chatSurface = false }) {
 
   const activeTab = useMemo(
     () => {
-      if (location.pathname.startsWith('/account') || location.pathname.startsWith('/profile')) return 'profile';
+      if (location.pathname.startsWith('/account') || location.pathname.startsWith('/profile') || location.pathname.startsWith('/wallet')) return 'profile';
       if (location.pathname.startsWith('/chat') || location.pathname.startsWith('/community')) return 'chat';
       if (location.pathname.startsWith('/create')) return 'create';
       if (location.pathname.startsWith('/map') || location.pathname.startsWith('/game')) return 'map';

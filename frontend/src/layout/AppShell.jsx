@@ -30,15 +30,16 @@ function AppShell({ children, persistentContent = null }) {
   const isCommunityRoute = location.pathname.startsWith('/community');
   const isMapSurfaceRoute = isMapLikeRoute || isCommunityRoute;
   const isAccountRoute = location.pathname.startsWith('/account');
+  const isWalletRoute = location.pathname.startsWith('/wallet');
   const isLocalProfileRoute = location.pathname === '/profile/me';
-  const isAccountLikeRoute = isAccountRoute || isLocalProfileRoute;
+  const isAccountLikeRoute = isAccountRoute || isWalletRoute || isLocalProfileRoute;
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   useViewportInsets();
 
   const isRefreshableRoute = useMemo(() => {
     const pathname = location.pathname;
-    if (pathname === '/agenda' || pathname === '/map' || pathname === '/account' || pathname === '/notifications') return true;
+    if (pathname === '/agenda' || pathname === '/map' || pathname === '/account' || pathname === '/wallet/credit' || pathname === '/notifications') return true;
     if (pathname === '/chat' || pathname === '/chat/inbox') return true;
     if (/^\/events\/[^/]+$/.test(pathname)) return true;
     return /^\/(admin|coach|convenzioni|dashboard|profile)(\/|$)/.test(pathname);

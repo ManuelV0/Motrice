@@ -17,17 +17,12 @@ import {
   Star,
   Trash2,
   UserRoundPlus,
-  WalletCards,
   X,
   Zap
 } from 'lucide-react';
 import styles from '../../styles/components/profile/motriceProfileV3.module.css';
 
 const RATING_ROWS = ['Puntualità', 'Impegno', 'Collaborazione', 'Correttezza', 'Atteggiamento'];
-
-function euro(cents) {
-  return `${(Number(cents || 0) / 100).toFixed(0)}€`;
-}
 
 function fileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -91,7 +86,6 @@ function MotriceProfileV3({
   const displayName = form.display_name.trim() || identity.display_name || 'Alessandro';
   const initials = displayName.slice(0, 1).toUpperCase();
   const reliability = state.reliability;
-  const walletTotal = state.credit_wallet.available_cents + state.credit_wallet.locked_cents;
   const xpProgress = Math.min(100, Math.round((state.xp.total / state.xp.next_level_at) * 100));
   const verified = Number(state.verified_checkins || reliability.present || 0);
   const isPrivate = mode === 'mine';
@@ -545,16 +539,6 @@ function MotriceProfileV3({
         <div className={styles.progress}><i style={{ width: `${xpProgress}%` }} /></div>
         <small>XP = progressione, non affidabilità.</small>
       </section>
-
-      {isPrivate ? (
-        <section className={`${styles.card} ${styles.walletCard}`}>
-          <div className={styles.cardTitleRow}><div><span>CREDITO MOTRICE</span><h2>{euro(walletTotal)} totali</h2></div><WalletCards size={34} aria-hidden="true" /></div>
-          <div className={styles.walletStats}>
-            <article><CreditCard size={18} /><span>Disponibili</span><strong>{euro(state.credit_wallet.available_cents)}</strong></article>
-            <article><LockKeyhole size={18} /><span>Bloccati</span><strong>{euro(state.credit_wallet.locked_cents)}</strong></article>
-          </div>
-        </section>
-      ) : null}
 
       {hasHistory ? (
         <section className={`${styles.card} ${styles.achievementsCard}`}>

@@ -69,7 +69,7 @@ function ExplorePage() {
   const [cityFilter, setCityFilter] = useState('all');
   const [savingIds, setSavingIds] = useState([]);
   const [groupBookingEvent, setGroupBookingEvent] = useState(null);
-  const [groupStakeCents, setGroupStakeCents] = useState(500);
+  const [groupStakeCents] = useState(1000);
   const [bookingGroupEventId, setBookingGroupEventId] = useState(null);
   const [participantName, setParticipantName] = useState('Partecipante');
   const [currentPage, setCurrentPage] = useState(1);
@@ -238,21 +238,14 @@ function ExplorePage() {
         await api.joinEvent(event.id, {
           name: participantName,
           skill_level: 'beginner',
-          note: entitlements.canUseCoachChat
-            ? 'Prenotazione gruppo Premium (quota esente)'
-            : `Prenotazione gruppo con quota ${groupStakeCents === 1000 ? '10' : '5'} EUR`,
-          participation_fee_cents: entitlements.canUseCoachChat ? 0 : groupStakeCents,
+          note: 'Prenotazione gruppo con riserva Motrice di 10 EUR',
+          participation_fee_cents: groupStakeCents,
           event_title: event.title || `${event.sport_name} @ ${event.location_name}`
         });
       }
 
       await reloadEvents();
-      showToast(
-        entitlements.canUseCoachChat
-          ? 'Sessione di gruppo prenotata. Accesso Premium senza quota.'
-          : `Sessione di gruppo prenotata. Quota ${groupStakeCents === 1000 ? '10' : '5'} EUR congelata nel salvadanaio.`,
-        'success'
-      );
+      showToast('Sessione prenotata. La riserva di 10 EUR è stata bloccata nel Wallet.', 'success');
       setGroupBookingEvent(null);
     } catch (error) {
       showToast(error.message || 'Impossibile prenotare la sessione di gruppo', 'error');
@@ -368,7 +361,6 @@ function ExplorePage() {
         events={featuredEvents}
         onToggleSave={toggleSaveEvent}
         onBookGroup={(selectedEvent) => {
-          setGroupStakeCents(500);
           setGroupBookingEvent(selectedEvent);
         }}
         savingIds={savingIds}
@@ -412,7 +404,6 @@ function ExplorePage() {
                     className={styles.uniformCard}
                     onToggleSave={toggleSaveEvent}
                     onBookGroup={(selectedEvent) => {
-                      setGroupStakeCents(500);
                       setGroupBookingEvent(selectedEvent);
                     }}
                     saving={savingIds.includes(event.id)}
@@ -459,8 +450,8 @@ function ExplorePage() {
           <PiggyBank size={16} aria-hidden="true" /> Anti-ghosting gruppi
         </p>
         <p className="muted">
-          Usa “Prenota sessione di gruppo” e scegli quota partecipazione (5 EUR o 10 EUR). La quota viene congelata nel
-          salvadanaio per incentivare presenza e creazione gruppi.
+          Ogni partecipante usa la riserva fissa di 10 EUR. Dopo una presenza valida torna disponibile al termine
+          delle 48 ore di tutela; un no-show viene ripartito secondo le regole Motrice.
         </p>
       </Card>
 
@@ -497,21 +488,12 @@ function ExplorePage() {
                 minute: '2-digit'
               })}
             </p>
-            <label className={styles.groupBookingField}>
-              Quota partecipazione
-              {entitlements.canUseCoachChat ? (
-                <p className="muted">Esente quota con abbonamento Premium attivo.</p>
-              ) : (
-                <select value={groupStakeCents} onChange={(event) => setGroupStakeCents(Number(event.target.value))}>
-                  <option value={500}>5 EUR</option>
-                  <option value={1000}>10 EUR</option>
-                </select>
-              )}
-            </label>
+            <div className={styles.groupBookingField}>
+              <strong>Riserva fissa: 10 EUR</strong>
+            </div>
             <p className="muted">
-              {entitlements.canUseCoachChat
-                ? 'Con Premium puoi accedere al gruppo senza quota di partecipazione.'
-                : 'La quota viene congelata nel salvadanaio. Se il gruppo si raduna e la presenza viene verificata, torna disponibile.'}
+              I primi due eventi verificati usano il credito prova. In seguito la somma viene bloccata nel Wallet e
+              torna disponibile dopo la presenza valida e la finestra di tutela di 48 ore.
             </p>
           </div>
         ) : null}

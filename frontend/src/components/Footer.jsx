@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ArrowUp, Instagram, Music2, Youtube } from 'lucide-react';
 import Button from './Button';
 import BrandLogo from './BrandLogo';
@@ -8,7 +8,6 @@ import styles from '../styles/components/footer.module.css';
 function Footer() {
   const year = new Date().getFullYear();
   const [showBackTop, setShowBackTop] = useState(false);
-  const location = useLocation();
 
   useEffect(() => {
     function onScroll() {
@@ -79,11 +78,6 @@ function Footer() {
           >
             admin convenzioni
           </Link>
-          {location.pathname !== '/convenzioni' && (
-            <Link to="/convenzioni?view=wallet" className={styles.adminLink} aria-label="Vai alla sezione salvadanaio">
-              salvadanaio
-            </Link>
-          )}
         </div>
 
         <Button

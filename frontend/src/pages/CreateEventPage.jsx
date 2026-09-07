@@ -44,12 +44,17 @@ import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
 import { geocodeAddress, geocodeEventLocation, reverseGeocodeCoordinates } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
-import { getMaximumCheckInGraceMinutes } from '../utils/eventLifecycle';
+import {
+  getSystemEventRules,
+  GROUP_CHECK_IN_GRACE_MINUTES
+} from '../utils/eventCreationRules';
 import {
   ensurePersonalWorkoutPlanRemote,
   listAvailablePersonalWorkoutPlans
 } from '../features/coach/services/personalWorkoutPlansApi';
 import styles from '../styles/pages/createEvent.module.css';
+
+const initialGroupRules = getSystemEventRules({ durationMinutes: 120 });
 
 const initialState = {
   title: '',
@@ -58,13 +63,13 @@ const initialState = {
   level: 'beginner',
   event_datetime: '',
   duration_minutes: 120,
-  deposit_cents: 500,
-  minimum_presence_minutes: 45,
-  verification_mode: 'both',
-  geofence_radius_m: 250,
-  checkin_grace_minutes: 15,
-  completion_xp: 50,
-  review_bonus_xp: 25,
+  deposit_cents: 1000,
+  minimum_presence_minutes: initialGroupRules.minimumPresenceMinutes,
+  verification_mode: initialGroupRules.verificationMode,
+  geofence_radius_m: initialGroupRules.geofenceRadiusM,
+  checkin_grace_minutes: initialGroupRules.checkInGraceMinutes,
+  completion_xp: initialGroupRules.completionXp,
+  review_bonus_xp: initialGroupRules.reviewBonusXp,
   max_participants: 8,
   audience: 'mixed',
   participation_protection: true,
@@ -96,7 +101,8 @@ const ROUTE_SPORT_SLUGS = new Set(['running', 'bici', 'trekking', 'ciclismo', 'c
 const WIZARD_STEPS = [
   { id: 1, label: 'Info base', description: 'Sport, livello e orario' },
   { id: 2, label: 'Luogo', description: 'Posizione e percorso' },
-  { id: 3, label: 'Regole', description: 'Accesso, verifica e pubblicazione' }
+  { id: 3, label: 'Regole', description: 'Accesso, deposito e contenuti' },
+  { id: 4, label: 'Riepilogo', description: 'Controlla e conferma il tuo evento' }
 ];
 
 const LEVEL_OPTIONS = [
@@ -107,19 +113,8 @@ const LEVEL_OPTIONS = [
 ];
 
 const DURATION_PRESETS = [60, 90, 120];
-const DEPOSIT_PRESETS = [0, 500, 1000, 1500];
-const PRESENCE_PRESETS = [30, 45, 60, 90];
-const CHECK_IN_GRACE_PRESETS = [0, 10, 15, 20, 30];
+const CHECK_IN_GRACE_PRESETS = GROUP_CHECK_IN_GRACE_MINUTES;
 const TIME_QUICK_OPTIONS = ['07:00', '12:30', '18:00', '18:30', '19:00', '20:00'];
-const ADVANCED_RULE_FIELDS = [
-  'deposit_cents',
-  'minimum_presence_minutes',
-  'verification_mode',
-  'geofence_radius_m',
-  'checkin_grace_minutes',
-  'completion_xp',
-  'review_bonus_xp'
-];
 
 const AUDIENCE_OPTIONS = [
   { value: 'mixed', label: 'Misto', copy: 'Aperto a tutti, senza distinzioni.', icon: UsersRound },
@@ -165,16 +160,12 @@ const STEP_ERROR_FIELDS = {
   ],
   3: [
     'deposit_cents',
-    'minimum_presence_minutes',
-    'verification_mode',
-    'geofence_radius_m',
     'checkin_grace_minutes',
-    'completion_xp',
-    'review_bonus_xp',
     'visibility',
     'join_policy',
     'description'
-  ]
+  ],
+  4: []
 };
 
 const NON_KEYBOARD_INPUT_TYPES = new Set([
@@ -206,16 +197,6 @@ function getTimeParts(value = '') {
   const match = /^(\d{2}):(\d{2})$/.exec(String(value));
   if (!match) return { hour: '', minute: '' };
   return { hour: match[1], minute: match[2] };
-}
-
-function getTimePeriodLabel(value = '') {
-  const { hour } = getTimeParts(value);
-  if (!hour) return '';
-  const numericHour = Number(hour);
-  if (numericHour < 5) return 'notte';
-  if (numericHour < 12) return 'mattina';
-  if (numericHour < 18) return 'pomeriggio';
-  return 'sera';
 }
 
 function toLocalDateInputValue(date = new Date()) {
@@ -346,6 +327,15 @@ function getSportKey(sport) {
 function getSportVisual(sport) {
   const key = getSportKey(sport);
   return SPORT_VISUALS[key] || { emoji: '🏅', subtitle: 'Allenamento di gruppo' };
+}
+
+function getEventDisplayTitle(form, sport) {
+  const customTitle = String(form?.title || '').trim();
+  if (customTitle) return customTitle;
+
+  const sportName = String(sport?.name || 'Evento sportivo').trim();
+  const location = String(form?.location_name || form?.city || '').trim();
+  return [sportName, location].filter(Boolean).join(' · ').slice(0, 100);
 }
 
 function isValidRoutePoint(point) {
@@ -488,6 +478,7 @@ function CreateEventPage() {
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
   const [creationStats, setCreationStats] = useState({ created_this_month: 0, month: '' });
+  const [moneyWallet, setMoneyWallet] = useState(null);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [routePicking, setRoutePicking] = useState(false);
   const [manualRouteSelection, setManualRouteSelection] = useState(false);
@@ -497,7 +488,6 @@ function CreateEventPage() {
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
-  const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
@@ -517,7 +507,6 @@ function CreateEventPage() {
       : entitlements.maxEventsPerMonth;
   const keyboardVisible = useKeyboardVisibility();
   const groupSettingsRef = useRef(null);
-  const protectionSettingsRef = useRef(null);
   const locationRequestRef = useRef(null);
   const autoLocationAttemptedRef = useRef(false);
   const {
@@ -528,7 +517,6 @@ function CreateEventPage() {
     requestLocation
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
-  const eventTimePeriod = useMemo(() => getTimePeriodLabel(eventTime), [eventTime]);
   const eventEndTime = useMemo(
     () => getEventEndTime(eventTime, form.duration_minutes),
     [eventTime, form.duration_minutes]
@@ -592,6 +580,9 @@ function CreateEventPage() {
   useEffect(() => {
     api.listSports().then(setSports);
     api.getEventCreationStats().then(setCreationStats);
+    api.getMoneyWallet?.().then(setMoneyWallet).catch(() => {
+      // La migrazione può non essere ancora presente nelle installazioni precedenti.
+    });
   }, []);
 
   useEffect(() => () => locationRequestRef.current?.abort(), []);
@@ -693,11 +684,6 @@ function CreateEventPage() {
     [form.geofence_radius_m]
   );
 
-  const maximumCheckInGraceMinutes = useMemo(
-    () => getMaximumCheckInGraceMinutes(form),
-    [form.duration_minutes, form.minimum_presence_minutes]
-  );
-
   const checkInWindowPreview = useMemo(() => {
     const startsAt = new Date(form.event_datetime || '');
     if (Number.isNaN(startsAt.getTime())) {
@@ -756,7 +742,24 @@ function CreateEventPage() {
   }, [activeStep, form.has_route, routePoints.length]);
 
   function setField(key, value) {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      if (key !== 'duration_minutes') return { ...prev, [key]: value };
+      const rules = getSystemEventRules({
+        durationMinutes: value,
+        isPersonal: prev.is_personal,
+        checkInGraceMinutes: prev.checkin_grace_minutes
+      });
+      return {
+        ...prev,
+        [key]: value,
+        minimum_presence_minutes: rules.minimumPresenceMinutes,
+        verification_mode: rules.verificationMode,
+        geofence_radius_m: rules.geofenceRadiusM,
+        checkin_grace_minutes: rules.checkInGraceMinutes,
+        completion_xp: rules.completionXp,
+        review_bonus_xp: rules.reviewBonusXp
+      };
+    });
     if (['city', 'location_name', 'lat', 'lng'].includes(key)) setLocationConfirmed(false);
     setErrors((prev) => {
       const errorKey = key === 'lat' || key === 'lng' ? 'coordinates' : key;
@@ -809,44 +812,6 @@ function CreateEventPage() {
     });
   }
 
-  function toggleParticipationProtection(enabled) {
-    if (form.is_personal) return;
-
-    if (!enabled) {
-      protectionSettingsRef.current = {
-        deposit_cents: form.deposit_cents,
-        minimum_presence_minutes: form.minimum_presence_minutes,
-        verification_mode: form.verification_mode,
-        geofence_radius_m: form.geofence_radius_m,
-        checkin_grace_minutes: form.checkin_grace_minutes
-      };
-      setForm((prev) => ({
-        ...prev,
-        participation_protection: false,
-        deposit_cents: 0,
-        minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
-        verification_mode: 'qr',
-        geofence_radius_m: 250,
-        checkin_grace_minutes: 0
-      }));
-      setAdvancedSettingsOpen(false);
-      return;
-    }
-
-    const previous = protectionSettingsRef.current || {};
-    setForm((prev) => ({
-      ...prev,
-      participation_protection: true,
-      deposit_cents: Number(previous.deposit_cents ?? 500),
-      minimum_presence_minutes: Number(
-        previous.minimum_presence_minutes ?? Math.min(45, Number(prev.duration_minutes || 45))
-      ),
-      verification_mode: previous.verification_mode || 'both',
-      geofence_radius_m: Number(previous.geofence_radius_m ?? 250),
-      checkin_grace_minutes: Number(previous.checkin_grace_minutes ?? 15)
-    }));
-  }
-
   function togglePersonalEvent(enabled) {
     if (enabled) {
       groupSettingsRef.current = {
@@ -854,49 +819,52 @@ function CreateEventPage() {
         join_policy: form.join_policy,
         max_participants: form.max_participants,
         deposit_cents: form.deposit_cents,
-        minimum_presence_minutes: form.minimum_presence_minutes,
-        verification_mode: form.verification_mode,
-        geofence_radius_m: form.geofence_radius_m,
         checkin_grace_minutes: form.checkin_grace_minutes,
-        completion_xp: form.completion_xp,
-        review_bonus_xp: form.review_bonus_xp,
         participation_protection: form.participation_protection
       };
-      setForm((prev) => ({
-        ...prev,
-        is_personal: true,
-        participation_protection: false,
-        visibility: 'private',
-        join_policy: 'open',
-        max_participants: 1,
-        deposit_cents: 0,
-        minimum_presence_minutes: Math.min(15, Number(prev.duration_minutes || 15)),
-        verification_mode: 'geo',
-        geofence_radius_m: 250,
-        checkin_grace_minutes: 0,
-        completion_xp: 5,
-        review_bonus_xp: 0
-      }));
-      setAdvancedSettingsOpen(false);
+      setForm((prev) => {
+        const rules = getSystemEventRules({ durationMinutes: prev.duration_minutes, isPersonal: true });
+        return {
+          ...prev,
+          is_personal: true,
+          participation_protection: false,
+          visibility: 'private',
+          join_policy: 'open',
+          max_participants: 1,
+          deposit_cents: 0,
+          minimum_presence_minutes: rules.minimumPresenceMinutes,
+          verification_mode: rules.verificationMode,
+          geofence_radius_m: rules.geofenceRadiusM,
+          checkin_grace_minutes: rules.checkInGraceMinutes,
+          completion_xp: rules.completionXp,
+          review_bonus_xp: rules.reviewBonusXp
+        };
+      });
       return;
     }
 
     const previous = groupSettingsRef.current || {};
-    setForm((prev) => ({
-      ...prev,
-      is_personal: false,
-      participation_protection: previous.participation_protection ?? true,
-      visibility: previous.visibility || 'public',
-      join_policy: previous.join_policy || 'open',
-      max_participants: Math.max(2, Number(previous.max_participants || 8)),
-      deposit_cents: Number(previous.deposit_cents ?? 500),
-      minimum_presence_minutes: Number(previous.minimum_presence_minutes ?? 45),
-      verification_mode: previous.verification_mode || 'both',
-      geofence_radius_m: Number(previous.geofence_radius_m ?? 250),
-      checkin_grace_minutes: Number(previous.checkin_grace_minutes ?? 15),
-      completion_xp: Number(previous.completion_xp ?? 50),
-      review_bonus_xp: Number(previous.review_bonus_xp ?? 25)
-    }));
+    setForm((prev) => {
+      const rules = getSystemEventRules({
+        durationMinutes: prev.duration_minutes,
+        checkInGraceMinutes: previous.checkin_grace_minutes ?? 15
+      });
+      return {
+        ...prev,
+        is_personal: false,
+        participation_protection: previous.participation_protection ?? true,
+        visibility: previous.visibility || 'public',
+        join_policy: previous.join_policy || 'open',
+        max_participants: Math.max(2, Number(previous.max_participants || 8)),
+        deposit_cents: 1000,
+        minimum_presence_minutes: rules.minimumPresenceMinutes,
+        verification_mode: rules.verificationMode,
+        geofence_radius_m: rules.geofenceRadiusM,
+        checkin_grace_minutes: rules.checkInGraceMinutes,
+        completion_xp: rules.completionXp,
+        review_bonus_xp: rules.reviewBonusXp
+      };
+    });
   }
 
   function clearRouteFieldErrors() {
@@ -1248,7 +1216,9 @@ function CreateEventPage() {
     const nextErrors = {};
 
     if (!form.sport_id) nextErrors.sport_id = 'Seleziona uno sport';
-    if (!form.title || form.title.length < 4) nextErrors.title = 'Titolo troppo corto';
+    if (form.title.trim() && form.title.trim().length < 4) {
+      nextErrors.title = 'Inserisci almeno 4 caratteri oppure lascia il campo vuoto';
+    }
     if (!form.city || form.city.length < 2) nextErrors.city = 'Citta richiesta';
     if (!form.location_name || form.location_name.length < 3) nextErrors.location_name = 'Location troppo corta';
     if (!form.event_datetime) nextErrors.event_datetime = 'Data/ora richiesta';
@@ -1256,49 +1226,13 @@ function CreateEventPage() {
       nextErrors.duration_minutes = 'Durata tra 15 e 360 minuti';
     }
     if (
-      form.participation_protection &&
-      (
-        Number(form.minimum_presence_minutes) < 15 ||
-        Number(form.minimum_presence_minutes) > Number(form.duration_minutes)
-      )
-    ) {
-      nextErrors.minimum_presence_minutes = 'Il tempo minimo deve essere compreso nella durata evento';
-    }
-    const maximumGraceMinutes = getMaximumCheckInGraceMinutes(form);
-    if (
       !form.is_personal &&
-      (
-        !Number.isInteger(Number(form.checkin_grace_minutes)) ||
-        Number(form.checkin_grace_minutes) < 0 ||
-        Number(form.checkin_grace_minutes) > maximumGraceMinutes
-      )
+      !CHECK_IN_GRACE_PRESETS.includes(Number(form.checkin_grace_minutes))
     ) {
-      nextErrors.checkin_grace_minutes = maximumGraceMinutes > 0
-        ? `Scegli una tolleranza tra 0 e ${maximumGraceMinutes} minuti`
-        : 'La presenza minima occupa tutta la durata: il check-in deve chiudere all’inizio';
+      nextErrors.checkin_grace_minutes = 'Scegli una tolleranza di 15, 20 o 30 minuti';
     }
-    if (
-      Number(form.deposit_cents) < 0 ||
-      Number(form.deposit_cents) > 5000 ||
-      Number(form.deposit_cents) % 100 !== 0
-    ) {
-      nextErrors.deposit_cents = 'Deposito tra 0 e 50 EUR, in euro interi';
-    }
-    if (form.participation_protection && !['qr', 'geo', 'both'].includes(form.verification_mode)) {
-      nextErrors.verification_mode = 'Scegli una modalita di verifica';
-    }
-    if (
-      form.participation_protection &&
-      form.verification_mode !== 'qr' &&
-      (Number(form.geofence_radius_m) < 50 || Number(form.geofence_radius_m) > 1000)
-    ) {
-      nextErrors.geofence_radius_m = 'Raggio consentito tra 50 e 1000 metri';
-    }
-    if (Number(form.completion_xp) < 0 || Number(form.completion_xp) > 200) {
-      nextErrors.completion_xp = 'PX evento tra 0 e 200';
-    }
-    if (Number(form.review_bonus_xp) < 0 || Number(form.review_bonus_xp) > 100) {
-      nextErrors.review_bonus_xp = 'Bonus recensione tra 0 e 100 PX';
+    if (!form.is_personal && Number(form.deposit_cents) !== 1000) {
+      nextErrors.deposit_cents = 'Il deposito Motrice è fisso a 10 EUR';
     }
     if (!['mixed', 'male', 'female'].includes(form.audience)) {
       nextErrors.audience = 'Scegli la categoria dell evento';
@@ -1363,9 +1297,6 @@ function CreateEventPage() {
   function validate() {
     const nextErrors = collectValidationErrors();
     setErrors(nextErrors);
-    if (ADVANCED_RULE_FIELDS.some((field) => nextErrors[field])) {
-      setAdvancedSettingsOpen(true);
-    }
     if (Object.keys(nextErrors).length) {
       const firstInvalidStep = WIZARD_STEPS.find((step) =>
         STEP_ERROR_FIELDS[step.id].some((field) => nextErrors[field])
@@ -1409,6 +1340,11 @@ function CreateEventPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function editReviewStep(step) {
+    setActiveStep(step);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   async function onSubmit(event) {
     event.preventDefault();
     if (submitting || !validate()) return;
@@ -1438,20 +1374,27 @@ function CreateEventPage() {
         resolvedLng = resolved.lng;
       }
 
+      const systemRules = getSystemEventRules({
+        durationMinutes: form.duration_minutes,
+        isPersonal: form.is_personal,
+        checkInGraceMinutes: form.checkin_grace_minutes
+      });
+
       const created = await api.createEvent({
         ...form,
+        title: getEventDisplayTitle(form, selectedSport),
         sport_id: Number(form.sport_id),
         duration_minutes: Number(form.duration_minutes),
-        deposit_cents: Number(form.deposit_cents),
-        minimum_presence_minutes: Number(form.minimum_presence_minutes),
-        verification_mode: form.verification_mode,
-        geofence_radius_m: Number(form.geofence_radius_m),
-        checkin_grace_minutes: Number(form.checkin_grace_minutes),
-        completion_xp: Number(form.completion_xp),
-        review_bonus_xp: Number(form.review_bonus_xp),
+        deposit_cents: form.is_personal ? 0 : 1000,
+        minimum_presence_minutes: systemRules.minimumPresenceMinutes,
+        verification_mode: systemRules.verificationMode,
+        geofence_radius_m: systemRules.geofenceRadiusM,
+        checkin_grace_minutes: systemRules.checkInGraceMinutes,
+        completion_xp: systemRules.completionXp,
+        review_bonus_xp: systemRules.reviewBonusXp,
         max_participants: Number(form.max_participants),
         audience: form.audience,
-        participation_protection: Boolean(form.participation_protection),
+        participation_protection: !form.is_personal,
         visibility: form.visibility,
         join_policy: form.join_policy,
         is_personal: Boolean(form.is_personal),
@@ -1491,6 +1434,11 @@ function CreateEventPage() {
       navigate(`/events/${created.id}`);
     } catch (submitError) {
       const message = String(submitError?.message || '').trim();
+      if (message.includes('DEPOSIT_REQUIRED')) {
+        showToast('Hai terminato gli eventi prova. Deposita 10 € nel Wallet per creare un nuovo evento.', 'info');
+        navigate('/account');
+        return;
+      }
       showToast(
         message || (selectedWorkoutPlan ? 'Impossibile pubblicare l’evento con la scheda allegata' : 'Impossibile pubblicare l’evento'),
         'error'
@@ -1504,7 +1452,8 @@ function CreateEventPage() {
     if (!aiEnabled || aiLoading) return;
     setAiLoading(true);
     try {
-      const context = [form.title, form.sport_id ? `Sport: ${selectedSport?.name || form.sport_id}` : '', form.city, form.location_name]
+      const displayTitle = getEventDisplayTitle(form, selectedSport);
+      const context = [displayTitle, form.sport_id ? `Sport: ${selectedSport?.name || form.sport_id}` : '', form.city, form.location_name]
         .filter(Boolean)
         .join(' · ');
       const result = await ai.generateText({
@@ -1512,7 +1461,7 @@ function CreateEventPage() {
         prompt: context || 'Sessione sportiva locale',
         maxTokens: 50,
         contextPayload: {
-          title: form.title,
+          title: displayTitle,
           sportName: selectedSport?.name || '',
           level: form.level,
           city: form.city,
@@ -1565,12 +1514,12 @@ function CreateEventPage() {
           <fieldset className={styles.wizardStep} aria-label="Informazioni base">
 
             <label className={styles.field}>
-              <span className={styles.fieldLabel}>Nome evento</span>
+              <span className={styles.fieldLabel}>Nome personalizzato</span>
               <input
                 className={invalidClass('title')}
                 value={form.title}
                 onChange={(e) => setField('title', e.target.value)}
-                placeholder="Es. Allenamento serale al parco"
+                placeholder="Es. Allenamento serale al parco (facoltativo)"
                 maxLength="100"
               />
               {errors.title && <span className="error">{errors.title}</span>}
@@ -2244,22 +2193,16 @@ function CreateEventPage() {
           <fieldset className={styles.wizardStep} aria-label="Regole e pubblicazione">
 
             <div className={styles.primarySettingsCard}>
-              <label
+              <div
                 className={`${styles.settingRow} ${styles.settingRowCompact} ${form.participation_protection ? styles.settingRowActive : ''}`}
               >
                 <span className={styles.settingIcon}><ShieldCheck size={22} /></span>
                 <span className={styles.settingCopy}>
                   <strong>Proteggi la partecipazione</strong>
-                  <small>Attiva deposito, presenza minima e verifica QR/GPS per una partecipazione affidabile.</small>
+                  <small>Deposito fisso e sblocco tramite QR o GPS. Presenza e premi sono calcolati da Motrice.</small>
                 </span>
-                <input
-                  type="checkbox"
-                  checked={form.participation_protection}
-                  disabled={form.is_personal}
-                  onChange={(event) => toggleParticipationProtection(event.target.checked)}
-                />
-                <span className={styles.switchTrack} aria-hidden="true"><i /></span>
-              </label>
+                <span className={styles.requiredBadge}>{form.is_personal ? 'Non richiesta' : 'Sempre attiva'}</span>
+              </div>
 
               <label
                 className={`${styles.settingRow} ${styles.settingRowCompact} ${form.is_personal ? styles.settingRowActive : ''}`}
@@ -2345,7 +2288,7 @@ function CreateEventPage() {
                 </div>
                 <p className={styles.choiceHelper}>
                   {form.join_policy === 'approval'
-                    ? 'L organizer approva ogni richiesta prima del blocco del deposito.'
+                    ? 'La riserva viene bloccata con la richiesta e torna disponibile se l’organizer la rifiuta.'
                     : 'La partecipazione viene confermata subito, senza approvazione.'}
                 </p>
                 {errors.join_policy && <span className="error">{errors.join_policy}</span>}
@@ -2380,177 +2323,70 @@ function CreateEventPage() {
               </div>
             </div>
 
-            {!form.is_personal && form.participation_protection ? (
-              <details
-                className={styles.advancedRuleDetails}
-                open={advancedSettingsOpen}
-                onToggle={(event) => setAdvancedSettingsOpen(event.currentTarget.open)}
-              >
-                <summary>
-                  <span>Impostazioni avanzate</span>
-                  <ChevronDown size={22} aria-hidden="true" />
-                </summary>
-                <div className={styles.advancedRuleBody}>
-                  <div className={styles.ruleCardGrid}>
-                    <div className={`${styles.ruleCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
-                      <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
-                      <div className={styles.presetRow}>
-                        {DEPOSIT_PRESETS.map((cents) => (
-                          <button
-                            key={cents}
-                            type="button"
-                            className={Number(form.deposit_cents) === cents ? styles.presetSelected : ''}
-                            onClick={() => setField('deposit_cents', cents)}
-                          >
-                            {cents === 0 ? 'No' : `${cents / 100} €`}
-                          </button>
-                        ))}
-                      </div>
-                      <label className={styles.compactNumber}>
-                        Altro importo (€)
-                        <input
-                          type="number"
-                          min="0"
-                          max="50"
-                          step="1"
-                          value={Number(form.deposit_cents || 0) / 100}
-                          onChange={(event) => setField('deposit_cents', Math.round(Number(event.target.value || 0) * 100))}
-                        />
-                      </label>
-                      <small>Bloccato all’iscrizione e restituito al completamento.</small>
-                      {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
+            {!form.is_personal ? (
+              <section className={styles.visibleRulesSection} aria-label="Deposito e tolleranza ritardatari">
+                <div className={styles.sectionLabelRow}><span>Deposito e tolleranza</span></div>
+                <div className={styles.ruleCardGrid}>
+                  <div className={`${styles.ruleCard} ${styles.fixedDepositCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
+                    <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>
+                    <div className={styles.fixedDepositValue}>
+                      <strong>10 €</strong>
+                      <span>quota fissa per persona</span>
                     </div>
-
-                    <div className={`${styles.ruleCard} ${errors.minimum_presence_minutes ? styles.invalidCard : ''}`}>
-                      <span className={styles.controlTitle}><Clock3 size={18} />Presenza minima</span>
-                      <div className={styles.presetRow}>
-                        {PRESENCE_PRESETS.map((minutes) => (
-                          <button
-                            key={minutes}
-                            type="button"
-                            className={Number(form.minimum_presence_minutes) === minutes ? styles.presetSelected : ''}
-                            onClick={() => setField('minimum_presence_minutes', minutes)}
-                          >
-                            {minutes}′
-                          </button>
-                        ))}
-                      </div>
-                      <label className={styles.compactNumber}>
-                        Minuti personalizzati
-                        <input
-                          type="number"
-                          min="15"
-                          max={form.duration_minutes || 360}
-                          step="5"
-                          value={form.minimum_presence_minutes}
-                          onChange={(event) => setField('minimum_presence_minutes', event.target.value)}
-                        />
-                      </label>
-                      <small>Al raggiungimento il cashback passa al 100%.</small>
-                      {errors.minimum_presence_minutes && <span className="error">{errors.minimum_presence_minutes}</span>}
-                    </div>
-
-                    <div className={`${styles.ruleCard} ${errors.checkin_grace_minutes ? styles.invalidCard : ''}`}>
-                      <span className={styles.controlTitle}><Clock3 size={18} />Tolleranza ritardatari</span>
-                      <div className={styles.presetRow}>
-                        {CHECK_IN_GRACE_PRESETS.map((minutes) => {
-                          const disabled = minutes > maximumCheckInGraceMinutes;
-                          return (
-                            <button
-                              key={minutes}
-                              type="button"
-                              className={Number(form.checkin_grace_minutes) === minutes ? styles.presetSelected : ''}
-                              onClick={() => setField('checkin_grace_minutes', minutes)}
-                              disabled={disabled}
-                              title={disabled ? `Con la presenza minima scelta puoi consentire al massimo ${maximumCheckInGraceMinutes} minuti` : undefined}
-                            >
-                              {minutes === 0 ? 'No' : `${minutes}′`}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <small>{checkInWindowPreview} Non modifica la fine dell’evento.</small>
-                      {errors.checkin_grace_minutes && <span className="error">{errors.checkin_grace_minutes}</span>}
-                    </div>
+                    <small>
+                      {Number(moneyWallet?.trial_events_remaining || 0) > 0
+                        ? `${moneyWallet.trial_events_remaining} eventi prova disponibili: nessun addebito reale.`
+                        : 'Bloccato alla conferma e restituito dopo l’evento, trascorse 48 ore senza contestazioni.'}
+                    </small>
+                    {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}
                   </div>
 
-                  <div className={styles.choiceSection}>
-                    <div className={styles.sectionLabelRow}><span>Metodo di verifica</span></div>
-                    <div className={styles.verificationGrid} role="group" aria-label="Metodo di verifica">
-                      {[
-                        { value: 'both', title: 'QR + GPS', copy: 'Più sicuro', icon: '◎' },
-                        { value: 'qr', title: 'Solo QR', copy: 'Più rapido', icon: '▦' },
-                        { value: 'geo', title: 'Solo GPS', copy: 'Automatico', icon: '⌖' }
-                      ].map((mode) => (
+                  <div className={`${styles.ruleCard} ${errors.checkin_grace_minutes ? styles.invalidCard : ''}`}>
+                    <span className={styles.controlTitle}><Clock3 size={18} />Tolleranza ritardatari</span>
+                    <div className={styles.presetRow}>
+                      {CHECK_IN_GRACE_PRESETS.map((minutes) => (
                         <button
-                          key={mode.value}
+                          key={minutes}
                           type="button"
-                          className={form.verification_mode === mode.value ? styles.verificationSelected : ''}
-                          aria-pressed={form.verification_mode === mode.value}
-                          onClick={() => setField('verification_mode', mode.value)}
+                          className={Number(form.checkin_grace_minutes) === minutes ? styles.presetSelected : ''}
+                          onClick={() => setField('checkin_grace_minutes', minutes)}
                         >
-                          <span aria-hidden="true">{mode.icon}</span>
-                          <strong>{mode.title}</strong>
-                          <small>{mode.copy}</small>
+                          {minutes}′
                         </button>
                       ))}
                     </div>
-                    {errors.verification_mode && <span className="error">{errors.verification_mode}</span>}
-                  </div>
-
-                  {form.verification_mode !== 'qr' ? (
-                    <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Raggio area evento (metri)</span>
-                      <input
-                        type="number"
-                        min="50"
-                        max="1000"
-                        step="25"
-                        className={invalidClass('geofence_radius_m')}
-                        value={form.geofence_radius_m}
-                        onChange={(event) => setField('geofence_radius_m', event.target.value)}
-                      />
-                      <span className="input-helper">Organizer e partecipanti devono rimanere dentro quest’area.</span>
-                      {errors.geofence_radius_m && <span className="error">{errors.geofence_radius_m}</span>}
-                    </label>
-                  ) : null}
-
-                  <div className={styles.inlineGrid}>
-                    <label className={styles.field}>
-                      <span className={styles.fieldLabel}>PX completamento</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="200"
-                        step="5"
-                        className={invalidClass('completion_xp')}
-                        value={form.completion_xp}
-                        onChange={(event) => setField('completion_xp', event.target.value)}
-                      />
-                      {errors.completion_xp && <span className="error">{errors.completion_xp}</span>}
-                    </label>
-                    <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Bonus questionario (PX)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="5"
-                        className={invalidClass('review_bonus_xp')}
-                        value={form.review_bonus_xp}
-                        onChange={(event) => setField('review_bonus_xp', event.target.value)}
-                      />
-                      {errors.review_bonus_xp && <span className="error">{errors.review_bonus_xp}</span>}
-                    </label>
+                    <small>{checkInWindowPreview} Non modifica la fine dell’evento.</small>
+                    {errors.checkin_grace_minutes && <span className="error">{errors.checkin_grace_minutes}</span>}
                   </div>
                 </div>
-              </details>
-            ) : !form.is_personal ? (
-              <div className={styles.protectionOffNotice}>
-                <ShieldCheck size={22} aria-hidden="true" />
-                <span>Partecipazione semplice: nessun deposito e check-in rapido tramite QR.</span>
-              </div>
+              </section>
             ) : null}
+
+            <section className={`${styles.workoutAttachmentCard} ${selectedWorkoutPlan ? styles.workoutAttachmentSelected : ''}`}>
+              <div className={styles.workoutAttachmentHeading}>
+                <span className={styles.workoutAttachmentIcon}><Dumbbell size={23} aria-hidden="true" /></span>
+                <div>
+                  <span className={styles.fieldLabel}>Allega scheda</span>
+                  <small>Condividi una delle tue Schede personali con i partecipanti.</small>
+                </div>
+              </div>
+              {selectedWorkoutPlan ? (
+                <div className={styles.workoutAttachmentPreview}>
+                  <div>
+                    <strong>{selectedWorkoutPlan.title}</strong>
+                    <span>{selectedWorkoutPlan.exercises?.length || 0} esercizi · {selectedWorkoutPlan.duration || 60} min</span>
+                  </div>
+                  <button type="button" onClick={removeWorkoutPlan} aria-label={`Rimuovi ${selectedWorkoutPlan.title}`}><X size={18} /></button>
+                  <button type="button" className={styles.workoutPreviewLink} onClick={() => setWorkoutPlanPreviewOpen(true)}>
+                    <Eye size={17} aria-hidden="true" /> Vedi anteprima
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className={styles.workoutAttachButton} onClick={openWorkoutPlanPicker}>
+                  <Plus size={19} aria-hidden="true" /> Scegli una scheda
+                </button>
+              )}
+            </section>
 
             <label className={`${styles.field} ${styles.descriptionCard}`}>
               <span className={styles.descriptionLabel}>
@@ -2584,43 +2420,74 @@ function CreateEventPage() {
               </span>
               {errors.description && <span className="error">{errors.description}</span>}
             </label>
+          </fieldset>
+        ) : null}
 
-            <section className={`${styles.workoutAttachmentCard} ${selectedWorkoutPlan ? styles.workoutAttachmentSelected : ''}`}>
-              <div className={styles.workoutAttachmentHeading}>
-                <span className={styles.workoutAttachmentIcon}><Dumbbell size={23} aria-hidden="true" /></span>
-                <div>
-                  <span className={styles.fieldLabel}>Allega scheda</span>
-                  <small>Condividi una delle tue Schede personali con i partecipanti.</small>
-                </div>
+        {activeStep === 4 ? (
+          <fieldset className={styles.wizardStep} aria-label="Riepilogo evento">
+            <section className={styles.reviewHero}>
+              <span className={styles.reviewHeroVisual}>{getSportVisual(selectedSport).emoji}</span>
+              <div>
+                <span className={styles.reviewEyebrow}>Pronto per la pubblicazione</span>
+                <h3>{getEventDisplayTitle(form, selectedSport)}</h3>
+                <p>{selectedSport?.name || 'Attività sportiva'} · {form.city}</p>
               </div>
-              {selectedWorkoutPlan ? (
-                <div className={styles.workoutAttachmentPreview}>
-                  <div>
-                    <strong>{selectedWorkoutPlan.title}</strong>
-                    <span>{selectedWorkoutPlan.exercises?.length || 0} esercizi · {selectedWorkoutPlan.duration || 60} min</span>
-                  </div>
-                  <button type="button" onClick={removeWorkoutPlan} aria-label={`Rimuovi ${selectedWorkoutPlan.title}`}><X size={18} /></button>
-                  <button type="button" className={styles.workoutPreviewLink} onClick={() => setWorkoutPlanPreviewOpen(true)}>
-                    <Eye size={17} aria-hidden="true" /> Vedi anteprima
-                  </button>
-                </div>
-              ) : (
-                <button type="button" className={styles.workoutAttachButton} onClick={openWorkoutPlanPicker}>
-                  <Plus size={19} aria-hidden="true" /> Scegli una scheda
-                </button>
-              )}
+              <Check size={22} aria-hidden="true" />
             </section>
 
-            <div className={styles.summaryCard}>
-              <span>{getSportVisual(selectedSport).emoji}</span>
-              <div>
-                <strong>{form.title || 'Il tuo evento'}</strong>
-                <small>
-                  {[selectedSport?.name, form.city, eventDate && eventTime ? `${eventDate} · ${eventTime} (${eventTimePeriod})` : 'Data da scegliere']
-                    .filter(Boolean)
-                    .join(' · ')}
-                </small>
+            <section className={styles.reviewSection}>
+              <div className={styles.reviewSectionHeader}>
+                <div><CalendarDays size={19} /><strong>Attività e orario</strong></div>
+                <button type="button" onClick={() => editReviewStep(1)}>Modifica</button>
               </div>
+              <div className={styles.reviewGrid}>
+                <div><span>Sport</span><strong>{selectedSport?.name || '—'}</strong></div>
+                <div><span>Livello</span><strong>{LEVEL_OPTIONS.find((item) => item.value === form.level)?.label || 'Open'}</strong></div>
+                <div><span>Data</span><strong>{formatEventDateLabel(eventDate)}</strong></div>
+                <div><span>Orario</span><strong>{eventTime}–{eventEndTime}</strong></div>
+                <div><span>Durata</span><strong>{form.duration_minutes} min</strong></div>
+                <div><span>Partecipanti</span><strong>Fino a {form.max_participants}</strong></div>
+              </div>
+            </section>
+
+            <section className={styles.reviewSection}>
+              <div className={styles.reviewSectionHeader}>
+                <div><MapPin size={19} /><strong>Luogo e percorso</strong></div>
+                <button type="button" onClick={() => editReviewStep(2)}>Modifica</button>
+              </div>
+              <div className={styles.reviewLocation}>
+                <strong>{form.location_name}</strong>
+                <span>{form.city}</span>
+                {form.has_route ? (
+                  <small>{form.route_name} · {form.route_distance_km} km · {routePoints.length} punti</small>
+                ) : (
+                  <small>Punto d’incontro confermato sulla mappa</small>
+                )}
+              </div>
+            </section>
+
+            <section className={styles.reviewSection}>
+              <div className={styles.reviewSectionHeader}>
+                <div><ShieldCheck size={19} /><strong>Regole e contenuti</strong></div>
+                <button type="button" onClick={() => editReviewStep(3)}>Modifica</button>
+              </div>
+              <div className={styles.reviewGrid}>
+                <div><span>Visibilità</span><strong>{form.visibility === 'private' ? 'Privato' : 'Pubblico'}</strong></div>
+                <div><span>Accesso</span><strong>{form.is_personal ? 'Solo tu' : form.join_policy === 'approval' ? 'Su richiesta' : 'Aperto a tutti'}</strong></div>
+                <div><span>Deposito</span><strong>{form.is_personal ? 'Non richiesto' : '10 €'}</strong></div>
+                <div><span>Tolleranza</span><strong>{form.is_personal ? '—' : `${form.checkin_grace_minutes} min`}</strong></div>
+                <div><span>Verifica</span><strong>{form.is_personal ? 'GPS' : 'QR + GPS'}</strong></div>
+                <div><span>Scheda</span><strong>{selectedWorkoutPlan?.title || 'Non allegata'}</strong></div>
+              </div>
+              <div className={styles.reviewDescription}>
+                <span>Descrizione</span>
+                <p>{form.description}</p>
+              </div>
+            </section>
+
+            <div className={styles.reviewConfirmation}>
+              <Check size={21} aria-hidden="true" />
+              <span>Controlla i dati. La pubblicazione avverrà solo dopo la conferma finale.</span>
             </div>
           </fieldset>
         ) : null}
@@ -2640,7 +2507,7 @@ function CreateEventPage() {
             </button>
           ) : (
             <button type="submit" className={styles.nextButton} disabled={submitting}>
-              {submitting ? 'Creazione...' : 'Crea evento'}{' '}
+              {submitting ? 'Pubblicazione...' : 'Conferma e pubblica'}{' '}
               <Check size={23} />
             </button>
           )}
