@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
@@ -523,6 +523,12 @@ function CreateEventPage() {
   );
   const todayDateValue = toLocalDateInputValue();
 
+  const refreshCreationStats = useCallback(async () => {
+    const nextStats = await api.getEventCreationStats();
+    setCreationStats(nextStats);
+    return nextStats;
+  }, []);
+
   function toggleWhenPanel(panel) {
     if (panel === 'time' && !eventDate) {
       setActiveWhenPanel('date');
@@ -579,11 +585,18 @@ function CreateEventPage() {
 
   useEffect(() => {
     api.listSports().then(setSports);
-    api.getEventCreationStats().then(setCreationStats);
+    refreshCreationStats().catch(() => {});
     api.getMoneyWallet?.().then(setMoneyWallet).catch(() => {
       // La migrazione può non essere ancora presente nelle installazioni precedenti.
     });
-  }, []);
+
+    function onAuthChanged() {
+      refreshCreationStats().catch(() => {});
+    }
+
+    window.addEventListener('motrice-auth-changed', onAuthChanged);
+    return () => window.removeEventListener('motrice-auth-changed', onAuthChanged);
+  }, [refreshCreationStats]);
 
   useEffect(() => () => locationRequestRef.current?.abort(), []);
 
@@ -1349,13 +1362,27 @@ function CreateEventPage() {
     event.preventDefault();
     if (submitting || !validate()) return;
 
-    if (creationStats.created_this_month >= creationLimit) {
-      setPaywallOpen(true);
-      return;
-    }
-
     setSubmitting(true);
     try {
+      let latestCreationStats;
+      try {
+        latestCreationStats = await refreshCreationStats();
+      } catch {
+        showToast('Impossibile verificare il piano. Controlla la connessione e riprova.', 'error');
+        return;
+      }
+
+      const latestCreationLimit = latestCreationStats.is_unlimited
+        ? Number.POSITIVE_INFINITY
+        : Number.isFinite(Number(latestCreationStats.max_events_per_month))
+          ? Number(latestCreationStats.max_events_per_month)
+          : entitlements.maxEventsPerMonth;
+
+      if (latestCreationStats.created_this_month >= latestCreationLimit) {
+        setPaywallOpen(true);
+        return;
+      }
+
       let attachedWorkoutPlan = selectedWorkoutPlan;
       if (attachedWorkoutPlan && !attachedWorkoutPlan.remoteId) {
         attachedWorkoutPlan = await ensurePersonalWorkoutPlanRemote(attachedWorkoutPlan);

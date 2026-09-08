@@ -237,6 +237,41 @@ export function getSubscriptionWithEntitlements(subscription) {
   };
 }
 
+export function applyServerEventEntitlement(quota, subscription = loadSubscription()) {
+  const serverPlan = normalizePlan(quota?.plan);
+  const current = normalizeRewardState({ ...defaultSubscription, ...subscription });
+
+  // The event entitlement is the authoritative source for paid Premium. Keep
+  // local rewarded/dev state untouched when the server does not expose a plan
+  // (for example during startup before auth has been restored).
+  if (!quota?.plan) return getSubscriptionWithEntitlements(current);
+
+  let next = current;
+  if (serverPlan === 'premium' && quota?.is_unlimited === true) {
+    next = {
+      ...current,
+      plan: 'premium',
+      status: 'active',
+      provider: 'supabase_entitlement',
+      current_period_end: null,
+      rewarded_unlock_until: null,
+      rewarded_progress_videos: 0
+    };
+  } else if (current.provider === 'supabase_entitlement') {
+    next = {
+      ...current,
+      plan: serverPlan,
+      status: 'active',
+      provider: 'supabase_entitlement',
+      current_period_start: null,
+      current_period_end: null
+    };
+  }
+
+  saveSubscription(next);
+  return getSubscriptionWithEntitlements(next);
+}
+
 export function activatePremiumDev() {
   const periodStart = new Date().toISOString();
   const next = {
