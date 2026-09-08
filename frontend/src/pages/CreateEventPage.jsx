@@ -1435,8 +1435,8 @@ function CreateEventPage() {
     } catch (submitError) {
       const message = String(submitError?.message || '').trim();
       if (message.includes('DEPOSIT_REQUIRED')) {
-        showToast('Hai terminato gli eventi prova. Deposita 10 € nel Wallet per creare un nuovo evento.', 'info');
-        navigate('/account');
+        showToast('Hai terminato gli eventi prova. Aggiungi 10 € virtuali per creare un nuovo evento.', 'info');
+        navigate('/wallet/credit');
         return;
       }
       showToast(
@@ -2336,6 +2336,8 @@ function CreateEventPage() {
                     <small>
                       {Number(moneyWallet?.trial_events_remaining || 0) > 0
                         ? `${moneyWallet.trial_events_remaining} eventi prova disponibili: nessun addebito reale.`
+                        : String(moneyWallet?.provider_mode || '') === 'virtual_beta'
+                          ? 'Credito virtuale bloccato alla conferma e restituito dopo la presenza verificata.'
                         : 'Bloccato alla conferma e restituito dopo l’evento, trascorse 48 ore senza contestazioni.'}
                     </small>
                     {errors.deposit_cents && <span className="error">{errors.deposit_cents}</span>}

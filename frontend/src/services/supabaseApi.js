@@ -505,6 +505,17 @@ function createRemoteMethods(localApi) {
       return data || [];
     },
 
+    async addVirtualWalletCredit() {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const clientRequestId = globalThis.crypto?.randomUUID?.() || `virtual-${Date.now()}`;
+      const { data, error } = await client.rpc('add_virtual_wallet_credit', {
+        client_request_id: clientRequestId
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async openEventMoneyDispute(eventId, reason) {
       const client = requireSupabase();
       requireAuthUserId();
@@ -1124,6 +1135,26 @@ function createRemoteMethods(localApi) {
       if (payload.cover_url != null) updates.cover_url = normalizeText(payload.cover_url);
       if (payload.city != null) updates.city = normalizeText(payload.city).slice(0, 80);
       if (payload.level != null) updates.level = payload.level;
+      if (payload.sport_profiles != null) {
+        updates.sport_profiles = (Array.isArray(payload.sport_profiles) ? payload.sport_profiles : [])
+          .map((sport) => ({
+            name: normalizeText(sport?.name).slice(0, 40),
+            level: ['Principiante', 'Intermedio', 'Avanzato'].includes(normalizeText(sport?.level))
+              ? normalizeText(sport.level)
+              : 'Principiante'
+          }))
+          .filter((sport) => sport.name)
+          .slice(0, 6);
+      }
+      if (payload.training_goal != null) updates.training_goal = normalizeText(payload.training_goal).slice(0, 120);
+      if (payload.looking_for != null) updates.looking_for = normalizeText(payload.looking_for).slice(0, 300);
+      if (payload.training_preferences != null) {
+        updates.training_preferences = Array.from(new Set(
+          (Array.isArray(payload.training_preferences) ? payload.training_preferences : [])
+            .map((item) => normalizeText(item).slice(0, 40))
+            .filter(Boolean)
+        )).slice(0, 8);
+      }
       const { data, error } = await client
         .from('profiles')
         .update(updates)

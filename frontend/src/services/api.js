@@ -22,8 +22,19 @@ import {
 import { getSystemEventRules } from '../utils/eventCreationRules';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
+const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
 const EVENT_DURATION_HOURS = 2;
-const DEFAULT_ACCOUNT_PROFILE = { display_name: '', bio: '', avatar_url: '', cover_url: '', chat_slots: [] };
+const DEFAULT_ACCOUNT_PROFILE = {
+  display_name: '',
+  bio: '',
+  avatar_url: '',
+  cover_url: '',
+  sport_profiles: [],
+  training_goal: '',
+  looking_for: '',
+  training_preferences: [],
+  chat_slots: []
+};
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -184,6 +195,38 @@ function isProfileCompleteForGroup(profile) {
   const bio = String(profile.bio || '').trim();
   const avatar = String(profile.avatar_url || '').trim();
   return username.length >= 2 && bio.length >= 8 && avatar.length > 0;
+}
+
+function buildInitialAccountProfiles() {
+  if (!IS_LOCAL_QA) {
+    return {
+      '1': { ...DEFAULT_ACCOUNT_PROFILE, display_name: '' },
+      '2': { ...DEFAULT_ACCOUNT_PROFILE, display_name: 'Utente 2' }
+    };
+  }
+
+  return {
+    '1': {
+      ...DEFAULT_ACCOUNT_PROFILE,
+      display_name: 'Marco Organizzatore',
+      bio: 'Organizzo allenamenti di prova ad Ascoli e seguo il gruppo con puntualità.',
+      avatar_url: '/images/motrice-logo.png',
+      sport_profiles: [
+        { sport_name: 'Palestra', level: 'intermediate' },
+        { sport_name: 'Running', level: 'intermediate' }
+      ]
+    },
+    '2': {
+      ...DEFAULT_ACCOUNT_PROFILE,
+      display_name: 'Sara Partecipante',
+      bio: 'Partecipo agli eventi locali e rispetto sempre orari e regole del gruppo.',
+      avatar_url: '/images/motrice-logo.png',
+      sport_profiles: [
+        { sport_name: 'Running', level: 'beginner' },
+        { sport_name: 'Trekking', level: 'intermediate' }
+      ]
+    }
+  };
 }
 
 function canAccessEventGroupChat({ rsvp, subscription }) {
@@ -678,11 +721,8 @@ function isUserAttendanceConfirmedAtEvent(store, userId, eventId) {
   const checkins = store.checkinRecordsByEvent?.[eventKey] || {};
   if (checkins[String(safeUserId)]) return true;
 
-  // Fallback: local RSVP attendance is only available for current auth user.
-  if (safeUserId === Number(resolveAuthUserId())) {
-    const rsvp = store.rsvps?.[eventKey];
-    if (String(rsvp?.attendance || '') === 'attended') return true;
-  }
+  const rsvp = getEventRsvp(store, eventKey, safeUserId);
+  if (String(rsvp?.attendance || '') === 'attended') return true;
 
   return false;
 }
@@ -830,12 +870,10 @@ function buildInitialStore() {
     hotspots: seededHotspots,
     localUser: localUserSeed,
     rsvps: {},
+    rsvpsByUserEvent: {},
     eventJoinRequests: {},
     savedEvents: {},
-    accountProfiles: {
-      '1': { ...DEFAULT_ACCOUNT_PROFILE, display_name: '' },
-      '2': { ...DEFAULT_ACCOUNT_PROFILE, display_name: 'Utente 2' }
-    },
+    accountProfiles: buildInitialAccountProfiles(),
     chatBookings: [],
     chatMessagesByBooking: {},
     eventGroupMessagesByEvent: {},
@@ -882,6 +920,12 @@ function purgeExpiredEvents(store) {
     if (!expiredIds.has(String(eventId))) nextRsvps[eventId] = value;
   });
   store.rsvps = nextRsvps;
+
+  const nextScopedRsvps = {};
+  Object.entries(store.rsvpsByUserEvent || {}).forEach(([key, value]) => {
+    if (!expiredIds.has(String(value?.event_id))) nextScopedRsvps[key] = value;
+  });
+  store.rsvpsByUserEvent = nextScopedRsvps;
 
   const nextSavedEvents = {};
   Object.entries(store.savedEvents || {}).forEach(([eventId, value]) => {
@@ -983,6 +1027,21 @@ function loadStore() {
     if (!merged.eventJoinRequests || typeof merged.eventJoinRequests !== 'object') {
       merged.eventJoinRequests = {};
     }
+    if (!merged.rsvpsByUserEvent || typeof merged.rsvpsByUserEvent !== 'object') {
+      merged.rsvpsByUserEvent = {};
+    }
+    if (Object.keys(merged.rsvpsByUserEvent).length === 0) {
+      const currentUserId = resolveAuthUserId();
+      Object.entries(merged.rsvps || {}).forEach(([eventId, rsvp]) => {
+        if (!rsvp || typeof rsvp !== 'object') return;
+        const ownerId = Number(rsvp.user_id || currentUserId);
+        merged.rsvpsByUserEvent[getRsvpStorageKey(eventId, ownerId)] = {
+          ...rsvp,
+          event_id: Number(rsvp.event_id ?? eventId),
+          user_id: ownerId
+        };
+      });
+    }
     if (!merged.checkinRecordsByEvent || typeof merged.checkinRecordsByEvent !== 'object') {
       merged.checkinRecordsByEvent = {};
     }
@@ -1049,6 +1108,49 @@ function saveStore(store) {
   safeStorageSet(STORAGE_KEY, JSON.stringify(store));
 }
 
+function getRsvpStorageKey(eventId, userId) {
+  return `${String(userId)}:${String(eventId)}`;
+}
+
+function getEventRsvp(store, eventId, userId = resolveAuthUserId()) {
+  const key = getRsvpStorageKey(eventId, userId);
+  const scoped = store.rsvpsByUserEvent?.[key];
+  if (scoped) return scoped;
+
+  const legacy = store.rsvps?.[String(eventId)];
+  if (!legacy) return null;
+  if (legacy.user_id != null && Number(legacy.user_id) !== Number(userId)) return null;
+  return legacy;
+}
+
+function setEventRsvp(store, eventId, userId, value) {
+  const eventKey = String(eventId);
+  const normalized = {
+    ...value,
+    event_id: Number(value?.event_id ?? eventId),
+    user_id: Number(userId)
+  };
+  store.rsvpsByUserEvent = {
+    ...(store.rsvpsByUserEvent || {}),
+    [getRsvpStorageKey(eventId, userId)]: normalized
+  };
+  // Keep the legacy slot populated for old local data readers during migration.
+  store.rsvps = {
+    ...(store.rsvps || {}),
+    [eventKey]: normalized
+  };
+  return normalized;
+}
+
+function listEventRsvps(store, eventId) {
+  const eventKey = String(eventId);
+  const scoped = Object.values(store.rsvpsByUserEvent || {})
+    .filter((rsvp) => String(rsvp?.event_id) === eventKey);
+  if (scoped.length > 0) return scoped;
+  const legacy = store.rsvps?.[eventKey];
+  return legacy ? [legacy] : [];
+}
+
 function addNotification(store, payload) {
   const currentUserId = resolveAuthUserId();
   const item = {
@@ -1071,7 +1173,8 @@ function computeReliability(localUser) {
 
 function enrichEvent(event, store, origin) {
   const currentUserId = resolveAuthUserId();
-  const rsvp = store.rsvps[String(event.id)] || null;
+  const isCurrentUserOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+  const rsvp = getEventRsvp(store, event.id, currentUserId);
   const joinRequest = store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)] || null;
   const isSaved = Boolean(store.savedEvents && store.savedEvents[String(event.id)]);
   const hasPassed = getEventTiming(event, nowMs()).hasEnded;
@@ -1091,6 +1194,7 @@ function enrichEvent(event, store, origin) {
 
   return {
     ...event,
+    created_by: isCurrentUserOrganizer ? 'me' : null,
     organizerId: String(
       event.organizerId ?? event.organizer?.auth_user_id ?? event.organizer?.id ?? ''
     ),
@@ -1143,7 +1247,7 @@ function ensureStartingSoonNotifications(store) {
   for (const event of store.events) {
     const eventMs = Date.parse(event.event_datetime);
     const delta = eventMs - now;
-    const rsvp = store.rsvps[String(event.id)];
+    const rsvp = getEventRsvp(store, event.id);
 
     if (!rsvp || rsvp.status !== 'going') continue;
     if (delta < 0 || delta > 2 * 60 * 60 * 1000) continue;
@@ -1296,6 +1400,19 @@ function getCreationStats(store) {
 }
 
 const localApi = {
+  async getMoneyWallet() {
+    return withDelay(piggybank.getWallet());
+  },
+
+  async listMoneyLedger({ limit = 50 } = {}) {
+    return withDelay(piggybank.listLedger({ limit }));
+  },
+
+  async addVirtualWalletCredit() {
+    const requestId = globalThis.crypto?.randomUUID?.() || `virtual-${Date.now()}`;
+    return withDelay(piggybank.claimVirtualCredit({ requestId }));
+  },
+
   async listEvents(filters = {}) {
     const store = loadStore();
     ensureStartingSoonNotifications(store);
@@ -1307,8 +1424,8 @@ const localApi = {
       .filter((event) => {
         if (event.status === 'cancelled' && filters.includeCancelled !== true) return false;
         if (String(event.visibility || 'public') !== 'private') return true;
-        if (event.created_by === 'me' || isEventOrganizerForUser(store, event, currentUserId)) return true;
-        if (store.rsvps?.[String(event.id)]?.status === 'going') return true;
+        if (isEventOrganizerForUser(store, event, currentUserId)) return true;
+        if (getEventRsvp(store, event.id, currentUserId)?.status === 'going') return true;
         return Boolean(store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)]);
       })
       .map((event) => enrichEvent(event, store, origin));
@@ -1403,10 +1520,18 @@ const localApi = {
       visibility: String(payload.visibility || 'public'),
       join_policy: String(payload.join_policy || 'open'),
       is_personal: Boolean(payload.is_personal),
-      created_by: 'me',
+      created_by: currentUserId,
       creator_plan: subscription.effective_plan || subscription.plan,
       featured_boost: subscription.effective_plan === 'premium'
     };
+
+    if (!event.is_personal) {
+      piggybank.freezeStake({
+        eventId: event.id,
+        eventTitle: event.title || `${event.sport_name} @ ${event.location_name}`,
+        amountCents: EVENT_JOIN_STAKE_CENTS
+      });
+    }
 
     store.events.unshift(event);
     store.monthlyEventCreations[stats.month] = stats.created_this_month + 1;
@@ -1444,7 +1569,7 @@ const localApi = {
     if (!isProfileCompleteForGroup(accountProfile)) {
       throw new Error('Completa profilo (nome utente, bio e immagine) prima di prenotare un gruppo');
     }
-    const existingRsvp = store.rsvps[key];
+    const existingRsvp = getEventRsvp(store, event.id, currentUserId);
     const isAlreadyGoing = Boolean(existingRsvp && existingRsvp.status === 'going');
     const maxParticipants = Number(event.max_participants || 0);
     const isFull = Number(event.participants_count || 0) >= maxParticipants;
@@ -1547,7 +1672,7 @@ const localApi = {
       'Partecipante'
     );
 
-    store.rsvps[key] = {
+    const nextRsvp = setEventRsvp(store, event.id, currentUserId, {
       event_id: event.id,
       status: 'going',
       name: participantName,
@@ -1558,6 +1683,25 @@ const localApi = {
       cashback_percent: 0,
       attendance: null,
       updated_at: nowIso()
+    });
+
+    store.eventJoinRequests = {
+      ...(store.eventJoinRequests || {}),
+      [key]: {
+        ...(store.eventJoinRequests?.[key] || {}),
+        [String(currentUserId)]: {
+          event_id: event.id,
+          user_id: currentUserId,
+          status: 'approved',
+          skill_level: payload?.skill_level || 'beginner',
+          note: payload?.note || '',
+          display_name: participantName,
+          avatar_url: accountProfile.avatar_url || '',
+          bio: accountProfile.bio || '',
+          requested_at: store.eventJoinRequests?.[key]?.[String(currentUserId)]?.requested_at || nowIso(),
+          decided_at: nowIso()
+        }
+      }
     };
 
     if (participantName && !event.participants_preview.includes(participantName)) {
@@ -1571,7 +1715,7 @@ const localApi = {
       event_id: event.id
     });
     saveStore(store);
-    return withDelay({ success: true, event: clone(event), rsvp: clone(store.rsvps[key]) });
+    return withDelay({ success: true, event: clone(event), rsvp: clone(nextRsvp) });
   },
 
   async listEventJoinRequests(eventId) {
@@ -1599,8 +1743,33 @@ const localApi = {
     if (Number(event.participants_count || 0) >= Number(event.max_participants || 0)) {
       throw new Error('Evento completo: posti disponibili terminati');
     }
+
+    try {
+      piggybank.freezeStake({
+        eventId: event.id,
+        eventTitle: event.title || `${event.sport_name} @ ${event.location_name}`,
+        amountCents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+        accountId: userKey
+      });
+    } catch (error) {
+      const message = String(error?.message || '');
+      if (!message.includes('gia una quota congelata')) throw error;
+    }
+
     request.status = 'approved';
     request.decided_at = nowIso();
+    const approvedRsvp = setEventRsvp(store, event.id, userKey, {
+      event_id: event.id,
+      status: 'going',
+      name: normalizeDisplayName(request.display_name || '', 'Partecipante'),
+      skill_level: request.skill_level || 'beginner',
+      note: request.note || '',
+      participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+      participation_fee_status: 'frozen',
+      cashback_percent: 0,
+      attendance: null,
+      updated_at: nowIso()
+    });
     event.participants_count = Math.min(
       Number(event.max_participants || 0),
       Number(event.participants_count || 0) + 1
@@ -1609,8 +1778,15 @@ const localApi = {
     if (request.display_name && !preview.includes(request.display_name)) {
       event.participants_preview = [request.display_name, ...preview].slice(0, 8);
     }
+    addNotification(store, {
+      type: 'rsvp_confirmed',
+      title: 'Richiesta approvata',
+      message: `La partecipazione a ${event.title || event.sport_name} e confermata.`,
+      event_id: event.id,
+      target_user_id: Number(userId)
+    });
     saveStore(store);
-    return withDelay({ success: true, approved: true });
+    return withDelay({ success: true, approved: true, rsvp: clone(approvedRsvp) });
   },
 
   async declineEventJoinRequest(eventId, userId) {
@@ -1663,7 +1839,7 @@ const localApi = {
     const currentUserId = resolveAuthUserId();
     const event = ensureEventExists(store, id);
     const key = String(id);
-    const existing = store.rsvps[key];
+    const existing = getEventRsvp(store, event.id, currentUserId);
     let penaltyApplied = false;
     let penaltyNote = '';
     let stakeReleased = false;
@@ -1680,9 +1856,9 @@ const localApi = {
       const leftBeforeStart = Number.isFinite(eventStartMs) && eventStartMs > nowMs();
       if (leftBeforeStart && String(existing.participation_fee_status || '') === 'frozen') {
         try {
-          piggybank.releaseStake({
+          piggybank.cancelStake({
             eventId: event.id,
-            note: 'Quota rilasciata: cancellazione prima dell inizio evento'
+            note: 'Quota ripristinata: cancellazione prima dell inizio evento'
           });
           stakeReleased = true;
           stakeReleaseNote = 'Quota rilasciata: cancellazione prima dell inizio evento.';
@@ -1746,7 +1922,7 @@ const localApi = {
       }
 
       event.participants_count = Math.max(0, event.participants_count - 1);
-      store.rsvps[key] = {
+      setEventRsvp(store, event.id, currentUserId, {
         ...existing,
         status: 'cancelled',
         cancel_penalty_applied: penaltyApplied,
@@ -1754,7 +1930,7 @@ const localApi = {
         stake_released: stakeReleased,
         stake_release_note: stakeReleaseNote,
         updated_at: nowIso()
-      };
+      });
       store.localUser.cancelled += 1;
       updateProfileReliability(store);
 
@@ -1840,7 +2016,7 @@ const localApi = {
     };
 
     Object.values(store.eventJoinRequests?.[eventKey] || {}).forEach((request) => {
-      if (request?.status === 'pending') {
+      if (['pending', 'approved'].includes(String(request?.status || ''))) {
         request.status = 'cancelled';
         request.decided_at = cancellationTimestamp;
       }
@@ -1854,6 +2030,26 @@ const localApi = {
     event.cancellation_is_late = eventStartMs < nowMs() + 24 * 60 * 60 * 1000;
     event.refundable_participants_count = participantCount;
     event.refundable_deposit_cents = refundedCents;
+
+    listEventRsvps(store, event.id).forEach((rsvp) => {
+      const participantUserId = Number(rsvp?.user_id);
+      if (!Number.isInteger(participantUserId) || participantUserId <= 0) return;
+      try {
+        piggybank.cancelStake({
+          eventId: event.id,
+          accountId: participantUserId,
+          note: 'Quota ripristinata: evento annullato dall organizzatore'
+        });
+      } catch {
+        // The event cancellation remains authoritative even if no local hold exists.
+      }
+      setEventRsvp(store, event.id, participantUserId, {
+        ...rsvp,
+        status: 'cancelled',
+        stake_released: true,
+        updated_at: cancellationTimestamp
+      });
+    });
 
     addNotification(store, {
       type: 'event_cancelled',
@@ -1876,7 +2072,8 @@ const localApi = {
     const store = loadStore();
     const event = ensureEventExists(store, id);
     const key = String(id);
-    const rsvp = store.rsvps[key];
+    const currentUserId = resolveAuthUserId();
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
 
     if (!rsvp || rsvp.status !== 'going') {
       throw new Error('Nessuna partecipazione da confermare');
@@ -1888,15 +2085,13 @@ const localApi = {
 
     if (attendance === 'attended') {
       store.localUser.attended += 1;
-      const eventLabel = event.title || `${event.sport_name} @ ${event.location_name}`;
       try {
-        piggybank.rewardParticipation({
+        piggybank.releaseStake({
           eventId: event.id,
-          eventTitle: eventLabel,
-          amountCents: 200
+          note: 'Quota virtuale restituita dopo la presenza verificata'
         });
       } catch {
-        // Wallet reward must not block attendance confirmation flow.
+        // Wallet settlement must not block attendance confirmation flow.
       }
       try {
         piggybank.unlockDeferredOnParticipation();
@@ -1920,6 +2115,11 @@ const localApi = {
       );
     } else {
       store.localUser.no_show += 1;
+      try {
+        piggybank.forfeitStake({ eventId: event.id });
+      } catch {
+        // Wallet settlement must not block attendance confirmation flow.
+      }
       awardXp(
         {
           userId: resolveAuthUserId(),
@@ -1937,16 +2137,16 @@ const localApi = {
       );
     }
 
-    store.rsvps[key] = {
+    const updatedRsvp = setEventRsvp(store, event.id, currentUserId, {
       ...rsvp,
       attendance,
       updated_at: nowIso()
-    };
+    });
 
     updateProfileReliability(store);
     saveStore(store);
 
-    return withDelay({ success: true, event: clone(event), rsvp: clone(store.rsvps[key]) });
+    return withDelay({ success: true, event: clone(event), rsvp: clone(updatedRsvp) });
   },
 
   async startEventCheckInSession(eventId) {
@@ -2016,7 +2216,7 @@ const localApi = {
 
     if (!session) throw new Error('Sessione check-in non trovata');
 
-    const rsvp = store.rsvps[eventKey];
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
     if (!rsvp || rsvp.status !== 'going') {
       throw new Error('Devi essere tra i partecipanti per fare check-in');
     }
@@ -2063,14 +2263,14 @@ const localApi = {
     }
 
     let attendanceConfirmed = false;
-    const currentRsvp = store.rsvps[eventKey] || rsvp;
+    const currentRsvp = getEventRsvp(store, event.id, currentUserId) || rsvp;
     if (String(currentRsvp.attendance || '') !== 'attended') {
       store.localUser.attended += 1;
-      store.rsvps[eventKey] = {
+      setEventRsvp(store, event.id, currentUserId, {
         ...currentRsvp,
         attendance: 'attended',
         updated_at: nowIso()
-      };
+      });
       updateProfileReliability(store);
       attendanceConfirmed = true;
     }
@@ -2211,7 +2411,7 @@ const localApi = {
     const event = ensureEventExists(store, eventId);
     const eventKey = String(event.id);
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
-    const rsvp = store.rsvps[eventKey];
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
     if (!isOrganizer && (!rsvp || !['going', 'completed'].includes(String(rsvp.status || '')))) {
       throw new Error('Partecipazione non trovata');
     }
@@ -2370,15 +2570,16 @@ const localApi = {
       completed_at: completed ? (current.completed_at || nowIso()) : null,
       updated_at: nowIso()
     };
-    if (completed && store.rsvps[eventKey]) {
-      store.rsvps[eventKey] = {
-        ...store.rsvps[eventKey],
+    const participantRsvp = getEventRsvp(store, event.id, currentUserId);
+    if (completed && participantRsvp) {
+      setEventRsvp(store, event.id, currentUserId, {
+        ...participantRsvp,
         status: 'completed',
         attendance: 'attended',
         cashback_percent: 100,
         participation_fee_status: 'released',
         updated_at: nowIso()
-      };
+      });
       piggybank.releaseStake({
         eventId: event.id,
         note: 'Partecipazione completata: deposito restituito'
@@ -2411,7 +2612,7 @@ const localApi = {
     if (isEventOrganizerForUser(store, event, currentUserId)) {
       throw new Error('Il check-in GPS partecipante non e disponibile per l organizzatore');
     }
-    const rsvp = store.rsvps[eventKey];
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
     if (!rsvp || !['going', 'completed'].includes(String(rsvp.status || ''))) {
       throw new Error('Partecipazione non valida');
     }
@@ -2432,12 +2633,12 @@ const localApi = {
         updated_at: nowIso()
       }
     };
-    store.rsvps[eventKey] = {
+    setEventRsvp(store, event.id, currentUserId, {
       ...rsvp,
       checked_in_at: checkedInAt,
       cashback_percent: 60,
       updated_at: nowIso()
-    };
+    });
     saveStore(store);
     return withDelay({ ok: true, checked_in_now: !current.checked_in_at, checked_in_at: checkedInAt, mot_awarded: current.checked_in_at ? 0 : 2, cashback_percent: 60 });
   },
@@ -2576,8 +2777,9 @@ const localApi = {
     const completedAt = current.completed_at || nowIso();
     const next = { ...current, progress_percent: 100, completed_at: completedAt, xp_completion_awarded: Boolean(current.xp_completion_awarded || xp) };
     store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
-    if (!isOrganizer && store.rsvps[eventKey]) {
-      store.rsvps[eventKey] = { ...store.rsvps[eventKey], status: 'completed', attendance: 'attended', cashback_percent: 100, updated_at: nowIso() };
+    const participantRsvp = getEventRsvp(store, event.id, currentUserId);
+    if (!isOrganizer && participantRsvp) {
+      setEventRsvp(store, event.id, currentUserId, { ...participantRsvp, status: 'completed', attendance: 'attended', cashback_percent: 100, updated_at: nowIso() });
       store.participationFlowsByEvent = {
         ...(store.participationFlowsByEvent || {}),
         [eventKey]: { ...(store.participationFlowsByEvent?.[eventKey] || {}), cashback_percent: 100, completed_at: completedAt, updated_at: nowIso() }
@@ -2591,20 +2793,79 @@ const localApi = {
     const store = loadStore();
     const event = ensureEventExists(store, eventId);
     const eventKey = String(event.id);
-    const current = store.participationFlowsByEvent?.[eventKey] || {};
-    const profile = store.accountProfiles?.[String(resolveAuthUserId())] || DEFAULT_ACCOUNT_PROFILE;
-    return withDelay([{
-      user_id: resolveAuthUserId(),
-      display_name: normalizeDisplayName(profile.display_name, 'Partecipante'),
-      avatar_url: profile.avatar_url || '',
-      participant_status: store.rsvps[eventKey]?.status || 'going',
-      stake_cents: Number(store.rsvps[eventKey]?.participation_fee_cents ?? event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
-      stake_status: current.cashback_percent >= 100 ? 'released' : current.cashback_percent >= 60 ? 'verified' : 'locked',
-      cashback_percent: Number(current.cashback_percent || 0),
-      checked_in_at: current.checked_in_at || null,
-      completed_at: current.completed_at || null,
-      reviewed: Boolean(current.review_submitted)
-    }]);
+    const organizerUserId = resolveOrganizerUserIdForEvent(store, event);
+    const checkins = store.checkinRecordsByEvent?.[eventKey] || {};
+    const participantByUserId = new Map();
+    listEventRsvps(store, event.id).forEach((rsvp) => {
+      const userId = Number(rsvp?.user_id);
+      if (!Number.isInteger(userId) || userId <= 0) return;
+      participantByUserId.set(userId, rsvp);
+    });
+
+    Object.values(store.eventJoinRequests?.[eventKey] || {}).forEach((request) => {
+      const userId = Number(request?.user_id);
+      if (
+        !Number.isInteger(userId) ||
+        userId <= 0 ||
+        String(request?.status || '') !== 'approved' ||
+        participantByUserId.has(userId)
+      ) return;
+      participantByUserId.set(userId, {
+        event_id: Number(event.id),
+        user_id: userId,
+        status: 'going',
+        name: request.display_name,
+        participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+        cashback_percent: 0,
+        updated_at: request.decided_at || request.requested_at || nowIso()
+      });
+    });
+
+    // Older local builds only persisted the compact participant preview. Recover
+    // matching demo profiles so organizers do not lose their participant list
+    // after upgrading the browser fallback store.
+    (event.participants_preview || []).forEach((displayName) => {
+      const normalizedName = normalizeNameToken(displayName);
+      if (!normalizedName || normalizedName === normalizeNameToken(event.organizer?.name || '')) return;
+      const profileEntry = Object.entries(store.accountProfiles || {}).find(([, profile]) => {
+        return normalizeNameToken(profile?.display_name || '') === normalizedName;
+      });
+      const userId = Number(profileEntry?.[0]);
+      if (!Number.isInteger(userId) || userId <= 0 || participantByUserId.has(userId)) return;
+      participantByUserId.set(userId, {
+        event_id: Number(event.id),
+        user_id: userId,
+        status: 'going',
+        name: displayName,
+        participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+        cashback_percent: 0,
+        updated_at: event.updated_at || event.created_at || nowIso()
+      });
+    });
+
+    const rows = Array.from(participantByUserId.values())
+      .filter((rsvp) => Number(rsvp?.user_id) !== Number(organizerUserId))
+      .map((rsvp) => {
+        const userId = Number(rsvp.user_id);
+        const profile = store.accountProfiles?.[String(userId)] || DEFAULT_ACCOUNT_PROFILE;
+        const record = checkins[String(userId)] || null;
+        const isCurrentUser = userId === Number(resolveAuthUserId());
+        const current = isCurrentUser ? (store.participationFlowsByEvent?.[eventKey] || {}) : {};
+        const cashbackPercent = Number(rsvp.cashback_percent ?? current.cashback_percent ?? 0);
+        return {
+          user_id: userId,
+          display_name: normalizeDisplayName(rsvp.name || profile.display_name, 'Partecipante'),
+          avatar_url: profile.avatar_url || '',
+          participant_status: rsvp.status || 'going',
+          stake_cents: Number(rsvp.participation_fee_cents ?? event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
+          stake_status: cashbackPercent >= 100 ? 'released' : cashbackPercent >= 60 ? 'verified' : 'locked',
+          cashback_percent: cashbackPercent,
+          checked_in_at: record?.ts || rsvp.checked_in_at || current.checked_in_at || null,
+          completed_at: rsvp.completed_at || current.completed_at || null,
+          reviewed: Boolean(rsvp.reviewed || current.review_submitted)
+        };
+      });
+    return withDelay(clone(rows));
   },
 
   async submitEventReview({
@@ -3062,6 +3323,10 @@ const localApi = {
         bio: accountProfile.bio || '',
         avatar_url: accountProfile.avatar_url || '',
         cover_url: accountProfile.cover_url || '',
+        sport_profiles: Array.isArray(accountProfile.sport_profiles) ? accountProfile.sport_profiles : [],
+        training_goal: accountProfile.training_goal || '',
+        looking_for: accountProfile.looking_for || '',
+        training_preferences: Array.isArray(accountProfile.training_preferences) ? accountProfile.training_preferences : [],
         chat_slots: Array.isArray(accountProfile.chat_slots) ? accountProfile.chat_slots : []
       })
     );
@@ -3084,6 +3349,30 @@ const localApi = {
       payload.city == null ? String(store.localUser?.city || '') : String(payload.city).trim().slice(0, 80);
     const nextLevel =
       payload.level == null ? String(store.localUser?.level || 'beginner') : String(payload.level);
+    const nextSportProfiles = payload.sport_profiles == null
+      ? Array.isArray(current.sport_profiles) ? current.sport_profiles : []
+      : (Array.isArray(payload.sport_profiles) ? payload.sport_profiles : [])
+          .map((sport) => ({
+            name: String(sport?.name || '').trim().slice(0, 40),
+            level: ['Principiante', 'Intermedio', 'Avanzato'].includes(String(sport?.level || ''))
+              ? String(sport.level)
+              : 'Principiante'
+          }))
+          .filter((sport) => sport.name)
+          .slice(0, 6);
+    const nextTrainingGoal = payload.training_goal == null
+      ? String(current.training_goal || '')
+      : String(payload.training_goal).trim().slice(0, 120);
+    const nextLookingFor = payload.looking_for == null
+      ? String(current.looking_for || '')
+      : String(payload.looking_for).trim().slice(0, 300);
+    const nextTrainingPreferences = payload.training_preferences == null
+      ? Array.isArray(current.training_preferences) ? current.training_preferences : []
+      : Array.from(new Set(
+          (Array.isArray(payload.training_preferences) ? payload.training_preferences : [])
+            .map((item) => String(item).trim().slice(0, 40))
+            .filter(Boolean)
+        )).slice(0, 8);
     const nextSlots =
       payload.chat_slots == null
         ? Array.isArray(current.chat_slots) ? current.chat_slots : []
@@ -3102,6 +3391,10 @@ const localApi = {
         bio: nextBio,
         avatar_url: nextAvatar,
         cover_url: nextCover,
+        sport_profiles: nextSportProfiles,
+        training_goal: nextTrainingGoal,
+        looking_for: nextLookingFor,
+        training_preferences: nextTrainingPreferences,
         chat_slots: nextSlots
       }
     };
@@ -3137,16 +3430,12 @@ const localApi = {
 
   async exportParticipantsCsv(id) {
     const store = loadStore();
-    const event = ensureEventExists(store, id);
-    const rows = [
-      'name,skill_level,status,note',
-      ...(event.participants_preview || []).map((name) => `${name},n/a,joined,`)
-    ];
-
-    const rsvp = store.rsvps[String(id)];
-    if (rsvp && rsvp.name) {
-      rows.push(`${rsvp.name},${rsvp.skill_level},${rsvp.status},"${(rsvp.note || '').replace(/"/g, '""')}"`);
-    }
+    ensureEventExists(store, id);
+    const rows = ['name,skill_level,status,note'];
+    listEventRsvps(store, id).forEach((rsvp) => {
+      if (!rsvp?.name) return;
+      rows.push(`${rsvp.name},${rsvp.skill_level || 'n/a'},${rsvp.status || 'going'},"${(rsvp.note || '').replace(/"/g, '""')}"`);
+    });
 
     return withDelay(rows.join('\n'));
   },
@@ -3187,10 +3476,10 @@ const localApi = {
     const currentUserId = resolveAuthUserId();
     const event = ensureEventExists(store, eventId);
     const key = String(event.id);
-    const rsvp = store.rsvps[key];
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
     const subscription = getSubscriptionWithEntitlements(loadSubscription());
 
-    if (!canAccessEventGroupChat({ rsvp, subscription })) {
+    if (!isEventOrganizerForUser(store, event, currentUserId) && !canAccessEventGroupChat({ rsvp, subscription })) {
       throw new Error('Chat di gruppo disponibile dopo prenotazione valida (quota o Premium)');
     }
 
@@ -3245,9 +3534,9 @@ const localApi = {
       throw new Error('La chat di questo evento e in sola lettura');
     }
 
-    const rsvp = store.rsvps[key];
+    const rsvp = getEventRsvp(store, event.id, currentUserId);
     const subscription = getSubscriptionWithEntitlements(loadSubscription());
-    if (!canAccessEventGroupChat({ rsvp, subscription })) {
+    if (!isEventOrganizerForUser(store, event, currentUserId) && !canAccessEventGroupChat({ rsvp, subscription })) {
       throw new Error('Chat di gruppo disponibile dopo prenotazione valida (quota o Premium)');
     }
 

@@ -4,6 +4,7 @@ import {
   getMyProfileVerification,
   getPublicProfileVerification
 } from './profileVerification';
+import { piggybank } from './piggybank';
 
 const STORAGE_PREFIX = 'motrice.profile-v3.';
 const SCHEMA_VERSION = 3;
@@ -14,13 +15,28 @@ function number(value) {
 }
 
 function identityFrom(profile = {}) {
+  const sportProfiles = Array.isArray(profile.sport_profiles)
+    ? profile.sport_profiles
+        .map((sport) => ({
+          name: String(sport?.name || '').trim(),
+          level: String(sport?.level || 'Principiante').trim() || 'Principiante'
+        }))
+        .filter((sport) => sport.name)
+        .slice(0, 6)
+    : [];
   return {
     display_name: String(profile.display_name || profile.name || 'Alessandro').trim() || 'Alessandro',
     avatar_url: String(profile.avatar_url || ''),
     cover_url: String(profile.cover_url || ''),
     bio: String(profile.bio || ''),
     city: String(profile.city || 'Ascoli Piceno').trim() || 'Ascoli Piceno',
-    sports: ['Calisthenics', 'Running'],
+    sports: sportProfiles.length ? sportProfiles.map((sport) => sport.name) : ['Calisthenics', 'Running'],
+    sport_profiles: sportProfiles,
+    training_goal: String(profile.training_goal || ''),
+    looking_for: String(profile.looking_for || ''),
+    training_preferences: Array.isArray(profile.training_preferences)
+      ? profile.training_preferences.map(String).filter(Boolean).slice(0, 8)
+      : [],
     member_since: 'Mar 2026'
   };
 }
@@ -174,7 +190,12 @@ function isMissingProfileV3Rpc(error, functionName = 'get_my_profile_v3') {
 
 export async function getProfileV3State(profile = {}) {
   const session = getAuthSession();
-  if (!isSupabaseConfigured || !session?.authUserId) return readLocal(profile);
+  if (!isSupabaseConfigured || !session?.authUserId) {
+    return normalizeState({
+      ...readLocal(profile),
+      credit_wallet: piggybank.getWallet()
+    }, profile);
+  }
   const client = requireSupabase();
   const [{ data, error }, walletResult, verification] = await Promise.all([
     client.rpc('get_my_profile_v3'),

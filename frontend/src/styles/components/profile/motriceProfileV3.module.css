@@ -56,35 +56,42 @@
 .topHeader .verification_rejected i,
 .topHeader .verification_suspended i { background: #ff5b5b; box-shadow: 0 0 0.65rem rgb(255 91 91 / 32%); }
 
-.modeToggle {
+.editPage {
+  gap: 0.75rem;
+  padding-bottom: 5.75rem;
+}
+
+.editHeader {
   position: sticky;
-  top: calc(var(--nav-h) + 0.35rem);
-  z-index: 8;
+  top: calc(var(--nav-h) + 0.15rem);
+  z-index: 9;
+  min-height: 3rem;
   display: grid;
-  grid-template-columns: 1fr 1.25fr;
-  gap: 0.25rem;
-  padding: 0.3rem;
-  border: 1px solid var(--v3-border);
-  border-radius: 999px;
-  background: #090909;
-  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 42%);
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0.15rem 0.1rem;
+  background: rgb(14 14 14 / 94%);
+  backdrop-filter: blur(14px);
 }
 
-.modeToggle button {
-  min-height: 2.8rem;
-  padding: 0.4rem 0.65rem;
+.editHeader strong {
+  color: #f1f1f1;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+}
+
+.editHeader button {
+  min-height: 2.75rem;
   border: 0;
-  border-radius: 999px;
   background: transparent;
-  color: #878787;
-  font-weight: 800;
+  color: #929292;
+  font-size: 0.65rem;
+  font-weight: 850;
 }
 
-.modeToggle .modeActive {
-  background: var(--v3-lime);
-  color: #070707;
-  box-shadow: 0 0 1.25rem rgb(198 255 0 / 30%);
-}
+.editHeader button:first-child { justify-self: start; }
+.editHeader button:last-child { justify-self: end; color: var(--v3-lime); }
+.editHeader button:disabled { opacity: 0.55; }
 
 .verificationBanner {
   display: grid;
@@ -198,11 +205,25 @@
   text-shadow: 0 0 0.72rem rgb(198 255 0 / 58%);
 }
 
-.coverButton {
+.editMediaCard {
+  position: relative;
+  overflow: visible;
+  margin-bottom: 2.9rem;
+  padding: 0;
+}
+
+.editCoverMedia {
+  height: 8.4rem;
+  overflow: hidden;
+  border-radius: calc(var(--r-2xl) - 1px);
+}
+
+.editCoverMedia.coverWithImage { height: 8.4rem; }
+
+.editCoverButton,
+.editAvatarButton {
   position: absolute;
-  z-index: 2;
-  right: 0.35rem;
-  top: 0.35rem;
+  z-index: 4;
   width: 2.75rem;
   height: 2.75rem;
   min-height: 2.75rem;
@@ -211,35 +232,31 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: transparent;
   color: var(--v3-lime);
-  box-shadow: none;
-}
-
-.coverButton::before {
-  content: '';
-  position: absolute;
-  width: 1.85rem;
-  height: 1.85rem;
-  border: 1px solid rgb(198 255 0 / 65%);
-  border-radius: 50%;
-  background: rgb(10 10 10 / 84%);
-  box-shadow: 0 0 0.8rem rgb(198 255 0 / 18%);
+  background: rgb(10 10 10 / 88%);
+  box-shadow: 0 0 0 1px rgb(198 255 0 / 62%), 0 0 0.85rem rgb(198 255 0 / 18%);
   backdrop-filter: blur(8px);
 }
 
-.coverButton > svg,
-.coverButton > .mediaSpinner {
-  position: relative;
-  z-index: 1;
-  width: 0.95rem;
-  min-width: 0.95rem;
-  height: 0.95rem;
+.editCoverButton { top: 0.65rem; right: 0.65rem; }
+.editCoverButton:disabled,
+.editAvatarButton:disabled { opacity: 0.62; }
+
+.editAvatarWrap {
+  position: absolute;
+  left: 1rem;
+  bottom: -2.6rem;
+  margin: 0;
 }
 
-.coverButton:hover,
-.coverButton:active { transform: none; box-shadow: none; }
-.coverButton:disabled { opacity: 0.62; }
+.editAvatarButton {
+  right: -0.35rem;
+  bottom: -0.15rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  min-height: 2.2rem;
+  color: var(--v3-lime);
+}
 .mediaInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .heroContent { position: relative; padding: 0 0.95rem 0.95rem; }
 
@@ -281,46 +298,6 @@
   border-radius: 50%;
   background: #24db3d;
 }
-
-.avatarButton {
-  position: absolute;
-  right: -0.8rem;
-  top: -0.8rem;
-  width: 2.75rem;
-  height: 2.75rem;
-  min-height: 2.75rem;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--v3-lime);
-  box-shadow: none;
-}
-
-.avatarButton::before {
-  content: '';
-  position: absolute;
-  width: 1.7rem;
-  height: 1.7rem;
-  border: 2px solid var(--v3-lime);
-  border-radius: 50%;
-  background: #101010;
-  box-shadow: 0 0 0 3px var(--v3-card), 0 0 0.8rem rgb(198 255 0 / 22%);
-}
-
-.avatarButton > svg {
-  position: relative;
-  z-index: 1;
-  width: 0.9rem;
-  min-width: 0.9rem;
-  height: 0.9rem;
-}
-
-.avatarButton:hover,
-.avatarButton:active { transform: none; box-shadow: none; }
-.avatarButton:disabled { opacity: 0.68; }
 
 .mediaSpinner {
   width: 0.75rem;
@@ -479,7 +456,6 @@
 .metricRows p strong { color: #efefef; text-align: right; }
 .mediaError { margin: 0.65rem 0 0; color: #ff7979; font-size: 0.68rem; }
 
-.identityAccordion { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid #303030; animation: accordion-open 180ms ease-out; }
 @keyframes accordion-open { from { opacity: 0; transform: translateY(-0.35rem); } }
 @keyframes metric-accordion-open {
   from { opacity: 0; transform: translateY(-0.35rem) scaleY(0.97); }
@@ -489,18 +465,123 @@
   from { opacity: 0; transform: translateX(-0.25rem); }
   to { opacity: 1; transform: translateX(0); }
 }
-.identityAccordion form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
-.accordionTitle { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.6rem; }
-.accordionTitle svg { color: var(--v3-lime); }
-.accordionTitle div { display: grid; gap: 0.1rem; }
-.accordionTitle span { color: #888; font-size: 0.68rem; }
-.identityAccordion label { display: grid; gap: 0.35rem; color: #a6a6a6; font-size: 0.68rem; font-weight: 750; }
-.identityAccordion input,
-.identityAccordion textarea { width: 100%; border: 1px solid #343434; border-radius: 12px; padding: 0.72rem 0.78rem; background: #101010; color: #fff; font: inherit; }
-.identityAccordion textarea { resize: vertical; min-height: 6.5rem; }
-.identityAccordion label > small { justify-self: end; color: #737373; }
-.identityAccordion .fullField { grid-column: 1 / -1; }
-.saveButton { grid-column: 1 / -1; min-height: 2.9rem; border: 0; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; background: var(--v3-lime); color: #090909; font-weight: 850; }
+.editForm { display: grid; gap: 0.75rem; }
+.editSection { display: grid; gap: 0.9rem; padding: 0.95rem; }
+.editSectionTitle { display: flex; align-items: center; gap: 0.65rem; }
+.editSectionTitle > svg {
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0.62rem;
+  border: 1px solid rgb(198 255 0 / 25%);
+  border-radius: 0.75rem;
+  color: var(--v3-lime);
+  background: rgb(198 255 0 / 7%);
+}
+.editSectionTitle > div { display: grid; gap: 0.12rem; }
+.editSectionTitle strong { font-size: 0.82rem; }
+.editSectionTitle span { color: #858585; font-size: 0.63rem; }
+.editFields { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+.editFields label {
+  display: grid;
+  gap: 0.38rem;
+  color: #a6a6a6;
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+.editFields input,
+.editFields select,
+.editFields textarea,
+.sportProfileRow select {
+  width: 100%;
+  min-height: 2.85rem;
+  border: 1px solid #343434;
+  border-radius: 12px;
+  padding: 0.7rem 0.78rem;
+  outline: none;
+  background: #101010;
+  color: #f6f6f6;
+  font: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.editFields textarea { min-height: 5.8rem; resize: vertical; line-height: 1.45; }
+.editFields input:focus,
+.editFields select:focus,
+.editFields textarea:focus,
+.sportProfileRow select:focus { border-color: rgb(198 255 0 / 68%); box-shadow: 0 0 0 3px rgb(198 255 0 / 8%); }
+.editFields label > small { justify-self: end; color: #686868; font-size: 0.58rem; }
+.editFullField { grid-column: 1 / -1; }
+
+.sportProfileRows { display: grid; gap: 0.55rem; }
+.sportProfileRow {
+  min-height: 4rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 0.9fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.65rem;
+  border: 1px solid #303030;
+  border-radius: 14px;
+  background: #121212;
+}
+.sportProfileRow > strong { display: flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; }
+.sportProfileRow > strong span { color: var(--v3-lime); text-shadow: 0 0 0.6rem rgb(198 255 0 / 45%); }
+.sportProfileRow label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.4rem; }
+.sportProfileRow label > span { color: #737373; font-size: 0.58rem; }
+.sportProfileRow select { min-height: 2.65rem; padding-block: 0.55rem; font-size: 0.65rem; }
+
+.preferenceFieldset { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; }
+.preferenceFieldset legend { margin-bottom: 0.45rem; color: #a6a6a6; font-size: 0.65rem; font-weight: 800; }
+.preferenceFieldset > div { display: flex; flex-wrap: wrap; gap: 0.42rem; }
+.preferenceFieldset button {
+  min-height: 2.45rem;
+  padding: 0.45rem 0.68rem;
+  border: 1px solid #343434;
+  border-radius: 999px;
+  background: #141414;
+  color: #8e8e8e;
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+.preferenceFieldset button[aria-pressed='true'] { border-color: rgb(198 255 0 / 60%); background: rgb(198 255 0 / 9%); color: var(--v3-lime); }
+.lockedStatsNote {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.78rem 0.85rem;
+  border: 1px solid #292929;
+  border-radius: 15px;
+  background: #141414;
+  color: #777;
+}
+.lockedStatsNote > svg { color: var(--v3-lime); }
+.lockedStatsNote > span { display: grid; gap: 0.12rem; font-size: 0.62rem; line-height: 1.42; }
+.lockedStatsNote strong { color: #dedede; font-size: 0.7rem; }
+.editFooter {
+  display: grid;
+  grid-template-columns: 0.72fr 1.28fr;
+  gap: 0.5rem;
+  padding: 0.45rem;
+  border: 1px solid #2d2d2d;
+  border-radius: 17px;
+  background: #121212;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+}
+.editFooter button {
+  min-height: 3.15rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid #343434;
+  border-radius: 13px;
+  background: #202020;
+  color: #aaa;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+.editFooter button:last-child { border-color: var(--v3-lime); background: var(--v3-lime); color: #090909; box-shadow: 0 0 1.1rem rgb(198 255 0 / 16%); }
+.editFooter button:disabled { opacity: 0.6; }
 
 .firstEventCard {
   min-height: 5rem;
@@ -519,6 +600,19 @@
 .firstEventCard strong { font-size: 0.82rem; }
 .firstEventCard p { margin: 0; color: #777; font-size: 0.65rem; }
 .firstEventCard > svg { color: var(--v3-lime); }
+
+.personalProfileCard { display: grid; gap: 0.78rem; }
+.personalProfileCard > header { display: flex; align-items: center; gap: 0.6rem; }
+.personalProfileCard > header > span { width: 2.3rem; height: 2.3rem; display: grid; place-items: center; border-radius: 0.75rem; background: rgb(198 255 0 / 9%); color: var(--v3-lime); }
+.personalProfileCard > header > div { display: grid; gap: 0.1rem; }
+.personalProfileCard > header small,
+.personalProfileGrid small { color: #858585; font-size: 0.57rem; font-weight: 850; letter-spacing: 0.11em; }
+.personalProfileCard > header strong { font-size: 0.82rem; }
+.personalProfileGrid { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 0.45rem; }
+.personalProfileGrid p { min-height: 4.1rem; display: grid; align-content: center; gap: 0.3rem; margin: 0; padding: 0.68rem; border: 1px solid #2e2e2e; border-radius: 13px; background: #121212; }
+.personalProfileGrid strong { font-size: 0.68rem; line-height: 1.4; }
+.personalPreferencePills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.personalPreferencePills span { padding: 0.28rem 0.5rem; border: 1px solid rgb(198 255 0 / 24%); border-radius: 999px; background: rgb(198 255 0 / 5%); color: #b4ca6e; font-size: 0.58rem; }
 
 .momentsPanel { padding: 0.9rem; border: 1px solid var(--v3-border); border-radius: var(--r-2xl); background: var(--v3-card); animation: moments-panel-in 180ms ease-out both; }
 @keyframes moments-panel-in { from { opacity: 0; transform: translateY(0.35rem); } to { opacity: 1; transform: translateY(0); } }
@@ -618,10 +712,11 @@
   .heroActions button { padding-inline: 0.55rem; }
   .metricButtons { gap: 0.3rem; }
   .metricButtons button { padding-right: 0.7rem; }
-  .identityAccordion form { grid-template-columns: 1fr; }
-  .identityAccordion .fullField,
-  .accordionTitle,
-  .saveButton { grid-column: auto; }
+  .editFields { grid-template-columns: 1fr; }
+  .editFullField,
+  .preferenceFieldset { grid-column: auto; }
+  .sportProfileRow { grid-template-columns: 1fr; }
+  .personalProfileGrid { grid-template-columns: 1fr; }
   .achievementGrid { gap: 0.25rem; }
   .verificationBanner { grid-template-columns: auto 1fr; }
   .verificationBanner button { grid-column: 1 / -1; }
@@ -631,7 +726,6 @@
 @media (prefers-reduced-motion: reduce) {
   .metricAccordion,
   .metricRows p,
-  .identityAccordion,
   .momentsPanel,
   .momentLightbox { animation: none; }
   .coverMedia,

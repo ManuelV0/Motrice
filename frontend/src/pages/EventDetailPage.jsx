@@ -558,8 +558,8 @@ function EventDetailPage() {
       }
       if (String(err?.message || '').includes('DEPOSIT_REQUIRED')) {
         setModalOpen(false);
-        showToast('Hai terminato gli eventi prova. Serve una riserva di 10 € nel Wallet per partecipare.', 'info');
-        navigate('/account');
+        showToast('Hai terminato gli eventi prova. Aggiungi 10 € virtuali per partecipare.', 'info');
+        navigate('/wallet/credit');
         return;
       }
       showToast(err.message, 'error');
@@ -1801,7 +1801,7 @@ function EventDetailPage() {
           </p>
           <p className="muted">
             {event?.join_policy === 'approval'
-              ? 'La riserva viene bloccata all’invio della richiesta e torna disponibile se l’organizzatore la rifiuta.'
+              ? 'La riserva viene bloccata solo dopo l’approvazione dell’organizzatore.'
               : `La riserva viene bloccata nel Wallet. Dopo almeno ${Number(event?.minimum_presence_minutes || 45)} minuti verificati torna disponibile al termine delle 48 ore di tutela.`}
           </p>
         </Card>

@@ -35,6 +35,7 @@ export function getCreditWalletDetails(wallet) {
   const pendingCents = safeNumber(readValue(wallet, 'pending_cents', 'pendingCents'));
   const withdrawableCents = safeNumber(readValue(wallet, 'withdrawable_cents', 'withdrawableCents'));
   const trialEventsRemaining = safeNumber(readValue(wallet, 'trial_events_remaining', 'trialEventsRemaining'));
+  const providerMode = String(readValue(wallet, 'provider_mode', 'providerMode') || 'stripe_test');
   const depositsEnabled = Boolean(readValue(wallet, 'deposits_enabled', 'depositsEnabled'));
   const withdrawalsEnabled = Boolean(readValue(wallet, 'withdrawals_enabled', 'withdrawalsEnabled'));
   const totalCents = availableCents + lockedCents + pendingCents + withdrawableCents;
@@ -48,6 +49,8 @@ export function getCreditWalletDetails(wallet) {
     pendingCents,
     withdrawableCents,
     trialEventsRemaining,
+    providerMode,
+    isVirtual: providerMode === 'virtual_beta',
     depositsEnabled,
     withdrawalsEnabled,
     rows: [
@@ -56,7 +59,12 @@ export function getCreditWalletDetails(wallet) {
       { label: 'In attesa (48 ore)', value: formatWalletCredit(pendingCents) },
       { label: 'Prelevabili', value: formatWalletCredit(withdrawableCents) },
       { label: 'Eventi prova rimasti', value: new Intl.NumberFormat('it-IT').format(trialEventsRemaining) },
-      { label: 'Pagamenti', value: depositsEnabled || withdrawalsEnabled ? 'Test attivo' : 'Test protetto' }
+      {
+        label: 'Modalità',
+        value: providerMode === 'virtual_beta'
+          ? 'Credito virtuale'
+          : depositsEnabled || withdrawalsEnabled ? 'Test attivo' : 'Test protetto'
+      }
     ]
   };
 }
@@ -69,7 +77,9 @@ function WalletCreditDetails({
   children
 }) {
   const details = getCreditWalletDetails(wallet);
-  const statusLabel = details.depositsEnabled ? 'Stripe attivo' : 'Ambiente protetto';
+  const statusLabel = details.isVirtual
+    ? 'Credito virtuale beta'
+    : details.depositsEnabled ? 'Stripe attivo' : 'Ambiente protetto';
 
   return (
     <>

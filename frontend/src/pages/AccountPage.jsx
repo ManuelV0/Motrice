@@ -27,7 +27,6 @@ function AccountPage() {
   const { showToast } = useToast();
   const [profile, setProfile] = useState(null);
   const [profileV3, setProfileV3] = useState(() => createEmptyProfileV3());
-  const [mode, setMode] = useState('mine');
   const [photoReview, setPhotoReview] = useState({ status: 'none' });
   const [moments, setMoments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +73,14 @@ function AccountPage() {
           avatar_url: identity.avatar_url,
           cover_url: identity.cover_url,
           bio: identity.bio,
-          city: identity.city
+          city: identity.city,
+          sports: Array.isArray(identity.sport_profiles)
+            ? identity.sport_profiles.map((sport) => sport.name).filter(Boolean)
+            : current.identity.sports,
+          sport_profiles: identity.sport_profiles,
+          training_goal: identity.training_goal,
+          looking_for: identity.looking_for,
+          training_preferences: identity.training_preferences
         }
       }));
       showToast('Profilo unificato aggiornato', 'success');
@@ -121,8 +127,7 @@ function AccountPage() {
     <MotriceProfileV3
       profile={profile}
       state={profileV3}
-      mode={mode}
-      onModeChange={setMode}
+      mode="mine"
       onSaveProfile={saveProfile}
       onUploadMedia={uploadMedia}
       photoReview={photoReview}

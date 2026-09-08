@@ -81,9 +81,6 @@ function ProfilePage() {
       profile={profile}
       state={profileV3}
       mode="public"
-      onModeChange={(nextMode) => {
-        if (nextMode === 'mine') navigate('/account');
-      }}
       onSaveProfile={() => false}
       moments={moments}
       isPremium={profile?.plan === 'premium' || profile?.subscription_plan === 'premium'}

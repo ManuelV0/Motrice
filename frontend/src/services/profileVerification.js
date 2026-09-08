@@ -6,6 +6,7 @@ const LOCAL_STATE_PREFIX = 'motrice.profile-verification.';
 const ONBOARDING_PREFIX = 'motrice.profile-verification-onboarding.';
 const PRIVATE_BUCKET = 'profile-verification-private';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
 
 const allowedStatuses = new Set([
   'unverified',
@@ -141,6 +142,13 @@ export async function canReviewProfileVerifications() {
 
 export async function getMyProfileVerification() {
   const session = getAuthSession();
+  if (IS_LOCAL_QA && session?.isAuthenticated) {
+    return normalizeSummary({
+      status: 'verified',
+      verified_at: new Date().toISOString(),
+      enforcement_enabled: true
+    });
+  }
   if (!isSupabaseConfigured || !session?.authUserId) return readLocalSummary();
   const client = requireSupabase();
   const { data, error } = await client.rpc('get_my_profile_verification');

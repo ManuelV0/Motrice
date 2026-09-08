@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import BrandLogo from '../BrandLogo';
 import {
   ArrowRight,
+  Camera,
   ChevronDown,
   ChevronUp,
   CircleCheck,
   Coins,
   CreditCard,
+  Dumbbell,
   ImagePlus,
   LockKeyhole,
   MapPin,
@@ -15,7 +17,9 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Target,
   Trash2,
+  UserRound,
   UserRoundPlus,
   X,
   Zap
@@ -23,6 +27,51 @@ import {
 import styles from '../../styles/components/profile/motriceProfileV3.module.css';
 
 const RATING_ROWS = ['Puntualità', 'Impegno', 'Collaborazione', 'Correttezza', 'Atteggiamento'];
+const SPORT_LEVELS = ['Principiante', 'Intermedio', 'Avanzato'];
+const TRAINING_GOALS = [
+  'Forza e costanza',
+  'Migliorare resistenza',
+  'Socialità e benessere',
+  'Preparazione gara'
+];
+const TRAINING_PREFERENCES = ['Allenamento intenso', 'In gruppo', 'Mattina', 'Sera'];
+
+function normalizeSportProfiles(profile, identity) {
+  const saved = Array.isArray(profile?.sport_profiles) ? profile.sport_profiles : [];
+  const fallbackSports = Array.isArray(identity?.sports) && identity.sports.length
+    ? identity.sports
+    : ['Calisthenics', 'Running'];
+  const normalized = saved
+    .map((item) => ({
+      name: String(item?.name || '').trim(),
+      level: SPORT_LEVELS.includes(String(item?.level || '')) ? String(item.level) : 'Principiante'
+    }))
+    .filter((item) => item.name)
+    .slice(0, 6);
+  if (normalized.length) return normalized;
+  return fallbackSports.slice(0, 6).map((name, index) => ({
+    name: String(name),
+    level: index === 0 ? 'Intermedio' : 'Principiante'
+  }));
+}
+
+function profileForm(profile, identity) {
+  return {
+    display_name: profile?.display_name || profile?.name || identity?.display_name || 'Alessandro',
+    city: profile?.city || identity?.city || 'Ascoli Piceno',
+    bio: profile?.bio || identity?.bio || '',
+    avatar_url: profile?.avatar_url || identity?.avatar_url || '',
+    cover_url: profile?.cover_url || identity?.cover_url || '',
+    sport_profiles: normalizeSportProfiles(profile, identity),
+    training_goal: String(profile?.training_goal || identity?.training_goal || ''),
+    looking_for: String(profile?.looking_for || identity?.looking_for || ''),
+    training_preferences: Array.isArray(profile?.training_preferences)
+      ? profile.training_preferences.map(String).filter(Boolean).slice(0, 8)
+      : Array.isArray(identity?.training_preferences)
+        ? identity.training_preferences.map(String).filter(Boolean).slice(0, 8)
+        : []
+  };
+}
 
 function fileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -37,7 +86,6 @@ function MotriceProfileV3({
   profile,
   state,
   mode,
-  onModeChange,
   onSaveProfile,
   onUploadMedia,
   moments = [],
@@ -59,28 +107,18 @@ function MotriceProfileV3({
   const [deletingMomentId, setDeletingMomentId] = useState('');
   const [selectedMoment, setSelectedMoment] = useState(null);
   const [mediaError, setMediaError] = useState('');
+  const [saveError, setSaveError] = useState('');
   const [momentError, setMomentError] = useState('');
   const [avatarConsentOpen, setAvatarConsentOpen] = useState(false);
-  const [form, setForm] = useState({
-    display_name: '',
-    city: '',
-    bio: '',
-    avatar_url: '',
-    cover_url: ''
-  });
+  const [form, setForm] = useState(() => profileForm(profile, state?.identity));
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
   const momentInputRef = useRef(null);
+  const editSnapshotRef = useRef(null);
 
   useEffect(() => {
-    setForm({
-      display_name: profile?.display_name || profile?.name || 'Alessandro',
-      city: profile?.city || 'Ascoli Piceno',
-      bio: profile?.bio || '',
-      avatar_url: profile?.avatar_url || '',
-      cover_url: profile?.cover_url || ''
-    });
-  }, [profile]);
+    if (!identityOpen) setForm(profileForm(profile, state?.identity));
+  }, [identityOpen, profile, state?.identity]);
 
   const identity = state.identity;
   const displayName = form.display_name.trim() || identity.display_name || 'Alessandro';
@@ -102,15 +140,17 @@ function MotriceProfileV3({
   const photoReviewStatus = String(photoReview?.status || 'none');
   const avatarReviewPending = photoReviewStatus === 'pending';
   const profileCompletion = Math.round(
-    [form.display_name, form.city, form.bio, form.avatar_url, form.cover_url]
-      .filter((value) => String(value || '').trim()).length / 5 * 100
+    [form.display_name, form.city, form.bio, form.avatar_url, form.cover_url, form.training_goal, form.looking_for]
+      .filter((value) => String(value || '').trim()).length / 7 * 100
   );
   const missingProfileFields = [
     !form.display_name && 'nome',
     !form.city && 'città',
     !form.bio && 'bio',
     !form.avatar_url && 'foto profilo',
-    !form.cover_url && 'copertina'
+    !form.cover_url && 'copertina',
+    !form.training_goal && 'obiettivo',
+    !form.looking_for && 'cosa cerchi'
   ].filter(Boolean);
   const hasHistory = verified > 0 || state.mot.total > 0 || state.recent_activity.length > 0;
   const lastMot = state.mot.logs?.[0];
@@ -153,13 +193,45 @@ function MotriceProfileV3({
 
   async function saveIdentity(event) {
     event.preventDefault();
+    setSaveError('');
     setSaving(true);
     try {
       const saved = await onSaveProfile(form);
-      if (saved !== false) setIdentityOpen(false);
+      if (saved !== false) {
+        editSnapshotRef.current = null;
+        setIdentityOpen(false);
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+          document.getElementById('main-content')?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+        });
+      } else {
+        setSaveError('Non è stato possibile salvare il profilo. Controlla i dati e riprova.');
+      }
+    } catch (error) {
+      setSaveError(error?.message || 'Non è stato possibile salvare il profilo. Riprova.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function openIdentityEditor() {
+    editSnapshotRef.current = {
+      ...form,
+      sport_profiles: form.sport_profiles.map((item) => ({ ...item })),
+      training_preferences: [...form.training_preferences]
+    };
+    setMediaError('');
+    setSaveError('');
+    setIdentityOpen(true);
+  }
+
+  function closeIdentityEditor() {
+    if (editSnapshotRef.current) setForm(editSnapshotRef.current);
+    editSnapshotRef.current = null;
+    setMediaError('');
+    setSaveError('');
+    setAvatarConsentOpen(false);
+    setIdentityOpen(false);
   }
 
   async function selectMedia(event, kind) {
@@ -168,7 +240,11 @@ function MotriceProfileV3({
     if (!file || !isPrivate) return;
 
     const field = kind === 'cover' ? 'cover_url' : 'avatar_url';
-    const previous = form;
+    const previous = {
+      ...form,
+      sport_profiles: form.sport_profiles.map((item) => ({ ...item })),
+      training_preferences: [...form.training_preferences]
+    };
     const previewUrl = URL.createObjectURL(file);
     setMediaError('');
     setUploadingKind(kind);
@@ -183,10 +259,7 @@ function MotriceProfileV3({
         return;
       }
       const uploadedUrl = String(uploadResult || '');
-      const next = { ...previous, [field]: uploadedUrl };
-      setForm(next);
-      const saved = await onSaveProfile(next);
-      if (saved === false) throw new Error('Salvataggio immagine non riuscito');
+      setForm((current) => ({ ...current, [field]: uploadedUrl }));
     } catch (error) {
       setForm(previous);
       setMediaError(error?.message || 'Caricamento immagine non riuscito');
@@ -204,8 +277,28 @@ function MotriceProfileV3({
     setActiveProfileSection(section);
     if (section === 'moments') {
       setActiveMetric('');
-      setIdentityOpen(false);
     }
+  }
+
+  function updateSportLevel(index, level) {
+    setForm((current) => ({
+      ...current,
+      sport_profiles: current.sport_profiles.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, level } : item
+      ))
+    }));
+  }
+
+  function toggleTrainingPreference(preference) {
+    setForm((current) => {
+      const selected = current.training_preferences.includes(preference);
+      return {
+        ...current,
+        training_preferences: selected
+          ? current.training_preferences.filter((item) => item !== preference)
+          : [...current.training_preferences, preference]
+      };
+    });
   }
 
   async function selectMoments(event) {
@@ -241,6 +334,150 @@ function MotriceProfileV3({
 
   const activeMetricDetail = activeMetric ? metricDetails[activeMetric] : null;
 
+  if (isPrivate && identityOpen) {
+    return (
+      <main className={`${styles.page} ${styles.editPage}`}>
+        <header className={styles.editHeader}>
+          <button type="button" onClick={closeIdentityEditor}>ANNULLA</button>
+          <strong>MODIFICA PROFILO</strong>
+          <button type="submit" form="profile-v3-edit-form" disabled={saving}>{saving ? 'SALVO…' : 'SALVA'}</button>
+        </header>
+
+        <section className={`${styles.card} ${styles.editMediaCard}`}>
+          <div className={`${styles.coverMedia} ${styles.editCoverMedia} ${form.cover_url ? styles.coverWithImage : ''}`}>
+            {form.cover_url ? (
+              <img src={form.cover_url} alt="Anteprima copertina del profilo" />
+            ) : (
+              <span className={styles.coverFallback} aria-hidden="true">
+                <BrandLogo className={styles.coverFallbackLogo} decorative />
+                <small>MOTRICE</small>
+              </span>
+            )}
+            <button
+              type="button"
+              className={styles.editCoverButton}
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingKind === 'cover'}
+              aria-label="Scegli la copertina dalla galleria"
+            >
+              {uploadingKind === 'cover' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={17} aria-hidden="true" />}
+            </button>
+            <input ref={coverInputRef} className={styles.mediaInput} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(event, 'cover')} />
+          </div>
+
+          <span className={`${styles.avatarWrap} ${styles.editAvatarWrap}`}>
+            <span className={styles.avatarImageFrame}>
+              {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
+            </span>
+            <i aria-hidden="true" />
+            <button
+              type="button"
+              className={styles.editAvatarButton}
+              onClick={() => {
+                if (verificationStatus !== 'verified') {
+                  onVerify?.();
+                  return;
+                }
+                setAvatarConsentOpen(true);
+              }}
+              disabled={uploadingKind === 'avatar' || avatarReviewPending}
+              aria-label={avatarReviewPending ? 'Foto profilo in revisione' : 'Scegli la foto profilo dalla galleria'}
+            >
+              {uploadingKind === 'avatar' ? <span className={styles.mediaSpinner} /> : <Camera size={16} aria-hidden="true" />}
+            </button>
+          </span>
+          <input ref={avatarInputRef} className={styles.mediaInput} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(event, 'avatar')} />
+        </section>
+
+        {avatarConsentOpen ? (
+          <section className={styles.avatarConsent} role="dialog" aria-label="Consenso confronto foto profilo">
+            <span><ShieldCheck size={19} /></span>
+            <div>
+              <strong>Confronto foto profilo</strong>
+              <small>La nuova foto sarà confrontata con la foto privata di verifica. L’avatar attuale resta visibile fino all’approvazione.</small>
+            </div>
+            <div className={styles.avatarConsentActions}>
+              <button type="button" onClick={() => setAvatarConsentOpen(false)}>Annulla</button>
+              <button type="button" onClick={() => { setAvatarConsentOpen(false); avatarInputRef.current?.click(); }}>Accetto e scelgo</button>
+            </div>
+          </section>
+        ) : null}
+
+        {avatarReviewPending ? (
+          <p className={styles.photoReviewStatus} role="status"><ShieldCheck size={16} /><span><strong>Nuova foto in verifica</strong>L’avatar attuale resta pubblico fino all’esito.</span></p>
+        ) : null}
+        {photoReviewStatus === 'rejected' ? (
+          <p className={`${styles.photoReviewStatus} ${styles.photoReviewRejected}`} role="status"><ImagePlus size={16} /><span><strong>Foto non approvata</strong>{photoReview.rejection_reason || 'Scegli una foto frontale più nitida.'}</span></p>
+        ) : null}
+
+        <form id="profile-v3-edit-form" className={styles.editForm} onSubmit={saveIdentity}>
+          <section className={`${styles.card} ${styles.editSection}`}>
+            <div className={styles.editSectionTitle}>
+              <UserRound size={17} aria-hidden="true" />
+              <div><strong>Bio e dati personali</strong><span>Visibili nel profilo e negli eventi.</span></div>
+            </div>
+            <div className={styles.editFields}>
+              <label>Nome<input value={form.display_name} maxLength={40} required onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>
+              <label>Città<input value={form.city} maxLength={80} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
+              <label className={styles.editFullField}>Bio<textarea value={form.bio} maxLength={600} rows={4} placeholder="Racconta come ti alleni e cosa cerchi..." onChange={(event) => setForm({ ...form, bio: event.target.value })} /><small>{form.bio.length}/600</small></label>
+            </div>
+          </section>
+
+          <section className={`${styles.card} ${styles.editSection}`}>
+            <div className={styles.editSectionTitle}>
+              <Dumbbell size={17} aria-hidden="true" />
+              <div><strong>Identità sportiva</strong><span>I livelli aiutano a trovare persone compatibili.</span></div>
+            </div>
+            <div className={styles.sportProfileRows}>
+              {form.sport_profiles.map((sport, index) => (
+                <div className={styles.sportProfileRow} key={`${sport.name}-${index}`}>
+                  <strong><span aria-hidden="true">●</span>{sport.name}</strong>
+                  <label>
+                    <span>Livello</span>
+                    <select value={sport.level} onChange={(event) => updateSportLevel(index, event.target.value)}>
+                      {SPORT_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
+                    </select>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className={`${styles.card} ${styles.editSection}`}>
+            <div className={styles.editSectionTitle}>
+              <Target size={17} aria-hidden="true" />
+              <div><strong>Obiettivi e preferenze</strong><span>Informazioni personali, non statistiche.</span></div>
+            </div>
+            <div className={styles.editFields}>
+              <label className={styles.editFullField}>Obiettivo principale<select value={form.training_goal} onChange={(event) => setForm({ ...form, training_goal: event.target.value })}><option value="">Seleziona obiettivo</option>{TRAINING_GOALS.map((goal) => <option key={goal} value={goal}>{goal}</option>)}</select></label>
+              <label className={styles.editFullField}>Cosa cerco<textarea value={form.looking_for} maxLength={300} rows={3} placeholder="Es. compagni costanti per allenarmi due volte a settimana" onChange={(event) => setForm({ ...form, looking_for: event.target.value })} /><small>{form.looking_for.length}/300</small></label>
+              <fieldset className={styles.preferenceFieldset}>
+                <legend>Preferenze</legend>
+                <div>{TRAINING_PREFERENCES.map((preference) => {
+                  const selected = form.training_preferences.includes(preference);
+                  return <button type="button" key={preference} aria-pressed={selected} onClick={() => toggleTrainingPreference(preference)}>{preference}</button>;
+                })}</div>
+              </fieldset>
+            </div>
+          </section>
+
+          <aside className={styles.lockedStatsNote}>
+            <LockKeyhole size={18} aria-hidden="true" />
+            <span><strong>Statistiche protette</strong>Eventi, MOT, affidabilità, valutazioni e XP si aggiornano automaticamente e non sono modificabili.</span>
+          </aside>
+
+          {mediaError ? <p className={styles.mediaError}>{mediaError}</p> : null}
+          {saveError ? <p className={styles.mediaError} role="alert">{saveError}</p> : null}
+
+          <div className={styles.editFooter}>
+            <button type="button" onClick={closeIdentityEditor}>Annulla</button>
+            <button type="submit" disabled={saving}><Save size={17} aria-hidden="true" /> {saving ? 'Salvataggio…' : 'Salva profilo'}</button>
+          </div>
+        </form>
+      </main>
+    );
+  }
+
   return (
     <main className={`${styles.page} ${!isPrivate ? styles.publicMode : ''}`}>
       <header className={styles.topHeader}>
@@ -254,11 +491,6 @@ function MotriceProfileV3({
           <i aria-hidden="true" /> {verificationLabel} <ChevronDown size={14} aria-hidden="true" />
         </button>
       </header>
-
-      <div className={styles.modeToggle} role="tablist" aria-label="Vista del profilo">
-        <button type="button" role="tab" aria-selected={isPrivate} className={isPrivate ? styles.modeActive : ''} onClick={() => onModeChange('mine')}>Mio profilo</button>
-        <button type="button" role="tab" aria-selected={!isPrivate} className={!isPrivate ? styles.modeActive : ''} onClick={() => onModeChange('public')}>Anteprima pubblica</button>
-      </div>
 
       {isPrivate && verificationStatus !== 'verified' ? (
         <section className={styles.verificationBanner}>
@@ -289,21 +521,6 @@ function MotriceProfileV3({
               <small>MOTRICE</small>
             </span>
           )}
-          {isPrivate ? (
-            <>
-              <button
-                type="button"
-                className={styles.coverButton}
-                onClick={() => coverInputRef.current?.click()}
-                disabled={uploadingKind === 'cover'}
-                aria-label="Scegli l’immagine di copertina dalla galleria"
-                title="Scegli copertina dalla galleria"
-              >
-                {uploadingKind === 'cover' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={15} strokeWidth={2.4} aria-hidden="true" />}
-              </button>
-              <input ref={coverInputRef} className={styles.mediaInput} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(event, 'cover')} />
-            </>
-          ) : null}
         </div>
 
         <div className={styles.heroContent}>
@@ -312,30 +529,11 @@ function MotriceProfileV3({
               {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
             </span>
             <i aria-hidden="true" />
-            {isPrivate ? (
-              <button
-                type="button"
-                className={styles.avatarButton}
-                onClick={() => {
-                  if (verificationStatus !== 'verified') {
-                    onVerify?.();
-                    return;
-                  }
-                  setAvatarConsentOpen(true);
-                }}
-                disabled={uploadingKind === 'avatar' || avatarReviewPending}
-                aria-label={avatarReviewPending ? 'Foto profilo in revisione' : 'Scegli la foto profilo dalla galleria'}
-                title={avatarReviewPending ? 'Foto in revisione' : 'Scegli dalla galleria'}
-              >
-                {uploadingKind === 'avatar' ? <span className={styles.mediaSpinner} /> : <ImagePlus size={14} strokeWidth={2.4} aria-hidden="true" />}
-              </button>
-            ) : null}
           </span>
-          {isPrivate ? <input ref={avatarInputRef} className={styles.mediaInput} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectMedia(event, 'avatar')} /> : null}
 
           <div className={styles.heroActions}>
             {isPrivate ? (
-              <button type="button" onClick={() => setIdentityOpen((value) => !value)}><Pencil size={14} /> Modifica profilo</button>
+              <button type="button" onClick={openIdentityEditor}><Pencil size={14} /> Modifica profilo</button>
             ) : (
               <button type="button" className={styles.inviteHeroButton} onClick={onInvite}><UserRoundPlus size={14} /> Invita a evento</button>
             )}
@@ -345,7 +543,7 @@ function MotriceProfileV3({
             <span className={styles.nameLine}><strong>{displayName}</strong>{isPremium ? <em>PREMIUM</em> : null}</span>
             <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city} · Lv {state.xp.level}</span>
             <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
-            <span className={styles.sportPills}>{identity.sports.map((sport) => <small key={sport}>{sport}</small>)}</span>
+            <span className={styles.sportPills}>{form.sport_profiles.map((sport) => <small key={sport.name}>{sport.name} · {sport.level}</small>)}</span>
           </div>
 
           <div className={styles.profileSectionTabs} role="tablist" aria-label="Contenuto del profilo">
@@ -368,20 +566,6 @@ function MotriceProfileV3({
               Momenti
             </button>
           </div>
-
-          {activeProfileSection === 'identity' && avatarConsentOpen ? (
-            <section className={styles.avatarConsent} role="dialog" aria-label="Consenso confronto foto profilo">
-              <span><ShieldCheck size={19} /></span>
-              <div>
-                <strong>Confronto foto profilo</strong>
-                <small>La nuova foto resterà privata e sarà confrontata solo con la tua foto di verifica. L’avatar attuale non cambia fino all’approvazione.</small>
-              </div>
-              <div className={styles.avatarConsentActions}>
-                <button type="button" onClick={() => setAvatarConsentOpen(false)}>Annulla</button>
-                <button type="button" onClick={() => { setAvatarConsentOpen(false); avatarInputRef.current?.click(); }}>Accetto e scelgo</button>
-              </div>
-            </section>
-          ) : null}
 
           {activeProfileSection === 'identity' && isPrivate && avatarReviewPending ? (
             <p className={styles.photoReviewStatus} role="status"><ShieldCheck size={16} /><span><strong>Nuova foto in verifica</strong>L’avatar attuale resta pubblico fino all’esito.</span></p>
@@ -417,17 +601,6 @@ function MotriceProfileV3({
 
           {mediaError ? <p className={styles.mediaError}>{mediaError}</p> : null}
 
-          {activeProfileSection === 'identity' && identityOpen ? (
-            <div id="profile-v3-identity" className={styles.identityAccordion}>
-              <form onSubmit={saveIdentity}>
-                <div className={styles.accordionTitle}><Pencil size={16} aria-hidden="true" /><div><strong>Bio e dati personali</strong><span>Unica identità per eventi e chat.</span></div></div>
-                <label>Nome<input value={form.display_name} maxLength={40} required onChange={(event) => setForm({ ...form, display_name: event.target.value })} /></label>
-                <label>Città<input value={form.city} maxLength={80} onChange={(event) => setForm({ ...form, city: event.target.value })} /></label>
-                <label className={styles.fullField}>Bio<textarea value={form.bio} maxLength={600} rows={4} placeholder="Racconta come ti alleni e cosa cerchi..." onChange={(event) => setForm({ ...form, bio: event.target.value })} /><small>{form.bio.length}/600</small></label>
-                <button type="submit" className={styles.saveButton} disabled={saving}><Save size={17} aria-hidden="true" /> {saving ? 'Salvataggio...' : 'Salva profilo'}</button>
-              </form>
-            </div>
-          ) : null}
         </div>
       </section>
 
@@ -511,6 +684,24 @@ function MotriceProfileV3({
           <span><Sparkles size={20} /></span>
           <div><small>IL PROSSIMO PASSO</small><strong>Completa il primo evento</strong><p>Sblocca valutazioni, achievement e attività recente.</p></div>
           <ArrowRight size={18} />
+        </section>
+      ) : null}
+
+      {(form.training_goal || form.looking_for || form.training_preferences.length > 0) ? (
+        <section className={`${styles.card} ${styles.personalProfileCard}`}>
+          <header>
+            <span><Target size={16} aria-hidden="true" /></span>
+            <div><small>PROFILO SPORTIVO</small><strong>Come mi piace allenarmi</strong></div>
+          </header>
+          <div className={styles.personalProfileGrid}>
+            {form.training_goal ? <p><small>OBIETTIVO</small><strong>{form.training_goal}</strong></p> : null}
+            {form.looking_for ? <p><small>COSA CERCO</small><strong>{form.looking_for}</strong></p> : null}
+          </div>
+          {form.training_preferences.length ? (
+            <div className={styles.personalPreferencePills}>
+              {form.training_preferences.map((preference) => <span key={preference}>{preference}</span>)}
+            </div>
+          ) : null}
         </section>
       ) : null}
 

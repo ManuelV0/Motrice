@@ -361,6 +361,59 @@ async function ensureDmThreadsFromFriends(store, currentUserId) {
   store.threads = filtered;
 }
 
+async function ensureEventThreadsFromMemberships(store, currentUserId) {
+  const events = await api.listEvents({
+    dateRange: 'all',
+    includePast: true,
+    includeCancelled: true,
+    sortBy: 'soonest'
+  });
+  const visibleEvents = (Array.isArray(events) ? events : []).filter(
+    (event) => event?.created_by === 'me' || event?.is_going
+  );
+
+  if (!Array.isArray(store.threads)) store.threads = [];
+
+  visibleEvents.forEach((event) => {
+    const eventId = String(event?.id || '').trim();
+    if (!eventId) return;
+    const threadId = `event_${eventId}`;
+    const existingThread = store.threads.find((thread) => String(thread?.id || '') === threadId);
+    const existingParticipants = Array.isArray(existingThread?.participants)
+      ? existingThread.participants.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+      : [];
+    const participants = Array.from(new Set([...existingParticipants, Number(currentUserId)]));
+    const sportSlug = String(event?.sport?.slug || event?.sport_slug || '').trim();
+    const eventStatus = String(event?.lifecycle_state || event?.status || 'scheduled').trim();
+    const baseThread = {
+      id: threadId,
+      type: 'event',
+      title: String(event?.title || event?.sport?.name || 'Chat evento').trim() || 'Chat evento',
+      avatarUrl: event?.cover_url || (sportSlug ? `/images/${sportSlug}.svg` : ''),
+      participants,
+      eventId,
+      meta: {
+        ...(existingThread?.meta || {}),
+        participantsCount: Number(event?.participants_count || participants.length),
+        startsAt: event?.event_datetime || '',
+        city: event?.city || '',
+        locationName: event?.location_name || '',
+        eventStatus,
+        sportName: event?.sport?.name || event?.sport_name || 'Sport',
+        sportSlug
+      },
+      lastMessage: existingThread?.lastMessage || '',
+      lastTs: existingThread?.lastTs || event?.event_datetime || nowIso()
+    };
+
+    if (existingThread) {
+      Object.assign(existingThread, { ...existingThread, ...baseThread });
+    } else {
+      store.threads.push(baseThread);
+    }
+  });
+}
+
 function isThreadDeletedLocally(store, thread, currentUserId) {
   const record = store.deletedThreadsByUser?.[String(currentUserId)]?.[String(thread?.id || '')];
   if (!record || typeof record !== 'object') return false;
@@ -410,9 +463,12 @@ export const chatApi = {
     const store = loadStore();
     const currentUserId = resolveUserId();
     try {
-      await ensureDmThreadsFromFriends(store, currentUserId);
+      await Promise.all([
+        ensureDmThreadsFromFriends(store, currentUserId),
+        ensureEventThreadsFromMemberships(store, currentUserId)
+      ]);
     } catch {
-      // La chat eventi resta disponibile anche se la rubrica locale non risponde.
+      // Mantiene utilizzabili le chat già persistite se una sorgente locale non risponde.
     }
     saveStore(store);
     const localItems = getVisibleThreads(store, currentUserId);
@@ -444,7 +500,10 @@ export const chatApi = {
 
     const store = loadStore();
     const currentUserId = resolveUserId();
-    await ensureDmThreadsFromFriends(store, currentUserId);
+    await Promise.all([
+      ensureDmThreadsFromFriends(store, currentUserId),
+      ensureEventThreadsFromMemberships(store, currentUserId)
+    ]);
     saveStore(store);
     const thread = getThreadById(store, threadId, currentUserId);
     if (!thread) throw new Error('Chat non trovata');

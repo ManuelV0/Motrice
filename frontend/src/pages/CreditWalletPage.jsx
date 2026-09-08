@@ -30,6 +30,9 @@ import styles from '../styles/pages/creditWallet.module.css';
 const FIXED_DEPOSIT_CENTS = 1000;
 
 const LEDGER_LABELS = {
+  virtual_credit_added: 'Credito virtuale aggiunto',
+  trial_event_used: 'Evento prova utilizzato',
+  trial_event_restored: 'Evento prova ripristinato',
   deposit_succeeded: 'Deposito completato',
   event_hold_locked: 'Credito bloccato per evento',
   hold_locked: 'Credito bloccato per evento',
@@ -97,15 +100,22 @@ function CreditWalletPage() {
     setLoading(true);
     try {
       const profile = await api.getLocalProfile();
-      const [stateResult, ledgerResult] = await Promise.allSettled([
+      const [stateResult, walletResult, ledgerResult] = await Promise.allSettled([
         getProfileV3State(profile),
+        typeof api.getMoneyWallet === 'function'
+          ? api.getMoneyWallet()
+          : Promise.resolve(null),
         typeof api.listMoneyLedger === 'function'
           ? api.listMoneyLedger({ limit: 12 })
           : Promise.resolve([])
       ]);
 
       if (stateResult.status === 'rejected') throw stateResult.reason;
-      setWallet(stateResult.value?.credit_wallet || null);
+      setWallet(
+        walletResult.status === 'fulfilled' && walletResult.value
+          ? walletResult.value
+          : stateResult.value?.credit_wallet || null
+      );
       setLedger(ledgerResult.status === 'fulfilled' && Array.isArray(ledgerResult.value)
         ? ledgerResult.value
         : []);
@@ -133,12 +143,24 @@ function CreditWalletPage() {
 
   const details = useMemo(() => getCreditWalletDetails(wallet), [wallet]);
   const withdrawal = wallet?.withdrawal || {};
-  const canDeposit = details.depositsEnabled && typeof api.createWalletDepositCheckout === 'function';
+  const canAddVirtualCredit = details.isVirtual && typeof api.addVirtualWalletCredit === 'function';
+  const canDeposit = details.depositsEnabled && (
+    canAddVirtualCredit || typeof api.createWalletDepositCheckout === 'function'
+  );
 
   async function startDeposit() {
     if (!canDeposit || depositing) return;
     setDepositing(true);
     try {
+      if (canAddVirtualCredit) {
+        const nextWallet = await api.addVirtualWalletCredit();
+        setWallet(nextWallet);
+        showToast('Aggiunti 10 € virtuali. Nessun addebito reale.', 'success');
+        await hydrate();
+        setDepositing(false);
+        return;
+      }
+
       const checkout = await api.createWalletDepositCheckout();
       if (!checkout?.checkout_url) throw new Error('Pagina di pagamento non disponibile');
 
@@ -182,7 +204,7 @@ function CreditWalletPage() {
           <h1>Credito Motrice</h1>
         </div>
         <span className={styles.secureBadge}>
-          <ShieldCheck size={15} aria-hidden="true" /> Protetto
+          <ShieldCheck size={15} aria-hidden="true" /> {details.isVirtual ? 'Beta' : 'Protetto'}
         </span>
       </header>
 
@@ -194,7 +216,11 @@ function CreditWalletPage() {
           </div>
         </div>
         <strong className={styles.balanceAmount}>{formatWalletCredit(details.totalCents)}</strong>
-        <p>Il credito accompagna le tue prenotazioni e resta separato da MOT e XP.</p>
+        <p>
+          {details.isVirtual
+            ? 'Saldo di test per provare prenotazioni e caparre: non è denaro reale e non è prelevabile.'
+            : 'Il credito accompagna le tue prenotazioni e resta separato da MOT e XP.'}
+        </p>
 
         <div className={styles.balanceHighlights}>
           <div>
@@ -250,13 +276,15 @@ function CreditWalletPage() {
             <CreditCard size={21} />
           </span>
           <div>
-            <span>Aggiungi credito</span>
-            <h2>Ricarica la riserva</h2>
+            <span>{details.isVirtual ? 'Credito beta' : 'Aggiungi credito'}</span>
+            <h2>{details.isVirtual ? 'Aggiungi saldo virtuale' : 'Ricarica la riserva'}</h2>
           </div>
         </div>
 
         <p className={styles.depositDescription}>
-          Mantieni la quota necessaria per creare e prenotare eventi dopo il periodo di prova.
+          {details.isVirtual
+            ? 'Aggiungi 10 € di test per verificare il flusso completo senza carta e senza addebiti.'
+            : 'Mantieni la quota necessaria per creare e prenotare eventi dopo il periodo di prova.'}
         </p>
 
         <div className={styles.depositChoice} aria-label="Importo deposito selezionato">
@@ -264,13 +292,15 @@ function CreditWalletPage() {
             <Check size={16} aria-hidden="true" /> Importo fisso
           </span>
           <strong>{formatWalletCredit(FIXED_DEPOSIT_CENTS)}</strong>
-          <small>Riserva di partecipazione Motrice</small>
+          <small>{details.isVirtual ? 'Valore di test non convertibile' : 'Riserva di partecipazione Motrice'}</small>
         </div>
 
         <div className={styles.providerNotice}>
           <LockKeyhole size={17} aria-hidden="true" />
           <p>
-            Carta, scadenza e CVC vengono inseriti nella pagina sicura Stripe. Motrice non salva i dati della carta.
+            {details.isVirtual
+              ? 'Modalità virtuale: nessuna carta richiesta, nessun addebito e nessun prelievo.'
+              : 'Carta, scadenza e CVC vengono inseriti nella pagina sicura Stripe. Motrice non salva i dati della carta.'}
           </p>
         </div>
 
@@ -280,11 +310,15 @@ function CreditWalletPage() {
           onClick={startDeposit}
           disabled={!canDeposit || depositing}
         >
-          {depositing ? 'Apertura pagamento…' : `Continua con Stripe · ${formatWalletCredit(FIXED_DEPOSIT_CENTS)}`}
+          {depositing
+            ? details.isVirtual ? 'Aggiunta credito…' : 'Apertura pagamento…'
+            : details.isVirtual
+              ? `Aggiungi ${formatWalletCredit(FIXED_DEPOSIT_CENTS)} virtuali`
+              : `Continua con Stripe · ${formatWalletCredit(FIXED_DEPOSIT_CENTS)}`}
           {!depositing ? <ArrowRight size={18} aria-hidden="true" /> : null}
         </button>
 
-        {!details.depositsEnabled ? (
+        {!details.depositsEnabled && !details.isVirtual ? (
           <p className={styles.disabledNote} role="status">
             Il deposito è pronto nell’app ma resta bloccato finché l’ambiente Stripe non viene abilitato dall’amministratore.
           </p>
@@ -317,7 +351,9 @@ function CreditWalletPage() {
           <span>Prelievo</span>
           <h2>{formatWalletCredit(details.withdrawableCents)} disponibili</h2>
           <p>
-            {details.withdrawalsEnabled
+            {details.isVirtual
+              ? 'Non disponibile nel test virtuale: il saldo serve esclusivamente a provare i flussi dell’app.'
+              : details.withdrawalsEnabled
               ? `Puoi prelevare mantenendo ${formatWalletCredit(withdrawal.required_reserve_cents || 1000)} di riserva.`
               : 'I prelievi si attiveranno dopo la verifica del conto di accredito.'}
           </p>
@@ -353,7 +389,7 @@ function CreditWalletPage() {
           <div className={styles.emptyHistory}>
             <Gift size={22} aria-hidden="true" />
             <strong>Nessun movimento ancora</strong>
-            <span>I depositi e le quote degli eventi appariranno qui.</span>
+            <span>Ricariche virtuali e quote degli eventi appariranno qui.</span>
           </div>
         )}
       </section>
