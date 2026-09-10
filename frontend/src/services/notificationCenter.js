@@ -12,7 +12,11 @@ import {
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
 const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
-const REMOTE_PUSH_ENABLED = String(import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED || '').toLowerCase() === 'true';
+// Native releases enable remote push by default. Developers can still disable
+// it explicitly with VITE_PUSH_NOTIFICATIONS_ENABLED=false in local builds.
+const REMOTE_PUSH_ENABLED = String(
+  import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED ?? 'true'
+).toLowerCase() !== 'false';
 
 let pushNotificationsPromise;
 

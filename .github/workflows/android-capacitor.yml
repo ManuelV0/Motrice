@@ -35,8 +35,6 @@ jobs:
       ORG_GRADLE_PROJECT_MOTRICE_VERSION_NAME: 1.0.${{ github.run_number }}
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      VITE_PUSH_NOTIFICATIONS_ENABLED: true
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
