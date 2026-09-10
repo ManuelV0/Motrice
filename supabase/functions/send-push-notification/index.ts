@@ -30,7 +30,18 @@ function pemToPkcs8(pem: string) {
 }
 
 async function getGoogleAccessToken(clientEmail: string, privateKey: string) {
-  const issuedAt = Math.floor(Date.now() / 1000);
+  // Google rejects assertions whose iat is even slightly ahead of its clock.
+  // Prefer Google's own Date header so edge-runtime clock drift cannot break
+  // notifications, then backdate by one minute for normal network latency.
+  let trustedNow = Date.now();
+  try {
+    const clockResponse = await fetch('https://oauth2.googleapis.com/token', { method: 'HEAD' });
+    const googleDate = Date.parse(clockResponse.headers.get('date') || '');
+    if (Number.isFinite(googleDate)) trustedNow = googleDate;
+  } catch {
+    // Date.now() remains a safe fallback on correctly synchronized runtimes.
+  }
+  const issuedAt = Math.floor(trustedNow / 1000) - 60;
   const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = base64Url(JSON.stringify({
     iss: clientEmail,
