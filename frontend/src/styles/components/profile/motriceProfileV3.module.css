@@ -417,7 +417,10 @@
 .photoReviewStatus span { color: #8d9187; font-size: 0.61rem; line-height: 1.35; }
 .photoReviewRejected { border-color: rgb(255 91 91 / 32%); color: #ff7979; background: rgb(255 91 91 / 6%); }
 
-.metricButtons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.42rem; margin-top: 0.85rem; }
+.metricsInfoRow { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin-top: 0.75rem; }
+.metricsInfoRow > span { color: #777; font-size: 0.58rem; font-weight: 850; letter-spacing: 0.12em; }
+.metricsInfoRow > :last-child { width: 2.4rem; height: 2.4rem; min-width: 2.4rem; min-height: 2.4rem; }
+.metricButtons { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.42rem; margin-top: 0.38rem; }
 .metricButtons button {
   position: relative;
   min-height: 4.15rem;

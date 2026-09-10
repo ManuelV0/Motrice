@@ -59,8 +59,13 @@ import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
+import ContextInfoButton from '../components/ContextInfoButton';
 import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
-import { resolveEventParticipationState, resolveParticipantOutcome } from '../utils/eventParticipationState';
+import {
+  resolveEventParticipationState,
+  resolveEventPrimaryAction,
+  resolveParticipantOutcome
+} from '../utils/eventParticipationState';
 import { getEventManagementPolicy } from '../utils/eventManagementRules';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import styles from '../styles/pages/eventDetail.module.css';
@@ -154,6 +159,16 @@ function hasMeaningfulDescription(value) {
   const text = String(value || '').trim();
   if (!text) return false;
   return (text.match(/[\p{L}\p{N}]/gu) || []).length >= 3;
+}
+
+function getPrimaryActionIcon(action) {
+  if (action?.target === 'join') return UserPlus;
+  if (action?.target === 'verify') return ShieldCheck;
+  if (action?.target === 'workout' || action?.target === 'outdoor') return Play;
+  if (action?.target === 'manage') return Users;
+  if (action?.target === 'feedback') return Trophy;
+  if (action?.id === 'summary' || action?.id === 'cancelled_summary') return CheckCircle2;
+  return ArrowRight;
 }
 
 function EventDetailPage() {
@@ -608,7 +623,7 @@ function EventDetailPage() {
       }
       if (String(err?.message || '').includes('DEPOSIT_REQUIRED')) {
         setModalOpen(false);
-        showToast('Hai terminato gli eventi prova. Aggiungi 10 € virtuali per partecipare.', 'info');
+        showToast('Credito insufficiente. L’amministratore può aumentarlo dal Centro operativo.', 'info');
         navigate('/wallet/credit');
         return;
       }
@@ -916,6 +931,13 @@ function EventDetailPage() {
   const eventHasEnded = eventTiming.hasEnded;
   const participantOutcome = resolveParticipantOutcome(event);
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
+  const eventPrimaryAction = resolveEventPrimaryAction({
+    event,
+    isOrganizer: isOrganizerForEvent,
+    isFull: participationIsFull,
+    referenceTime: checkInNowMs
+  });
+  const EventPrimaryActionIcon = getPrimaryActionIcon(eventPrimaryAction);
   const canInviteFriendsFromGroupChat = Boolean(
     participantOutcome.id === 'completed'
   );
@@ -979,6 +1001,26 @@ function EventDetailPage() {
       window.clearInterval(intervalId);
     };
   }, [event?.id, id, isOrganizerForEvent, originParams, participationState.id, participationState.shouldPoll, showToast]);
+
+  useEffect(() => {
+    if (!event?.id || searchParams.get('action') !== 'join' || eventPrimaryAction.target !== 'join') return;
+    setModalOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('action');
+    navigate(
+      { pathname: location.pathname, search: nextParams.toString(), hash: location.hash },
+      { replace: true }
+    );
+  }, [event?.id, eventPrimaryAction.target, location.hash, location.pathname, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!event?.id || !['#organizer-controls', '#post-event-feedback', '#event-summary'].includes(location.hash)) return undefined;
+    const targetId = location.hash.slice(1);
+    const timer = window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [event?.id, location.hash]);
 
   useEffect(() => {
     if (!groupChatOpen) return undefined;
@@ -1049,6 +1091,36 @@ function EventDetailPage() {
     setCancelCountdown(3);
     setCancelReady(false);
     setCancelKaboom(false);
+  }
+
+  function handlePrimaryEventAction() {
+    if (!event?.id || eventPrimaryAction.disabled) return;
+    switch (eventPrimaryAction.target) {
+      case 'join':
+        setModalOpen(true);
+        return;
+      case 'verify':
+        navigate(`/agenda?verifyEvent=${encodeURIComponent(String(event.id))}`);
+        return;
+      case 'workout':
+        navigate(`/events/${event.id}/workout`);
+        return;
+      case 'outdoor':
+        navigate(`/events/${event.id}/activity`);
+        return;
+      case 'manage':
+        document.getElementById('organizer-controls')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      case 'feedback':
+        document.getElementById('post-event-feedback')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      case 'event':
+      default: {
+        const summary = document.getElementById('event-summary');
+        if (summary) summary.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        else window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
   }
 
   async function saveAttachedWorkoutPlan() {
@@ -1208,12 +1280,6 @@ function EventDetailPage() {
     isOrganizerForEvent ||
     ['confirmed', 'checked_in', 'completed'].includes(participationState.id)
   );
-  const agendaCheckInPath = `/agenda?verifyEvent=${encodeURIComponent(String(event.id))}`;
-  const checkInActionLabel = isClosedEvent
-    ? 'Vedi stato check-in'
-    : isOrganizerForEvent
-      ? 'Gestisci check-in'
-      : 'Verifica presenza';
 
   return (
     <div className={styles.page}>
@@ -1534,7 +1600,7 @@ function EventDetailPage() {
           ) : null}
 
           {isClosedEvent && !event.is_personal ? (
-            <Card as="section" className={styles.closedSummaryCard}>
+            <Card id="event-summary" as="section" className={styles.closedSummaryCard}>
               <div className={styles.closedSummaryHeading}>
                 <span><CheckCircle2 size={19} aria-hidden="true" /></span>
                 <div>
@@ -1563,15 +1629,28 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          <PostEventUserFeedback
-            eventId={event.id}
-            enabled={Boolean(
-              isClosedEvent &&
-              !event.is_personal &&
-              (isOrganizerForEvent || participantWasPresent)
-            )}
-            bonusXp={reviewBonusXp || 25}
-          />
+          <div id="post-event-feedback">
+            <PostEventUserFeedback
+              eventId={event.id}
+              enabled={Boolean(
+                isClosedEvent &&
+                !event.is_personal &&
+                (isOrganizerForEvent || participantWasPresent)
+              )}
+              bonusXp={reviewBonusXp || 25}
+              onCompleted={() => {
+                setEvent((current) => current ? {
+                  ...current,
+                  feedback_completed: true,
+                  organizer_feedback_completed: isOrganizerForEvent || current.organizer_feedback_completed,
+                  user_rsvp: current.user_rsvp ? {
+                    ...current.user_rsvp,
+                    review_submitted: !isOrganizerForEvent || current.user_rsvp.review_submitted
+                  } : current.user_rsvp
+                } : current);
+              }}
+            />
+          </div>
 
           {!event.is_personal && !eventIsCancelled ? (
             <Card
@@ -1597,10 +1676,9 @@ function EventDetailPage() {
                 <small><Clock3 size={14} aria-hidden="true" /> Finestra check-in {checkInWindowLabel}</small>
               </div>
               {canOpenAgendaCheckIn ? (
-                <Link className={styles.checkInBridgeAction} to={agendaCheckInPath}>
-                  {checkInActionLabel}
-                  <ArrowRight size={18} aria-hidden="true" />
-                </Link>
+                <span className={styles.checkInBridgeLocked}>
+                  {isClosedEvent ? 'Check-in concluso' : 'Da I miei eventi'}
+                </span>
               ) : (
                 <span className={styles.checkInBridgeLocked}>Prima partecipa</span>
               )}
@@ -1608,7 +1686,7 @@ function EventDetailPage() {
           ) : null}
 
           {!event.is_personal && isOrganizerForEvent && !eventIsCancelled ? (
-            <div className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
+            <div id="organizer-controls" className={`${styles.participationFlowAnchor} ${styles.organizerFlowPriority}`}>
               <EventParticipationFlow
                 event={event}
                 isOrganizer
@@ -1760,43 +1838,24 @@ function EventDetailPage() {
                 <Button
                   type="button"
                   fullWidth
-                  variant={participationState.action === 'cancel' || participationState.action === 'none' ? 'secondary' : 'primary'}
-                  icon={participationState.action === 'join' ? UserPlus : participationState.action === 'cancel' ? UserMinus : participationState.id === 'pending' ? Clock3 : ShieldCheck}
-                  disabled={participationState.action === 'none'}
-                  onClick={() => {
-                    if (participationState.action === 'join') {
-                      setModalOpen(true);
-                    } else if (participationState.action === 'cancel') {
-                      openCancelDialog();
-                    } else if (participationState.action === 'progress') {
-                      participationFlowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                  }}
+                  variant={eventPrimaryAction.tone === 'primary' ? 'primary' : 'secondary'}
+                  icon={EventPrimaryActionIcon}
+                  disabled={eventPrimaryAction.disabled}
+                  onClick={handlePrimaryEventAction}
                 >
-                  {participationState.actionLabel || participationState.badge}
+                  {eventPrimaryAction.label}
                 </Button>
               ) : null}
-              {isOrganizerForEvent && !eventIsCancelled ? (
+              {isOrganizerForEvent && !event.is_personal ? (
                 <Button
                   type="button"
                   fullWidth
-                  variant="secondary"
-                  icon={PencilLine}
-                  onClick={openOrganizerEditDialog}
+                  variant={eventPrimaryAction.tone === 'primary' ? 'primary' : 'secondary'}
+                  icon={EventPrimaryActionIcon}
+                  disabled={eventPrimaryAction.disabled}
+                  onClick={handlePrimaryEventAction}
                 >
-                  Modifica evento
-                </Button>
-              ) : null}
-              {canCancelOrganizedEvent ? (
-                <Button
-                  type="button"
-                  fullWidth
-                  variant="secondary"
-                  className={styles.organizerCancelButton}
-                  icon={Ban}
-                  onClick={() => setOrganizerCancelOpen(true)}
-                >
-                  Cancella evento
+                  {eventPrimaryAction.label}
                 </Button>
               ) : null}
             </div>
@@ -1815,6 +1874,27 @@ function EventDetailPage() {
             </button> : null}
             {actionsOpen ? (
             <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
+              {isOrganizerForEvent && !eventIsCancelled ? (
+                <Button type="button" variant="secondary" icon={PencilLine} onClick={openOrganizerEditDialog}>
+                  Modifica evento
+                </Button>
+              ) : null}
+              {canCancelOrganizedEvent ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className={styles.organizerCancelButton}
+                  icon={Ban}
+                  onClick={() => setOrganizerCancelOpen(true)}
+                >
+                  Cancella evento
+                </Button>
+              ) : null}
+              {!isOrganizerForEvent && participationState.canCancel ? (
+                <Button type="button" variant="secondary" icon={UserMinus} onClick={openCancelDialog}>
+                  Annulla partecipazione
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant={event.is_saved ? 'secondary' : 'ghost'}
@@ -2144,6 +2224,16 @@ function EventDetailPage() {
               <strong>Azione permanente</strong>
               <p>Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.</p>
             </div>
+            <ContextInfoButton
+              title="Cancellazione evento"
+              description="La cancellazione chiude definitivamente l’attività e informa tutte le persone coinvolte."
+              items={[
+                { title: 'Partecipanti', text: 'Le iscrizioni vengono chiuse e ogni partecipante riceve una notifica.' },
+                { title: 'Depositi', text: 'Le quote interessate vengono restituite secondo le regole mostrate nel riepilogo.' },
+                { title: 'Cancellazione tardiva', text: 'Se mancano meno di 24 ore, l’operazione viene registrata come tardiva.' }
+              ]}
+              note="Dopo la conferma l’evento non può essere riattivato."
+            />
           </div>
 
           <div className={styles.organizerCancelSummary}>

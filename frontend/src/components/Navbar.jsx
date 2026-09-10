@@ -55,9 +55,9 @@ const drawerSections = [
   {
     title: 'Altro',
     items: [
-      { to: '/notifications', label: 'Notifiche', icon: Bell },
       { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
+      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake },
+      { to: '/notifications', label: 'Notifiche', icon: Bell }
     ]
   }
 ];

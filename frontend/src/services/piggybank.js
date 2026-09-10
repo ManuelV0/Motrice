@@ -2,8 +2,9 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safe
 
 const LEGACY_STORAGE_KEY = 'motrice_piggybank_v1';
 const STORAGE_PREFIX = 'motrice_virtual_wallet_v1.';
-const CURRENT_SCHEMA_VERSION = 4;
-const FIXED_VIRTUAL_TOP_UP_CENTS = 1000;
+const CURRENT_SCHEMA_VERSION = 5;
+const EVENT_STAKE_CENTS = 1000;
+const INITIAL_VIRTUAL_CREDIT_CENTS = 3000;
 const INITIAL_TRIAL_EVENTS = 2;
 const AUTH_STORAGE_KEY = 'motrice_auth_session_v1';
 
@@ -28,9 +29,10 @@ function normalizePositiveCents(value) {
 }
 
 function buildDefaultState() {
+  const createdAt = nowIso();
   return {
     schema_version: CURRENT_SCHEMA_VERSION,
-    available_cents: 0,
+    available_cents: INITIAL_VIRTUAL_CREDIT_CENTS,
     pending_cents: 0,
     withdrawable_cents: 0,
     reinvested_cents: 0,
@@ -38,7 +40,20 @@ function buildDefaultState() {
     trial_events_used: 0,
     rewarded_event_ids: [],
     entries: [],
-    history: []
+    history: [{
+      id: `hist_opening_${Date.now()}`,
+      entry_type: 'virtual_opening_credit',
+      type: 'virtual_opening_credit',
+      amount_cents: INITIAL_VIRTUAL_CREDIT_CENTS,
+      available_delta: INITIAL_VIRTUAL_CREDIT_CENTS,
+      locked_delta: 0,
+      pending_delta: 0,
+      withdrawable_delta: 0,
+      event_id: null,
+      idempotency_key: 'virtual-opening-credit:v1',
+      note: 'Credito iniziale beta assegnato dal sistema',
+      created_at: createdAt
+    }]
   };
 }
 
@@ -65,24 +80,67 @@ function migrateState(parsed) {
     };
   }
 
-  // Legacy migration: old model started from a preloaded amount (30 EUR) and subtracted freezes.
-  // New model starts at 0 and credits only when stakes are unlocked.
+  // Legacy migration: preserve every existing movement, then bring the whole
+  // beta wallet up to the new 30 EUR opening balance exactly once.
   const releasedTotal = entries
     .filter((entry) => entry.status === 'released')
     .reduce((sum, entry) => sum + Number(entry.amount_cents || 0), 0);
 
+  const availableCents = schemaVersion >= 4
+    ? Math.max(0, Number(parsed.available_cents) || 0)
+    : Math.max(0, releasedTotal);
+  const pendingCents = Math.max(0, Number(parsed.pending_cents) || 0);
+  const withdrawableCents = Math.max(0, Number(parsed.withdrawable_cents) || 0);
+  const lockedCents = entries
+    .filter((entry) => ['frozen', 'frozen_until_next_participation'].includes(entry.status))
+    .reduce((sum, entry) => sum + Number(entry.amount_cents || 0), 0);
+  const openingDelta = Math.max(
+    0,
+    INITIAL_VIRTUAL_CREDIT_CENTS - availableCents - pendingCents - withdrawableCents - lockedCents
+  );
+  const nextHistory = openingDelta > 0
+    ? [{
+        id: `hist_opening_${Date.now()}`,
+        entry_type: 'virtual_opening_credit',
+        type: 'virtual_opening_credit',
+        amount_cents: openingDelta,
+        available_delta: openingDelta,
+        locked_delta: 0,
+        pending_delta: 0,
+        withdrawable_delta: 0,
+        event_id: null,
+        idempotency_key: 'virtual-opening-credit:v1',
+        note: 'Adeguamento al credito iniziale beta di 30 EUR',
+        created_at: nowIso()
+      }, ...history]
+    : history;
+
   return {
     schema_version: CURRENT_SCHEMA_VERSION,
-    available_cents: Math.max(0, releasedTotal),
-    pending_cents: 0,
-    withdrawable_cents: 0,
-    reinvested_cents: 0,
-    trial_events_remaining: INITIAL_TRIAL_EVENTS,
-    trial_events_used: 0,
-    rewarded_event_ids: [],
+    available_cents: availableCents + openingDelta,
+    pending_cents: pendingCents,
+    withdrawable_cents: withdrawableCents,
+    reinvested_cents: Math.max(0, Number(parsed.reinvested_cents) || 0),
+    trial_events_remaining: Math.max(
+      0,
+      Math.min(INITIAL_TRIAL_EVENTS, Number(parsed.trial_events_remaining ?? INITIAL_TRIAL_EVENTS))
+    ),
+    trial_events_used: Math.max(0, Number(parsed.trial_events_used) || 0),
+    rewarded_event_ids: Array.isArray(parsed.rewarded_event_ids) ? parsed.rewarded_event_ids : [],
     entries,
-    history
+    history: nextHistory
   };
+}
+
+function hasLocalAdminSession() {
+  try {
+    const session = JSON.parse(safeStorageGet(AUTH_STORAGE_KEY) || 'null');
+    const role = String(session?.role || '').trim().toLowerCase();
+    const email = String(session?.email || '').trim().toLowerCase();
+    return role === 'admin' || email === 'aletarqui@libero.it';
+  } catch {
+    return false;
+  }
 }
 
 function storageKey(accountId = null) {
@@ -103,7 +161,11 @@ function loadState(accountId = null) {
     raw = safeStorageGet(LEGACY_STORAGE_KEY);
     if (raw) safeStorageRemove(LEGACY_STORAGE_KEY);
   }
-  if (!raw) return buildDefaultState();
+  if (!raw) {
+    const initialState = buildDefaultState();
+    saveState(initialState, accountId);
+    return initialState;
+  }
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return buildDefaultState();
@@ -149,19 +211,19 @@ function summarize(state) {
     trial_events_used: Number(state.trial_events_used || 0),
     can_participate:
       Number(state.trial_events_remaining || 0) > 0 ||
-      Number(state.available_cents || 0) >= FIXED_VIRTUAL_TOP_UP_CENTS,
+      Number(state.available_cents || 0) >= EVENT_STAKE_CENTS,
     funding_source:
       Number(state.trial_events_remaining || 0) > 0
         ? 'trial'
-        : Number(state.available_cents || 0) >= FIXED_VIRTUAL_TOP_UP_CENTS
+        : Number(state.available_cents || 0) >= EVENT_STAKE_CENTS
           ? 'balance'
           : 'none',
     amount_missing_cents:
       Number(state.trial_events_remaining || 0) > 0
         ? 0
-        : Math.max(0, FIXED_VIRTUAL_TOP_UP_CENTS - Number(state.available_cents || 0)),
+        : Math.max(0, EVENT_STAKE_CENTS - Number(state.available_cents || 0)),
     provider_mode: 'virtual_beta',
-    deposits_enabled: true,
+    deposits_enabled: false,
     withdrawals_enabled: false,
     withdrawal: {
       settled_cents: Number(state.available_cents || 0) + Number(state.withdrawable_cents || 0),
@@ -186,29 +248,33 @@ export const piggybank = {
     return clone(loadState().history.slice(0, safeLimit));
   },
 
-  claimVirtualCredit({ requestId } = {}) {
-    const state = loadState();
-    const safeRequestId = String(requestId || `virtual-${Date.now()}`).trim().slice(0, 120);
-    const idempotencyKey = `virtual-credit:${safeRequestId}`;
+  adminIncreaseVirtualCredit({ accountId, amountCents, requestId, reason } = {}) {
+    if (!hasLocalAdminSession()) throw new Error('Accesso amministratore richiesto');
+    const safeAmount = normalizePositiveCents(amountCents);
+    if (!safeAmount || safeAmount > 100000) throw new Error('Importo credito non valido');
+
+    const state = loadState(accountId);
+    const safeRequestId = String(requestId || `admin-credit-${Date.now()}`).trim().slice(0, 120);
+    const idempotencyKey = `admin-virtual-credit:${String(accountId || 'current')}:${safeRequestId}`;
     const existing = state.history.find((entry) => entry.idempotency_key === idempotencyKey);
     if (existing) return summarize(state);
 
-    state.available_cents += FIXED_VIRTUAL_TOP_UP_CENTS;
+    state.available_cents += safeAmount;
     state.history.unshift({
       id: `hist_${Date.now()}_${Math.random().toString(16).slice(2, 7)}`,
-      entry_type: 'virtual_credit_added',
-      type: 'virtual_credit_added',
-      amount_cents: FIXED_VIRTUAL_TOP_UP_CENTS,
-      available_delta: FIXED_VIRTUAL_TOP_UP_CENTS,
+      entry_type: 'admin_virtual_credit_added',
+      type: 'admin_virtual_credit_added',
+      amount_cents: safeAmount,
+      available_delta: safeAmount,
       locked_delta: 0,
       pending_delta: 0,
       withdrawable_delta: 0,
       event_id: null,
       idempotency_key: idempotencyKey,
-      note: 'Ricarica virtuale beta — nessun addebito reale',
+      note: String(reason || 'Credito virtuale assegnato dall’amministratore').slice(0, 240),
       created_at: nowIso()
     });
-    saveState(state);
+    saveState(state, accountId);
     return summarize(state);
   },
 

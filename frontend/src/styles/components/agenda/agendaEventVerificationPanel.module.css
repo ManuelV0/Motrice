@@ -65,6 +65,20 @@
   background: #1a1c1a;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.headerActions > :first-child {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+}
+
 .timingBar {
   display: flex;
   align-items: center;

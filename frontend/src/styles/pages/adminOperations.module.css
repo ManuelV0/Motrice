@@ -547,6 +547,71 @@
 .detailField small { color: #747970; font-size: 0.56rem; font-weight: 800; }
 .detailField strong { overflow: hidden; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
 
+.adminCreditCard {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid rgb(204 255 0 / 26%);
+  border-radius: 0.9rem;
+  background: linear-gradient(145deg, rgb(204 255 0 / 8%), #151714 68%);
+}
+
+.adminCreditHeading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  color: #ccff00;
+}
+
+.adminCreditHeading > span:nth-child(2) { min-width: 0; display: grid; gap: 0.12rem; }
+.adminCreditHeading small { color: #a1aa83; font-size: 0.55rem; font-weight: 900; letter-spacing: 0.09em; text-transform: uppercase; }
+.adminCreditHeading h3 { margin: 0; color: #f5f5f3; font-size: 0.83rem; }
+.adminCreditIcon { width: 2.35rem; height: 2.35rem; display: grid; place-items: center; border-radius: 0.72rem; color: #11140a; background: #ccff00; }
+.adminCreditCard > p { margin: 0; color: #858a80; font-size: 0.63rem; line-height: 1.45; }
+
+.creditPresets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.creditPresets button {
+  min-height: 2.25rem;
+  padding: 0.35rem;
+  border: 1px solid #343832;
+  border-radius: 0.65rem;
+  color: #9ca195;
+  background: #111311;
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 850;
+}
+
+.creditPresets button[aria-pressed='true'] {
+  border-color: #ccff00;
+  color: #101309;
+  background: #ccff00;
+}
+
+.grantCreditButton {
+  min-height: 2.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid #ccff00;
+  border-radius: 0.75rem;
+  color: #0d1007;
+  background: #ccff00;
+  font: inherit;
+  font-size: 0.69rem;
+  font-weight: 900;
+}
+
+.grantCreditButton:disabled,
+.creditPresets button:disabled { cursor: wait; opacity: 0.58; }
+
 .drawerSection { display: grid; gap: 0.45rem; padding: 0.8rem; border: 1px solid #2b2e2a; border-radius: 0.9rem; background: #161716; }
 .drawerSection > div:first-child { display: grid; gap: 0.12rem; }
 .drawerSection > div:first-child small { color: #858a81; font-size: 0.55rem; font-weight: 850; letter-spacing: 0.09em; text-transform: uppercase; }
@@ -605,6 +670,12 @@
   outline-offset: 2px;
 }
 
+.creditPresets button:focus-visible,
+.grantCreditButton:focus-visible {
+  outline: 2px solid #ccff00;
+  outline-offset: 2px;
+}
+
 @media (max-width: 900px) {
   .metricsGrid,
   .moneyGrid { grid-template-columns: 1fr 1fr; }
@@ -650,6 +721,7 @@
 @media (max-width: 410px) {
   .metricsGrid,
   .moneyGrid { grid-template-columns: 1fr; }
+  .creditPresets { grid-template-columns: 1fr 1fr; }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }

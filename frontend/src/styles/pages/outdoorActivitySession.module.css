@@ -306,6 +306,24 @@
   font-size: 0.7rem;
 }
 
+.sectionTitle > .traceActions {
+  gap: 8px;
+}
+
+.traceActions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.traceActions > :last-child {
+  width: 2.45rem;
+  height: 2.45rem;
+  min-width: 2.45rem;
+  min-height: 2.45rem;
+}
+
 .traceCanvas {
   position: relative;
   height: 126px;

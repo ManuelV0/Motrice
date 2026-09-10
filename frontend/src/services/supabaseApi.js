@@ -506,17 +506,6 @@ function createRemoteMethods(localApi) {
       return data || [];
     },
 
-    async addVirtualWalletCredit() {
-      const client = requireSupabase();
-      requireAuthUserId();
-      const clientRequestId = globalThis.crypto?.randomUUID?.() || `virtual-${Date.now()}`;
-      const { data, error } = await client.rpc('add_virtual_wallet_credit', {
-        client_request_id: clientRequestId
-      });
-      throwIfError(error);
-      return data;
-    },
-
     async openEventMoneyDispute(eventId, reason) {
       const client = requireSupabase();
       requireAuthUserId();

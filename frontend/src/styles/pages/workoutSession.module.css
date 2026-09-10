@@ -171,6 +171,19 @@
   font-variant-numeric: tabular-nums;
 }
 
+.progressActions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.progressActions > :first-child {
+  width: 2.45rem;
+  height: 2.45rem;
+  min-width: 2.45rem;
+  min-height: 2.45rem;
+}
+
 .progress {
   height: 8px;
   overflow: hidden;

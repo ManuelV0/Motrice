@@ -1462,11 +1462,6 @@ const localApi = {
     return withDelay(piggybank.listLedger({ limit }));
   },
 
-  async addVirtualWalletCredit() {
-    const requestId = globalThis.crypto?.randomUUID?.() || `virtual-${Date.now()}`;
-    return withDelay(piggybank.claimVirtualCredit({ requestId }));
-  },
-
   async listEvents(filters = {}) {
     const store = loadStore();
     ensureStartingSoonNotifications(store);

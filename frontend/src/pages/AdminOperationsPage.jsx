@@ -12,6 +12,7 @@ import {
   Handshake,
   Info,
   MapPin,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -27,7 +28,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { getAdminOperationsSnapshot } from '../services/adminOperations';
+import { getAdminOperationsSnapshot, increaseAdminVirtualCredit } from '../services/adminOperations';
 import { getAuthSession } from '../services/authSession';
 import {
   buildAdminAlerts,
@@ -58,6 +59,8 @@ const USER_FILTERS = [
   { id: 'pending', label: 'In attesa' },
   { id: 'attention', label: 'Da controllare' }
 ];
+
+const CREDIT_PRESETS = [500, 1000, 2000, 3000];
 
 const STATUS_LABELS = {
   active: 'In corso',
@@ -350,7 +353,7 @@ function UsersPanel({ users, initialStatus = 'all', onSelect }) {
           Mostra altri utenti
         </button>
       ) : null}
-      <p className={styles.readOnlyNote}><ShieldCheck size={15} /> Vista protetta in sola lettura. Le azioni sugli account saranno introdotte con motivazione e registro di audit.</p>
+      <p className={styles.readOnlyNote}><ShieldCheck size={15} /> Vista protetta. Gli aumenti di credito sono riservati all’amministratore e registrati nel ledger.</p>
     </section>
   );
 }
@@ -465,7 +468,8 @@ function EventsPanel({ events, initialStatus = 'all', initialDate = 'all', onSel
   );
 }
 
-function UserDetailDrawer({ user, events, onClose }) {
+function UserDetailDrawer({ user, events, onClose, onIncreaseCredit, increasing, canManageCredit }) {
+  const [creditAmount, setCreditAmount] = useState(1000);
   const createdEvents = useMemo(() => {
     if (!user) return [];
     const userId = String(user.id || '');
@@ -475,6 +479,10 @@ function UserDetailDrawer({ user, events, onClose }) {
       String(event.creator_name || '').trim().toLowerCase() === userName
     )).slice(0, 4);
   }, [events, user]);
+
+  useEffect(() => {
+    setCreditAmount(1000);
+  }, [user?.id]);
 
   return (
     <DetailDrawer
@@ -504,6 +512,39 @@ function UserDetailDrawer({ user, events, onClose }) {
             <DetailField label="Città" value={user.city} />
             <DetailField label="ID account" value={String(user.id || '')} />
           </div>
+          {canManageCredit ? <section className={styles.adminCreditCard}>
+            <div className={styles.adminCreditHeading}>
+              <span className={styles.adminCreditIcon}><CircleDollarSign size={19} /></span>
+              <span>
+                <small>Credito beta</small>
+                <h3>Aumenta saldo virtuale</h3>
+              </span>
+              <ShieldCheck size={17} />
+            </div>
+            <p>Operazione riservata all’amministratore e registrata nel ledger.</p>
+            <div className={styles.creditPresets} aria-label="Seleziona credito da aggiungere">
+              {CREDIT_PRESETS.map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  aria-pressed={creditAmount === amount}
+                  onClick={() => setCreditAmount(amount)}
+                  disabled={increasing}
+                >
+                  +{formatMoney(amount)}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={styles.grantCreditButton}
+              disabled={increasing}
+              onClick={() => onIncreaseCredit(user, creditAmount)}
+            >
+              <Plus size={17} />
+              {increasing ? 'Accredito in corso…' : `Aggiungi ${formatMoney(creditAmount)}`}
+            </button>
+          </section> : null}
           <section className={styles.drawerSection}>
             <div><small>Attività</small><h3>Ultimi eventi creati</h3></div>
             {createdEvents.length > 0 ? createdEvents.map((event) => (
@@ -647,6 +688,7 @@ function AdminOperationsPage() {
   const [eventDatePreset, setEventDatePreset] = useState('all');
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [creditingUserId, setCreditingUserId] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -689,6 +731,55 @@ function AdminOperationsPage() {
     window.requestAnimationFrame(() => {
       document.querySelector(`.${styles.tabs}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }
+
+  async function handleIncreaseCredit(user, amountCents) {
+    if (!user?.id || creditingUserId) return;
+    setCreditingUserId(String(user.id));
+    try {
+      const result = await increaseAdminVirtualCredit({
+        userId: user.id,
+        amountCents,
+        reason: `Credito beta assegnato a ${user.display_name || user.email || user.id}`
+      });
+      const creditedCents = Number(result?.credited_cents ?? amountCents);
+      const nextAvailable = Number(result?.available_cents);
+
+      setSelectedUser((current) => current && String(current.id) === String(user.id)
+        ? {
+            ...current,
+            balance_cents: Number.isFinite(nextAvailable)
+              ? nextAvailable + Number(result?.withdrawable_cents || 0)
+              : Number(current.balance_cents || 0) + creditedCents
+          }
+        : current);
+      setData((current) => current ? {
+        ...current,
+        wallet: {
+          ...current.wallet,
+          available_cents: Number(current.wallet.available_cents || 0) + creditedCents
+        },
+        users: current.users.map((item) => String(item.id) === String(user.id)
+          ? { ...item, balance_cents: Number(item.balance_cents || 0) + creditedCents }
+          : item),
+        ledger: [{
+          id: `admin-credit-${Date.now()}`,
+          user_id: user.id,
+          display_name: user.display_name,
+          entry_type: 'admin_virtual_credit_added',
+          available_delta: creditedCents,
+          locked_delta: 0,
+          pending_delta: 0,
+          withdrawable_delta: 0,
+          created_at: new Date().toISOString()
+        }, ...current.ledger]
+      } : current);
+      showToast(`${formatMoney(creditedCents)} aggiunti a ${user.display_name || 'utente'}`, 'success');
+    } catch (error) {
+      showToast(error.message || 'Impossibile aumentare il credito', 'error');
+    } finally {
+      setCreditingUserId(null);
+    }
   }
 
   return (
@@ -737,7 +828,14 @@ function AdminOperationsPage() {
           {activeTab === 'verifications' ? <VerificationsPanel verification={data.verification} /> : null}
         </div>
       )}
-      <UserDetailDrawer user={selectedUser} events={data?.events || []} onClose={() => setSelectedUser(null)} />
+      <UserDetailDrawer
+        user={selectedUser}
+        events={data?.events || []}
+        onClose={() => setSelectedUser(null)}
+        onIncreaseCredit={handleIncreaseCredit}
+        increasing={Boolean(selectedUser && String(creditingUserId) === String(selectedUser.id))}
+        canManageCredit={String(session?.role || '').toLowerCase() === 'admin' || String(session?.email || '').trim().toLowerCase() === 'aletarqui@libero.it'}
+      />
       <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
     </main>
   );

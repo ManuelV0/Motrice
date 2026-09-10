@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  getEventPrimaryActionPath,
   hasConfirmedEventParticipation,
+  resolveEventPrimaryAction,
   resolveEventParticipationState,
   resolveParticipantOutcome
 } from './eventParticipationState.js';
@@ -59,4 +61,93 @@ test('completed and cancellation outcomes are exposed consistently', () => {
   assert.equal(completed.id, 'completed');
   assert.equal(completed.canAccessChat, true);
   assert.equal(completed.canCancel, false);
+});
+
+test('the primary action follows the participant through join, check-in and session', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const baseEvent = {
+    id: 'event-1',
+    event_datetime: new Date(startsAt).toISOString(),
+    duration_minutes: 60,
+    checkin_grace_minutes: 15,
+    join_policy: 'open'
+  };
+
+  assert.equal(resolveEventPrimaryAction({
+    event: baseEvent,
+    referenceTime: startsAt - 60 * 60 * 1000
+  }).id, 'join');
+
+  const confirmedEvent = {
+    ...baseEvent,
+    is_going: true,
+    user_rsvp: { lifecycle_state: 'confirmed', status: 'going' }
+  };
+  const checkInAction = resolveEventPrimaryAction({
+    event: confirmedEvent,
+    referenceTime: startsAt - 15 * 60 * 1000
+  });
+  assert.equal(checkInAction.id, 'participant_checkin');
+  assert.equal(checkInAction.label, 'Verifica presenza');
+
+  const waitingAction = resolveEventPrimaryAction({
+    event: {
+      ...confirmedEvent,
+      user_rsvp: {
+        lifecycle_state: 'checked_in',
+        status: 'going',
+        checked_in_at: new Date(startsAt - 10 * 60 * 1000).toISOString()
+      }
+    },
+    referenceTime: startsAt - 5 * 60 * 1000
+  });
+  assert.equal(waitingAction.id, 'waiting_start');
+  assert.equal(waitingAction.disabled, true);
+
+  const liveAction = resolveEventPrimaryAction({
+    event: {
+      ...confirmedEvent,
+      sport_name: 'Running',
+      user_rsvp: {
+        lifecycle_state: 'checked_in',
+        status: 'going',
+        checked_in_at: new Date(startsAt - 10 * 60 * 1000).toISOString()
+      }
+    },
+    referenceTime: startsAt + 5 * 60 * 1000
+  });
+  assert.equal(liveAction.id, 'open_outdoor');
+  assert.equal(getEventPrimaryActionPath(baseEvent, liveAction), '/events/event-1/activity');
+});
+
+test('the organizer sees management, check-in, live session and feedback in order', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const event = {
+    id: 'event-2',
+    created_by: 'me',
+    event_datetime: new Date(startsAt).toISOString(),
+    duration_minutes: 60,
+    checkin_grace_minutes: 15,
+    join_policy: 'approval'
+  };
+
+  assert.equal(resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt - 2 * 60 * 60 * 1000
+  }).id, 'manage_requests');
+
+  assert.equal(resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt - 10 * 60 * 1000
+  }).id, 'organizer_checkin');
+
+  assert.equal(resolveEventPrimaryAction({
+    event: { ...event, participants_checked_in_count: 1 },
+    referenceTime: startsAt + 20 * 60 * 1000
+  }).id, 'open_event');
+
+  assert.equal(resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt + 61 * 60 * 1000
+  }).id, 'feedback');
 });

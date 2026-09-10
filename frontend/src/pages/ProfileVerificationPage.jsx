@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import BrandLogo from '../components/BrandLogo';
+import ContextInfoButton from '../components/ContextInfoButton';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
@@ -353,7 +354,19 @@ function ProfileVerificationPage() {
             <BrandLogo className={styles.mark} decorative />
             <span><strong>MOTRICE</strong><small>Verifica profilo beta</small></span>
           </div>
-          <span className={styles.stepCount}>{step + 1} / 6</span>
+          <span className={styles.topbarActions}>
+            <ContextInfoButton
+              title="Verifica del profilo"
+              description="La verifica serve a collegare il profilo sportivo a una persona reale e a proteggere gli eventi."
+              items={[
+                { title: 'Dati personali', text: 'Completi le informazioni necessarie alla tua identità sportiva.' },
+                { title: 'Foto e gestualità', text: 'La foto principale e le challenge confermano che la richiesta appartenga alla stessa persona.' },
+                { title: 'Controllo', text: 'Durante la beta la richiesta viene esaminata prima di sbloccare creazione, partecipazione e check-in.' }
+              ]}
+              note="Le foto di verifica non vengono utilizzate automaticamente come immagine pubblica del profilo."
+            />
+            <span className={styles.stepCount}>{step + 1} / 6</span>
+          </span>
         </header>
 
         <div className={styles.progress} aria-label={`Passaggio ${step + 1} di 6`}>

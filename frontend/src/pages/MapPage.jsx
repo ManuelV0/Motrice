@@ -2,13 +2,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import maplibregl from 'maplibre-gl';
 import {
+  ArrowRight,
   Check,
+  CheckCircle2,
   LocateFixed,
   MapPinOff,
   Minus,
+  Play,
   Plus,
   RotateCcw,
   Search,
+  Settings2,
+  ShieldCheck,
   SlidersHorizontal,
   X
 } from 'lucide-react';
@@ -20,6 +25,10 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
 import EventCard from '../components/EventCard';
+import {
+  getEventPrimaryActionPath,
+  resolveEventPrimaryAction
+} from '../utils/eventParticipationState';
 import styles from '../styles/pages/map.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -48,6 +57,14 @@ const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
 const EVENT_PINS_LAYER = 'motrice-event-pins';
 const EVENT_CLUSTERS_LAYER = 'motrice-event-clusters';
 const EVENT_SELECTED_LABEL_LAYER = 'motrice-event-selected-label';
+
+function getPrimaryActionIcon(action) {
+  if (action?.target === 'verify') return ShieldCheck;
+  if (action?.target === 'workout' || action?.target === 'outdoor') return Play;
+  if (action?.target === 'manage') return Settings2;
+  if (action?.id === 'summary' || action?.id === 'feedback') return CheckCircle2;
+  return ArrowRight;
+}
 const EVENT_PIN_FILL = '#a8f000';
 const EVENT_PIN_SAVED_FILL = '#c7f75a';
 const EVENT_PIN_PATH = 'M24 2.5C12.5 2.5 3.5 11.1 3.5 22.2c0 8.3 5.1 15 11.9 19.2L24 54.2l8.6-12.8c6.8-4.2 11.9-10.9 11.9-19.2C44.5 11.1 35.5 2.5 24 2.5Z';
@@ -1657,20 +1674,40 @@ function MapPage({ active = true }) {
               <div className={styles.sheetLoading}><LoadingSkeleton rows={2} /></div>
             ) : sheetEvents.length > 0 ? (
               <div className={styles.sheetEventList} aria-label="Eventi visibili sulla mappa">
-                {sheetEvents.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    variant="compact"
-                    context="map"
-                    selected={String(event.id) === String(selectedEventId)}
-                    onSelect={focusEvent}
-                    onToggleSave={toggleSaveEvent}
-                    saving={savingIds.includes(event.id)}
-                    detailsIconOnly
-                    showProgress={false}
-                  />
-                ))}
+                {sheetEvents.map((event) => {
+                  const selected = String(event.id) === String(selectedEventId);
+                  const participants = Math.max(0, Number(event.participants_count || 0));
+                  const capacity = Math.max(participants, Number(event.max_participants || 0));
+                  const action = resolveEventPrimaryAction({
+                    event,
+                    isOrganizer: event.created_by === 'me',
+                    isFull: capacity > 0 && participants >= capacity,
+                    referenceTime: lifecycleTick
+                  });
+                  return (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      variant="compact"
+                      context="map"
+                      selected={selected}
+                      onSelect={focusEvent}
+                      onToggleSave={toggleSaveEvent}
+                      saving={savingIds.includes(event.id)}
+                      primaryAction={{
+                        label: action.label,
+                        icon: getPrimaryActionIcon(action),
+                        disabled: action.disabled,
+                        onClick: (selectedEvent) => {
+                          const target = getEventPrimaryActionPath(selectedEvent, action);
+                          if (target) navigate(target);
+                        }
+                      }}
+                      detailsIconOnly
+                      showProgress={false}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div className={styles.sheetEmpty}>

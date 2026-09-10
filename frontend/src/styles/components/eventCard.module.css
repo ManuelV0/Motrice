@@ -469,6 +469,10 @@
   transform: none;
 }
 
+.context_map.selected:has(.primaryAction) {
+  padding-bottom: 3.05rem;
+}
+
 .context_map.variant_compact .main {
   grid-template-columns: 5.45rem minmax(0, 1fr);
   min-height: 5.9rem;
@@ -586,6 +590,29 @@
   bottom: 0.42rem;
 }
 
+.context_map.selected.variant_compact .actions {
+  right: 0.42rem;
+  left: 5.88rem;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.context_map.selected.variant_compact .actions > .primaryAction {
+  display: inline-flex;
+  min-height: 2.25rem;
+  padding: 0.48rem 0.72rem;
+  border-radius: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context_map.selected.variant_compact .actions > .primaryAction:disabled {
+  border-color: rgb(255 255 255 / 14%);
+  background: rgb(255 255 255 / 8%);
+  color: #92978f;
+}
+
 .context_map .saveButton::after,
 .context_map.variant_compact .detailsAction::after {
   position: absolute;
@@ -622,6 +649,10 @@
 
   .context_map .location {
     font-size: 0.64rem;
+  }
+
+  .context_map.selected.variant_compact .actions {
+    left: 5.32rem;
   }
 }
 

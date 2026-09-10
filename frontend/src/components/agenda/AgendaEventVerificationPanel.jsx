@@ -17,6 +17,7 @@ import {
 import { api } from '../../services/api';
 import { useUserLocation } from '../../hooks/useUserLocation';
 import Modal from '../Modal';
+import ContextInfoButton from '../ContextInfoButton';
 import styles from '../../styles/components/agenda/agendaEventVerificationPanel.module.css';
 import {
   getEventPhaseLabel,
@@ -467,7 +468,19 @@ function AgendaEventVerificationPanel({
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
               : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
         </div>
-        <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Chiudi verifica"><X size={19} /></button>
+        <span className={styles.headerActions}>
+          <ContextInfoButton
+            title="Verifica presenza"
+            description="Il check-in conferma che l’utente sia realmente presente e sblocca la sessione dell’evento."
+            items={[
+              { title: 'QR Code', text: isOrganizer ? 'Scannerizza il codice personale mostrato dal partecipante.' : 'Mostra il tuo codice personale all’organizzatore.' },
+              { title: 'Geolocalizzazione', text: 'Controlla che il telefono si trovi nell’area impostata per l’evento.' },
+              { title: 'Finestra temporale', text: 'Apre 30 minuti prima dell’inizio e include la tolleranza decisa dall’organizzatore.' }
+            ]}
+            note="La posizione viene richiesta soltanto quando serve alla verifica o al monitoraggio dell’attività."
+          />
+          <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Chiudi verifica"><X size={19} /></button>
+        </span>
       </header>
 
       <div className={styles.timingBar} data-open={timing.isCheckInOpen ? 'true' : 'false'}>

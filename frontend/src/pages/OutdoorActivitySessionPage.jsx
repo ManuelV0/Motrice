@@ -45,6 +45,7 @@ import {
   saveOutdoorSession
 } from '../features/outdoor/services/outdoorSessionStore';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
+import ContextInfoButton from '../components/ContextInfoButton';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -449,7 +450,19 @@ function OutdoorActivitySessionPage() {
         <section className={styles.traceCard}>
           <div className={styles.sectionTitle}>
             <div><small>TRACCIA LIVE</small><strong>Il tuo percorso</strong></div>
-            <span><LocateFixed size={16} /> ±{Math.round(Number(session.lastAccuracyM || 0)) || '—'} m</span>
+            <span className={styles.traceActions}>
+              <span><LocateFixed size={16} /> ±{Math.round(Number(session.lastAccuracyM || 0)) || '—'} m</span>
+              <ContextInfoButton
+                title="Monitoraggio attività"
+                description="Durante corsa e trekking Motrice elabora i dati ricevuti dal GPS per costruire il riepilogo dell’attività."
+                items={[
+                  { title: 'Traccia e distanza', text: 'I punti GPS validi vengono collegati per calcolare il percorso e i chilometri.' },
+                  { title: 'Passo e dislivello', text: 'Sono stime aggiornate durante il movimento e dipendono dalla qualità del segnale.' },
+                  { title: 'Pausa e ripresa', text: 'La pausa interrompe il conteggio attivo senza chiudere definitivamente la sessione.' }
+                ]}
+                note="Per un monitoraggio continuo consenti la posizione precisa e non interrompere i permessi dell’app."
+              />
+            </span>
           </div>
           <div className={styles.traceCanvas}>
             <svg viewBox="0 0 320 126" role="img" aria-label="Traccia GPS dell’attività">

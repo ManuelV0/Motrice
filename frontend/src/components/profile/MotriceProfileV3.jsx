@@ -25,6 +25,7 @@ import {
   Zap
 } from 'lucide-react';
 import styles from '../../styles/components/profile/motriceProfileV3.module.css';
+import ContextInfoButton from '../ContextInfoButton';
 
 const RATING_ROWS = ['Puntualità', 'Impegno', 'Collaborazione', 'Correttezza', 'Atteggiamento'];
 const SPORT_LEVELS = ['Principiante', 'Intermedio', 'Avanzato'];
@@ -574,17 +575,35 @@ function MotriceProfileV3({
             <p className={`${styles.photoReviewStatus} ${styles.photoReviewRejected}`} role="status"><ImagePlus size={16} /><span><strong>Foto non approvata</strong>{photoReview.rejection_reason || 'Scegli una foto frontale più nitida.'}</span></p>
           ) : null}
 
-          {activeProfileSection === 'identity' ? <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
-            <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>
-              <strong>{state.host.events}</strong><span>Eventi</span><ChevronDown size={15} />
-            </button>
-            <button type="button" aria-expanded={activeMetric === 'mot'} className={activeMetric === 'mot' ? styles.metricActive : ''} onClick={() => toggleMetric('mot')}>
-              <strong>{state.mot.total}</strong><span>MOT</span><ChevronDown size={15} />
-            </button>
-            <button type="button" aria-expanded={activeMetric === 'trust'} className={activeMetric === 'trust' ? styles.metricActive : ''} onClick={() => toggleMetric('trust')}>
-              <strong>{reliability.score}%</strong><span>Affidabilità</span><ChevronDown size={15} />
-            </button>
-          </div> : null}
+          {activeProfileSection === 'identity' ? (
+            <>
+              <div className={styles.metricsInfoRow}>
+                <span>STATISTICHE VERIFICATE</span>
+                <ContextInfoButton
+                  title="Statistiche del profilo"
+                  description="Questi valori vengono aggiornati automaticamente dalle attività verificate e non possono essere modificati manualmente."
+                  items={[
+                    { title: 'Eventi', text: 'Raccoglie partecipazioni e attività organizzate collegate al profilo.' },
+                    { title: 'MOT', text: 'Premiano soprattutto le presenze confermate tramite il flusso di check-in.' },
+                    { title: 'Affidabilità', text: 'Rappresenta continuità, puntualità ed esiti delle partecipazioni.' },
+                    { title: 'XP', text: 'Misurano la progressione nell’app e determinano livello e obiettivi.' }
+                  ]}
+                  note="MOT, XP, credito e affidabilità sono indicatori distinti e non si sostituiscono tra loro."
+                />
+              </div>
+              <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
+                <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>
+                  <strong>{state.host.events}</strong><span>Eventi</span><ChevronDown size={15} />
+                </button>
+                <button type="button" aria-expanded={activeMetric === 'mot'} className={activeMetric === 'mot' ? styles.metricActive : ''} onClick={() => toggleMetric('mot')}>
+                  <strong>{state.mot.total}</strong><span>MOT</span><ChevronDown size={15} />
+                </button>
+                <button type="button" aria-expanded={activeMetric === 'trust'} className={activeMetric === 'trust' ? styles.metricActive : ''} onClick={() => toggleMetric('trust')}>
+                  <strong>{reliability.score}%</strong><span>Affidabilità</span><ChevronDown size={15} />
+                </button>
+              </div>
+            </>
+          ) : null}
 
           {activeProfileSection === 'identity' && activeMetricDetail ? (
             <section className={styles.metricAccordion} aria-live="polite">

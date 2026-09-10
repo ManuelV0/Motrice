@@ -70,6 +70,19 @@
   white-space: nowrap;
 }
 
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.topbarActions > :first-child {
+  width: 2.4rem;
+  height: 2.4rem;
+  min-width: 2.4rem;
+  min-height: 2.4rem;
+}
+
 .progress {
   display: grid;
   grid-template-columns: repeat(6, 1fr);

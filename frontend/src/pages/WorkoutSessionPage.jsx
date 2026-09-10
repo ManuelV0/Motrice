@@ -25,6 +25,7 @@ import {
   saveWorkoutSession
 } from '../features/workout/services/workoutSessionStore';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
+import ContextInfoButton from '../components/ContextInfoButton';
 import styles from '../styles/pages/workoutSession.module.css';
 
 function formatClock(totalSeconds) {
@@ -376,7 +377,19 @@ function WorkoutSessionPage() {
           <div className={styles.progressPanel}>
             <div className={styles.progressHeading}>
               <div><small>PROGRESSO SESSIONE</small><span>{totals.completedSets} di {totals.totalSets} serie</span></div>
-              <strong>{totals.percent}%</strong>
+              <span className={styles.progressActions}>
+                <ContextInfoButton
+                  title="Allenamento e ricompense"
+                  description="La scheda registra le serie completate e aggiorna progressione e ricompense durante la sessione."
+                  items={[
+                    { title: 'Serie', text: 'Conferma ogni serie soltanto dopo averla realmente completata.' },
+                    { title: 'Carichi e recupero', text: 'Annota i carichi e rispetta il recupero indicato prima di proseguire.' },
+                    { title: 'Ricompense', text: 'Check-in, avanzamento e conclusione vengono registrati in momenti distinti.' }
+                  ]}
+                  note="Uscire dalla schermata non annulla la sessione: puoi riaprirla dall’evento in corso."
+                />
+                <strong>{totals.percent}%</strong>
+              </span>
             </div>
             <div className={styles.progress}><span style={{ width: `${totals.percent}%` }} /></div>
           </div>

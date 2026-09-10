@@ -39,6 +39,7 @@ import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
 import Modal from '../components/Modal';
 import Button from '../components/Button';
+import ContextInfoButton from '../components/ContextInfoButton';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
@@ -1462,7 +1463,7 @@ function CreateEventPage() {
     } catch (submitError) {
       const message = String(submitError?.message || '').trim();
       if (message.includes('DEPOSIT_REQUIRED')) {
-        showToast('Hai terminato gli eventi prova. Aggiungi 10 € virtuali per creare un nuovo evento.', 'info');
+        showToast('Credito insufficiente. L’amministratore può aumentarlo dal Centro operativo.', 'info');
         navigate('/wallet/credit');
         return;
       }
@@ -2352,7 +2353,19 @@ function CreateEventPage() {
 
             {!form.is_personal ? (
               <section className={styles.visibleRulesSection} aria-label="Deposito e tolleranza ritardatari">
-                <div className={styles.sectionLabelRow}><span>Deposito e tolleranza</span></div>
+                <div className={styles.sectionLabelRow}>
+                  <span>Deposito e tolleranza</span>
+                  <ContextInfoButton
+                    title="Deposito e tolleranza"
+                    description="Queste regole proteggono organizzatore e partecipanti prima dell’inizio dell’attività."
+                    items={[
+                      { title: 'Deposito', text: 'La quota fissa di 10 € viene impegnata per l’evento e gestita secondo l’esito della presenza.' },
+                      { title: 'Verifica', text: 'Ogni persona può validarsi tramite QR Code oppure geolocalizzazione.' },
+                      { title: 'Tolleranza', text: 'L’organizzatore concede da 15 a 30 minuti per registrare eventuali ritardatari.' }
+                    ]}
+                    note="La tolleranza estende soltanto il check-in e non modifica l’orario di fine dell’evento."
+                  />
+                </div>
                 <div className={styles.ruleCardGrid}>
                   <div className={`${styles.ruleCard} ${styles.fixedDepositCard} ${errors.deposit_cents ? styles.invalidCard : ''}`}>
                     <span className={styles.controlTitle}><WalletCards size={18} />Deposito</span>

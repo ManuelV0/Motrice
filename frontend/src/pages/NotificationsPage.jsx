@@ -5,22 +5,29 @@ import {
   BellOff,
   BellRing,
   CalendarClock,
+  Check,
+  CheckCheck,
   CheckCircle2,
+  ChevronRight,
+  LockKeyhole,
   MessageCircle,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Star,
+  Trash2,
   WalletCards
 } from 'lucide-react';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
-import EmptyState from '../components/EmptyState';
+import ContextInfoButton from '../components/ContextInfoButton';
 import {
   getNotificationPermissionStatus,
   requestNotificationPermission,
   scheduleEventReminders
 } from '../services/notificationCenter';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '../utils/notificationRules';
+import styles from '../styles/pages/notifications.module.css';
 
 const typeIcons = {
   rsvp_confirmed: CheckCircle2,
@@ -57,31 +64,87 @@ const typeIcons = {
   convention_application_rejected: BellOff
 };
 
+const preferenceRows = [
+  {
+    key: 'chat_social',
+    icon: MessageCircle,
+    title: 'Chat e social',
+    description: 'Messaggi, inviti, richieste e recensioni.'
+  },
+  {
+    key: 'wallet_account',
+    icon: WalletCards,
+    title: 'Wallet e account',
+    description: 'Depositi, rimborsi, prelievi e verifica del profilo.'
+  },
+  {
+    key: 'promotions',
+    icon: Sparkles,
+    title: 'Suggerimenti',
+    description: 'Eventi consigliati, novità e promozioni.'
+  }
+];
+
+function formatNotificationDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayDifference = Math.round((startOfToday - startOfDate) / 86400000);
+  const time = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+
+  if (dayDifference === 0) return `Oggi, ${time}`;
+  if (dayDifference === 1) return `Ieri, ${time}`;
+  return date.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function getNotificationTone(type = '') {
+  if (type.startsWith('wallet_')) return styles.walletTone;
+  if (type.includes('cancelled') || type.includes('declined') || type.includes('failed') || type.includes('suspended')) {
+    return styles.alertTone;
+  }
+  if (type.includes('chat') || type.includes('message')) return styles.socialTone;
+  return styles.eventTone;
+}
+
 function NotificationsPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [preferences, setPreferences] = useState({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [permission, setPermission] = useState({ display: 'unsupported', receive: 'unsupported' });
   const [savingPreference, setSavingPreference] = useState('');
+  const [loading, setLoading] = useState(true);
 
   usePageMeta({
     title: 'Notifiche | Motrice',
     description: 'Centro notifiche Motrice: eventi, sicurezza, chat, wallet e account.'
   });
 
-  async function load() {
-    const [items, nextPreferences, nextPermission] = await Promise.all([
-      api.listNotifications().catch(() => []),
-      api.getNotificationPreferences().catch(() => DEFAULT_NOTIFICATION_PREFERENCES),
-      getNotificationPermissionStatus().catch(() => ({ display: 'unsupported', receive: 'unsupported' }))
-    ]);
-    setNotifications(items);
-    setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...nextPreferences });
-    setPermission(nextPermission);
+  async function load({ showLoading = false } = {}) {
+    if (showLoading) setLoading(true);
+    try {
+      const [items, nextPreferences, nextPermission] = await Promise.all([
+        api.listNotifications().catch(() => []),
+        api.getNotificationPreferences().catch(() => DEFAULT_NOTIFICATION_PREFERENCES),
+        getNotificationPermissionStatus().catch(() => ({ display: 'unsupported', receive: 'unsupported' }))
+      ]);
+      setNotifications(items);
+      setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...nextPreferences });
+      setPermission(nextPermission);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    load();
+    load({ showLoading: true });
     window.addEventListener('motrice:notifications-changed', load);
     return () => window.removeEventListener('motrice:notifications-changed', load);
   }, []);
@@ -121,92 +184,197 @@ function NotificationsPage() {
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
-  return (
-    <section className="page">
-      <div className="section-head">
-        <h1>Notifiche</h1>
-        <div className="inline-actions">
-          <button type="button" className="secondary" onClick={markAll}>Segna tutte come lette</button>
-          <button type="button" className="secondary" onClick={clearAll}>Elimina notifiche</button>
-        </div>
-      </div>
+  const unreadCount = notifications.filter((item) => !item.read).length;
+  const permissionGranted = permission.display === 'granted';
+  const permissionUnsupported = permission.display === 'unsupported';
 
-      <section className="card">
-        <h2><Bell size={19} aria-hidden="true" /> Notifiche sul telefono</h2>
-        <p className="muted">
-          {permission.display === 'granted'
-            ? 'Attive: riceverai promemoria anche con Motrice chiusa.'
-            : permission.display === 'unsupported'
-              ? 'Le notifiche push saranno disponibili nell’app installata sul telefono.'
-              : 'Autorizza Motrice per ricevere promemoria e aggiornamenti importanti.'}
-        </p>
-        {permission.display !== 'granted' && permission.display !== 'unsupported' ? (
-          <button type="button" onClick={enableDeviceNotifications}>Attiva notifiche</button>
+  return (
+    <section className={styles.page}>
+      <header className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>CENTRO NOTIFICHE</p>
+          <div className={styles.titleRow}>
+            <h1>Notifiche</h1>
+            {!loading && unreadCount > 0 ? <span className={styles.unreadBadge}>{unreadCount}</span> : null}
+          </div>
+          <p className={styles.subtitle}>
+            {loading
+              ? 'Aggiornamento in corso…'
+              : unreadCount > 0
+                ? `${unreadCount} ${unreadCount === 1 ? 'aggiornamento da leggere' : 'aggiornamenti da leggere'}`
+                : 'Sei al passo con tutte le attività.'}
+          </p>
+        </div>
+
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.headerButton}
+            onClick={markAll}
+            disabled={loading || unreadCount === 0}
+            aria-label="Segna tutte le notifiche come lette"
+            title="Segna tutte come lette"
+          >
+            <CheckCheck size={18} aria-hidden="true" />
+            <span>Leggi tutte</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.headerButton} ${styles.deleteButton}`}
+            onClick={clearAll}
+            disabled={loading || notifications.length === 0}
+            aria-label="Elimina tutte le notifiche"
+            title="Elimina notifiche"
+          >
+            <Trash2 size={17} aria-hidden="true" />
+            <span>Elimina</span>
+          </button>
+        </div>
+      </header>
+
+      <section className={`${styles.phoneCard} ${permissionGranted ? styles.phoneCardActive : ''}`}>
+        <span className={styles.phoneIcon} aria-hidden="true">
+          {permissionGranted ? <BellRing size={21} /> : <Smartphone size={21} />}
+        </span>
+        <div className={styles.phoneCopy}>
+          <div className={styles.phoneTitleRow}>
+            <h2>Notifiche sul telefono</h2>
+            <span className={permissionGranted ? styles.activeStatus : styles.neutralStatus}>
+              {permissionGranted ? 'Attive' : permissionUnsupported ? 'Solo app' : 'Da attivare'}
+            </span>
+          </div>
+          <p>
+            {permissionGranted
+              ? 'Riceverai promemoria importanti anche quando Motrice è chiusa.'
+              : permissionUnsupported
+                ? 'Le notifiche push saranno disponibili nell’app installata sul telefono.'
+                : 'Autorizza Motrice per ricevere promemoria e aggiornamenti importanti.'}
+          </p>
+        </div>
+        {!permissionGranted && !permissionUnsupported ? (
+          <button type="button" className={styles.enableButton} onClick={enableDeviceNotifications}>
+            Attiva
+          </button>
         ) : null}
       </section>
 
-      <section className="card">
-        <h2>Preferenze</h2>
-        <div className="grid">
-          <label className="card">
-            <span><ShieldCheck size={18} aria-hidden="true" /> Eventi e sicurezza</span>
-            <input type="checkbox" checked readOnly aria-label="Eventi e sicurezza sempre attivi" />
-            <small className="muted">Sempre attive: check-in, variazioni, annullamenti e no-show.</small>
-          </label>
-          <label className="card">
-            <span><MessageCircle size={18} aria-hidden="true" /> Chat e social</span>
-            <input type="checkbox" checked={preferences.chat_social} disabled={savingPreference === 'chat_social'} onChange={() => togglePreference('chat_social')} />
-            <small className="muted">Messaggi, inviti, richieste e recensioni.</small>
-          </label>
-          <label className="card">
-            <span><WalletCards size={18} aria-hidden="true" /> Wallet e account</span>
-            <input type="checkbox" checked={preferences.wallet_account} disabled={savingPreference === 'wallet_account'} onChange={() => togglePreference('wallet_account')} />
-            <small className="muted">Depositi, rimborsi, prelievi e verifica del profilo.</small>
-          </label>
-          <label className="card">
-            <span><Sparkles size={18} aria-hidden="true" /> Suggerimenti</span>
-            <input type="checkbox" checked={preferences.promotions} disabled={savingPreference === 'promotions'} onChange={() => togglePreference('promotions')} />
-            <small className="muted">Eventi consigliati, novità e promozioni.</small>
-          </label>
+      <section className={styles.preferencesCard}>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Preferenze</h2>
+            <p>Scegli quali aggiornamenti vuoi ricevere.</p>
+          </div>
+          <ContextInfoButton
+            title="Preferenze notifiche"
+            description="Motrice separa gli avvisi essenziali dagli aggiornamenti facoltativi."
+            items={[
+              { title: 'Eventi e sicurezza', text: 'Restano sempre attivi per check-in, variazioni, annullamenti e no-show.' },
+              { title: 'Chat e wallet', text: 'Puoi disattivarli separatamente senza perdere gli avvisi di sicurezza.' },
+              { title: 'Suggerimenti', text: 'Comprendono eventi consigliati, novità e comunicazioni promozionali.' }
+            ]}
+            note="Le preferenze modificano gli avvisi facoltativi, non le operazioni già registrate nel tuo account."
+          />
+        </div>
+
+        <div className={styles.preferenceList}>
+          <div className={styles.preferenceRow}>
+            <span className={styles.preferenceIcon}><ShieldCheck size={19} aria-hidden="true" /></span>
+            <span className={styles.preferenceCopy}>
+              <strong>Eventi e sicurezza</strong>
+              <small>Check-in, variazioni, annullamenti e no-show.</small>
+            </span>
+            <span className={styles.lockedBadge}><LockKeyhole size={12} aria-hidden="true" /> Sempre attiva</span>
+          </div>
+
+          {preferenceRows.map(({ key, icon: Icon, title, description }) => (
+            <label className={styles.preferenceRow} key={key}>
+              <span className={styles.preferenceIcon}><Icon size={19} aria-hidden="true" /></span>
+              <span className={styles.preferenceCopy}>
+                <strong>{title}</strong>
+                <small>{description}</small>
+              </span>
+              <span className={styles.switch}>
+                <input
+                  type="checkbox"
+                  checked={preferences[key]}
+                  disabled={savingPreference === key}
+                  onChange={() => togglePreference(key)}
+                  aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
+                />
+                <span className={styles.switchTrack} aria-hidden="true" />
+              </span>
+            </label>
+          ))}
         </div>
       </section>
 
-      <div className="grid">
-          {notifications.length === 0 ? (
-            <EmptyState
-              icon={BellOff}
-              imageSrc="/images/default-sport.svg"
-              imageAlt="Icona notifiche"
-              title="Nessuna notifica"
-              description="Sei aggiornato. Quando ci saranno novita le vedrai qui."
-              primaryActionLabel="Apri la mappa"
-              onPrimaryAction={() => navigate('/map')}
-            />
+      <section className={styles.activitySection}>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Attività recente</h2>
+            <p>{notifications.length > 0 ? `${notifications.length} ${notifications.length === 1 ? 'notifica' : 'notifiche'}` : 'Nessun aggiornamento'}</p>
+          </div>
+        </div>
+
+        <div className={styles.notificationList} aria-live="polite" aria-busy={loading}>
+          {loading ? (
+            Array.from({ length: 3 }, (_, index) => (
+              <div className={styles.skeletonRow} key={index} aria-hidden="true">
+                <span className={styles.skeletonIcon} />
+                <span className={styles.skeletonCopy}><i /><i /><i /></span>
+              </div>
+            ))
+          ) : notifications.length === 0 ? (
+            <div className={styles.emptyState}>
+              <span><BellOff size={24} aria-hidden="true" /></span>
+              <h3>Nessuna notifica</h3>
+              <p>Sei aggiornato. I prossimi avvisi compariranno qui.</p>
+              <button type="button" onClick={() => navigate('/map')}>Esplora gli eventi</button>
+            </div>
           ) : (
             notifications.map((item) => {
               const Icon = typeIcons[item.type] || BellRing;
+              const destination = item.action_path || (item.event_id ? `/events/${item.event_id}` : '');
               return (
-                <article key={item.id} className="card">
-                  <h3><Icon size={16} aria-hidden="true" /> {item.title}</h3>
-                  <p>{item.message}</p>
-                  <p className="muted">{new Date(item.created_at).toLocaleString('it-IT')}</p>
-                  <div className="inline-actions">
-                    {item.action_path ? (
-                      <Link to={item.action_path}>Apri dettaglio</Link>
-                    ) : item.event_id ? (
-                      <Link to={`/events/${item.event_id}`}>Apri evento</Link>
-                    ) : null}
-                    {!item.read && (
-                      <button type="button" className="secondary" onClick={() => markAsRead(item.id)}>
-                        Segna letta
+                <article
+                  key={item.id}
+                  className={`${styles.notificationRow} ${!item.read ? styles.unreadRow : ''}`}
+                >
+                  <span className={`${styles.notificationIcon} ${getNotificationTone(item.type)}`}>
+                    <Icon size={19} aria-hidden="true" />
+                  </span>
+                  <div className={styles.notificationCopy}>
+                    <div className={styles.notificationTitleRow}>
+                      <h3>{item.title}</h3>
+                      {!item.read ? <span className={styles.unreadDot} aria-label="Non letta" /> : null}
+                    </div>
+                    <p>{item.message || item.body}</p>
+                    <time dateTime={item.created_at}>{formatNotificationDate(item.created_at)}</time>
+                  </div>
+                  <div className={styles.notificationActions}>
+                    {!item.read ? (
+                      <button
+                        type="button"
+                        className={styles.readButton}
+                        onClick={() => markAsRead(item.id)}
+                        aria-label={`Segna come letta: ${item.title}`}
+                        title="Segna come letta"
+                      >
+                        <Check size={17} aria-hidden="true" />
                       </button>
-                    )}
+                    ) : null}
+                    {destination ? (
+                      <Link className={styles.openLink} to={destination} aria-label={`Apri: ${item.title}`}>
+                        <ChevronRight size={20} aria-hidden="true" />
+                      </Link>
+                    ) : null}
                   </div>
                 </article>
               );
             })
           )}
-      </div>
+        </div>
+      </section>
     </section>
   );
 }

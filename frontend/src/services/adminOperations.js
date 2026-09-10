@@ -1,5 +1,6 @@
 import { api } from './api';
 import { getAuthSession } from './authSession';
+import { piggybank } from './piggybank';
 import { isSupabaseConfigured, requireSupabase } from './supabaseClient';
 
 function numberOrZero(value) {
@@ -207,4 +208,42 @@ export async function getAdminOperationsSnapshot() {
   if (!error) return normalizeSnapshot(data);
   if (isMissingSnapshotRpc(error)) return buildLocalSnapshot();
   throw new Error(error.message || 'Impossibile caricare il centro operativo');
+}
+
+export async function increaseAdminVirtualCredit({ userId, amountCents, reason = '' } = {}) {
+  const targetUserId = String(userId || '').trim();
+  const safeAmount = Math.round(Number(amountCents));
+  if (!targetUserId) throw new Error('Utente non valido');
+  if (!Number.isFinite(safeAmount) || safeAmount < 100 || safeAmount > 100000) {
+    throw new Error('Inserisci un importo compreso tra 1 € e 1.000 €');
+  }
+
+  const session = getAuthSession();
+  const requestId = globalThis.crypto?.randomUUID?.() || `admin-credit-${Date.now()}`;
+  const auditReason = String(reason || 'Aumento credito virtuale autorizzato dall’amministratore')
+    .trim()
+    .slice(0, 500);
+
+  if (!isSupabaseConfigured || !session?.authUserId) {
+    const isAdmin = String(session?.role || '').toLowerCase() === 'admin' ||
+      String(session?.email || '').trim().toLowerCase() === 'aletarqui@libero.it';
+    if (!isAdmin) throw new Error('Accesso amministratore richiesto');
+    const wallet = piggybank.adminIncreaseVirtualCredit({
+      accountId: targetUserId,
+      amountCents: safeAmount,
+      requestId,
+      reason: auditReason
+    });
+    return { ...wallet, user_id: targetUserId, credited_cents: safeAmount };
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('admin_increase_virtual_wallet_credit', {
+    target_user_id: targetUserId,
+    amount_cents: safeAmount,
+    client_request_id: requestId,
+    operation_reason: auditReason
+  });
+  if (error) throw new Error(error.message || 'Impossibile aumentare il credito');
+  return data;
 }

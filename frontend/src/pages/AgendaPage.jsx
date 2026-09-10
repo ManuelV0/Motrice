@@ -9,7 +9,6 @@ import {
   LockKeyhole,
   LocateFixed,
   MapPin,
-  MessageCircle,
   Play,
   QrCode,
   Route,
@@ -24,7 +23,11 @@ import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerifi
 import EventCard from '../components/EventCard';
 import styles from '../styles/pages/agenda.module.css';
 import { getEventTiming } from '../utils/eventLifecycle';
-import { resolveParticipantOutcome } from '../utils/eventParticipationState';
+import {
+  getEventPrimaryActionPath,
+  resolveEventPrimaryAction,
+  resolveParticipantOutcome
+} from '../utils/eventParticipationState';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
@@ -193,6 +196,14 @@ function getSessionTimeline(timing, referenceTime = Date.now()) {
     progress: Math.max(1, Math.min(99, Math.round(((nowMs - startsAtMs) / (endsAtMs - startsAtMs)) * 100))),
     label: `${elapsedMinutes} di ${durationMinutes} min`
   };
+}
+
+function getPrimaryActionIcon(action) {
+  if (action?.target === 'verify') return ShieldCheck;
+  if (action?.target === 'workout' || action?.target === 'outdoor') return Play;
+  if (action?.target === 'manage') return Settings2;
+  if (action?.id === 'summary' || action?.id === 'feedback') return CheckCircle2;
+  return ArrowRight;
 }
 
 function getTodaySessionState(event, referenceTime = Date.now()) {
@@ -412,7 +423,23 @@ function AgendaPage() {
         const isParticipant = !isOrganizer && (event?.is_going || event?.user_rsvp);
         return Boolean(isOrganizer || event?.is_personal || isParticipant);
       })
-      .map((event) => ({ event, state: getTodaySessionState(event, nowMs) }))
+      .map((event) => {
+        const primaryAction = resolveEventPrimaryAction({
+          event,
+          isOrganizer: event?.created_by === 'me' && !event?.is_personal,
+          referenceTime: nowMs
+        });
+        return {
+          event,
+          state: {
+            ...getTodaySessionState(event, nowMs),
+            action: primaryAction.label,
+            actionTarget: primaryAction.target,
+            actionDisabled: primaryAction.disabled,
+            primaryAction
+          }
+        };
+      })
       .filter(({ event, state }) => {
         if (state.key === 'completed') return true;
         const startsAt = Date.parse(event?.event_datetime || '');
@@ -438,9 +465,20 @@ function AgendaPage() {
   );
   const focusedSession = useMemo(() => {
     if (!requestedAgendaEvent) return todaySession;
+    const primaryAction = resolveEventPrimaryAction({
+      event: requestedAgendaEvent,
+      isOrganizer: requestedAgendaEvent?.created_by === 'me' && !requestedAgendaEvent?.is_personal,
+      referenceTime: nowMs
+    });
     return {
       event: requestedAgendaEvent,
-      state: getTodaySessionState(requestedAgendaEvent, nowMs)
+      state: {
+        ...getTodaySessionState(requestedAgendaEvent, nowMs),
+        action: primaryAction.label,
+        actionTarget: primaryAction.target,
+        actionDisabled: primaryAction.disabled,
+        primaryAction
+      }
     };
   }, [nowMs, requestedAgendaEvent, todaySession]);
 
@@ -536,21 +574,16 @@ function AgendaPage() {
     });
   }
 
-  function openEvent(event) {
-    navigate(`/events/${event.id}`);
-  }
-
-  function openFutureAction(event) {
-    if (event.created_by === 'me') {
-      navigate(`/events/${event.id}?manage=1`);
-      return;
-    }
-    navigate(`/chat/event_${event.id}`);
+  function openEventPrimaryAction(event, action) {
+    if (!event?.id || action?.disabled) return;
+    const target = getEventPrimaryActionPath(event, action);
+    if (target) navigate(target);
   }
 
   function openTodaySession() {
     if (!focusedSession?.event?.id) return;
     const { event, state } = focusedSession;
+    if (state.actionDisabled) return;
     if (state.actionTarget === 'outdoor' && isOutdoorTrackedEvent(event)) {
       navigate(`/events/${event.id}/activity`);
       return;
@@ -563,7 +596,7 @@ function AgendaPage() {
       setVerificationEventId((current) => current === String(event.id) ? '' : String(event.id));
       return;
     }
-    navigate(`/events/${event.id}`);
+    openEventPrimaryAction(event, state.primaryAction);
   }
 
   return (
@@ -596,11 +629,7 @@ function AgendaPage() {
             ? LocateFixed
             : state.verificationIcon === 'both'
               ? ShieldCheck
-              : state.actionTarget === 'workout' || state.actionTarget === 'outdoor'
-                ? Play
-                : state.key === 'completed'
-                  ? CheckCircle2
-                  : ArrowRight;
+              : getPrimaryActionIcon(state.primaryAction);
 
         return (
           <section
@@ -645,7 +674,12 @@ function AgendaPage() {
               <strong>{state.progress}%</strong>
             </div>
 
-            <button type="button" className={styles.todayWorkoutAction} onClick={openTodaySession}>
+            <button
+              type="button"
+              className={styles.todayWorkoutAction}
+              onClick={openTodaySession}
+              disabled={state.actionDisabled}
+            >
               <ActionIcon size={20} aria-hidden="true" />
               <span>{state.action}</span>
               {!['workout', 'outdoor'].includes(state.actionTarget) ? <ArrowRight size={18} aria-hidden="true" /> : null}
@@ -863,7 +897,13 @@ function AgendaPage() {
                 }
 
                 const isOrganizer = event.created_by === 'me';
-                const ActionIcon = isOrganizer ? Settings2 : MessageCircle;
+                const action = resolveEventPrimaryAction({
+                  event,
+                  isOrganizer,
+                  isFull: capacity > 0 && participants >= capacity,
+                  referenceTime: nowMs
+                });
+                const ActionIcon = getPrimaryActionIcon(action);
                 return (
                   <EventCard
                     key={event.id}
@@ -872,12 +912,13 @@ function AgendaPage() {
                     context="agenda"
                     status={{ label: 'Da svolgere', tone: 'success' }}
                     primaryAction={{
-                      label: isOrganizer ? 'Gestisci' : 'Chat',
+                      label: action.label,
                       icon: ActionIcon,
-                      onClick: openFutureAction
+                      disabled: action.disabled,
+                      onClick: (selectedEvent) => openEventPrimaryAction(selectedEvent, action)
                     }}
                     showProgress
-                    detailsLabel="Dettagli"
+                    detailsLabel={null}
                   />
                 );
               })}

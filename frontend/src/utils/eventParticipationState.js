@@ -1,3 +1,6 @@
+import { getEventTiming } from './eventLifecycle.js';
+import { isOutdoorTrackedEvent } from './outdoorActivity.js';
+
 const CONFIRMED_PARTICIPATION_STATUSES = new Set(['going', 'completed']);
 
 function normalized(value) {
@@ -258,4 +261,236 @@ export function resolveEventParticipationState({ event, isOrganizer = false, isF
     canAccessChat: false,
     canCancel: false
   };
+}
+
+function hasCompletedFeedback(event, isOrganizer) {
+  if (isOrganizer) {
+    return Boolean(
+      event?.organizer_feedback_completed ||
+      event?.organizer_review_submitted ||
+      event?.feedback_completed
+    );
+  }
+  return Boolean(
+    event?.user_rsvp?.review_submitted ||
+    event?.user_rsvp?.reviewed ||
+    event?.review_submitted
+  );
+}
+
+function sessionAction(event, { waiting = false } = {}) {
+  if (waiting) {
+    return {
+      id: 'waiting_start',
+      label: 'Attendi l\u2019inizio',
+      target: 'wait',
+      disabled: true,
+      tone: 'neutral'
+    };
+  }
+  if (isOutdoorTrackedEvent(event)) {
+    return {
+      id: 'open_outdoor',
+      label: 'Apri attivit\u00e0',
+      target: 'outdoor',
+      disabled: false,
+      tone: 'primary'
+    };
+  }
+  if (event?.workout_plan) {
+    return {
+      id: 'open_workout',
+      label: 'Apri allenamento',
+      target: 'workout',
+      disabled: false,
+      tone: 'primary'
+    };
+  }
+  return {
+    id: 'open_event',
+    label: 'Apri evento',
+    target: 'event',
+    disabled: false,
+    tone: 'primary'
+  };
+}
+
+/**
+ * Single source of truth for the next useful event action.
+ *
+ * UI surfaces may render the result differently, but must not independently
+ * infer a competing action from dates, role or RSVP fields.
+ */
+export function resolveEventPrimaryAction({
+  event,
+  isOrganizer = event?.created_by === 'me',
+  isFull = false,
+  referenceTime = Date.now()
+}) {
+  const timing = getEventTiming(event || {}, referenceTime);
+  const outcome = resolveParticipantOutcome(event);
+  const approvalRequired = normalized(event?.join_policy) === 'approval';
+  const cancelled = timing.phase === 'cancelled' || normalized(event?.status) === 'cancelled';
+  const completed = timing.hasEnded || timing.phase === 'completed' || normalized(event?.status) === 'completed';
+  const feedbackEligible = Boolean(isOrganizer || outcome.id === 'completed');
+
+  if (cancelled) {
+    return {
+      id: 'cancelled_summary',
+      label: isOrganizer ? 'Riepilogo annullamento' : 'Vedi rimborso',
+      target: 'event',
+      disabled: false,
+      tone: 'neutral'
+    };
+  }
+
+  if (completed || ['completed', 'no_show'].includes(outcome.id)) {
+    if (feedbackEligible && !hasCompletedFeedback(event, isOrganizer)) {
+      return {
+        id: 'feedback',
+        label: 'Valuta partecipanti',
+        target: 'feedback',
+        disabled: false,
+        tone: 'primary'
+      };
+    }
+    return {
+      id: 'summary',
+      label: 'Vedi riepilogo',
+      target: 'event',
+      disabled: false,
+      tone: 'neutral'
+    };
+  }
+
+  if (event?.is_personal) {
+    if (timing.phase === 'active' || timing.phase === 'in_progress' || timing.phase === 'live_checkin') {
+      return sessionAction(event);
+    }
+    return {
+      id: 'personal_details',
+      label: 'Vedi allenamento',
+      target: 'event',
+      disabled: false,
+      tone: 'neutral'
+    };
+  }
+
+  if (isOrganizer) {
+    if (timing.isCheckInOpen || timing.phase === 'checkin_open' || timing.phase === 'live_checkin') {
+      return {
+        id: 'organizer_checkin',
+        label: 'Verifica partecipanti',
+        target: 'verify',
+        disabled: false,
+        tone: 'primary'
+      };
+    }
+
+    if (timing.phase === 'in_progress' || timing.lifecycleState === 'active') {
+      const checkedInCount = Math.max(0, Number(event?.participants_checked_in_count || 0));
+      if (checkedInCount === 0 && timing.canExtendCheckIn) {
+        return {
+          id: 'organizer_extend_checkin',
+          label: 'Gestisci check-in',
+          target: 'verify',
+          disabled: false,
+          tone: 'primary'
+        };
+      }
+      return sessionAction(event);
+    }
+
+    return {
+      id: approvalRequired ? 'manage_requests' : 'manage_event',
+      label: approvalRequired ? 'Gestisci richieste' : 'Gestisci evento',
+      target: 'manage',
+      disabled: false,
+      tone: 'primary'
+    };
+  }
+
+  if (outcome.id === 'checked_in') {
+    const beforeStart = Number.isFinite(timing.startsAtMs) && Number(referenceTime) < timing.startsAtMs;
+    return sessionAction(event, { waiting: beforeStart });
+  }
+
+  if (outcome.id === 'confirmed' || hasConfirmedEventParticipation(event)) {
+    if (timing.isCheckInOpen || ['checkin_open', 'live_checkin'].includes(timing.phase)) {
+      return {
+        id: 'participant_checkin',
+        label: 'Verifica presenza',
+        target: 'verify',
+        disabled: false,
+        tone: 'primary'
+      };
+    }
+    return {
+      id: 'confirmed_details',
+      label: 'Vedi dettagli',
+      target: 'event',
+      disabled: false,
+      tone: 'neutral'
+    };
+  }
+
+  if (['requested', 'pending'].includes(outcome.id) || event?.is_join_pending || normalized(event?.join_request_status) === 'pending') {
+    return {
+      id: 'request_pending',
+      label: 'Richiesta inviata',
+      target: 'wait',
+      disabled: true,
+      tone: 'neutral'
+    };
+  }
+
+  if (outcome.id === 'cancelled' || outcome.id === 'cancelled_late') {
+    return {
+      id: 'participation_cancelled',
+      label: 'Vedi evento',
+      target: 'event',
+      disabled: false,
+      tone: 'neutral'
+    };
+  }
+
+  if (isFull) {
+    return {
+      id: 'full',
+      label: 'Evento al completo',
+      target: 'wait',
+      disabled: true,
+      tone: 'neutral'
+    };
+  }
+
+  return {
+    id: approvalRequired ? 'request_join' : 'join',
+    label: approvalRequired ? 'Richiedi di partecipare' : 'Partecipa',
+    target: 'join',
+    disabled: false,
+    tone: 'primary'
+  };
+}
+
+export function getEventPrimaryActionPath(event, action) {
+  const eventId = encodeURIComponent(String(event?.id || ''));
+  if (!eventId) return '';
+  switch (action?.target) {
+    case 'verify':
+      return `/agenda?verifyEvent=${eventId}`;
+    case 'workout':
+      return `/events/${eventId}/workout`;
+    case 'outdoor':
+      return `/events/${eventId}/activity`;
+    case 'join':
+      return `/events/${eventId}?action=join`;
+    case 'manage':
+      return `/events/${eventId}#organizer-controls`;
+    case 'feedback':
+      return `/events/${eventId}#post-event-feedback`;
+    case 'event':
+    default:
+      return `/events/${eventId}`;
+  }
 }
