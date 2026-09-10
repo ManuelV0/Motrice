@@ -490,6 +490,7 @@ function CreateEventPage() {
   const [locationConfirmed, setLocationConfirmed] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
+  const [stepDirection, setStepDirection] = useState('forward');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [activeWhenPanel, setActiveWhenPanel] = useState(null);
@@ -1315,7 +1316,10 @@ function CreateEventPage() {
       const firstInvalidStep = WIZARD_STEPS.find((step) =>
         STEP_ERROR_FIELDS[step.id].some((field) => nextErrors[field])
       );
-      if (firstInvalidStep) setActiveStep(firstInvalidStep.id);
+      if (firstInvalidStep) {
+        setStepDirection(firstInvalidStep.id < activeStep ? 'backward' : 'forward');
+        setActiveStep(firstInvalidStep.id);
+      }
       return false;
     }
     return true;
@@ -1345,16 +1349,19 @@ function CreateEventPage() {
       showToast('Completa i campi evidenziati prima di continuare', 'error');
       return;
     }
+    setStepDirection('forward');
     setActiveStep((step) => Math.min(WIZARD_STEPS.length, step + 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function goToPreviousStep() {
+    setStepDirection('backward');
     setActiveStep((step) => Math.max(1, step - 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function editReviewStep(step) {
+    setStepDirection(step < activeStep ? 'backward' : 'forward');
     setActiveStep(step);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1539,7 +1546,7 @@ function CreateEventPage() {
         </div>
 
         {activeStep === 1 ? (
-          <fieldset className={styles.wizardStep} aria-label="Informazioni base">
+          <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Informazioni base">
 
             <label className={styles.field}>
               <span className={styles.fieldLabel}>Nome personalizzato</span>
@@ -1825,7 +1832,7 @@ function CreateEventPage() {
         ) : null}
 
         {activeStep === 2 ? (
-          <fieldset className={styles.wizardStep} aria-label="Luogo e percorso">
+          <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Luogo e percorso">
             <div className={styles.sectionHero}>
               <span><MapPin size={22} /></span>
               <div>
@@ -2218,7 +2225,7 @@ function CreateEventPage() {
         ) : null}
 
         {activeStep === 3 ? (
-          <fieldset className={styles.wizardStep} aria-label="Regole e pubblicazione">
+          <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Regole e pubblicazione">
 
             <div className={styles.primarySettingsCard}>
               <div
@@ -2466,7 +2473,7 @@ function CreateEventPage() {
         ) : null}
 
         {activeStep === 4 ? (
-          <fieldset className={styles.wizardStep} aria-label="Riepilogo evento">
+          <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Riepilogo evento">
             <section className={styles.reviewHero}>
               <span className={styles.reviewHeroVisual}>{getSportVisual(selectedSport).emoji}</span>
               <div>

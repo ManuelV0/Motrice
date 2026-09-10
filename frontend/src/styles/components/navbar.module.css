@@ -714,7 +714,8 @@
   left: 0;
   z-index: var(--z-nav-backdrop);
   background: color-mix(in srgb, var(--text) 45%, transparent);
-  backdrop-filter: blur(2px);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border: 0;
   margin: 0;
   padding: 0;
@@ -1043,8 +1044,11 @@
   background: #0c0f0c;
   border-right: 1px solid rgb(255 255 255 / 8%);
   border-bottom: 0;
-  transform: translateX(-102%);
+  transform: translate3d(-102%, 0, 0);
   box-shadow: 18px 0 44px rgb(0 0 0 / 48%);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  contain: layout paint style;
 }
 
 .drawer::before,
@@ -1053,7 +1057,7 @@
 }
 
 .drawerOpen {
-  transform: translateX(0);
+  transform: translate3d(0, 0, 0);
 }
 
 .mobileNav {

@@ -161,6 +161,16 @@ function hasMeaningfulDescription(value) {
   return (text.match(/[\p{L}\p{N}]/gu) || []).length >= 3;
 }
 
+function eventSnapshotsMatch(current, next) {
+  if (current === next) return true;
+  if (!current || !next) return false;
+  try {
+    return JSON.stringify(current) === JSON.stringify(next);
+  } catch {
+    return false;
+  }
+}
+
 function getPrimaryActionIcon(action) {
   if (action?.target === 'join') return UserPlus;
   if (action?.target === 'verify') return ShieldCheck;
@@ -380,19 +390,55 @@ function EventDetailPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     setCoachProfile(getCoachProfile());
     setLoading(true);
+    setError('');
+    setSimilarEvents([]);
 
-    Promise.all([api.getEvent(id, originParams), api.listEvents({ sortBy: 'popular', ...originParams })])
-      .then(([eventData, allEvents]) => {
+    api.getEvent(id, originParams)
+      .then((eventData) => {
+        if (!active) return;
         setEvent(eventData);
-        setSimilarEvents(
-          allEvents.filter((item) => String(item.id) !== String(id) && item.sport_id === eventData.sport_id).slice(0, 3)
-        );
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (active) setError(err.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, [id, originParams]);
+
+  useEffect(() => {
+    if (!event?.id || String(event.id) !== String(id) || event.sport_id == null) return undefined;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api.listEvents({
+        sortBy: 'popular',
+        sport: event.sport_id,
+        limit: 12,
+        ...originParams
+      })
+        .then((allEvents) => {
+          if (!active) return;
+          setSimilarEvents(
+            allEvents.filter((item) => String(item.id) !== String(id)).slice(0, 3)
+          );
+        })
+        .catch(() => {
+          if (active) setSimilarEvents([]);
+        });
+    }, 350);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [event?.id, event?.sport_id, id, originParams]);
 
   useEffect(() => {
     let active = true;
@@ -433,7 +479,13 @@ function EventDetailPage() {
     return () => {
       active = false;
     };
-  }, [event, currentUserId]);
+  }, [
+    currentUserId,
+    event?.organizer?.avatar_url,
+    event?.organizer?.bio,
+    event?.organizer?.id,
+    event?.organizer?.name
+  ]);
 
   async function reload() {
     const fresh = await api.getEvent(id, originParams);
@@ -974,7 +1026,7 @@ function EventDetailPage() {
         const nextState = resolveEventParticipationState({ event: fresh, isFull: nextIsFull });
         const previousStateId = lastParticipationStateRef.current || participationState.id;
 
-        setEvent(fresh);
+        setEvent((current) => eventSnapshotsMatch(current, fresh) ? current : fresh);
         lastParticipationStateRef.current = nextState.id;
 
         if (previousStateId === 'pending' && nextState.id === 'confirmed') {
@@ -994,7 +1046,10 @@ function EventDetailPage() {
 
     lastParticipationStateRef.current = participationState.id;
     const firstRefreshId = window.setTimeout(refreshParticipationState, 1500);
-    const intervalId = window.setInterval(refreshParticipationState, 5000);
+    const refreshIntervalMs = participationState.id === 'pending' ? 5000 : 10000;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshParticipationState();
+    }, refreshIntervalMs);
     return () => {
       active = false;
       window.clearTimeout(firstRefreshId);
@@ -1356,7 +1411,18 @@ function EventDetailPage() {
           <Card as="section" className={styles.locationCard}>
             <div className={styles.mapStage}>
               {routePoints.length >= 2 ? (
-                <MapContainer center={routePoints[0]} zoom={11} className={styles.mapFrame}>
+                <MapContainer
+                  center={routePoints[0]}
+                  zoom={11}
+                  className={styles.mapFrame}
+                  dragging={false}
+                  touchZoom={false}
+                  doubleClickZoom={false}
+                  scrollWheelZoom={false}
+                  boxZoom={false}
+                  keyboard={false}
+                  zoomControl={false}
+                >
                   <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <Polyline positions={routePoints} />
                   <Marker position={routePoints[0]}>
@@ -1367,7 +1433,18 @@ function EventDetailPage() {
                   </Marker>
                 </MapContainer>
               ) : event.lat != null && event.lng != null ? (
-                <MapContainer center={[event.lat, event.lng]} zoom={13} className={styles.mapFrame}>
+                <MapContainer
+                  center={[event.lat, event.lng]}
+                  zoom={13}
+                  className={styles.mapFrame}
+                  dragging={false}
+                  touchZoom={false}
+                  doubleClickZoom={false}
+                  scrollWheelZoom={false}
+                  boxZoom={false}
+                  keyboard={false}
+                  zoomControl={false}
+                >
                   <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                   <Marker position={[event.lat, event.lng]}>
                     <Popup>{event.location_name}</Popup>

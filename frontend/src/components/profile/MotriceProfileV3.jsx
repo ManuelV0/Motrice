@@ -116,6 +116,8 @@ function MotriceProfileV3({
   const coverInputRef = useRef(null);
   const momentInputRef = useRef(null);
   const editSnapshotRef = useRef(null);
+  const profileSwipeRef = useRef(null);
+  const profileTabIndicatorRef = useRef(null);
 
   useEffect(() => {
     if (!identityOpen) setForm(profileForm(profile, state?.identity));
@@ -276,8 +278,63 @@ function MotriceProfileV3({
 
   function selectProfileSection(section) {
     setActiveProfileSection(section);
+    if (profileTabIndicatorRef.current) profileTabIndicatorRef.current.style.removeProperty('transform');
     if (section === 'moments') {
       setActiveMetric('');
+    }
+  }
+
+  function startProfileSwipe(event) {
+    if (event.button !== 0) return;
+    profileSwipeRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastTime: performance.now(),
+      deltaX: 0,
+      velocity: 0,
+      recognized: false
+    };
+  }
+
+  function moveProfileSwipe(event) {
+    const swipe = profileSwipeRef.current;
+    if (!swipe || swipe.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    if (!swipe.recognized) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) {
+        profileSwipeRef.current = null;
+        return;
+      }
+      swipe.recognized = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+
+    event.preventDefault();
+    const now = performance.now();
+    swipe.velocity = (event.clientX - swipe.lastX) / Math.max(1, now - swipe.lastTime);
+    swipe.lastX = event.clientX;
+    swipe.lastTime = now;
+    swipe.deltaX = Math.max(-72, Math.min(72, deltaX * 0.55));
+    if (profileTabIndicatorRef.current) {
+      profileTabIndicatorRef.current.style.transform = `translate3d(${swipe.deltaX}px, 0, 0)`;
+    }
+  }
+
+  function finishProfileSwipe(event) {
+    const swipe = profileSwipeRef.current;
+    if (!swipe || swipe.pointerId !== event.pointerId) return;
+    profileSwipeRef.current = null;
+    if (profileTabIndicatorRef.current) profileTabIndicatorRef.current.style.removeProperty('transform');
+    if (!swipe.recognized) return;
+
+    if (activeProfileSection === 'identity' && (swipe.deltaX <= -32 || swipe.velocity <= -0.45)) {
+      selectProfileSection('moments');
+    } else if (activeProfileSection === 'moments' && (swipe.deltaX >= 32 || swipe.velocity >= 0.45)) {
+      selectProfileSection('identity');
     }
   }
 
@@ -547,7 +604,20 @@ function MotriceProfileV3({
             <span className={styles.sportPills}>{form.sport_profiles.map((sport) => <small key={sport.name}>{sport.name} · {sport.level}</small>)}</span>
           </div>
 
-          <div className={styles.profileSectionTabs} role="tablist" aria-label="Contenuto del profilo">
+          <div
+            className={styles.profileSectionTabs}
+            role="tablist"
+            aria-label="Contenuto del profilo"
+            onPointerDown={startProfileSwipe}
+            onPointerMove={moveProfileSwipe}
+            onPointerUp={finishProfileSwipe}
+            onPointerCancel={finishProfileSwipe}
+          >
+            <span
+              ref={profileTabIndicatorRef}
+              className={`${styles.profileTabIndicator} ${activeProfileSection === 'moments' ? styles.profileTabIndicatorMoments : ''}`}
+              aria-hidden="true"
+            />
             <button
               type="button"
               role="tab"

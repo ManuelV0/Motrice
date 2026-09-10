@@ -43,6 +43,19 @@ const EMPTY_REVIEW = {
   note: ''
 };
 
+function snapshotsMatch(current, next) {
+  if (current === next) return true;
+  try {
+    return JSON.stringify(current) === JSON.stringify(next);
+  } catch {
+    return false;
+  }
+}
+
+function keepStableSnapshot(setter, next) {
+  setter((current) => snapshotsMatch(current, next) ? current : next);
+}
+
 function formatEventTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--:--';
@@ -245,13 +258,13 @@ function EventParticipationFlow({
       ]);
 
       if (flowResult.status === 'fulfilled') {
-        setProgress(flowResult.value);
+        keepStableSnapshot(setProgress, flowResult.value);
       }
       if (validationResult.status === 'fulfilled') {
-        setParticipants(Array.isArray(validationResult.value) ? validationResult.value : []);
+        keepStableSnapshot(setParticipants, Array.isArray(validationResult.value) ? validationResult.value : []);
       }
       if (requestsResult.status === 'fulfilled') {
-        setJoinRequests(Array.isArray(requestsResult.value) ? requestsResult.value : []);
+        keepStableSnapshot(setJoinRequests, Array.isArray(requestsResult.value) ? requestsResult.value : []);
       }
 
       if (!silent) {
@@ -275,14 +288,16 @@ function EventParticipationFlow({
 
   useEffect(() => {
     if (!canLoad) return undefined;
-    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    const timer = window.setInterval(() => setNowMs(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, [canLoad]);
 
   useEffect(() => {
     if (!canLoad) return undefined;
     const timer = window.setInterval(
-      () => loadFlow({ silent: true }),
+      () => {
+        if (document.visibilityState === 'visible') loadFlow({ silent: true });
+      },
       isOrganizer ? 5000 : 10000
     );
     return () => window.clearInterval(timer);
@@ -790,7 +805,7 @@ function EventParticipationFlow({
               </Button>
             </div>
 
-            <div className={styles.progressBlock}>
+            <div className={`${styles.progressBlock} ${progressPercent >= 60 ? styles.progressVerified : ''}`}>
               <div className={styles.progressCopy}>
                 <strong>{progressPercent >= 100 ? 'Partecipazione completata' : progressPercent >= 60 ? 'Presenza verificata' : 'Iscrizione confermata'}</strong>
                 <span>{progressPercent}% cashback</span>

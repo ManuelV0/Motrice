@@ -46,6 +46,7 @@ import {
 } from '../features/outdoor/services/outdoorSessionStore';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
+import AnimatedNumber from '../components/AnimatedNumber';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -410,7 +411,7 @@ function OutdoorActivitySessionPage() {
         <section className={styles.primaryMetrics} aria-label="Statistiche principali">
           <article>
             <small>DISTANZA</small>
-            <strong>{distanceKm.toFixed(2)}</strong>
+            <strong><AnimatedNumber value={distanceKm} decimals={2} duration={520} /></strong>
             <span>km</span>
           </article>
           <article>
@@ -430,13 +431,13 @@ function OutdoorActivitySessionPage() {
           <article>
             <span><Mountain size={19} /></span>
             <small>DISLIVELLO +</small>
-            <strong>{Math.round(Number(session.elevationGainM || 0))}</strong>
+            <strong><AnimatedNumber value={session.elevationGainM} duration={480} /></strong>
             <em>metri</em>
           </article>
           <article>
             <span><Footprints size={19} /></span>
             <small>PASSI STIMATI</small>
-            <strong>{steps.toLocaleString('it-IT')}</strong>
+            <strong><AnimatedNumber value={steps} duration={480} /></strong>
             <em>in movimento</em>
           </article>
           <article>

@@ -444,6 +444,16 @@ async function fetchEvents(filters = {}) {
     query = query.gte('starts_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString());
   }
 
+  if (filters.sport != null && filters.sport !== '') {
+    const sportId = Number(filters.sport);
+    if (Number.isFinite(sportId)) query = query.eq('sport_id', sportId);
+  }
+
+  const requestedLimit = Number(filters.limit);
+  if (Number.isInteger(requestedLimit) && requestedLimit > 0) {
+    query = query.limit(Math.min(100, requestedLimit));
+  }
+
   const { data, error } = await query;
   throwIfError(error);
   const context = await loadEventContext(client, data, { includeWorkoutPlans: true });
@@ -1447,6 +1457,18 @@ function createRemoteMethods(localApi) {
         .update({ read_at: new Date().toISOString() })
         .eq('user_id', userId)
         .is('read_at', null);
+      throwIfError(error);
+      return { success: true };
+    },
+
+    async deleteNotification(id) {
+      const client = requireSupabase();
+      const userId = requireAuthUserId();
+      const { error } = await client
+        .from('notifications')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', userId);
       throwIfError(error);
       return { success: true };
     },

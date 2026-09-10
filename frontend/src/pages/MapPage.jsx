@@ -614,6 +614,13 @@ function MapFiltersDrawer({
   const drawerRef = useRef(null);
   const closeButtonRef = useRef(null);
   const onCloseRef = useRef(onClose);
+  const dragRef = useRef(null);
+  const dragFrameRef = useRef(null);
+  const pendingDragOffsetRef = useRef(0);
+  const closeTimerRef = useRef(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [dragSettling, setDragSettling] = useState(false);
   const periodOptions = [
     { value: 'all', label: 'Sempre' },
     { value: 'today', label: 'Oggi' },
@@ -636,6 +643,97 @@ function MapFiltersDrawer({
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  useEffect(() => () => {
+    if (dragFrameRef.current) window.cancelAnimationFrame(dragFrameRef.current);
+    if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+  }, []);
+
+  function scheduleDragOffset(offset) {
+    pendingDragOffsetRef.current = offset;
+    if (dragFrameRef.current) return;
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      setDragOffset(pendingDragOffsetRef.current);
+    });
+  }
+
+  function onDrawerDragStart(event) {
+    if (!open || window.matchMedia('(min-width: 768px)').matches || event.button !== 0) return;
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setDragSettling(false);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastY: event.clientY,
+      lastTime: performance.now(),
+      velocity: 0,
+      moved: false
+    };
+  }
+
+  function onDrawerDragMove(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved) {
+      if (Math.abs(deltaX) < 7 && Math.abs(deltaY) < 7) return;
+      if (deltaY >= 0 || Math.abs(deltaY) <= Math.abs(deltaX)) {
+        dragRef.current = null;
+        return;
+      }
+      drag.moved = true;
+      setDragging(true);
+    }
+
+    event.preventDefault();
+    const now = performance.now();
+    drag.velocity = (event.clientY - drag.lastY) / Math.max(1, now - drag.lastTime);
+    drag.lastY = event.clientY;
+    drag.lastTime = now;
+    scheduleDragOffset(Math.max(-window.innerHeight, Math.min(0, deltaY)));
+  }
+
+  function onDrawerDragEnd(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (dragFrameRef.current) {
+      window.cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+      setDragOffset(pendingDragOffsetRef.current);
+    }
+    setDragging(false);
+    setDragSettling(true);
+
+    const shouldClose = drag.moved && (pendingDragOffsetRef.current <= -72 || drag.velocity <= -0.45);
+    if (!shouldClose) {
+      pendingDragOffsetRef.current = 0;
+      setDragOffset(0);
+      closeTimerRef.current = window.setTimeout(() => {
+        setDragSettling(false);
+        closeTimerRef.current = null;
+      }, 190);
+      return;
+    }
+
+    const exitOffset = -Math.max(window.innerHeight, drawerRef.current?.getBoundingClientRect().height || 0);
+    pendingDragOffsetRef.current = exitOffset;
+    setDragOffset(exitOffset);
+    closeTimerRef.current = window.setTimeout(() => {
+      setDragOffset(0);
+      pendingDragOffsetRef.current = 0;
+      setDragSettling(false);
+      onCloseRef.current();
+      closeTimerRef.current = null;
+    }, 190);
+  }
 
   useEffect(() => {
     if (!open) return undefined;
@@ -685,12 +783,20 @@ function MapFiltersDrawer({
       />
       <div
         ref={drawerRef}
-        className={`${styles.filtersDrawer} ${styles.filtersDrawerOpen}`}
+        className={`${styles.filtersDrawer} ${styles.filtersDrawerOpen} ${dragging ? styles.filtersDrawerDragging : ''} ${dragSettling ? styles.filtersDrawerSettling : ''}`}
+        style={dragOffset ? { transform: `translate3d(0, ${dragOffset}px, 0)` } : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby="map-filters-title"
       >
-        <div className={styles.sheetHandle} aria-hidden="true" />
+        <div
+          className={styles.sheetHandle}
+          aria-hidden="true"
+          onPointerDown={onDrawerDragStart}
+          onPointerMove={onDrawerDragMove}
+          onPointerUp={onDrawerDragEnd}
+          onPointerCancel={onDrawerDragEnd}
+        />
         <div className={styles.sheetHeaderRow}>
           <div className={styles.sheetTitleGroup}>
             <span className={styles.sheetTitleIcon} aria-hidden="true">
@@ -842,6 +948,8 @@ function MapPage({ active = true }) {
   const shouldRecenterRef = useRef(true);
   const focusTimerRef = useRef(null);
   const sheetDragRef = useRef(null);
+  const sheetMoveFrameRef = useRef(null);
+  const pendingSheetHeightRef = useRef(null);
   const sheetTransitionTimerRef = useRef(null);
   const mapStyleThemeRef = useRef(null);
   const hasLoadedEventsRef = useRef(false);
@@ -1200,13 +1308,26 @@ function MapPage({ active = true }) {
     const { compact, full } = getSheetSnapHeights();
     drag.currentHeight = Math.min(full, Math.max(compact, drag.startHeight - (event.clientY - drag.startY)));
     drag.moved ||= Math.abs(event.clientY - drag.startY) > 5;
-    sheet.style.height = `${drag.currentHeight}px`;
+    pendingSheetHeightRef.current = drag.currentHeight;
+    if (!sheetMoveFrameRef.current) {
+      sheetMoveFrameRef.current = window.requestAnimationFrame(() => {
+        sheetMoveFrameRef.current = null;
+        if (resultsSheetRef.current && pendingSheetHeightRef.current != null) {
+          resultsSheetRef.current.style.height = `${pendingSheetHeightRef.current}px`;
+        }
+      });
+    }
   }
 
   function finishSheetDrag(event) {
     const drag = sheetDragRef.current;
     const sheet = resultsSheetRef.current;
     if (!drag || !sheet || drag.pointerId !== event.pointerId) return;
+    if (sheetMoveFrameRef.current) {
+      window.cancelAnimationFrame(sheetMoveFrameRef.current);
+      sheetMoveFrameRef.current = null;
+    }
+    pendingSheetHeightRef.current = null;
     const heights = getSheetSnapHeights();
     const snaps = [
       ['compact', heights.compact],
@@ -1476,6 +1597,7 @@ function MapPage({ active = true }) {
   useEffect(() => () => {
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
     if (sheetTransitionTimerRef.current) window.clearTimeout(sheetTransitionTimerRef.current);
+    if (sheetMoveFrameRef.current) window.cancelAnimationFrame(sheetMoveFrameRef.current);
   }, []);
 
   useEffect(() => {

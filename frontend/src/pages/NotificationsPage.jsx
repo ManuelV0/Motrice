@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -114,6 +114,155 @@ function getNotificationTone(type = '') {
   return styles.eventTone;
 }
 
+function SwipeableNotificationRow({ item, onRead, onDelete }) {
+  const dragRef = useRef(null);
+  const frameRef = useRef(null);
+  const pendingOffsetRef = useRef(0);
+  const actionTimerRef = useRef(null);
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const Icon = typeIcons[item.type] || BellRing;
+  const destination = item.action_path || (item.event_id ? `/events/${item.event_id}` : '');
+
+  useEffect(() => () => {
+    if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
+    if (actionTimerRef.current) window.clearTimeout(actionTimerRef.current);
+  }, []);
+
+  function scheduleOffset(nextOffset) {
+    pendingOffsetRef.current = nextOffset;
+    if (frameRef.current) return;
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      setOffset(pendingOffsetRef.current);
+    });
+  }
+
+  function vibrate(duration) {
+    try {
+      navigator.vibrate?.(duration);
+    } catch {
+      // Il feedback aptico e opzionale e non deve interrompere l'azione.
+    }
+  }
+
+  function startSwipe(event) {
+    const interactiveTarget = event.target instanceof Element
+      ? event.target.closest('a, button, input, label')
+      : null;
+    if (event.button !== 0 || interactiveTarget) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastTime: performance.now(),
+      velocity: 0,
+      recognized: false
+    };
+  }
+
+  function moveSwipe(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.recognized) {
+      if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.15) {
+        dragRef.current = null;
+        return;
+      }
+      drag.recognized = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setDragging(true);
+    }
+
+    event.preventDefault();
+    const now = performance.now();
+    drag.velocity = (event.clientX - drag.lastX) / Math.max(1, now - drag.lastTime);
+    drag.lastX = event.clientX;
+    drag.lastTime = now;
+    const resistedOffset = Math.sign(deltaX) * Math.min(112, Math.abs(deltaX) * 0.82);
+    scheduleOffset(resistedOffset);
+  }
+
+  function finishSwipe(event) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (frameRef.current) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+      setOffset(pendingOffsetRef.current);
+    }
+    setDragging(false);
+
+    const swipedToRead = !item.read && (pendingOffsetRef.current >= 68 || drag.velocity >= 0.5);
+    const swipedToDelete = pendingOffsetRef.current <= -68 || drag.velocity <= -0.5;
+    if (swipedToDelete) {
+      pendingOffsetRef.current = -window.innerWidth;
+      setOffset(-window.innerWidth);
+      vibrate(35);
+      actionTimerRef.current = window.setTimeout(() => {
+        Promise.resolve(onDelete(item.id)).catch(() => {
+          pendingOffsetRef.current = 0;
+          setOffset(0);
+        });
+        actionTimerRef.current = null;
+      }, 190);
+      return;
+    }
+    pendingOffsetRef.current = 0;
+    setOffset(0);
+    if (swipedToRead) {
+      vibrate(25);
+      Promise.resolve(onRead(item.id)).catch(() => undefined);
+    }
+  }
+
+  return (
+    <div className={styles.swipeShell}>
+      <div className={styles.swipeActions} aria-hidden="true">
+        <span className={styles.swipeRead}><Check size={18} /> Letta</span>
+        <span className={styles.swipeDelete}><Trash2 size={18} /> Elimina</span>
+      </div>
+      <article
+        className={`${styles.notificationRow} ${!item.read ? styles.unreadRow : ''} ${dragging ? styles.notificationRowDragging : ''}`}
+        style={offset ? { transform: `translate3d(${offset}px, 0, 0)` } : undefined}
+        onPointerDown={startSwipe}
+        onPointerMove={moveSwipe}
+        onPointerUp={finishSwipe}
+        onPointerCancel={finishSwipe}
+      >
+        <span className={`${styles.notificationIcon} ${getNotificationTone(item.type)}`}>
+          <Icon size={19} aria-hidden="true" />
+        </span>
+        <div className={styles.notificationCopy}>
+          <div className={styles.notificationTitleRow}>
+            <h3>{item.title}</h3>
+            {!item.read ? <span className={styles.unreadDot} aria-label="Non letta" /> : null}
+          </div>
+          <p>{item.message || item.body}</p>
+          <time dateTime={item.created_at}>{formatNotificationDate(item.created_at)}</time>
+        </div>
+        <div className={styles.notificationActions}>
+          {!item.read ? (
+            <button type="button" className={styles.readButton} onClick={() => onRead(item.id)} aria-label={`Segna come letta: ${item.title}`} title="Segna come letta">
+              <Check size={17} aria-hidden="true" />
+            </button>
+          ) : null}
+          {destination ? (
+            <Link className={styles.openLink} to={destination} aria-label={`Apri: ${item.title}`}>
+              <ChevronRight size={20} aria-hidden="true" />
+            </Link>
+          ) : null}
+        </div>
+      </article>
+    </div>
+  );
+}
+
 function NotificationsPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
@@ -175,6 +324,12 @@ function NotificationsPage() {
   async function markAll() {
     await api.markAllNotificationsRead();
     await load();
+    window.dispatchEvent(new Event('motrice:notifications-changed'));
+  }
+
+  async function deleteOne(id) {
+    await api.deleteNotification(id);
+    setNotifications((current) => current.filter((item) => String(item.id) !== String(id)));
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
@@ -332,46 +487,14 @@ function NotificationsPage() {
               <button type="button" onClick={() => navigate('/map')}>Esplora gli eventi</button>
             </div>
           ) : (
-            notifications.map((item) => {
-              const Icon = typeIcons[item.type] || BellRing;
-              const destination = item.action_path || (item.event_id ? `/events/${item.event_id}` : '');
-              return (
-                <article
-                  key={item.id}
-                  className={`${styles.notificationRow} ${!item.read ? styles.unreadRow : ''}`}
-                >
-                  <span className={`${styles.notificationIcon} ${getNotificationTone(item.type)}`}>
-                    <Icon size={19} aria-hidden="true" />
-                  </span>
-                  <div className={styles.notificationCopy}>
-                    <div className={styles.notificationTitleRow}>
-                      <h3>{item.title}</h3>
-                      {!item.read ? <span className={styles.unreadDot} aria-label="Non letta" /> : null}
-                    </div>
-                    <p>{item.message || item.body}</p>
-                    <time dateTime={item.created_at}>{formatNotificationDate(item.created_at)}</time>
-                  </div>
-                  <div className={styles.notificationActions}>
-                    {!item.read ? (
-                      <button
-                        type="button"
-                        className={styles.readButton}
-                        onClick={() => markAsRead(item.id)}
-                        aria-label={`Segna come letta: ${item.title}`}
-                        title="Segna come letta"
-                      >
-                        <Check size={17} aria-hidden="true" />
-                      </button>
-                    ) : null}
-                    {destination ? (
-                      <Link className={styles.openLink} to={destination} aria-label={`Apri: ${item.title}`}>
-                        <ChevronRight size={20} aria-hidden="true" />
-                      </Link>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })
+            notifications.map((item) => (
+              <SwipeableNotificationRow
+                key={item.id}
+                item={item}
+                onRead={markAsRead}
+                onDelete={deleteOne}
+              />
+            ))
           )}
         </div>
       </section>

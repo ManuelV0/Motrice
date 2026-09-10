@@ -49,6 +49,8 @@ function PullToRefresh({ enabled, edgeOnly = false, fullscreen = false, routeKey
   const distanceRef = useRef(0);
   const refreshingRef = useRef(false);
   const resetTimerRef = useRef(null);
+  const moveFrameRef = useRef(null);
+  const pendingDistanceRef = useRef(0);
 
   useEffect(() => {
     distanceRef.current = distance;
@@ -68,10 +70,26 @@ function PullToRefresh({ enabled, edgeOnly = false, fullscreen = false, routeKey
     if (!enabled) return undefined;
 
     const reset = () => {
+      if (moveFrameRef.current) {
+        window.cancelAnimationFrame(moveFrameRef.current);
+        moveFrameRef.current = null;
+      }
       gestureRef.current = null;
       distanceRef.current = 0;
+      pendingDistanceRef.current = 0;
       setDistance(0);
       if (!refreshingRef.current) setPhase('idle');
+    };
+
+    const renderPullDistance = (nextDistance) => {
+      pendingDistanceRef.current = nextDistance;
+      if (moveFrameRef.current) return;
+      moveFrameRef.current = window.requestAnimationFrame(() => {
+        moveFrameRef.current = null;
+        const renderedDistance = pendingDistanceRef.current;
+        setDistance(renderedDistance);
+        setPhase(renderedDistance >= ACTIVATION_DISTANCE ? 'ready' : 'pulling');
+      });
     };
 
     const handleTouchStart = (event) => {
@@ -110,10 +128,7 @@ function PullToRefresh({ enabled, edgeOnly = false, fullscreen = false, routeKey
 
       const resistedDistance = Math.min(MAX_DISTANCE, Math.max(0, deltaY * 0.48));
       distanceRef.current = resistedDistance;
-      setDistance(resistedDistance);
-      setPhase(resistedDistance >= ACTIVATION_DISTANCE ? 'ready' : 'pulling');
-
-      if (event.cancelable) event.preventDefault();
+      renderPullDistance(resistedDistance);
     };
 
     const handleTouchEnd = () => {
@@ -153,7 +168,9 @@ function PullToRefresh({ enabled, edgeOnly = false, fullscreen = false, routeKey
     };
 
     document.addEventListener('touchstart', handleTouchStart, { passive: true });
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    // A passive listener lets Android keep scrolling on the compositor thread.
+    // The indicator follows the gesture without taking control of the page scroll.
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
     document.addEventListener('touchend', handleTouchEnd, { passive: true });
     document.addEventListener('touchcancel', handleTouchCancel, { passive: true });
 
@@ -162,6 +179,7 @@ function PullToRefresh({ enabled, edgeOnly = false, fullscreen = false, routeKey
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
       document.removeEventListener('touchcancel', handleTouchCancel);
+      if (moveFrameRef.current) window.cancelAnimationFrame(moveFrameRef.current);
       if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current);
     };
   }, [edgeOnly, enabled, onRefresh]);

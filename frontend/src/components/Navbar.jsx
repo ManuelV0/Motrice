@@ -88,16 +88,42 @@ function Navbar({ forceMobile = false }) {
   const drawerGestureSessionRef = useRef(null);
   const drawerGestureStateRef = useRef(null);
   const drawerSettleTimerRef = useRef(null);
+  const drawerMoveFrameRef = useRef(null);
+  const pendingDrawerGestureRef = useRef(null);
   const suppressDrawerClickRef = useRef(false);
   const [drawerGesture, setDrawerGesture] = useState(null);
 
   function updateDrawerGesture(progress, settling = false) {
     const nextGesture = { progress: clampDrawerProgress(progress), settling };
+    if (drawerMoveFrameRef.current) {
+      window.cancelAnimationFrame(drawerMoveFrameRef.current);
+      drawerMoveFrameRef.current = null;
+    }
+    pendingDrawerGestureRef.current = null;
     drawerGestureStateRef.current = nextGesture;
     setDrawerGesture(nextGesture);
   }
 
+  function scheduleDrawerGesture(progress) {
+    const nextGesture = { progress: clampDrawerProgress(progress), settling: false };
+    drawerGestureStateRef.current = nextGesture;
+    pendingDrawerGestureRef.current = nextGesture;
+    if (drawerMoveFrameRef.current) return;
+
+    drawerMoveFrameRef.current = window.requestAnimationFrame(() => {
+      drawerMoveFrameRef.current = null;
+      const pendingGesture = pendingDrawerGestureRef.current;
+      pendingDrawerGestureRef.current = null;
+      if (pendingGesture) setDrawerGesture(pendingGesture);
+    });
+  }
+
   function clearDrawerGesture() {
+    if (drawerMoveFrameRef.current) {
+      window.cancelAnimationFrame(drawerMoveFrameRef.current);
+      drawerMoveFrameRef.current = null;
+    }
+    pendingDrawerGestureRef.current = null;
     drawerGestureSessionRef.current = null;
     drawerGestureStateRef.current = null;
     setDrawerGesture(null);
@@ -110,9 +136,10 @@ function Navbar({ forceMobile = false }) {
   function settleDrawerGesture(shouldOpen) {
     if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
     drawerGestureSessionRef.current = null;
+    if (shouldOpen) setIsOpen(true);
     updateDrawerGesture(shouldOpen ? 1 : 0, true);
     drawerSettleTimerRef.current = window.setTimeout(() => {
-      setIsOpen(shouldOpen);
+      if (!shouldOpen) setIsOpen(false);
       clearDrawerGesture();
       drawerSettleTimerRef.current = null;
     }, DRAWER_SETTLE_MS);
@@ -132,6 +159,7 @@ function Navbar({ forceMobile = false }) {
       width: getDrawerWidth(),
       recognized: false
     };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     updateDrawerGesture(0);
   }
 
@@ -152,7 +180,7 @@ function Navbar({ forceMobile = false }) {
     }
 
     event.preventDefault();
-    updateDrawerGesture(deltaX / session.width);
+    scheduleDrawerGesture(deltaX / session.width);
   }
 
   function onEdgePointerEnd(event) {
@@ -166,7 +194,20 @@ function Navbar({ forceMobile = false }) {
   }
 
   function onDrawerPointerDown(event) {
-    if (!isOpen || drawerGestureStateRef.current || event.button !== 0) return;
+    const currentGesture = drawerGestureStateRef.current;
+    const canInterruptOpenSettle = Boolean(
+      currentGesture?.settling && currentGesture.progress >= 0.98
+    );
+    if ((!isOpen && !canInterruptOpenSettle) || (currentGesture && !canInterruptOpenSettle) || event.button !== 0) return;
+
+    if (drawerSettleTimerRef.current) {
+      window.clearTimeout(drawerSettleTimerRef.current);
+      drawerSettleTimerRef.current = null;
+    }
+    if (canInterruptOpenSettle) {
+      setIsOpen(true);
+      updateDrawerGesture(1);
+    }
 
     drawerGestureSessionRef.current = {
       mode: 'closing',
@@ -193,11 +234,11 @@ function Navbar({ forceMobile = false }) {
         return;
       }
       session.recognized = true;
-      updateDrawerGesture(1);
+      scheduleDrawerGesture(1);
     }
 
     event.preventDefault();
-    updateDrawerGesture(1 + deltaX / session.width);
+    scheduleDrawerGesture(1 + deltaX / session.width);
   }
 
   function onDrawerPointerEnd(event) {
@@ -280,6 +321,7 @@ function Navbar({ forceMobile = false }) {
 
   useEffect(() => () => {
     if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    if (drawerMoveFrameRef.current) window.cancelAnimationFrame(drawerMoveFrameRef.current);
   }, []);
 
   useEffect(() => {

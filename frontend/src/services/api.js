@@ -3950,6 +3950,21 @@ const localApi = {
     return withDelay({ success: true });
   },
 
+  async deleteNotification(id) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    store.notifications = store.notifications.map((item) => {
+      if (String(item.id) !== String(id)) return item;
+      const visibleForUser = !item.target_user_id || Number(item.target_user_id) === Number(currentUserId);
+      if (!visibleForUser) return item;
+      const dismissedBy = Array.isArray(item.dismissed_by_user_ids) ? item.dismissed_by_user_ids : [];
+      if (dismissedBy.some((userId) => Number(userId) === Number(currentUserId))) return item;
+      return { ...item, dismissed_by_user_ids: [...dismissedBy, Number(currentUserId)] };
+    });
+    saveStore(store);
+    return withDelay({ success: true });
+  },
+
   async clearNotifications() {
     const store = loadStore();
     const currentUserId = resolveAuthUserId();

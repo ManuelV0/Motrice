@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, WalletCards, X } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
 import WalletCreditDetails, { formatWalletCredit } from './wallet/WalletCreditDetails';
 import styles from '../styles/components/headerWallet.module.css';
 
@@ -139,6 +140,11 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
   }, [activeSection, updatePanelPosition]);
 
   const creditTotal = summary.availableCents + summary.lockedCents + summary.pendingCents + summary.withdrawableCents;
+  const animatedValues = {
+    credit: <AnimatedNumber value={creditTotal} formatter={(value) => formatWalletCredit(Math.round(value))} />,
+    mot: <AnimatedNumber value={summary.mot} formatter={(value) => formatNumber(Math.round(value))} />,
+    xp: <AnimatedNumber value={summary.xp} formatter={(value) => formatNumber(Math.round(value))} />
+  };
   const xpRemaining = Math.max(0, summary.xpNextLevelAt - summary.xp);
   const xpProgress = summary.xpNextLevelAt > 0
     ? Math.min(100, Math.round((summary.xp / summary.xpNextLevelAt) * 100))
@@ -308,7 +314,7 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
             tabIndex={open ? 0 : -1}
           >
             <span>Credito</span>
-            <strong>{loading ? '…' : formatWalletCredit(creditTotal)}</strong>
+            <strong>{loading ? '…' : animatedValues.credit}</strong>
           </button>
           <button
             type="button"
@@ -319,7 +325,7 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
             tabIndex={open ? 0 : -1}
           >
             <span>MOT</span>
-            <strong>{loading ? '…' : formatNumber(summary.mot)}</strong>
+            <strong>{loading ? '…' : animatedValues.mot}</strong>
           </button>
           <button
             type="button"
@@ -330,7 +336,7 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
             tabIndex={open ? 0 : -1}
           >
             <span>XP</span>
-            <strong>{loading ? '…' : formatNumber(summary.xp)}</strong>
+            <strong>{loading ? '…' : animatedValues.xp}</strong>
           </button>
         </div>
 
