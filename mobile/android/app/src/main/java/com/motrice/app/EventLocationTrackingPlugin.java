@@ -59,7 +59,8 @@ public class EventLocationTrackingPlugin extends Plugin {
                 call.getString("anonKey", ""),
                 call.getString("accessToken", ""),
                 call.getString("refreshToken", ""),
-                Math.max(30000L, call.getDouble("intervalMs", 60000.0).longValue())
+                Math.max(5000L, call.getDouble("intervalMs", 60000.0).longValue()),
+                call.getString("activityKind", "")
         );
 
         Intent intent = new Intent(getContext(), EventLocationService.class);
@@ -102,6 +103,15 @@ public class EventLocationTrackingPlugin extends Plugin {
 
     @PluginMethod
     public void getStatus(PluginCall call) {
+        call.resolve(EventLocationService.readStatus(getContext()));
+    }
+
+    @PluginMethod
+    public void setActivityPaused(PluginCall call) {
+        EventLocationService.setActivityPaused(
+                getContext(),
+                Boolean.TRUE.equals(call.getBoolean("paused", false))
+        );
         call.resolve(EventLocationService.readStatus(getContext()));
     }
 

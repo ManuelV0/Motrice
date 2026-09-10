@@ -332,6 +332,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     title: rawEvent.title,
     city: rawEvent.city,
     sport_id: rawEvent.sport_id,
+    sport_slug: rawEvent.sport?.slug || '',
     sport_name: rawEvent.sport?.name || 'Sport',
     level: rawEvent.required_level,
     event_datetime: startsAt,
@@ -1013,6 +1014,51 @@ function createRemoteMethods(localApi) {
       }));
     },
 
+    async listEventReviewTargets(eventId) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('list_event_review_targets', {
+        target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return (data || []).map((target) => ({
+        ...target,
+        user_id: legacyProfileId(target.user_id),
+        auth_user_id: target.user_id
+      }));
+    },
+
+    async submitEventUserReview({
+      eventId,
+      targetUserId,
+      targetAuthUserId = '',
+      punctuality,
+      respect,
+      collaboration,
+      communication,
+      organization = null,
+      tags = [],
+      reportNote = '',
+      skipped = false
+    }) {
+      const client = requireSupabase();
+      const revieweeId = resolveProfileUuid(targetAuthUserId || targetUserId);
+      if (!revieweeId) throw new Error('Profilo da valutare non disponibile');
+      const { data, error } = await client.rpc('submit_event_user_review', {
+        target_event_id: String(eventId),
+        target_user_id: revieweeId,
+        punctuality_value: skipped ? null : Number(punctuality),
+        respect_value: skipped ? null : Number(respect),
+        collaboration_value: skipped ? null : Number(collaboration),
+        communication_value: skipped ? null : Number(communication),
+        organization_value: skipped || organization == null ? null : Number(organization),
+        review_tags: Array.isArray(tags) ? tags : [],
+        report_note: normalizeText(reportNote),
+        skip_interaction: Boolean(skipped)
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async submitEventReview({
       eventId,
       partnerRating,
@@ -1329,8 +1375,67 @@ function createRemoteMethods(localApi) {
       return (data || []).map((item) => ({
         ...item,
         message: item.body,
-        read: Boolean(item.read_at)
+        read: Boolean(item.read_at),
+        action_path: item.payload?.action_path || null,
+        category: item.payload?.category || null
       }));
+    },
+
+    async registerPushDevice({ token, platform = 'android', deviceLabel = '' }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('register_push_device', {
+        token_value: normalizeText(token),
+        platform_value: normalizeText(platform) || 'android',
+        device_label_value: normalizeText(deviceLabel).slice(0, 180)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async unregisterPushDevice(token) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('unregister_push_device', {
+        token_value: normalizeText(token)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async getNotificationPreferences() {
+      const client = requireSupabase();
+      const userId = requireAuthUserId();
+      const { data, error } = await client
+        .from('notification_preferences')
+        .select('event_security,chat_social,wallet_account,promotions')
+        .eq('user_id', userId)
+        .maybeSingle();
+      throwIfError(error);
+      return {
+        event_security: true,
+        chat_social: data?.chat_social ?? true,
+        wallet_account: data?.wallet_account ?? true,
+        promotions: data?.promotions ?? false
+      };
+    },
+
+    async updateNotificationPreferences(patch = {}) {
+      const client = requireSupabase();
+      const userId = requireAuthUserId();
+      const current = await this.getNotificationPreferences();
+      const { data, error } = await client
+        .from('notification_preferences')
+        .upsert({
+          user_id: userId,
+          event_security: true,
+          chat_social: patch.chat_social ?? current.chat_social,
+          wallet_account: patch.wallet_account ?? current.wallet_account,
+          promotions: patch.promotions ?? current.promotions,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'user_id' })
+        .select('event_security,chat_social,wallet_account,promotions')
+        .single();
+      throwIfError(error);
+      return data;
     },
 
     async markNotificationRead(id) {
@@ -1417,6 +1522,8 @@ export function createSupabaseApi(localApi) {
       startEventWorkout: requireSecureBackend,
       recordEventWorkoutProgress: requireSecureBackend,
       completeEventWorkout: requireSecureBackend,
+      listEventReviewTargets: requireSecureBackend,
+      submitEventUserReview: requireSecureBackend,
       submitEventReview: requireSecureBackend,
       finalizeEventOutcomes: requireSecureBackend,
       extendEventCheckInWindow: requireSecureBackend,

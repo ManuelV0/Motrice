@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Play,
   QrCode,
+  Route,
   Settings2,
   ShieldCheck,
   XCircle
@@ -24,6 +25,7 @@ import EventCard from '../components/EventCard';
 import styles from '../styles/pages/agenda.module.css';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../utils/eventParticipationState';
+import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -198,6 +200,7 @@ function getTodaySessionState(event, referenceTime = Date.now()) {
   const timing = getEventTiming(event, referenceTime);
   const timeline = getSessionTimeline(timing, referenceTime);
   const hasWorkout = Boolean(event?.workout_plan);
+  const hasOutdoorTracking = isOutdoorTrackedEvent(event);
   const participantOutcome = resolveParticipantOutcome(event);
   const isCompleted = participantOutcome.id === 'completed';
   const isVerified =
@@ -293,13 +296,17 @@ function getTodaySessionState(event, referenceTime = Date.now()) {
     const verificationCta = getVerificationCta(event, { isOrganizer: true });
     const canVerify = timing.isCheckInOpen || timing.canExtendCheckIn;
     return {
-      key: checkedIn > 0 ? (hasWorkout ? 'ready' : 'active') : 'organizer',
+      key: checkedIn > 0 ? (hasWorkout || hasOutdoorTracking ? 'ready' : 'active') : 'organizer',
       eyebrow: 'SESSIONE DI OGGI · ORGANIZER',
       status: checkedIn > 0
         ? `${checkedIn}/${registered} partecipanti con check-in verificato`
         : verificationCta.status,
-      action: checkedIn > 0 ? (hasWorkout ? 'Avvia allenamento' : 'Apri evento') : verificationCta.action,
-      actionTarget: checkedIn > 0 ? (hasWorkout ? 'workout' : 'event') : (canVerify ? 'verify' : 'event'),
+      action: checkedIn > 0
+        ? hasOutdoorTracking ? 'Avvia attività' : hasWorkout ? 'Avvia allenamento' : 'Apri evento'
+        : verificationCta.action,
+      actionTarget: checkedIn > 0
+        ? hasOutdoorTracking ? 'outdoor' : hasWorkout ? 'workout' : 'event'
+        : (canVerify ? 'verify' : 'event'),
       verificationIcon: verificationCta.icon,
       progress: timeline.progress,
       progressLabel: timeline.label,
@@ -311,13 +318,13 @@ function getTodaySessionState(event, referenceTime = Date.now()) {
     const checkedInAt = event?.user_rsvp?.checked_in_at;
     const verifiedAt = checkedInAt ? formatEventTime(checkedInAt) : '';
     return {
-      key: hasWorkout ? 'ready' : 'active',
+      key: hasWorkout || hasOutdoorTracking ? 'ready' : 'active',
       eyebrow: 'SESSIONE DI OGGI',
       status: event?.is_personal
-        ? (hasWorkout ? 'Sessione personale pronta' : 'Sessione personale in programma')
-        : `Presenza verificata${verifiedAt ? ` alle ${verifiedAt}` : ''}${hasWorkout ? ' · scheda sbloccata' : ' · sessione attiva'}`,
-      action: hasWorkout ? 'Avvia allenamento' : 'Apri evento',
-      actionTarget: hasWorkout ? 'workout' : 'event',
+        ? (hasOutdoorTracking ? 'Tracciamento attività pronto' : hasWorkout ? 'Sessione personale pronta' : 'Sessione personale in programma')
+        : `Presenza verificata${verifiedAt ? ` alle ${verifiedAt}` : ''}${hasOutdoorTracking ? ' · GPS live pronto' : hasWorkout ? ' · scheda sbloccata' : ' · sessione attiva'}`,
+      action: hasOutdoorTracking ? 'Avvia attività' : hasWorkout ? 'Avvia allenamento' : 'Apri evento',
+      actionTarget: hasOutdoorTracking ? 'outdoor' : hasWorkout ? 'workout' : 'event',
       progress: timeline.progress,
       progressLabel: timeline.label
     };
@@ -544,6 +551,10 @@ function AgendaPage() {
   function openTodaySession() {
     if (!focusedSession?.event?.id) return;
     const { event, state } = focusedSession;
+    if (state.actionTarget === 'outdoor' && isOutdoorTrackedEvent(event)) {
+      navigate(`/events/${event.id}/activity`);
+      return;
+    }
     if (state.actionTarget === 'workout' && event.workout_plan) {
       navigate(`/events/${event.id}/workout`);
       return;
@@ -568,6 +579,7 @@ function AgendaPage() {
         const { event, state } = focusedSession;
         const workoutPlan = event.workout_plan;
         const hasWorkout = Boolean(workoutPlan);
+        const hasOutdoorTracking = isOutdoorTrackedEvent(event);
         const exerciseCount = Array.isArray(workoutPlan?.exercises) ? workoutPlan.exercises.length : 0;
         const workoutDuration = Number(workoutPlan?.duration || event.duration_minutes || 0);
         const workoutTitle = event.title || workoutPlan?.title || event.sport_name || 'Sessione Motrice';
@@ -584,7 +596,7 @@ function AgendaPage() {
             ? LocateFixed
             : state.verificationIcon === 'both'
               ? ShieldCheck
-              : state.actionTarget === 'workout'
+              : state.actionTarget === 'workout' || state.actionTarget === 'outdoor'
                 ? Play
                 : state.key === 'completed'
                   ? CheckCircle2
@@ -598,7 +610,7 @@ function AgendaPage() {
           >
             <div className={styles.todayWorkoutTopline}>
               <span className={styles.todayWorkoutIcon} aria-hidden="true">
-                {hasWorkout ? <Dumbbell size={22} /> : <CalendarDays size={22} />}
+                {hasOutdoorTracking ? <Route size={22} /> : hasWorkout ? <Dumbbell size={22} /> : <CalendarDays size={22} />}
               </span>
               <div>
                 <small>{state.eyebrow}</small>
@@ -614,7 +626,7 @@ function AgendaPage() {
 
             <div className={styles.todayWorkoutMeta}>
               <span><Dumbbell size={15} aria-hidden="true" /> {event.sport_name || 'Sport'}</span>
-              {exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : <span>Sessione libera</span>}
+              {hasOutdoorTracking ? <span>GPS live</span> : exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : <span>Sessione libera</span>}
               <span><Clock3 size={15} aria-hidden="true" /> {workoutDuration} min</span>
               <span><MapPin size={15} aria-hidden="true" /> {event.location_name || event.city || 'Luogo evento'}</span>
             </div>
@@ -636,7 +648,7 @@ function AgendaPage() {
             <button type="button" className={styles.todayWorkoutAction} onClick={openTodaySession}>
               <ActionIcon size={20} aria-hidden="true" />
               <span>{state.action}</span>
-              {state.actionTarget !== 'workout' ? <ArrowRight size={18} aria-hidden="true" /> : null}
+              {!['workout', 'outdoor'].includes(state.actionTarget) ? <ArrowRight size={18} aria-hidden="true" /> : null}
             </button>
             {verificationEventId === String(event.id) ? (
               <AgendaEventVerificationPanel
@@ -646,6 +658,7 @@ function AgendaPage() {
                 onClose={() => setVerificationEventId('')}
                 onVerified={() => loadEvents({ silent: true })}
                 onStartWorkout={() => navigate(`/events/${event.id}/workout`)}
+                onStartOutdoor={() => navigate(`/events/${event.id}/activity`)}
                 onOpenEvent={() => navigate(`/events/${event.id}`)}
               />
             ) : null}

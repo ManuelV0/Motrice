@@ -25,6 +25,19 @@ import {
 } from '../../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
 import { startEventLocationTracking } from '../../services/eventLocationTracking';
+import { validateEventLocationProof } from '../../utils/eventLocationProof';
+import { isOutdoorTrackedEvent } from '../../utils/outdoorActivity';
+
+function requireEventLocationProof(location, event) {
+  const proof = validateEventLocationProof({
+    location,
+    eventLat: event?.lat,
+    eventLng: event?.lng,
+    radiusM: event?.geofence_radius_m
+  });
+  if (!proof.valid) throw new Error(proof.message);
+  return proof;
+}
 
 function decodeQrPayload(rawValue) {
   const raw = String(rawValue || '').trim();
@@ -90,10 +103,12 @@ function AgendaEventVerificationPanel({
   onClose,
   onVerified,
   onStartWorkout,
+  onStartOutdoor,
   onOpenEvent,
   showToast
 }) {
   const hasWorkout = Boolean(event?.workout_plan);
+  const hasOutdoorTracking = isOutdoorTrackedEvent(event);
   const mode = String(event?.verification_mode || 'both').toLowerCase();
   const usesQr = mode === 'qr' || mode === 'both';
   const usesGeo = mode === 'geo' || mode === 'gps' || mode === 'both';
@@ -242,8 +257,11 @@ function AgendaEventVerificationPanel({
     scannerControlsRef.current?.stop?.();
 
     try {
-      const location = coords || (usesGeo ? await requestLocation() : null);
+      const location = usesGeo
+        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        : null;
       if (usesGeo && !location) throw new Error('Attiva la posizione per validare la scansione.');
+      if (usesGeo) requireEventLocationProof(location, event);
       const result = await api.scanEventParticipantQr({
         eventId: event.id,
         token: decoded.token,
@@ -275,7 +293,7 @@ function AgendaEventVerificationPanel({
       scanBusyRef.current = false;
       setBusy(false);
     }
-  }, [activateLocationTracking, coords, event?.id, notifyVerified, requestLocation, showToast, usesGeo]);
+  }, [activateLocationTracking, event, notifyVerified, requestLocation, showToast, usesGeo]);
 
   useEffect(() => {
     if (isOrganizer || !verified || !coords) return;
@@ -332,13 +350,14 @@ function AgendaEventVerificationPanel({
     try {
       // La verifica deve usare una rilevazione nuova: la posizione in cache serve
       // alla mappa, ma non e sufficiente per certificare la presenza all evento.
-      const location = await requestLocation();
+      const location = await requestLocation({ requireFresh: true, maxAgeMs: 30000 });
       if (!location) {
         throw new Error(locationError || 'Attiva la posizione del telefono, autorizza Motrice e riprova.');
       }
       if (!Number.isFinite(Number(location.lat)) || !Number.isFinite(Number(location.lng))) {
         throw new Error('Coordinate non valide. Attiva la posizione precisa e riprova.');
       }
+      const locationProof = requireEventLocationProof(location, event);
       const result = isOrganizer
         ? await api.recordEventPresence({
           eventId: event.id,
@@ -353,14 +372,13 @@ function AgendaEventVerificationPanel({
           accuracyM: location.accuracy ?? null
         });
 
-      const eventRadius = Math.max(50, Number(event?.geofence_radius_m || 250));
       const distance = Number(result?.distance_m);
       const insideRadius = typeof result?.inside_radius === 'boolean'
         ? result.inside_radius
-        : !Number.isFinite(distance) || distance <= eventRadius;
+        : Number.isFinite(distance) && distance + locationProof.accuracyM <= locationProof.radiusM;
 
       if (!insideRadius) {
-        throw new Error(`Sei fuori dall’area dell’evento (${Math.round(distance || 0)} m, raggio ${eventRadius} m).`);
+        throw new Error(`Sei fuori dall’area dell’evento (${Math.round(distance || locationProof.distanceM)} m, raggio ${Math.round(locationProof.radiusM)} m).`);
       }
 
       if (isOrganizer) {
@@ -444,7 +462,7 @@ function AgendaEventVerificationPanel({
           <small>{isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
           <h3>{panelVerified ? 'Presenza verificata' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
           <p>{panelVerified
-            ? hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
+            ? hasOutdoorTracking ? 'Il monitoraggio GPS dell’attività è ora sbloccato.' : hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
             : isOrganizer
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
               : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
@@ -488,12 +506,12 @@ function AgendaEventVerificationPanel({
         <div className={styles.verifiedState}>
           <span aria-hidden="true"><CheckCircle2 size={25} /></span>
           <div>
-            <strong>{hasWorkout ? 'Allenamento sbloccato' : 'Sessione attiva'}</strong>
-            <small>{hasWorkout ? 'Puoi iniziare la scheda preimpostata.' : 'Puoi seguire durata e stato dalla pagina evento.'}</small>
+            <strong>{hasOutdoorTracking ? 'Attività live sbloccata' : hasWorkout ? 'Allenamento sbloccato' : 'Sessione attiva'}</strong>
+            <small>{hasOutdoorTracking ? 'Tempo, km, passo, dislivello e passi in tempo reale.' : hasWorkout ? 'Puoi iniziare la scheda preimpostata.' : 'Puoi seguire durata e stato dalla pagina evento.'}</small>
           </div>
-          <button type="button" onClick={hasWorkout ? onStartWorkout : onOpenEvent}>
-            {hasWorkout ? <Play size={18} /> : <ArrowRight size={18} />}
-            {hasWorkout ? 'Avvia allenamento' : 'Apri evento'}
+          <button type="button" onClick={hasOutdoorTracking ? onStartOutdoor : hasWorkout ? onStartWorkout : onOpenEvent}>
+            {hasOutdoorTracking || hasWorkout ? <Play size={18} /> : <ArrowRight size={18} />}
+            {hasOutdoorTracking ? 'Avvia attività' : hasWorkout ? 'Avvia allenamento' : 'Apri evento'}
           </button>
         </div>
       ) : isOrganizer ? (

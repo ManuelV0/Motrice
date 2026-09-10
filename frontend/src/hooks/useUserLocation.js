@@ -17,6 +17,7 @@ function readCachedLocation() {
       lat: parsed.lat,
       lng: parsed.lng,
       accuracy: Number.isFinite(Number(parsed.accuracy)) ? Number(parsed.accuracy) : null,
+      capturedAt: Number.isFinite(Number(parsed.capturedAt)) ? Number(parsed.capturedAt) : Number(parsed.updatedAt),
       updatedAt: parsed.updatedAt
     };
   } catch {
@@ -32,6 +33,7 @@ function writeCachedLocation(coords) {
         lat: Number(coords.lat),
         lng: Number(coords.lng),
         accuracy: Number.isFinite(Number(coords.accuracy)) ? Number(coords.accuracy) : null,
+        capturedAt: Number.isFinite(Number(coords.capturedAt)) ? Number(coords.capturedAt) : Date.now(),
         updatedAt: Date.now()
       })
     );
@@ -64,6 +66,9 @@ function normalizeError(error) {
   if (code === 'OS-PLUG-GLOC-0018') {
     return { permission: 'error', message: 'Permesso posizione non configurato nell app.' };
   }
+  if (code === 'MOTRICE_STALE_LOCATION') {
+    return { permission: 'granted', message: 'La posizione ricevuta non è aggiornata. Attendi il nuovo segnale GPS e riprova.' };
+  }
   return { permission: 'error', message: 'Errore durante il recupero della posizione.' };
 }
 
@@ -73,7 +78,8 @@ function useUserLocation() {
   const [coords, setCoords] = useState(cached ? {
     lat: cached.lat,
     lng: cached.lng,
-    accuracy: cached.accuracy
+    accuracy: cached.accuracy,
+    capturedAt: cached.capturedAt
   } : null);
   const [permission, setPermission] = useState(cached ? 'granted' : 'prompt');
   const [error, setError] = useState('');
@@ -124,7 +130,7 @@ function useUserLocation() {
     };
   }, [isNative]);
 
-  const requestLocation = useCallback(async () => {
+  const requestLocation = useCallback(async ({ requireFresh = false, maxAgeMs = 30000 } = {}) => {
     if (!isNative && !navigator?.geolocation) {
       setPermission('unavailable');
       setError('Geolocalizzazione non supportata su questo browser.');
@@ -157,7 +163,7 @@ function useUserLocation() {
           enableHighAccuracy: true,
           timeout: 15000,
           maximumAge: 0,
-          enableLocationFallback: true
+          enableLocationFallback: !requireFresh
         });
       } else {
         position = await new Promise((resolve, reject) => {
@@ -169,12 +175,22 @@ function useUserLocation() {
         });
       }
 
+      const capturedAt = Number.isFinite(Number(position.timestamp))
+        ? Number(position.timestamp)
+        : Date.now();
+      if (requireFresh && Math.max(0, Date.now() - capturedAt) > maxAgeMs) {
+        const staleError = new Error('Posizione GPS non aggiornata');
+        staleError.code = 'MOTRICE_STALE_LOCATION';
+        throw staleError;
+      }
+
       const nextCoords = {
         lat: Number(position.coords.latitude),
         lng: Number(position.coords.longitude),
         accuracy: Number.isFinite(Number(position.coords.accuracy))
           ? Number(position.coords.accuracy)
-          : null
+          : null,
+        capturedAt
       };
 
       setCoords(nextCoords);

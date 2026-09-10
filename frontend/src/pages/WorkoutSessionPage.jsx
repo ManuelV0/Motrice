@@ -12,9 +12,7 @@ import {
   Pause,
   Play,
   RotateCcw,
-  ShieldCheck,
-  Sparkles,
-  Star
+  ShieldCheck
 } from 'lucide-react';
 import { api } from '../services/api';
 import { getAuthSession } from '../services/authSession';
@@ -26,15 +24,8 @@ import {
   recordWorkoutSet,
   saveWorkoutSession
 } from '../features/workout/services/workoutSessionStore';
+import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import styles from '../styles/pages/workoutSession.module.css';
-
-const EMPTY_REVIEW = {
-  partnerRating: 5,
-  organizerPunctuality: 5,
-  descriptionAccuracy: 5,
-  wouldJoinAgain: true,
-  note: ''
-};
 
 function formatClock(totalSeconds) {
   const safe = Math.max(0, Number(totalSeconds) || 0);
@@ -56,27 +47,6 @@ function isOrganizerForEvent(event, auth) {
   );
 }
 
-function RatingRow({ label, value, onChange }) {
-  return (
-    <div className={styles.ratingRow}>
-      <span>{label}</span>
-      <div role="radiogroup" aria-label={label}>
-        {[1, 2, 3, 4, 5].map((rating) => (
-          <button
-            key={rating}
-            type="button"
-            className={rating <= value ? styles.starActive : undefined}
-            onClick={() => onChange(rating)}
-            aria-label={`${rating} stelle`}
-          >
-            <Star size={20} fill={rating <= value ? 'currentColor' : 'none'} />
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function WorkoutSessionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -90,7 +60,6 @@ function WorkoutSessionPage() {
   const [openExerciseId, setOpenExerciseId] = useState('');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [restTimer, setRestTimer] = useState({ exerciseId: '', remaining: 0, running: false });
-  const [review, setReview] = useState(EMPTY_REVIEW);
   const auth = useMemo(() => getAuthSession(), []);
 
   usePageMeta({ title: 'Allenamento live · Motrice', description: 'Sessione allenamento Motrice' });
@@ -275,22 +244,6 @@ function WorkoutSessionPage() {
     }
   }
 
-  async function submitReview(eventSubmit) {
-    eventSubmit.preventDefault();
-    if (busy || session?.reviewSubmitted) return;
-    setBusy(true);
-    try {
-      const result = await api.submitEventReview({ eventId: id, ...review });
-      const next = { ...session, reviewSubmitted: true };
-      setSession(saveWorkoutSession(id, next));
-      showToast(`Questionario completato · +${Number(result?.bonus_xp || 0)} XP`, 'success');
-    } catch (reviewError) {
-      showToast(reviewError?.message || 'Questionario non salvato', 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   if (loading) {
     return <section className={styles.statePage}><div className={styles.loader} /><p>Preparo la tua scheda…</p></section>;
   }
@@ -469,17 +422,15 @@ function WorkoutSessionPage() {
           </button>
         )}
 
-        {session.completedAt && !organizer && !session.reviewSubmitted ? (
-          <form className={styles.reviewCard} onSubmit={submitReview}>
-            <div><Sparkles /><span><small>BONUS FINALE</small><h2>Com’è andato l’allenamento?</h2></span><strong>+25 XP</strong></div>
-            <RatingRow label="Compagni di allenamento" value={review.partnerRating} onChange={(value) => setReview((current) => ({ ...current, partnerRating: value }))} />
-            <RatingRow label="Puntualità organizzatore" value={review.organizerPunctuality} onChange={(value) => setReview((current) => ({ ...current, organizerPunctuality: value }))} />
-            <RatingRow label="Evento conforme alla descrizione" value={review.descriptionAccuracy} onChange={(value) => setReview((current) => ({ ...current, descriptionAccuracy: value }))} />
-            <button type="submit" disabled={busy}>{busy ? 'Invio…' : 'Invia questionario · +25 XP'}</button>
-          </form>
-        ) : null}
-
-        {session.reviewSubmitted ? <p className={styles.reviewDone}><Check /> Questionario completato e bonus assegnato</p> : null}
+        <PostEventUserFeedback
+          eventId={id}
+          enabled={Boolean(session.completedAt)}
+          bonusXp={Number(event.review_bonus_xp || 25)}
+          onCompleted={() => {
+            const next = { ...session, reviewSubmitted: true };
+            setSession(saveWorkoutSession(id, next));
+          }}
+        />
       </main>
 
       {restExercise && (restTimer.remaining > 0 || restTimer.running) ? (

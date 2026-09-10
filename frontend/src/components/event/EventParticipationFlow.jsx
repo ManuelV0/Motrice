@@ -33,6 +33,7 @@ import {
   startEventLocationTracking,
   stopEventLocationTracking
 } from '../../services/eventLocationTracking';
+import { validateEventLocationProof } from '../../utils/eventLocationProof';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
@@ -103,6 +104,16 @@ function scanFeedbackFromError(error) {
   if (normalized.includes('scadut') || normalized.includes('finestra evento')) {
     return { kind: 'error', title: 'QR scaduto', detail: 'Stato: scaduto' };
   }
+  if (
+    normalized.includes('fuori dall area') ||
+    normalized.includes('fuori dall’area') ||
+    normalized.includes('fuori area') ||
+    normalized.includes('posizione') ||
+    normalized.includes('segnale gps') ||
+    normalized.includes('coordinate')
+  ) {
+    return { kind: 'error', title: 'Posizione non valida', detail: message };
+  }
   return { kind: 'error', title: 'QR non valido', detail: message };
 }
 
@@ -137,6 +148,17 @@ function playScanFeedback(kind) {
   } catch {
     // Alcuni browser richiedono policy audio piu restrittive.
   }
+}
+
+function requireEventLocationProof(location, event) {
+  const proof = validateEventLocationProof({
+    location,
+    eventLat: event?.lat,
+    eventLng: event?.lng,
+    radiusM: event?.geofence_radius_m
+  });
+  if (!proof.valid) throw new Error(proof.message);
+  return proof;
 }
 
 function ratingField(label, value, onChange) {
@@ -365,10 +387,13 @@ function EventParticipationFlow({
     setScannerError('');
     scannerControlsRef.current?.stop?.();
     try {
-      const location = coords || (usesGeo ? await requestLocation() : null);
+      const location = usesGeo
+        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        : null;
       if (!location && usesGeo) {
         throw new Error('Attiva la posizione per validare la scansione');
       }
+      if (usesGeo) requireEventLocationProof(location, event);
       const result = await api.scanEventParticipantQr({
         eventId: event.id,
         token: decoded.token,
@@ -415,8 +440,7 @@ function EventParticipationFlow({
       setBusy(false);
     }
   }, [
-    coords,
-    event?.id,
+    event,
     loadFlow,
     onEventRefresh,
     requestLocation,
@@ -510,12 +534,16 @@ function EventParticipationFlow({
     presenceBusyRef.current = true;
     setBusy(true);
     try {
-      const location = coords || (usesGeo && interactive ? await requestLocation() : null);
+      const startsGpsCheckIn = !isOrganizer && usesGeo && !progress?.checked_in_at;
+      const needsFreshProof = usesGeo && (interactive || startsGpsCheckIn || isOrganizer);
+      const location = needsFreshProof
+        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        : coords;
       if (!location && usesGeo) {
         if (interactive) throw new Error('Posizione non disponibile');
         return;
       }
-      const startsGpsCheckIn = !isOrganizer && usesGeo && !progress?.checked_in_at;
+      if (needsFreshProof) requireEventLocationProof(location, event);
       if (startsGpsCheckIn && !getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }).isCheckInOpen) {
         throw new Error('La finestra di check-in non è aperta');
       }
@@ -529,7 +557,8 @@ function EventParticipationFlow({
         : await api.recordEventPresence({
           eventId: event.id,
           lat: location?.lat ?? null,
-          lng: location?.lng ?? null
+          lng: location?.lng ?? null,
+          accuracyM: location?.accuracy ?? null
         });
       setLastPresence(result);
       await loadFlow({ silent: true });
@@ -555,12 +584,7 @@ function EventParticipationFlow({
     }
   }, [
     coords,
-    event?.completion_xp,
-    event?.id,
-    event?.event_datetime,
-    event?.duration_minutes,
-    event?.minimum_presence_minutes,
-    event?.status,
+    event,
     graceMinutes,
     isOrganizer,
     loadFlow,
@@ -691,11 +715,6 @@ function EventParticipationFlow({
     setScannerError('');
     setScanFeedback(null);
     setManualToken('');
-    const location = coords || (usesGeo ? await requestLocation() : null);
-    if (!location && usesGeo) {
-      showToast('Attiva la posizione prima di scansionare', 'error');
-      return;
-    }
     setScannerOpen(true);
     setScannerCycle((value) => value + 1);
   }
@@ -900,8 +919,9 @@ function EventParticipationFlow({
                   icon={LocateFixed}
                   onClick={async () => {
                     try {
-                      const location = coords || await requestLocation();
+                      const location = await requestLocation({ requireFresh: true, maxAgeMs: 30000 });
                       if (!location) return;
+                      requireEventLocationProof(location, event);
                       await startEventLocationTracking({
                         event,
                         role: 'participant',

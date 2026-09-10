@@ -74,9 +74,12 @@ public class EventLocationService extends Service implements LocationListener {
             String anonKey,
             String accessToken,
             String refreshToken,
-            long intervalMs
+            long intervalMs,
+            String activityKind
     ) {
-        prefs(context).edit()
+        SharedPreferences values = prefs(context);
+        boolean isNewEvent = !eventId.equals(values.getString("eventId", ""));
+        SharedPreferences.Editor editor = values.edit()
                 .putBoolean("active", true)
                 .putString("eventId", eventId)
                 .putString("eventTitle", eventTitle)
@@ -89,8 +92,23 @@ public class EventLocationService extends Service implements LocationListener {
                 .putString("accessToken", accessToken)
                 .putString("refreshToken", refreshToken)
                 .putLong("intervalMs", intervalMs)
-                .putString("lastError", "")
-                .apply();
+                .putString("activityKind", activityKind == null ? "" : activityKind)
+                .putString("lastError", "");
+        if (isNewEvent) {
+            editor
+                    .putLong("activityDistanceBits", Double.doubleToRawLongBits(0.0))
+                    .putLong("activityElevationBits", Double.doubleToRawLongBits(0.0))
+                    .putLong("activitySpeedBits", Double.doubleToRawLongBits(0.0))
+                    .putBoolean("hasActivityLocation", false)
+                    .putBoolean("hasActivityAltitude", false)
+                    .putBoolean("activityPaused", false)
+                    .remove("lastActivityAt")
+                    .remove("lastActivityLatBits")
+                    .remove("lastActivityLngBits")
+                    .remove("lastActivityAltitudeBits")
+                    .remove("activityAccuracyBits");
+        }
+        editor.apply();
     }
 
     private static SharedPreferences prefs(Context context) {
@@ -112,7 +130,28 @@ public class EventLocationService extends Service implements LocationListener {
         result.put("expectedEndAtMs", values.getLong("expectedEndAtMs", 0L));
         result.put("accessToken", values.getString("accessToken", ""));
         result.put("refreshToken", values.getString("refreshToken", ""));
+        result.put("activityKind", values.getString("activityKind", ""));
+        result.put("activityPaused", values.getBoolean("activityPaused", false));
+        result.put("activityDistanceM", readDouble(values, "activityDistanceBits", 0.0));
+        result.put("activityElevationGainM", readDouble(values, "activityElevationBits", 0.0));
+        result.put("activitySpeedMps", readDouble(values, "activitySpeedBits", 0.0));
+        result.put("activityAccuracyM", readDouble(values, "activityAccuracyBits", -1.0));
+        if (values.getBoolean("hasActivityLocation", false)) {
+            result.put("activityLat", readDouble(values, "lastActivityLatBits", 0.0));
+            result.put("activityLng", readDouble(values, "lastActivityLngBits", 0.0));
+            result.put("activityAltitude", readDouble(values, "lastActivityAltitudeBits", 0.0));
+            result.put("activityRecordedAt", values.getLong("lastActivityAt", 0L));
+        }
         return result;
+    }
+
+    private static double readDouble(SharedPreferences values, String key, double fallback) {
+        if (!values.contains(key)) return fallback;
+        return Double.longBitsToDouble(values.getLong(key, Double.doubleToRawLongBits(fallback)));
+    }
+
+    public static void setActivityPaused(Context context, boolean paused) {
+        prefs(context).edit().putBoolean("activityPaused", paused).apply();
     }
 
     public static void markStopped(Context context, boolean clearCredentials) {
@@ -249,7 +288,7 @@ public class EventLocationService extends Service implements LocationListener {
         }
 
         stopLocationUpdates();
-        long interval = Math.max(30000L, prefs(this).getLong("intervalMs", 60000L));
+        long interval = Math.max(5000L, prefs(this).getLong("intervalMs", 60000L));
         try {
             if (hasFine && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval, 0f, this, Looper.getMainLooper());
@@ -284,6 +323,7 @@ public class EventLocationService extends Service implements LocationListener {
             return;
         }
 
+        updateActivityMetrics(location);
         JSONObject ping = new JSONObject();
         try {
             long recordedAt = location.getTime() > 0 ? location.getTime() : System.currentTimeMillis();
@@ -300,6 +340,66 @@ public class EventLocationService extends Service implements LocationListener {
         } catch (JSONException error) {
             setError("Campione posizione non valido");
         }
+    }
+
+    private void updateActivityMetrics(@NonNull Location location) {
+        SharedPreferences values = prefs(this);
+        String activityKind = values.getString("activityKind", "");
+        if (!"running".equals(activityKind) && !"trekking".equals(activityKind)) return;
+        if (values.getBoolean("activityPaused", false)) return;
+        if (location.hasAccuracy() && location.getAccuracy() > 80f) return;
+
+        long recordedAt = location.getTime() > 0 ? location.getTime() : System.currentTimeMillis();
+        double distanceM = readDouble(values, "activityDistanceBits", 0.0);
+        double elevationGainM = readDouble(values, "activityElevationBits", 0.0);
+        double speedMps = location.hasSpeed() ? Math.max(0.0, location.getSpeed()) : 0.0;
+        boolean hasPrevious = values.getBoolean("hasActivityLocation", false);
+
+        if (hasPrevious) {
+            long previousAt = values.getLong("lastActivityAt", 0L);
+            double deltaSeconds = (recordedAt - previousAt) / 1000.0;
+            if (deltaSeconds > 0) {
+                float[] distanceResult = new float[1];
+                Location.distanceBetween(
+                        readDouble(values, "lastActivityLatBits", location.getLatitude()),
+                        readDouble(values, "lastActivityLngBits", location.getLongitude()),
+                        location.getLatitude(),
+                        location.getLongitude(),
+                        distanceResult
+                );
+                double segmentM = Math.max(0.0, distanceResult[0]);
+                double previousAccuracy = readDouble(values, "activityAccuracyBits", location.hasAccuracy() ? location.getAccuracy() : 20.0);
+                double currentAccuracy = location.hasAccuracy() ? location.getAccuracy() : previousAccuracy;
+                double uncertaintyM = Math.min(45.0, Math.max(8.0, (previousAccuracy + currentAccuracy) * 0.5));
+                double maximumSpeedMps = "trekking".equals(activityKind) ? 4.5 : 10.0;
+                double movementThresholdM = Math.min(8.0, Math.max(2.2, (previousAccuracy + currentAccuracy) * 0.08));
+                if (segmentM <= maximumSpeedMps * deltaSeconds + uncertaintyM && segmentM >= movementThresholdM) {
+                    distanceM += segmentM;
+                    if (location.hasAltitude() && values.getBoolean("hasActivityAltitude", false)) {
+                        double previousAltitude = readDouble(values, "lastActivityAltitudeBits", location.getAltitude());
+                        double elevationDelta = location.getAltitude() - previousAltitude;
+                        if (elevationDelta >= 2.5 && elevationDelta <= 35.0) elevationGainM += elevationDelta;
+                    }
+                    if (!location.hasSpeed()) speedMps = segmentM / deltaSeconds;
+                }
+            }
+        }
+
+        SharedPreferences.Editor editor = values.edit()
+                .putBoolean("hasActivityLocation", true)
+                .putLong("lastActivityLatBits", Double.doubleToRawLongBits(location.getLatitude()))
+                .putLong("lastActivityLngBits", Double.doubleToRawLongBits(location.getLongitude()))
+                .putLong("lastActivityAt", recordedAt)
+                .putLong("activityDistanceBits", Double.doubleToRawLongBits(distanceM))
+                .putLong("activityElevationBits", Double.doubleToRawLongBits(elevationGainM))
+                .putLong("activitySpeedBits", Double.doubleToRawLongBits(speedMps))
+                .putLong("activityAccuracyBits", Double.doubleToRawLongBits(location.hasAccuracy() ? location.getAccuracy() : -1.0));
+        if (location.hasAltitude()) {
+            editor
+                    .putBoolean("hasActivityAltitude", true)
+                    .putLong("lastActivityAltitudeBits", Double.doubleToRawLongBits(location.getAltitude()));
+        }
+        editor.apply();
     }
 
     @Override

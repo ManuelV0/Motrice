@@ -99,7 +99,12 @@ function normalizeState(raw, profile = {}) {
   const noShow = number(raw.reliability?.no_show ?? raw.no_show_count);
   const late = number(raw.reliability?.late_cancellations ?? raw.late_cancellation_count);
   const outcomes = present + noShow + late;
-  const score = outcomes > 0 ? Math.round((present / outcomes) * 100) : 0;
+  const suppliedScore = Number(raw.reliability?.score ?? raw.reliability_score);
+  const score = Number.isFinite(suppliedScore)
+    ? Math.max(0, Math.min(100, suppliedScore))
+    : outcomes > 0
+      ? Math.round((present / outcomes) * 100)
+      : 0;
   const xpTotal = number(raw.xp?.total ?? raw.xp_total);
   const level = Math.max(1, Math.floor(xpTotal / 250) + 1);
   const verificationStatus = String(raw.identity_verification?.status || 'unverified').toLowerCase();
@@ -197,9 +202,10 @@ export async function getProfileV3State(profile = {}) {
     }, profile);
   }
   const client = requireSupabase();
-  const [{ data, error }, walletResult, verification] = await Promise.all([
+  const [{ data, error }, walletResult, reputationResult, verification] = await Promise.all([
     client.rpc('get_my_profile_v3'),
     client.rpc('get_my_money_wallet'),
+    client.rpc('get_profile_reputation', { target_user_id: session.authUserId }),
     getMyProfileVerification()
   ]);
   if (error) {
@@ -209,8 +215,12 @@ export async function getProfileV3State(profile = {}) {
   if (walletResult.error && !isMissingProfileV3Rpc(walletResult.error, 'get_my_money_wallet')) {
     throw new Error(walletResult.error.message || 'Impossibile caricare il Wallet Motrice');
   }
+  if (reputationResult.error && !isMissingProfileV3Rpc(reputationResult.error, 'get_profile_reputation')) {
+    throw new Error(reputationResult.error.message || 'Impossibile caricare la reputazione Motrice');
+  }
   return normalizeState({
     ...data,
+    ...(reputationResult.error ? {} : reputationResult.data),
     credit_wallet: walletResult.error ? data?.credit_wallet : walletResult.data,
     identity_verification: verification
   }, profile);
@@ -231,8 +241,9 @@ export async function getPublicProfileV3State(targetUserId, profile = {}) {
   }
 
   const client = requireSupabase();
-  const [{ data, error }, verification] = await Promise.all([
+  const [{ data, error }, reputationResult, verification] = await Promise.all([
     client.rpc('get_public_profile_v3', { target_user_id: targetId }),
+    client.rpc('get_profile_reputation', { target_user_id: targetId }),
     getPublicProfileVerification(targetId)
   ]);
   if (error) {
@@ -241,5 +252,12 @@ export async function getPublicProfileV3State(targetUserId, profile = {}) {
     }
     throw new Error(error.message || 'Impossibile caricare il profilo pubblico Motrice');
   }
-  return normalizeState({ ...data, identity_verification: verification }, profile);
+  if (reputationResult.error && !isMissingProfileV3Rpc(reputationResult.error, 'get_profile_reputation')) {
+    throw new Error(reputationResult.error.message || 'Impossibile caricare la reputazione Motrice');
+  }
+  return normalizeState({
+    ...data,
+    ...(reputationResult.error ? {} : reputationResult.data),
+    identity_verification: verification
+  }, profile);
 }

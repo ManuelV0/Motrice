@@ -21,6 +21,7 @@ import {
 } from '../utils/eventLifecycle';
 import { getSystemEventRules } from '../utils/eventCreationRules';
 import { getEventManagementPolicy } from '../utils/eventManagementRules';
+import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
@@ -680,6 +681,55 @@ function resolveOrganizerUserIdForEvent(store, event) {
   return null;
 }
 
+function getLocalEventReviewTargets(store, event, reviewerUserId) {
+  const eventKey = String(event?.id || '');
+  const organizerUserId = resolveOrganizerUserIdForEvent(store, event);
+  const candidates = new Map();
+
+  if (organizerUserId && Number(organizerUserId) !== Number(reviewerUserId)) {
+    const organizerProfile = store.accountProfiles?.[String(organizerUserId)] || {};
+    candidates.set(String(organizerUserId), {
+      user_id: Number(organizerUserId),
+      auth_user_id: '',
+      display_name: normalizeDisplayName(
+        organizerProfile.display_name || event?.organizer?.name,
+        'Organizzatore'
+      ),
+      avatar_url: organizerProfile.avatar_url || event?.organizer?.avatar || '',
+      role_key: 'organizer',
+      checked_in_at: null
+    });
+  }
+
+  listEventRsvps(store, event?.id).forEach((rsvp) => {
+    const userId = Number(rsvp?.user_id);
+    const completed = String(rsvp?.status || '') === 'completed'
+      || Number(rsvp?.cashback_percent || 0) >= 100;
+    if (!Number.isInteger(userId) || userId <= 0 || !completed) return;
+    if (userId === Number(reviewerUserId) || userId === Number(organizerUserId)) return;
+    const profile = store.accountProfiles?.[String(userId)] || {};
+    candidates.set(String(userId), {
+      user_id: userId,
+      auth_user_id: '',
+      display_name: normalizeDisplayName(rsvp?.name || profile.display_name, 'Partecipante'),
+      avatar_url: profile.avatar_url || '',
+      role_key: 'participant',
+      checked_in_at: rsvp?.checked_in_at || null
+    });
+  });
+
+  const reviews = store.eventUserReviewsByEvent?.[eventKey]?.[String(reviewerUserId)] || {};
+  return Array.from(candidates.values())
+    .map((candidate) => ({
+      ...candidate,
+      reviewed: Boolean(reviews[String(candidate.user_id)])
+    }))
+    .sort((first, second) => {
+      if (first.role_key !== second.role_key) return first.role_key === 'organizer' ? -1 : 1;
+      return first.display_name.localeCompare(second.display_name, 'it');
+    });
+}
+
 function getFriendMap(store) {
   const legacy = store.friendsByUser && typeof store.friendsByUser === 'object' ? store.friendsByUser : {};
   const byId = store.friendsByUserId && typeof store.friendsByUserId === 'object' ? store.friendsByUserId : {};
@@ -888,6 +938,8 @@ function buildInitialStore() {
     conventionContractTemplates: [],
     revokedAuthUserIds: [],
     notifications: [],
+    pushDevices: [],
+    notificationPreferencesByUser: {},
     monthlyEventCreations: {},
     generatedFlags: {
       startingSoonByEvent: {},
@@ -896,6 +948,7 @@ function buildInitialStore() {
     checkinSessionsByEvent: {},
     checkinRecordsByEvent: {},
     checkinOrganizerAwardByEvent: {},
+    eventUserReviewsByEvent: {},
     friendRequests: [],
     friendsByUser: {},
     friendsByUserId: {},
@@ -2726,7 +2779,15 @@ const localApi = {
       updated_at: nowIso()
     });
     saveStore(store);
-    return withDelay({ ok: true, checked_in_now: !current.checked_in_at, checked_in_at: checkedInAt, mot_awarded: current.checked_in_at ? 0 : 2, cashback_percent: 60 });
+    return withDelay({
+      ok: true,
+      checked_in_now: !current.checked_in_at,
+      checked_in_at: checkedInAt,
+      mot_awarded: current.checked_in_at ? 0 : 2,
+      cashback_percent: 60,
+      distance_m: Number(distanceM.toFixed(1)),
+      inside_radius: true
+    });
   },
 
   async startEventLocationTracking({ eventId, verificationMethod = 'gps', devicePlatform = 'web' }) {
@@ -2952,6 +3013,160 @@ const localApi = {
         };
       });
     return withDelay(clone(rows));
+  },
+
+  async listEventReviewTargets(eventId) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const currentUserId = resolveAuthUserId();
+    const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+    const ownRsvp = getEventRsvp(store, event.id, currentUserId);
+    const ownSession = store.workoutSessionsByEvent?.[String(event.id)] || null;
+    const eventEnded = getEventTiming(event).hasEnded || event.status === 'completed';
+    const canReview = isOrganizer || String(ownRsvp?.status || '') === 'completed'
+      || Number(ownRsvp?.cashback_percent || 0) >= 100
+      || Boolean(ownSession?.completed_at);
+    if (!canReview || (!eventEnded && !ownSession?.completed_at)) {
+      throw new Error('La valutazione sara disponibile al termine dell evento');
+    }
+    return withDelay(clone(getLocalEventReviewTargets(store, event, currentUserId)));
+  },
+
+  async submitEventUserReview({
+    eventId,
+    targetUserId,
+    punctuality,
+    respect,
+    collaboration,
+    communication,
+    organization = null,
+    tags = [],
+    reportNote = '',
+    skipped = false
+  }) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const reviewerUserId = resolveAuthUserId();
+    const targetId = Number(targetUserId);
+    const targets = getLocalEventReviewTargets(store, event, reviewerUserId);
+    const target = targets.find((item) => Number(item.user_id) === targetId);
+    if (!target) throw new Error('Puoi valutare solo presenze verificate');
+
+    const eventKey = String(event.id);
+    const reviewerKey = String(reviewerUserId);
+    const targetKey = String(targetId);
+    const existing = store.eventUserReviewsByEvent?.[eventKey]?.[reviewerKey]?.[targetKey];
+    if (existing) {
+      return withDelay({ success: true, already_submitted: true, bonus_xp: 0 });
+    }
+
+    const ratingValues = [punctuality, respect, collaboration, communication]
+      .map((value) => Number(value));
+    if (!skipped && ratingValues.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) {
+      throw new Error('Completa tutti i parametri della valutazione');
+    }
+    if (!skipped && target.role_key === 'organizer') {
+      const organizationRating = Number(organization);
+      if (!Number.isInteger(organizationRating) || organizationRating < 1 || organizationRating > 5) {
+        throw new Error('Valuta anche l organizzazione dell evento');
+      }
+    }
+
+    const allowedTags = new Set([
+      'puntuale', 'collaborativo', 'motivante', 'rispettoso',
+      'comunicazione_chiara', 'poco_comunicativo', 'indicazioni_chiare'
+    ]);
+    const safeTags = Array.from(new Set((Array.isArray(tags) ? tags : [])
+      .map((tag) => String(tag || '').trim().toLowerCase())
+      .filter((tag) => allowedTags.has(tag))))
+      .slice(0, 4);
+    const review = {
+      event_id: Number(event.id),
+      reviewer_id: reviewerUserId,
+      reviewee_id: targetId,
+      punctuality_stars: skipped ? null : ratingValues[0],
+      respect_stars: skipped ? null : ratingValues[1],
+      collaboration_stars: skipped ? null : ratingValues[2],
+      communication_stars: skipped ? null : ratingValues[3],
+      organization_stars: skipped || target.role_key !== 'organizer' ? null : Number(organization),
+      tags: skipped ? [] : safeTags,
+      private_report_note: skipped ? '' : String(reportNote || '').trim().slice(0, 500),
+      skipped: Boolean(skipped),
+      created_at: nowIso()
+    };
+    store.eventUserReviewsByEvent = {
+      ...(store.eventUserReviewsByEvent || {}),
+      [eventKey]: {
+        ...(store.eventUserReviewsByEvent?.[eventKey] || {}),
+        [reviewerKey]: {
+          ...(store.eventUserReviewsByEvent?.[eventKey]?.[reviewerKey] || {}),
+          [targetKey]: review
+        }
+      }
+    };
+
+    if (!skipped) {
+      const targetProfile = store.accountProfiles?.[targetKey] || {};
+      const targetReviews = Object.values(store.eventUserReviewsByEvent || {})
+        .flatMap((eventReviews) => Object.values(eventReviews || {}))
+        .flatMap((reviewerReviews) => Object.values(reviewerReviews || {}))
+        .filter((item) => Number(item?.reviewee_id) === targetId && !item?.skipped);
+      const peerAverage = getPeerFeedbackAverage(targetReviews);
+      const objectiveReliability = Number(
+        targetProfile.objective_reliability_score ?? targetProfile.reliability_score ?? 100
+      );
+      store.accountProfiles = {
+        ...(store.accountProfiles || {}),
+        [targetKey]: {
+          ...targetProfile,
+          objective_reliability_score: objectiveReliability,
+          reliability_score: computeReliabilityWithPeer(objectiveReliability, peerAverage, targetReviews.length),
+          peer_rating_average: peerAverage,
+          verified_ratings: targetReviews.length
+        }
+      };
+    }
+
+    const reviewedTargets = getLocalEventReviewTargets(store, event, reviewerUserId);
+    const reviewedCount = reviewedTargets.filter((item) => item.reviewed).length;
+    const allCompleted = reviewedTargets.length > 0 && reviewedCount >= reviewedTargets.length;
+    let bonusXp = 0;
+    if (allCompleted) {
+      const ownRsvp = getEventRsvp(store, event.id, reviewerUserId);
+      const oldFlow = store.participationFlowsByEvent?.[eventKey] || {};
+      const alreadyRewarded = Boolean(ownRsvp?.review_bonus_awarded || ownRsvp?.review_submitted || oldFlow.review_submitted);
+      if (!alreadyRewarded) {
+        bonusXp = Number(event.review_bonus_xp ?? 25);
+        awardXp({
+          userId: reviewerUserId,
+          type: 'event_user_feedback_completed',
+          pointsGlobal: bonusXp,
+          pointsSport: 0,
+          sportId: event.sport_id || 'generic',
+          refId: `event_${event.id}_user_feedback`,
+          meta: { eventId: event.id, reviewedCount }
+        }, store);
+      }
+      if (ownRsvp) {
+        setEventRsvp(store, event.id, reviewerUserId, {
+          ...ownRsvp,
+          review_bonus_awarded: true,
+          review_submitted: true,
+          updated_at: nowIso()
+        });
+      }
+    }
+    saveStore(store);
+    return withDelay({
+      success: true,
+      already_submitted: false,
+      skipped: Boolean(skipped),
+      reviewed_count: reviewedCount,
+      target_count: reviewedTargets.length,
+      all_completed: allCompleted,
+      bonus_xp: bonusXp,
+      reviewee_reliability: store.accountProfiles?.[targetKey]?.reliability_score ?? null
+    });
   },
 
   async submitEventReview({
@@ -3555,6 +3770,65 @@ const localApi = {
       }
     );
     return withDelay(clone(scoped));
+  },
+
+  async registerPushDevice({ token, platform = 'android', deviceLabel = '' }) {
+    const safeToken = String(token || '').trim();
+    if (!safeToken) throw new Error('Token notifiche non valido');
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const nextDevice = {
+      token: safeToken,
+      user_id: currentUserId,
+      platform: String(platform || 'android'),
+      device_label: String(deviceLabel || '').slice(0, 180),
+      active: true,
+      updated_at: nowIso()
+    };
+    store.pushDevices = [
+      ...(store.pushDevices || []).filter((item) => String(item.token) !== safeToken),
+      nextDevice
+    ].slice(-20);
+    saveStore(store);
+    return withDelay(clone(nextDevice));
+  },
+
+  async unregisterPushDevice(token) {
+    const store = loadStore();
+    const safeToken = String(token || '').trim();
+    store.pushDevices = (store.pushDevices || []).filter((item) => String(item.token) !== safeToken);
+    saveStore(store);
+    return withDelay({ success: true });
+  },
+
+  async getNotificationPreferences() {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    return withDelay(clone({
+      event_security: true,
+      chat_social: true,
+      wallet_account: true,
+      promotions: false,
+      ...(store.notificationPreferencesByUser?.[String(currentUserId)] || {})
+    }));
+  },
+
+  async updateNotificationPreferences(patch = {}) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const current = store.notificationPreferencesByUser?.[String(currentUserId)] || {};
+    const next = {
+      event_security: true,
+      chat_social: patch.chat_social ?? current.chat_social ?? true,
+      wallet_account: patch.wallet_account ?? current.wallet_account ?? true,
+      promotions: patch.promotions ?? current.promotions ?? false
+    };
+    store.notificationPreferencesByUser = {
+      ...(store.notificationPreferencesByUser || {}),
+      [String(currentUserId)]: next
+    };
+    saveStore(store);
+    return withDelay(clone(next));
   },
 
   async listEventGroupMessages(eventId) {

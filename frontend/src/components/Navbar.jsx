@@ -7,6 +7,7 @@ import {
   Handshake,
   UserRound,
   MessageCircle,
+  Bell,
   Menu,
   Target,
   LogIn,
@@ -16,7 +17,6 @@ import {
   X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
-import { useBilling } from '../context/BillingContext';
 import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { getAuthSession, signOutFromSupabase } from '../services/authSession';
@@ -55,6 +55,7 @@ const drawerSections = [
   {
     title: 'Altro',
     items: [
+      { to: '/notifications', label: 'Notifiche', icon: Bell },
       { to: '/coach', label: 'Coach', icon: Target },
       { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
     ]
@@ -65,7 +66,6 @@ function Navbar({ forceMobile = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { isOpen, setIsOpen } = useMobileMenu();
-  const { entitlements } = useBilling();
   const { showToast } = useToast();
 
   const [query, setQuery] = useState('');
@@ -285,27 +285,26 @@ function Navbar({ forceMobile = false }) {
   useEffect(() => {
     let active = true;
 
-    if (!entitlements.canUseNotifications) {
-      setUnread(0);
-      return () => {
-        active = false;
-      };
+    function refreshUnread() {
+      import('../services/api')
+        .then(({ api }) => api.getUnreadCount())
+        .then((count) => {
+          if (!active) return;
+          setUnread(Number.isFinite(count) ? count : 0);
+        })
+        .catch(() => {
+          if (active) setUnread(0);
+        });
     }
 
-    import('../services/api')
-      .then(({ api }) => api.getUnreadCount())
-      .then((count) => {
-        if (!active) return;
-        setUnread(Number.isFinite(count) ? count : 0);
-      })
-      .catch(() => {
-        if (active) setUnread(0);
-      });
+    refreshUnread();
+    window.addEventListener('motrice:notifications-changed', refreshUnread);
 
     return () => {
       active = false;
+      window.removeEventListener('motrice:notifications-changed', refreshUnread);
     };
-  }, [location.pathname, entitlements.canUseNotifications]);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (locationError) showToast(locationError, 'error');
@@ -434,6 +433,23 @@ function Navbar({ forceMobile = false }) {
         </form>
 
         <div className={styles.rightGroup}>
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) => `${styles.notificationButton} ${isActive ? styles.notificationButtonActive : ''}`}
+            aria-label={unread > 0 ? `Notifiche, ${unread} non lette` : 'Notifiche'}
+            title="Notifiche"
+            onClick={() => {
+              setIsOpen(false);
+              setWalletOpen(false);
+            }}
+          >
+            <Bell size={18} aria-hidden="true" />
+            {unread > 0 ? (
+              <span className={styles.notificationBadge} aria-hidden="true">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            ) : null}
+          </NavLink>
           <HeaderWallet
             open={walletOpen}
             onOpenChange={(nextOpen) => {
@@ -458,11 +474,6 @@ function Navbar({ forceMobile = false }) {
                 >
                   <Icon size={18} aria-hidden="true" />
                   <span>{link.label}</span>
-                  {link.to === '/chat' && unread > 0 ? (
-                    <span className={styles.chatriceBadge} aria-label={`${unread} nuovi messaggi`}>
-                      {unread}
-                    </span>
-                  ) : null}
                 </NavLink>
               );
             })}
@@ -550,7 +561,12 @@ function Navbar({ forceMobile = false }) {
                       onClick={() => setIsOpen(false)}
                     >
                       <Icon size={18} aria-hidden="true" />
-                      <span>{item.label}{item.to === '/chat' && unread > 0 ? ` (${unread})` : ''}</span>
+                      <span>{item.label}</span>
+                      {item.to === '/notifications' && unread > 0 ? (
+                        <span className={styles.drawerNotificationCount} aria-label={`${unread} notifiche non lette`}>
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      ) : null}
                     </NavLink>
                   );
                 })}

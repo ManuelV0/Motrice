@@ -21,6 +21,7 @@ import {
   Navigation,
   PencilLine,
   Play,
+  Route,
   Send,
   Share2,
   ShieldCheck,
@@ -57,9 +58,11 @@ import { markStepByAction } from '../services/tutorialMode';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
+import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
 import { resolveEventParticipationState, resolveParticipantOutcome } from '../utils/eventParticipationState';
 import { getEventManagementPolicy } from '../utils/eventManagementRules';
+import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const SPORT_DETAIL_VISUALS = [
@@ -549,14 +552,28 @@ function EventDetailPage() {
 
   async function confirmRsvp() {
     if (rsvpSubmitting) return;
-    const participantName = String(rsvpForm.name || localProfile.display_name || '').trim();
+    const profileDisplayName = String(localProfile.display_name || '').trim();
+    const participantName = String(rsvpForm.name || profileDisplayName || '').trim().slice(0, 40);
     if (participantName.length < 2) {
-      showToast('Completa il nome utente nel profilo prima di partecipare', 'error');
+      showToast('Inserisci il tuo nome per completare il profilo', 'error');
       return;
     }
 
     setRsvpSubmitting(true);
     try {
+      if (profileDisplayName.length < 2) {
+        const savedProfile = await api.updateLocalProfile({ display_name: participantName });
+        const savedDisplayName = String(savedProfile?.display_name || participantName).trim();
+        setLocalProfile((current) => ({
+          ...current,
+          display_name: savedDisplayName
+        }));
+        setRsvpForm((current) => ({
+          ...current,
+          name: savedDisplayName
+        }));
+      }
+
       const result = await api.joinEvent(id, {
         ...rsvpForm,
         name: participantName
@@ -898,6 +915,7 @@ function EventDetailPage() {
   const eventTiming = getEventTiming(event || {}, checkInNowMs);
   const eventHasEnded = eventTiming.hasEnded;
   const participantOutcome = resolveParticipantOutcome(event);
+  const hasOutdoorTracking = isOutdoorTrackedEvent(event);
   const canInviteFriendsFromGroupChat = Boolean(
     participantOutcome.id === 'completed'
   );
@@ -1392,6 +1410,28 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
+          {hasOutdoorTracking && (
+            event.is_personal ||
+            ['checked_in', 'completed'].includes(participantOutcome.id) ||
+            (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)
+          ) ? (
+            <Card as="section" className={styles.outdoorLiveCard}>
+              <span className={styles.outdoorLiveIcon}><Route size={24} aria-hidden="true" /></span>
+              <div>
+                <small>ATTIVITÀ GPS LIVE</small>
+                <strong>{participantOutcome.id === 'completed' ? 'Consulta la tua attività' : 'Inizia il monitoraggio'}</strong>
+                <p>Tempo, distanza, passo, dislivello e passi in un’unica schermata.</p>
+              </div>
+              <Button
+                type="button"
+                icon={Play}
+                onClick={() => navigate(`/events/${event.id}/activity`)}
+              >
+                {participantOutcome.id === 'completed' ? 'Apri attività' : 'Avvia attività'}
+              </Button>
+            </Card>
+          ) : null}
+
           <section className={styles.statGrid} aria-label="Riepilogo evento">
             <div className={styles.statCard}>
               <Clock3 size={22} aria-hidden="true" />
@@ -1522,6 +1562,16 @@ function EventDetailPage() {
               </div>
             </Card>
           ) : null}
+
+          <PostEventUserFeedback
+            eventId={event.id}
+            enabled={Boolean(
+              isClosedEvent &&
+              !event.is_personal &&
+              (isOrganizerForEvent || participantWasPresent)
+            )}
+            bonusXp={reviewBonusXp || 25}
+          />
 
           {!event.is_personal && !eventIsCancelled ? (
             <Card
@@ -1879,10 +1929,20 @@ function EventDetailPage() {
         <label>
           Nome dal profilo
           <input
-            value={rsvpForm.name || localProfile.display_name}
-            readOnly
+            value={rsvpForm.name || localProfile.display_name || ''}
+            readOnly={String(localProfile.display_name || '').trim().length >= 2}
             placeholder="Completa il nome nel profilo"
+            autoComplete="name"
+            maxLength="40"
+            required
+            onChange={(event) => setRsvpForm((current) => ({
+              ...current,
+              name: event.target.value
+            }))}
           />
+          {String(localProfile.display_name || '').trim().length < 2 ? (
+            <small className="muted">Il nome verrà salvato nel tuo profilo quando invii la richiesta.</small>
+          ) : null}
         </label>
         <label>
           Livello

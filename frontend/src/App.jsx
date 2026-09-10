@@ -49,6 +49,7 @@ const ProfileVerificationPage = lazy(() => import('./pages/ProfileVerificationPa
 const AdminOperationsPage = lazy(() => import('./pages/AdminOperationsPage'));
 const AdminProfileVerificationsPage = lazy(() => import('./pages/AdminProfileVerificationsPage'));
 const WorkoutSessionPage = lazy(() => import('./pages/WorkoutSessionPage'));
+const OutdoorActivitySessionPage = lazy(() => import('./pages/OutdoorActivitySessionPage'));
 const ExerciseProgressPage = lazy(() => import('./pages/ExerciseProgressPage'));
 const GameMapPage = lazy(() => import('./features/game/pages/GameMapPage'));
 const EXPLORE_SECTION_ENABLED = false;
@@ -86,6 +87,7 @@ function App() {
           <Route path="/tutorial" element={<TutorialPage />} />
           <Route path="/events/:id" element={<EventDetailPage />} />
           <Route path="/events/:id/workout" element={<WorkoutSessionPage />} />
+          <Route path="/events/:id/activity" element={<OutdoorActivitySessionPage />} />
           <Route path="/dashboard/progress" element={<ExerciseProgressPage />} />
           <Route path="/create" element={<VerifiedProfileRoute><CreateEventPage /></VerifiedProfileRoute>} />
           <Route path="/agenda" element={<AgendaPage />} />

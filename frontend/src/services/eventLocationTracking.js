@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { supabase, supabasePublishableKey, supabaseUrl } from './supabaseClient';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { getEventTiming } from '../utils/eventLifecycle';
+import { getOutdoorActivityKind } from '../utils/outdoorActivity';
 
 const ACTIVE_TRACKING_KEY = 'motrice_active_event_tracking_v1';
 const WEB_QUEUE_KEY = 'motrice_event_tracking_queue_v1';
@@ -153,7 +154,8 @@ export async function startEventLocationTracking({
 }) {
   if (!event?.id) throw new Error('Evento non valido');
   const mode = String(event.verification_mode || 'both').toLowerCase();
-  if (!['geo', 'gps', 'both'].includes(mode)) return null;
+  const activityKind = getOutdoorActivityKind(event) || '';
+  if (!['geo', 'gps', 'both'].includes(mode) && !activityKind) return null;
 
   const timing = getEventTiming(event);
   if (!timing.endsAtMs || timing.endsAtMs <= Date.now()) return null;
@@ -185,6 +187,7 @@ export async function startEventLocationTracking({
     validPingCount: Number(remote?.valid_ping_count || existing?.validPingCount || 0),
     outsidePingCount: Number(remote?.outside_ping_count || existing?.outsidePingCount || 0),
     pendingPingCount: Number(existing?.pendingPingCount || 0),
+    activityKind,
     platform
   };
   writeActiveTracking(active);
@@ -207,7 +210,8 @@ export async function startEventLocationTracking({
         anonKey: supabasePublishableKey,
         accessToken: session.access_token,
         refreshToken: session.refresh_token,
-        intervalMs: 60000
+        intervalMs: activityKind ? 5000 : 60000,
+        activityKind
       });
     } else {
       startBrowserWatch(active);
@@ -331,7 +335,8 @@ export async function resumeEventLocationTracking() {
           anonKey: supabasePublishableKey,
           accessToken: session.access_token,
           refreshToken: session.refresh_token,
-          intervalMs: 60000
+          intervalMs: active.activityKind ? 5000 : 60000,
+          activityKind: active.activityKind || ''
         });
       }
     }
@@ -355,6 +360,34 @@ export async function stopEventLocationTracking({ status = 'interrupted', reason
   const result = await api.stopEventLocationTracking({ eventId: active.eventId, status, reason }).catch(() => null);
   writeActiveTracking(null);
   return result;
+}
+
+export async function getEventActivityMetrics(eventId) {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
+  const status = await NativeTracking.getStatus().catch(() => null);
+  if (!status || String(status.eventId || '') !== String(eventId || '')) return null;
+  const finiteOrNull = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const accuracyM = finiteOrNull(status.activityAccuracyM);
+  return {
+    distanceM: Math.max(0, finiteOrNull(status.activityDistanceM) || 0),
+    elevationGainM: Math.max(0, finiteOrNull(status.activityElevationGainM) || 0),
+    currentSpeedMps: Math.max(0, finiteOrNull(status.activitySpeedMps) || 0),
+    accuracyM: accuracyM != null && accuracyM >= 0 ? accuracyM : null,
+    lat: finiteOrNull(status.activityLat),
+    lng: finiteOrNull(status.activityLng),
+    altitude: finiteOrNull(status.activityAltitude),
+    capturedAt: finiteOrNull(status.activityRecordedAt),
+    paused: Boolean(status.activityPaused)
+  };
+}
+
+export async function setEventActivityPaused(paused) {
+  if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return null;
+  return NativeTracking.setActivityPaused({ paused: Boolean(paused) }).catch(() => null);
 }
 
 export function installEventLocationTrackingLifecycle() {

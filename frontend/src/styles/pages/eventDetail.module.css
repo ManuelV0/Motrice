@@ -3675,3 +3675,59 @@
     padding-right: 0.8rem;
   }
 }
+.outdoorLiveCard {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 15px;
+  border-color: rgba(204, 255, 0, 0.28);
+  background:
+    linear-gradient(120deg, rgba(204, 255, 0, 0.08), transparent 58%),
+    #191a19;
+}
+
+.outdoorLiveIcon {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  background: #ccff00;
+  color: #0b0c0a;
+  box-shadow: 0 0 22px rgba(204, 255, 0, 0.2);
+}
+
+.outdoorLiveCard > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.outdoorLiveCard small {
+  color: #91b800;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.outdoorLiveCard strong {
+  font-size: 1rem;
+}
+
+.outdoorLiveCard p {
+  margin: 0;
+  color: #90938d;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 540px) {
+  .outdoorLiveCard {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .outdoorLiveCard > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

@@ -5,13 +5,14 @@ import SiteTourOverlay from '../components/SiteTourOverlay';
 import PullToRefresh from '../components/PullToRefresh';
 import ActiveEventLocationMonitor from '../components/ActiveEventLocationMonitor';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
 import { hasCompletedAppIntro } from '../services/appIntro';
 
 function AppShell({ children, persistentContent = null }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [soonNotification, setSoonNotification] = useState(null);
   const [authSession, setAuthSession] = useState(getAuthSession);
   const isEmbed = location.pathname.startsWith('/embed/');
@@ -22,8 +23,9 @@ function AppShell({ children, persistentContent = null }) {
   const isVerificationRoute = location.pathname === '/verify-profile';
   const isPasswordResetRoute = location.pathname === '/reset-password';
   const isWorkoutRoute = /^\/events\/[^/]+\/workout$/.test(location.pathname);
+  const isOutdoorActivityRoute = /^\/events\/[^/]+\/activity$/.test(location.pathname);
   const isChatThreadRoute = /^\/chat\/[^/]+$/.test(location.pathname);
-  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute;
+  const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute || isOutdoorActivityRoute;
   const isFixedFullscreenRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
@@ -81,6 +83,36 @@ function AppShell({ children, persistentContent = null }) {
     window.addEventListener('motrice-auth-changed', refreshAuthSession);
     return () => window.removeEventListener('motrice-auth-changed', refreshAuthSession);
   }, []);
+
+  useEffect(() => {
+    if (!authSession.isAuthenticated) return undefined;
+    let disposed = false;
+    let cleanup = () => {};
+
+    import('../services/notificationCenter')
+      .then(async ({ consumePendingNotificationPath, initializeNotificationCenter }) => {
+        if (disposed) return;
+        const pendingPath = consumePendingNotificationPath();
+        if (pendingPath) navigate(pendingPath);
+        cleanup = await initializeNotificationCenter({
+          onOpen: (path) => navigate(path)
+        });
+        if (disposed) cleanup();
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      cleanup();
+    };
+  }, [authSession.authUserId, authSession.isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!authSession.isAuthenticated) return;
+    import('../services/notificationCenter')
+      .then(({ scheduleEventReminders }) => scheduleEventReminders())
+      .catch(() => undefined);
+  }, [authSession.isAuthenticated, location.pathname]);
 
   useEffect(() => {
     let active = true;
