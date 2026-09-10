@@ -19,6 +19,7 @@ import {
   MapPin,
   MessageCircle,
   Navigation,
+  PencilLine,
   Play,
   Send,
   Share2,
@@ -58,6 +59,7 @@ import { ai, getAiSettings } from '../services/ai';
 import EventParticipationFlow from '../components/event/EventParticipationFlow';
 import { saveSharedWorkoutPlanToLibrary } from '../features/coach/services/personalWorkoutPlansApi';
 import { resolveEventParticipationState, resolveParticipantOutcome } from '../utils/eventParticipationState';
+import { getEventManagementPolicy } from '../utils/eventManagementRules';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const SPORT_DETAIL_VISUALS = [
@@ -195,6 +197,13 @@ function EventDetailPage() {
   const [organizerCancelOpen, setOrganizerCancelOpen] = useState(false);
   const [organizerCancelSubmitting, setOrganizerCancelSubmitting] = useState(false);
   const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '' });
+  const [organizerEditOpen, setOrganizerEditOpen] = useState(false);
+  const [organizerEditSubmitting, setOrganizerEditSubmitting] = useState(false);
+  const [organizerEditForm, setOrganizerEditForm] = useState({
+    description: '',
+    duration_minutes: 120,
+    checkin_grace_minutes: 15
+  });
   const [rsvpForm, setRsvpForm] = useState({
     name: '',
     skill_level: 'beginner',
@@ -252,7 +261,31 @@ function EventDetailPage() {
     setRulesOpen(false);
     setOrganizerCancelOpen(false);
     setOrganizerCancelForm({ reasonCode: '', note: '' });
+    setOrganizerEditOpen(false);
   }, [event?.id]);
+
+  useEffect(() => {
+    if (!event?.id || searchParams.get('manage') !== '1') return;
+    const organizerOwned = Boolean(
+      event.created_by === 'me' ||
+      String(event.organizer?.id || '') === 'me' ||
+      String(event.organizer?.id || '') === String(currentUserId) ||
+      normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
+    );
+    if (!organizerOwned) return;
+    setOrganizerEditForm({
+      description: String(event.description || ''),
+      duration_minutes: Number(event.duration_minutes || 120),
+      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15)
+    });
+    setOrganizerEditOpen(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('manage');
+    navigate(
+      { pathname: location.pathname, search: nextParams.toString(), hash: location.hash },
+      { replace: true }
+    );
+  }, [event, currentUserId, localProfile.display_name, location.hash, location.pathname, navigate, searchParams]);
 
   useEffect(() => {
     if (!event?.id || !event?.workout_plan || location.hash !== '#workout-plan') return undefined;
@@ -620,6 +653,66 @@ function EventDetailPage() {
     }
   }
 
+  function openOrganizerEditDialog() {
+    if (!event) return;
+    setOrganizerEditForm({
+      description: String(event.description || ''),
+      duration_minutes: Number(event.duration_minutes || 120),
+      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15)
+    });
+    setOrganizerEditOpen(true);
+  }
+
+  async function saveOrganizerEventChanges() {
+    if (!event || organizerEditSubmitting) return;
+    const policy = getEventManagementPolicy(event);
+    const description = String(organizerEditForm.description || '').trim();
+    const durationMinutes = Number(organizerEditForm.duration_minutes);
+    const graceMinutes = Number(organizerEditForm.checkin_grace_minutes);
+    const descriptionChanged = description !== String(event.description || '').trim();
+    const durationChanged = durationMinutes !== Number(event.duration_minutes);
+    const graceChanged = !event.is_personal && graceMinutes !== Number(event.checkin_grace_minutes);
+
+    if (description.length > 0 && description.length < 20) {
+      showToast('La descrizione deve avere almeno 20 caratteri oppure restare vuota', 'error');
+      return;
+    }
+    if (descriptionChanged && !policy.canEditDescription) {
+      showToast('La descrizione non è più modificabile', 'error');
+      return;
+    }
+    if (durationChanged && !policy.canEditDuration) {
+      showToast('La durata è modificabile fino a 2 ore prima', 'error');
+      return;
+    }
+    if (graceChanged && !policy.canEditTolerance) {
+      showToast('La tolleranza ritardi non è più modificabile', 'error');
+      return;
+    }
+
+    setOrganizerEditSubmitting(true);
+    try {
+      const result = await api.updateManagedEvent(event.id, {
+        description,
+        duration_minutes: durationMinutes,
+        checkin_grace_minutes: event.is_personal ? 0 : graceMinutes
+      });
+      if (result?.event) setEvent(result.event);
+      else await reload();
+      setOrganizerEditOpen(false);
+      showToast(
+        (result?.changes || []).length > 0
+          ? 'Evento aggiornato. I partecipanti sono stati avvisati.'
+          : 'Nessuna modifica da salvare.',
+        'success'
+      );
+    } catch (editError) {
+      showToast(editError.message || 'Impossibile aggiornare l evento', 'error');
+    } finally {
+      setOrganizerEditSubmitting(false);
+    }
+  }
+
   async function completePersonalEvent() {
     setPersonalEventBusy(true);
     try {
@@ -980,6 +1073,14 @@ function EventDetailPage() {
   const showHeroDescription = hasMeaningfulDescription(eventDescription);
   const showHeroDateSport = normalizeName(eventTitle) !== normalizeName(event.sport_name);
   const durationMinutes = Number(event.duration_minutes || 120);
+  const eventManagementPolicy = getEventManagementPolicy(event, checkInNowMs);
+  const organizerEditDescription = String(organizerEditForm.description || '').trim();
+  const organizerEditDescriptionValid = organizerEditDescription.length === 0 || organizerEditDescription.length >= 20;
+  const organizerEditHasChanges = Boolean(
+    organizerEditDescription !== String(event.description || '').trim() ||
+    Number(organizerEditForm.duration_minutes) !== durationMinutes ||
+    (!event.is_personal && Number(organizerEditForm.checkin_grace_minutes) !== Number(event.checkin_grace_minutes))
+  );
   const minimumPresenceMinutes = Number(event.minimum_presence_minutes || 45);
   const completionXp = Number(event.completion_xp || (event.is_personal ? 5 : 50));
   const reviewBonusXp = event.is_personal ? 0 : Number(event.review_bonus_xp || 0);
@@ -1625,6 +1726,17 @@ function EventDetailPage() {
                   {participationState.actionLabel || participationState.badge}
                 </Button>
               ) : null}
+              {isOrganizerForEvent && !eventIsCancelled ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant="secondary"
+                  icon={PencilLine}
+                  onClick={openOrganizerEditDialog}
+                >
+                  Modifica evento
+                </Button>
+              ) : null}
               {canCancelOrganizedEvent ? (
                 <Button
                   type="button"
@@ -1828,6 +1940,128 @@ function EventDetailPage() {
                 : 'Countdown di sicurezza in corso...'}
             </small>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={organizerEditOpen}
+        title="Modifica evento"
+        onClose={() => {
+          if (!organizerEditSubmitting) setOrganizerEditOpen(false);
+        }}
+        onConfirm={saveOrganizerEventChanges}
+        confirmText={organizerEditSubmitting ? 'Salvataggio...' : 'Salva modifiche'}
+        confirmDisabled={
+          organizerEditSubmitting ||
+          !organizerEditHasChanges ||
+          !organizerEditDescriptionValid ||
+          !eventManagementPolicy.canEditAnything
+        }
+        closeText="Chiudi"
+        showConfirm={eventManagementPolicy.canEditAnything}
+      >
+        <div className={styles.organizerEditModal}>
+          <div className={styles.organizerEditIntro}>
+            <PencilLine size={21} aria-hidden="true" />
+            <div>
+              <strong>Solo le informazioni adattabili</strong>
+              <p>Sport, luogo, data, accesso, partecipanti e deposito restano invariati.</p>
+            </div>
+          </div>
+
+          <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDescription}>
+            <span className={styles.organizerEditFieldHead}>
+              <strong>Descrizione</strong>
+              <small>{eventManagementPolicy.canEditDescription ? 'Fino all’inizio' : 'Modifica chiusa'}</small>
+            </span>
+            <textarea
+              rows="4"
+              maxLength="2000"
+              value={organizerEditForm.description}
+              onChange={(changeEvent) => setOrganizerEditForm((current) => ({
+                ...current,
+                description: changeEvent.target.value
+              }))}
+              placeholder="Aggiungi indicazioni utili per i partecipanti..."
+              disabled={!eventManagementPolicy.canEditDescription || organizerEditSubmitting}
+            />
+            <span className={styles.organizerEditFieldFoot}>
+              <small>{organizerEditDescription.length > 0 && organizerEditDescription.length < 20 ? 'Minimo 20 caratteri' : 'Può anche restare vuota'}</small>
+              <small>{organizerEditForm.description.length}/2000</small>
+            </span>
+          </label>
+
+          <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDuration}>
+            <span className={styles.organizerEditFieldHead}>
+              <strong>Tempo di allenamento</strong>
+              <small>{eventManagementPolicy.canEditDuration ? 'Fino a 2 ore prima' : 'Modifica chiusa'}</small>
+            </span>
+            <select
+              value={organizerEditForm.duration_minutes}
+              onChange={(changeEvent) => setOrganizerEditForm((current) => ({
+                ...current,
+                duration_minutes: Number(changeEvent.target.value)
+              }))}
+              disabled={!eventManagementPolicy.canEditDuration || organizerEditSubmitting}
+            >
+              {[30, 45, 60, 75, 90, 120, 150, 180, 240].map((minutes) => (
+                <option key={minutes} value={minutes}>{minutes} minuti</option>
+              ))}
+              {![30, 45, 60, 75, 90, 120, 150, 180, 240].includes(Number(organizerEditForm.duration_minutes)) ? (
+                <option value={organizerEditForm.duration_minutes}>{organizerEditForm.duration_minutes} minuti</option>
+              ) : null}
+            </select>
+            <small>La presenza minima si ricalcola automaticamente.</small>
+          </label>
+
+          {!event.is_personal ? (
+            <fieldset className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditTolerance}>
+              <legend className={styles.organizerEditFieldHead}>
+                <strong>Tolleranza ritardi</strong>
+                <small>
+                  {eventManagementPolicy.canIncreaseToleranceAfterStart
+                    ? 'Puoi solo aumentarla'
+                    : eventManagementPolicy.canEditTolerance
+                      ? '15–30 minuti'
+                      : 'Modifica chiusa'}
+                </small>
+              </legend>
+              <div className={styles.organizerToleranceOptions}>
+                {[15, 20, 30].map((minutes) => {
+                  const optionDisabled = !eventManagementPolicy.canEditTolerance ||
+                    (eventManagementPolicy.hasStarted && minutes <= eventManagementPolicy.currentTolerance);
+                  const selected = Number(organizerEditForm.checkin_grace_minutes) === minutes;
+                  return (
+                    <button
+                      key={minutes}
+                      type="button"
+                      className={selected ? styles.organizerToleranceSelected : ''}
+                      aria-pressed={selected}
+                      disabled={optionDisabled || organizerEditSubmitting}
+                      onClick={() => setOrganizerEditForm((current) => ({
+                        ...current,
+                        checkin_grace_minutes: minutes
+                      }))}
+                    >
+                      <strong>{minutes}</strong>
+                      <span>min</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <small>Dopo l’inizio è consentito soltanto prolungare, entro il limite massimo di 30 minuti.</small>
+            </fieldset>
+          ) : null}
+
+          {!eventManagementPolicy.canEditAnything ? (
+            <p className={styles.organizerEditClosed}>
+              <Clock3 size={18} aria-hidden="true" /> Le finestre di modifica sono terminate. L’evento resta consultabile senza variazioni.
+            </p>
+          ) : organizerEditHasChanges ? (
+            <p className={styles.organizerEditNotice}>
+              I partecipanti riceveranno una notifica con le informazioni cambiate.
+            </p>
+          ) : null}
         </div>
       </Modal>
 

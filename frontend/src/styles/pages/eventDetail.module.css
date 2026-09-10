@@ -2289,6 +2289,170 @@
   font-weight: 750;
 }
 
+.organizerEditModal {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.organizerEditIntro {
+  padding: 0.9rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, rgb(255 255 255 / 0.08));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--primary) 7%, #111311);
+  color: var(--primary);
+}
+
+.organizerEditIntro div,
+.organizerEditIntro p {
+  min-width: 0;
+  margin: 0;
+}
+
+.organizerEditIntro strong {
+  color: #fff;
+  font-size: 0.86rem;
+}
+
+.organizerEditIntro p {
+  margin-top: 0.18rem;
+  color: rgb(255 255 255 / 0.52);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.organizerEditField {
+  min-width: 0;
+  margin: 0;
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.6rem;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 1rem;
+  background: #111311;
+}
+
+.organizerEditField[data-disabled='true'] {
+  opacity: 0.52;
+}
+
+.organizerEditFieldHead {
+  width: 100%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.organizerEditFieldHead small {
+  color: rgb(255 255 255 / 0.4);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.organizerEditField :is(textarea, select) {
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.8rem;
+  background: #090b09;
+  color: #fff;
+}
+
+.organizerEditField textarea {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
+.organizerEditField :is(textarea, select):focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  outline-offset: 1px;
+}
+
+.organizerEditField > small,
+.organizerEditFieldFoot small {
+  color: rgb(255 255 255 / 0.38);
+  font-size: 0.65rem;
+  line-height: 1.4;
+}
+
+.organizerEditFieldFoot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.organizerToleranceOptions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.organizerToleranceOptions button {
+  min-height: 3.5rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.8rem;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.2rem;
+  background: #090b09;
+  color: rgb(255 255 255 / 0.56);
+}
+
+.organizerToleranceOptions button strong {
+  font-size: 1rem;
+}
+
+.organizerToleranceOptions button span {
+  font-size: 0.65rem;
+  font-weight: 750;
+}
+
+.organizerToleranceOptions button.organizerToleranceSelected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #071000;
+  box-shadow: 0 0 1.2rem color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.organizerToleranceOptions button:disabled:not(.organizerToleranceSelected) {
+  opacity: 0.34;
+}
+
+.organizerEditNotice,
+.organizerEditClosed {
+  margin: 0;
+  padding: 0.78rem 0.9rem;
+  border-radius: 0.85rem;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.organizerEditNotice {
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  color: rgb(255 255 255 / 0.66);
+}
+
+.organizerEditClosed {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  background: rgb(255 255 255 / 0.03);
+  color: rgb(255 255 255 / 0.48);
+}
+
+.organizerEditClosed svg {
+  flex: 0 0 auto;
+}
+
 .organizerCancelField > span {
   margin-left: 0.25rem;
   color: rgb(255 255 255 / 0.38);

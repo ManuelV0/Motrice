@@ -46,6 +46,7 @@ const CommunityPage = lazy(() => import('./pages/CommunityPage'));
 const ChatSearchPage = lazy(() => import('./pages/ChatSearchPage'));
 const FriendsPage = lazy(() => import('./pages/FriendsPage'));
 const ProfileVerificationPage = lazy(() => import('./pages/ProfileVerificationPage'));
+const AdminOperationsPage = lazy(() => import('./pages/AdminOperationsPage'));
 const AdminProfileVerificationsPage = lazy(() => import('./pages/AdminProfileVerificationsPage'));
 const WorkoutSessionPage = lazy(() => import('./pages/WorkoutSessionPage'));
 const ExerciseProgressPage = lazy(() => import('./pages/ExerciseProgressPage'));
@@ -104,7 +105,7 @@ function App() {
           <Route path="/game" element={<GameMapPage />} />
           <Route path="/pricing" element={<PricingPage />} />
           <Route path="/convenzioni" element={<ConvenzioniPage />} />
-          <Route path="/admin/convenzioni-generator" element={<ConvenzioneAgreementGeneratorPage />} />
+          <Route path="/admin/convenzioni-generator" element={<AdminVerificationRoute><ConvenzioneAgreementGeneratorPage /></AdminVerificationRoute>} />
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/wallet/credit" element={<CreditWalletPage />} />
@@ -118,10 +119,11 @@ function App() {
           <Route path="/dashboard/plans" element={<MyPlansPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<LoginPage resetPasswordMode />} />
-          <Route path="/admin/coach-applications" element={<AdminCoachApplicationsPage />} />
-          <Route path="/admin/convenzioni-applications" element={<AdminConvenzioniApplicationsPage />} />
+          <Route path="/admin" element={<AdminVerificationRoute><AdminOperationsPage /></AdminVerificationRoute>} />
+          <Route path="/admin/coach-applications" element={<AdminVerificationRoute><AdminCoachApplicationsPage /></AdminVerificationRoute>} />
+          <Route path="/admin/convenzioni-applications" element={<AdminVerificationRoute><AdminConvenzioniApplicationsPage /></AdminVerificationRoute>} />
           <Route path="/admin/verifiche" element={<AdminVerificationRoute><AdminProfileVerificationsPage /></AdminVerificationRoute>} />
-          <Route path="/admin/tutorial" element={<AdminTutorialPage />} />
+          <Route path="/admin/tutorial" element={<AdminVerificationRoute><AdminTutorialPage /></AdminVerificationRoute>} />
           <Route path="/coach/plan" element={<CoachPlanPage />} />
           <Route path="/coach/check-in" element={<CoachCheckInPage />} />
           <Route path="/profile/me" element={<Navigate to="/account" replace />} />

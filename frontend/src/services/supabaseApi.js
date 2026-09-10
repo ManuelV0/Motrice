@@ -596,6 +596,24 @@ function createRemoteMethods(localApi) {
       return fetchEvent(data.id);
     },
 
+    async updateManagedEvent(eventId, payload = {}) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client.rpc('update_managed_event', {
+        target_event_id: String(eventId),
+        requested_description: normalizeText(payload.description),
+        requested_duration_minutes: Math.round(Number(payload.duration_minutes)),
+        requested_grace_minutes: Math.round(Number(payload.checkin_grace_minutes))
+      });
+      throwIfError(error);
+      const updatedEvent = await fetchEvent(eventId);
+      return {
+        success: true,
+        event: updatedEvent,
+        changes: Array.isArray(data?.changes) ? data.changes : []
+      };
+    },
+
     async updateEventCoordinates(eventId, coordinates = {}) {
       const client = requireSupabase();
       const creatorId = requireAuthUserId();
@@ -1386,6 +1404,7 @@ export function createSupabaseApi(localApi) {
       approveEventJoinRequest: requireSecureBackend,
       declineEventJoinRequest: requireSecureBackend,
       cancelEvent: requireSecureBackend,
+      updateManagedEvent: requireSecureBackend,
       completePersonalEvent: requireSecureBackend,
       startEventCheckInSession: requireSecureBackend,
       checkInToEvent: requireSecureBackend,

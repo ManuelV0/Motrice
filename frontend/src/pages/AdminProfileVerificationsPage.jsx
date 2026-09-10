@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   BadgeCheck,
   Check,
   Clock3,
@@ -11,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
 import AdminProfilePhotoReviews from '../components/AdminProfilePhotoReviews';
@@ -143,9 +145,15 @@ function AdminProfileVerificationsPage() {
           <h1>Centro verifiche</h1>
           <span>Accesso riservato all’amministratore Motrice.</span>
         </div>
-        <button type="button" className={styles.refresh} onClick={() => loadRequests(filter)} disabled={loading} aria-label="Aggiorna richieste">
-          <RefreshCw size={18} />
-        </button>
+        <div className={styles.headerActions}>
+          <Link className={styles.backLink} to="/admin" aria-label="Torna al Centro operativo">
+            <ArrowLeft size={18} aria-hidden="true" />
+            <span>Centro operativo</span>
+          </Link>
+          <button type="button" className={styles.refresh} onClick={() => loadRequests(filter)} disabled={loading} aria-label="Aggiorna richieste">
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </header>
 
       <div className={styles.reviewKinds} role="tablist" aria-label="Tipo di verifica">

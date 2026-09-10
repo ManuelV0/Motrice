@@ -20,6 +20,7 @@ import {
   normalizeCheckInGraceMinutes
 } from '../utils/eventLifecycle';
 import { getSystemEventRules } from '../utils/eventCreationRules';
+import { getEventManagementPolicy } from '../utils/eventManagementRules';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
@@ -1552,6 +1553,91 @@ const localApi = {
 
     saveStore(store);
     return withDelay(clone(event));
+  },
+
+  async updateManagedEvent(id, payload = {}) {
+    const store = loadStore();
+    const currentUserId = resolveAuthUserId();
+    const event = ensureEventExists(store, id);
+    if (!isEventOrganizerForUser(store, event, currentUserId)) {
+      throw new Error('Solo l organizzatore può modificare questo evento');
+    }
+
+    const policy = getEventManagementPolicy(event);
+    const description = String(payload.description ?? event.description ?? '').trim();
+    const durationMinutes = Math.round(Number(payload.duration_minutes ?? event.duration_minutes));
+    const graceMinutes = event.is_personal
+      ? 0
+      : Math.round(Number(payload.checkin_grace_minutes ?? event.checkin_grace_minutes));
+    const descriptionChanged = description !== String(event.description || '').trim();
+    const durationChanged = durationMinutes !== Number(event.duration_minutes);
+    const graceChanged = !event.is_personal && graceMinutes !== Number(event.checkin_grace_minutes);
+
+    if (description.length > 0 && description.length < 20) {
+      throw new Error('La descrizione deve contenere almeno 20 caratteri oppure restare vuota');
+    }
+    if (description.length > 2000) throw new Error('La descrizione può contenere massimo 2000 caratteri');
+    if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 360) {
+      throw new Error('La durata deve essere compresa tra 15 e 360 minuti');
+    }
+    if (!event.is_personal && ![15, 20, 30].includes(graceMinutes)) {
+      throw new Error('La tolleranza può essere di 15, 20 o 30 minuti');
+    }
+    if (descriptionChanged && !policy.canEditDescription) {
+      throw new Error('La descrizione non è più modificabile dopo l inizio dell evento');
+    }
+    if (durationChanged && !policy.canEditDuration) {
+      throw new Error('La durata è modificabile fino a 2 ore prima dell inizio');
+    }
+    if (graceChanged && !policy.canEditTolerance) {
+      throw new Error('La tolleranza ritardi non è più modificabile');
+    }
+    if (policy.hasStarted && graceChanged && graceMinutes <= policy.currentTolerance) {
+      throw new Error('Dopo l inizio puoi soltanto aumentare la tolleranza');
+    }
+
+    const changes = [];
+    if (descriptionChanged) {
+      event.description = description;
+      changes.push('descrizione');
+    }
+    if (durationChanged) {
+      event.duration_minutes = durationMinutes;
+      changes.push('durata');
+    }
+    if (graceChanged) {
+      event.checkin_grace_minutes = graceMinutes;
+      changes.push('tolleranza ritardi');
+    }
+
+    if (changes.length > 0) {
+      const systemRules = getSystemEventRules({
+        durationMinutes: event.duration_minutes,
+        isPersonal: event.is_personal,
+        checkInGraceMinutes: event.checkin_grace_minutes
+      });
+      event.minimum_presence_minutes = systemRules.minimumPresenceMinutes;
+      event.checkin_grace_minutes = systemRules.checkInGraceMinutes;
+      const startsAtMs = Date.parse(event.event_datetime || '');
+      if (Number.isFinite(startsAtMs)) {
+        event.ends_at = new Date(startsAtMs + event.duration_minutes * 60 * 1000).toISOString();
+        event.checkin_closes_at = new Date(startsAtMs + event.checkin_grace_minutes * 60 * 1000).toISOString();
+      }
+      event.updated_at = nowIso();
+
+      listEventRsvps(store, event.id)
+        .filter((rsvp) => String(rsvp?.status || '') === 'going' && Number(rsvp?.user_id) !== Number(currentUserId))
+        .forEach((rsvp) => addNotification(store, {
+          target_user_id: rsvp.user_id,
+          type: 'event_updated',
+          title: 'Evento aggiornato',
+          message: `${event.title || event.sport_name}: modifica a ${changes.join(', ')}.`,
+          event_id: event.id
+        }));
+    }
+
+    saveStore(store);
+    return withDelay(clone({ success: true, event, changes }));
   },
 
   async joinEvent(id, payload) {

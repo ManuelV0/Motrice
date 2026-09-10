@@ -535,7 +535,7 @@ function AgendaPage() {
 
   function openFutureAction(event) {
     if (event.created_by === 'me') {
-      openEvent(event);
+      navigate(`/events/${event.id}?manage=1`);
       return;
     }
     navigate(`/chat/event_${event.id}`);

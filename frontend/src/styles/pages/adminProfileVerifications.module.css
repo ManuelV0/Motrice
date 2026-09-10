@@ -46,6 +46,41 @@
   font-size: 0.82rem;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+}
+
+.backLink {
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 0.9rem;
+  border: 1px solid #343434;
+  border-radius: 0.95rem;
+  color: #e9e9e9;
+  background: #1e1e1e;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.backLink:hover,
+.backLink:focus-visible {
+  border-color: rgb(198 255 0 / 55%);
+  color: #c6ff00;
+  background: rgb(198 255 0 / 7%);
+}
+
+.backLink:focus-visible {
+  outline: 2px solid rgb(198 255 0 / 55%);
+  outline-offset: 2px;
+}
+
 .refresh {
   width: 3rem;
   height: 3rem;
@@ -569,7 +604,9 @@
 }
 
 @media (max-width: 430px) {
-  .header { padding: 1rem; border-radius: 1.15rem; }
+  .header { flex-wrap: wrap; padding: 1rem; border-radius: 1.15rem; }
+  .headerActions { width: 100%; }
+  .backLink { flex: 1; }
   .headingCopy h1 { font-size: 1.8rem; }
   .headingCopy > span { max-width: 16rem; }
   .privatePill { max-width: 7.8rem; white-space: normal; text-align: center; }

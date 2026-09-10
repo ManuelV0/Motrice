@@ -78,7 +78,7 @@ function Navbar({ forceMobile = false }) {
         ...drawerSections,
         {
           title: 'Amministrazione',
-          items: [{ to: '/admin/verifiche', label: 'Centro verifiche', icon: ShieldCheck }]
+          items: [{ to: '/admin', label: 'Centro operativo', icon: ShieldCheck }]
         }
       ]
     : drawerSections;
