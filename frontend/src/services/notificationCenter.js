@@ -1,6 +1,5 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { PushNotifications } from '@capacitor/push-notifications';
 import { api } from './api';
 import {
   buildEventReminderPlan,
@@ -13,6 +12,19 @@ import {
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
 const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
+const REMOTE_PUSH_ENABLED = String(import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED || '').toLowerCase() === 'true';
+
+let pushNotificationsPromise;
+
+async function getPushNotifications() {
+  if (!REMOTE_PUSH_ENABLED) return null;
+  if (!pushNotificationsPromise) {
+    pushNotificationsPromise = import('@capacitor/push-notifications')
+      .then(({ PushNotifications }) => PushNotifications)
+      .catch(() => null);
+  }
+  return pushNotificationsPromise;
+}
 
 const CHANNELS = [
   {
@@ -91,9 +103,12 @@ export function consumePendingNotificationPath() {
 
 async function createNotificationChannels() {
   if (!isNativeDevice() || Capacitor.getPlatform() !== 'android') return;
+  const pushNotifications = await getPushNotifications();
   await Promise.all(CHANNELS.map(async (channel) => {
     await LocalNotifications.createChannel(channel).catch(() => undefined);
-    await PushNotifications.createChannel(channel).catch(() => undefined);
+    if (pushNotifications) {
+      await pushNotifications.createChannel(channel).catch(() => undefined);
+    }
   }));
 }
 
@@ -165,17 +180,23 @@ export async function scheduleEventReminders() {
 }
 
 export async function requestNotificationPermission() {
-  if (!isNativeDevice()) return { display: 'unsupported' };
-  const local = await LocalNotifications.requestPermissions();
-  const push = await PushNotifications.requestPermissions().catch(() => ({ receive: 'denied' }));
+  if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
+  const local = await LocalNotifications.requestPermissions().catch(() => ({ display: 'denied' }));
+  const pushNotifications = await getPushNotifications();
+  const push = pushNotifications
+    ? await pushNotifications.requestPermissions().catch(() => ({ receive: 'denied' }))
+    : { receive: 'disabled' };
   return { display: local.display, receive: push.receive };
 }
 
 export async function getNotificationPermissionStatus() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
+  const pushNotifications = await getPushNotifications();
   const [local, push] = await Promise.all([
     LocalNotifications.checkPermissions().catch(() => ({ display: 'denied' })),
-    PushNotifications.checkPermissions().catch(() => ({ receive: 'denied' }))
+    pushNotifications
+      ? pushNotifications.checkPermissions().catch(() => ({ receive: 'denied' }))
+      : Promise.resolve({ receive: 'disabled' })
   ]);
   return { display: local.display, receive: push.receive };
 }
@@ -185,33 +206,45 @@ export async function initializeNotificationCenter({ onOpen } = {}) {
   await createNotificationChannels();
 
   const handles = [];
-  handles.push(await LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
-    forwardNotificationPath(notification?.extra || notification, onOpen);
-  }));
-  handles.push(await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
-    forwardNotificationPath({ ...notification, payload: notification?.data }, onOpen);
-  }));
-  handles.push(await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-    showPushWhileOpen(notification).catch(() => undefined);
-  }));
-  handles.push(await PushNotifications.addListener('registration', ({ value }) => {
-    api.registerPushDevice({
-      token: value,
-      platform: Capacitor.getPlatform(),
-      deviceLabel: navigator.userAgent || 'Motrice mobile'
-    }).catch(() => undefined);
-  }));
-  handles.push(await PushNotifications.addListener('registrationError', () => {
-    // I promemoria locali restano operativi anche senza configurazione FCM/APNs.
-  }));
+  const localActionHandle = await LocalNotifications
+    .addListener('localNotificationActionPerformed', ({ notification }) => {
+      forwardNotificationPath(notification?.extra || notification, onOpen);
+    })
+    .catch(() => null);
+  if (localActionHandle) handles.push(localActionHandle);
+
+  const pushNotifications = await getPushNotifications();
+  if (pushNotifications) {
+    const pushHandles = await Promise.all([
+      pushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
+        forwardNotificationPath({ ...notification, payload: notification?.data }, onOpen);
+      }).catch(() => null),
+      pushNotifications.addListener('pushNotificationReceived', (notification) => {
+        showPushWhileOpen(notification).catch(() => undefined);
+      }).catch(() => null),
+      pushNotifications.addListener('registration', ({ value }) => {
+        api.registerPushDevice({
+          token: value,
+          platform: Capacitor.getPlatform(),
+          deviceLabel: navigator.userAgent || 'Motrice mobile'
+        }).catch(() => undefined);
+      }).catch(() => null),
+      pushNotifications.addListener('registrationError', () => {
+        // I promemoria locali restano operativi anche senza configurazione FCM/APNs.
+      }).catch(() => null)
+    ]);
+    handles.push(...pushHandles.filter(Boolean));
+  }
 
   const currentPermissions = await getNotificationPermissionStatus();
-  const permissions = ['prompt', 'prompt-with-rationale'].includes(currentPermissions.display) ||
-    ['prompt', 'prompt-with-rationale'].includes(currentPermissions.receive)
-    ? await requestNotificationPermission()
-    : currentPermissions;
-  if (permissions.receive === 'granted') await PushNotifications.register().catch(() => undefined);
-  if (permissions.display === 'granted') await scheduleEventReminders().catch(() => undefined);
+  // Non mostrare richieste di sistema durante l'accesso: l'utente le attiva
+  // volontariamente dalla pagina Notifiche. Questo mantiene il bootstrap sicuro.
+  if (pushNotifications && currentPermissions.receive === 'granted') {
+    await pushNotifications.register().catch(() => undefined);
+  }
+  if (currentPermissions.display === 'granted') {
+    await scheduleEventReminders().catch(() => undefined);
+  }
 
   return () => {
     handles.forEach((handle) => handle?.remove?.());
