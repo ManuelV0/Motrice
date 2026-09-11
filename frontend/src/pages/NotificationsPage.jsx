@@ -27,7 +27,11 @@ import {
   scheduleEventReminders
 } from '../services/notificationCenter';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '../utils/notificationRules';
+import { withTimeout } from '../utils/asyncTimeout';
 import styles from '../styles/pages/notifications.module.css';
+
+const NOTIFICATIONS_LOAD_TIMEOUT_MS = 8000;
+const SECONDARY_LOAD_TIMEOUT_MS = 4500;
 
 const typeIcons = {
   rsvp_confirmed: CheckCircle2,
@@ -270,25 +274,56 @@ function NotificationsPage() {
   const [permission, setPermission] = useState({ display: 'unsupported', receive: 'unsupported' });
   const [savingPreference, setSavingPreference] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const loadRequestRef = useRef(0);
 
   usePageMeta({
     title: 'Notifiche | Motrice',
     description: 'Centro notifiche Motrice: eventi, sicurezza, chat, wallet e account.'
   });
 
-  async function load({ showLoading = false } = {}) {
+  async function load(options = {}) {
+    const showLoading = Boolean(options?.showLoading);
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
     if (showLoading) setLoading(true);
+    setLoadError('');
+
+    const preferencesRequest = withTimeout(
+      api.getNotificationPreferences(),
+      SECONDARY_LOAD_TIMEOUT_MS,
+      'Preferenze non disponibili'
+    ).catch(() => DEFAULT_NOTIFICATION_PREFERENCES);
+    const permissionRequest = withTimeout(
+      getNotificationPermissionStatus(),
+      SECONDARY_LOAD_TIMEOUT_MS,
+      'Permessi non disponibili'
+    ).catch(() => ({ display: 'unsupported', receive: 'unsupported' }));
+
     try {
-      const [items, nextPreferences, nextPermission] = await Promise.all([
-        api.listNotifications().catch(() => []),
-        api.getNotificationPreferences().catch(() => DEFAULT_NOTIFICATION_PREFERENCES),
-        getNotificationPermissionStatus().catch(() => ({ display: 'unsupported', receive: 'unsupported' }))
-      ]);
-      setNotifications(items);
+      const items = await withTimeout(
+        api.listNotifications(),
+        NOTIFICATIONS_LOAD_TIMEOUT_MS,
+        'Caricamento notifiche non disponibile'
+      );
+      if (loadRequestRef.current === requestId) {
+        setNotifications(Array.isArray(items) ? items : []);
+      }
+    } catch {
+      if (loadRequestRef.current === requestId) {
+        setLoadError('Non è stato possibile aggiornare le notifiche. Controlla la connessione e riprova.');
+      }
+    } finally {
+      if (loadRequestRef.current === requestId) setLoading(false);
+    }
+
+    const [nextPreferences, nextPermission] = await Promise.all([
+      preferencesRequest,
+      permissionRequest
+    ]);
+    if (loadRequestRef.current === requestId) {
       setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...nextPreferences });
       setPermission(nextPermission);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -355,6 +390,8 @@ function NotificationsPage() {
           <p className={styles.subtitle}>
             {loading
               ? 'Aggiornamento in corso…'
+              : loadError
+                ? 'Aggiornamento non riuscito. Puoi riprovare.'
               : unreadCount > 0
                 ? `${unreadCount} ${unreadCount === 1 ? 'aggiornamento da leggere' : 'aggiornamenti da leggere'}`
                 : 'Sei al passo con tutte le attività.'}
@@ -479,6 +516,13 @@ function NotificationsPage() {
                 <span className={styles.skeletonCopy}><i /><i /><i /></span>
               </div>
             ))
+          ) : loadError && notifications.length === 0 ? (
+            <div className={styles.emptyState} role="alert">
+              <span><BellOff size={24} aria-hidden="true" /></span>
+              <h3>Notifiche non disponibili</h3>
+              <p>{loadError}</p>
+              <button type="button" onClick={() => load({ showLoading: true })}>Riprova</button>
+            </div>
           ) : notifications.length === 0 ? (
             <div className={styles.emptyState}>
               <span><BellOff size={24} aria-hidden="true" /></span>

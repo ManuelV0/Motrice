@@ -9,6 +9,7 @@ import {
   isNotificationEnabled,
   stableNotificationId
 } from '../utils/notificationRules';
+import { withTimeout } from '../utils/asyncTimeout';
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
 const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
@@ -17,6 +18,7 @@ const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
 const REMOTE_PUSH_ENABLED = String(
   import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED ?? 'true'
 ).toLowerCase() !== 'false';
+const NATIVE_PERMISSION_TIMEOUT_MS = 4000;
 
 let pushNotificationsPromise;
 
@@ -195,11 +197,23 @@ export async function requestNotificationPermission() {
 
 export async function getNotificationPermissionStatus() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
-  const pushNotifications = await getPushNotifications();
+  const pushNotifications = await withTimeout(
+    getPushNotifications(),
+    NATIVE_PERMISSION_TIMEOUT_MS,
+    'Modulo push non disponibile'
+  ).catch(() => null);
   const [local, push] = await Promise.all([
-    LocalNotifications.checkPermissions().catch(() => ({ display: 'denied' })),
+    withTimeout(
+      LocalNotifications.checkPermissions(),
+      NATIVE_PERMISSION_TIMEOUT_MS,
+      'Permessi notifiche locali non disponibili'
+    ).catch(() => ({ display: 'denied' })),
     pushNotifications
-      ? pushNotifications.checkPermissions().catch(() => ({ receive: 'denied' }))
+      ? withTimeout(
+        pushNotifications.checkPermissions(),
+        NATIVE_PERMISSION_TIMEOUT_MS,
+        'Permessi push non disponibili'
+      ).catch(() => ({ receive: 'denied' }))
       : Promise.resolve({ receive: 'disabled' })
   ]);
   return { display: local.display, receive: push.receive };
