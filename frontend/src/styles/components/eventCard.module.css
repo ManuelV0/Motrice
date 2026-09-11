@@ -178,6 +178,13 @@
   white-space: nowrap;
 }
 
+.locationRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.42rem;
+}
+
 .location {
   display: flex;
   align-items: center;
@@ -195,6 +202,35 @@
   flex: 0 0 auto;
   color: #c6ff00;
 }
+
+.location > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.venueAccess {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 52%;
+  min-height: 1.6rem;
+  padding: 0.22rem 0.48rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+  border: 1px solid rgb(32 217 167 / 38%);
+  border-radius: 999px;
+  background: rgb(32 217 167 / 10%);
+  color: #55e5bd;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.venueAccess svg { flex: 0 0 auto; }
 
 .metaRow {
   display: flex;
@@ -496,6 +532,7 @@
 }
 
 .context_map .image {
+  object-position: 56% center;
   filter: brightness(0.92) saturate(1.08) contrast(1.02);
 }
 

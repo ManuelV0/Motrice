@@ -4,12 +4,14 @@ import {
   BookmarkCheck,
   ChevronRight,
   Clock3,
+  LockKeyhole,
   MapPin,
   ShieldCheck,
   Users
 } from 'lucide-react';
 import Card from './Card';
 import { getSportHeroImage } from '../utils/sportImages';
+import { getGymAccessPresentation } from '../utils/eventVenueAccess';
 import styles from '../styles/components/eventCard.module.css';
 
 function formatEventDate(value) {
@@ -72,6 +74,7 @@ function EventCard({
   const title = event.title || event.sport_name || 'Evento Motrice';
   const location = event.location_name || event.city || 'Luogo da definire';
   const detailHref = `/events/${event.id}`;
+  const gymAccess = getGymAccessPresentation(event);
 
   const mainContent = (
     <>
@@ -102,7 +105,14 @@ function EventCard({
           <small>{date.day}</small>
         </span>
         <strong className={styles.title}>{title}</strong>
-        <span className={styles.location}><MapPin size={14} aria-hidden="true" /> {location}</span>
+        <span className={styles.locationRow}>
+          <span className={styles.location}><MapPin size={14} aria-hidden="true" /><span>{location}</span></span>
+          {gymAccess ? (
+            <span className={styles.venueAccess}>
+              <LockKeyhole size={13} aria-hidden="true" /> {gymAccess.shortLabel}
+            </span>
+          ) : null}
+        </span>
         {renderedMetaItems.length ? (
           <span className={styles.metaRow}>
             {renderedMetaItems.map((item, index) => {

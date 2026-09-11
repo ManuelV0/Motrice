@@ -22,6 +22,7 @@ import {
 import { getSystemEventRules } from '../utils/eventCreationRules';
 import { getEventManagementPolicy } from '../utils/eventManagementRules';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
+import { normalizeGymAccessPolicy, normalizeVenueType } from '../utils/eventVenueAccess';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
@@ -1268,6 +1269,10 @@ function enrichEvent(event, store, origin) {
     completion_xp: Number(event.completion_xp ?? 50),
     review_bonus_xp: Number(event.review_bonus_xp ?? 25),
     audience: String(event.audience || 'mixed'),
+    min_age: Number(event.min_age || 18),
+    max_age: Number(event.max_age || 99),
+    venue_type: normalizeVenueType(event.venue_type),
+    gym_access_policy: normalizeGymAccessPolicy(event.venue_type, event.gym_access_policy),
     participation_protection: event.participation_protection !== false,
     visibility: String(event.visibility || 'public'),
     join_policy: String(event.join_policy || 'open'),
@@ -1565,6 +1570,10 @@ const localApi = {
       review_bonus_xp: systemRules.reviewBonusXp,
       status: 'scheduled',
       audience: String(payload.audience || 'mixed'),
+      min_age: Number(payload.min_age || 18),
+      max_age: Number(payload.max_age || 99),
+      venue_type: normalizeVenueType(payload.venue_type),
+      gym_access_policy: normalizeGymAccessPolicy(payload.venue_type, payload.gym_access_policy),
       participation_protection: !Boolean(payload.is_personal),
       visibility: String(payload.visibility || 'public'),
       join_policy: String(payload.join_policy || 'open'),

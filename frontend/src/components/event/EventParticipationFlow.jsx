@@ -198,7 +198,8 @@ function EventParticipationFlow({
   requestLocation,
   showToast,
   onEventRefresh,
-  managementOnly = false
+  managementOnly = false,
+  compactEmbedded = false
 }) {
   const [progress, setProgress] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -778,7 +779,7 @@ function EventParticipationFlow({
 
   return (
     <>
-      <Card subtle className={`${styles.flowCard} ${isOrganizer ? styles.organizerFlowCard : ''} ${managementOnly ? styles.managementOnlyCard : ''}`}>
+      <Card subtle className={`${styles.flowCard} ${isOrganizer ? styles.organizerFlowCard : ''} ${managementOnly ? styles.managementOnlyCard : ''} ${compactEmbedded ? styles.compactEmbeddedCard : ''}`}>
         {!managementOnly ? <div className={styles.lifecycleStatus} data-open={timing.isCheckInOpen ? 'true' : 'false'}>
           <Clock3 size={18} aria-hidden="true" />
           <div>
@@ -970,7 +971,7 @@ function EventParticipationFlow({
           </>
         ) : (
           <>
-            <section className={styles.organizerHero} aria-label="Dashboard organizer">
+            {!compactEmbedded ? <section className={styles.organizerHero} aria-label="Dashboard organizer">
               <div className={styles.organizerHeroTitle}>
                 <div>
                   <h2>{managementOnly ? 'Gestisci partecipanti' : <>Sei<br />l&apos;organizzatore</>}</h2>
@@ -986,7 +987,20 @@ function EventParticipationFlow({
                   Aggiorna
                 </Button>
               </div>
-            </section>
+            </section> : null}
+
+            {compactEmbedded ? (
+              <div className={styles.compactManagementOverview} aria-label="Riepilogo gestione partecipanti">
+                <div className={joinRequests.length > 0 ? styles.compactManagementPending : ''}>
+                  <span>Da approvare</span>
+                  <strong>{joinRequests.length}</strong>
+                </div>
+                <div>
+                  <span>Posti occupati</span>
+                  <strong>{validationSummary.total}/{event.max_participants || '∞'}</strong>
+                </div>
+              </div>
+            ) : null}
 
             {event.join_policy === 'approval' ? (
               <section className={styles.requestSection} aria-label="Richieste di partecipazione">

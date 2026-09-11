@@ -5,6 +5,7 @@ import { assertProfileVerified } from './profileVerification';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../utils/eventParticipationState';
 import { getSystemEventRules } from '../utils/eventCreationRules';
+import { normalizeGymAccessPolicy, normalizeVenueType } from '../utils/eventVenueAccess';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -394,6 +395,10 @@ function normalizeEvent(rawEvent, context, filters = {}) {
       0
     ),
     audience: rawEvent.audience || 'mixed',
+    min_age: Number(rawEvent.min_age || 18),
+    max_age: Number(rawEvent.max_age || 99),
+    venue_type: normalizeVenueType(rawEvent.venue_type),
+    gym_access_policy: normalizeGymAccessPolicy(rawEvent.venue_type, rawEvent.gym_access_policy),
     participation_protection: rawEvent.participation_protection !== false,
     visibility: rawEvent.visibility || 'public',
     join_policy: rawEvent.join_policy || 'open',
@@ -584,6 +589,10 @@ function createRemoteMethods(localApi) {
           completion_xp: systemRules.completionXp,
           review_bonus_xp: systemRules.reviewBonusXp,
           audience: payload.audience || 'mixed',
+          min_age: Number(payload.min_age || 18),
+          max_age: Number(payload.max_age || 99),
+          venue_type: normalizeVenueType(payload.venue_type),
+          gym_access_policy: normalizeGymAccessPolicy(payload.venue_type, payload.gym_access_policy),
           participation_protection: !payload.is_personal,
           visibility: payload.visibility || 'public',
           join_policy: payload.join_policy || 'open',

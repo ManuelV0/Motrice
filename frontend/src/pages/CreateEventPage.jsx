@@ -43,12 +43,18 @@ import ContextInfoButton from '../components/ContextInfoButton';
 import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
-import { geocodeAddress, geocodeEventLocation, reverseGeocodeCoordinates } from '../services/geocoding';
+import { geocodeEventLocation, reverseGeocodeCoordinates, searchLocations } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
 import {
   getSystemEventRules,
   GROUP_CHECK_IN_GRACE_MINUTES
 } from '../utils/eventCreationRules';
+import {
+  GYM_ACCESS_OPTIONS,
+  VENUE_TYPE_GYM,
+  VENUE_TYPE_STANDARD,
+  getGymAccessPresentation
+} from '../utils/eventVenueAccess';
 import {
   ensurePersonalWorkoutPlanRemote,
   listAvailablePersonalWorkoutPlans
@@ -73,6 +79,8 @@ const initialState = {
   review_bonus_xp: initialGroupRules.reviewBonusXp,
   max_participants: 8,
   audience: 'mixed',
+  min_age: 18,
+  max_age: 99,
   participation_protection: true,
   visibility: 'public',
   join_policy: 'open',
@@ -81,6 +89,8 @@ const initialState = {
   location_name: '',
   lat: '',
   lng: '',
+  venue_type: VENUE_TYPE_STANDARD,
+  gym_access_policy: null,
   description: '',
   scheda_id: null,
   has_route: false,
@@ -147,7 +157,7 @@ const CREATE_SPORT_ORDER = [
 ];
 
 const STEP_ERROR_FIELDS = {
-  1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants', 'audience'],
+  1: ['title', 'sport_id', 'event_datetime', 'duration_minutes', 'max_participants', 'audience', 'min_age', 'max_age'],
   2: [
     'city',
     'location_name',
@@ -485,6 +495,7 @@ function CreateEventPage() {
   const [manualRouteSelection, setManualRouteSelection] = useState(false);
   const [locationResolving, setLocationResolving] = useState(false);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [locationSearchResults, setLocationSearchResults] = useState([]);
   const [locationMapRevision, setLocationMapRevision] = useState(0);
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [locationConfirmed, setLocationConfirmed] = useState(false);
@@ -778,9 +789,11 @@ function CreateEventPage() {
     if (['city', 'location_name', 'lat', 'lng'].includes(key)) setLocationConfirmed(false);
     setErrors((prev) => {
       const errorKey = key === 'lat' || key === 'lng' ? 'coordinates' : key;
-      if (!prev[errorKey]) return prev;
+      const linkedAgeField = key === 'min_age' ? 'max_age' : key === 'max_age' ? 'min_age' : '';
+      if (!prev[errorKey] && (!linkedAgeField || !prev[linkedAgeField])) return prev;
       const next = { ...prev };
       delete next[errorKey];
+      if (linkedAgeField) delete next[linkedAgeField];
       return next;
     });
   }
@@ -949,8 +962,14 @@ function CreateEventPage() {
   }
 
   function setLocationMode(hasRoute) {
-    setForm((prev) => ({ ...prev, has_route: hasRoute }));
+    setForm((prev) => ({
+      ...prev,
+      has_route: hasRoute,
+      venue_type: hasRoute ? VENUE_TYPE_STANDARD : prev.venue_type,
+      gym_access_policy: hasRoute ? null : prev.gym_access_policy
+    }));
     setLocationConfirmed(false);
+    setLocationSearchResults([]);
     clearRouteFieldErrors();
     if (hasRoute) {
       setLocationSelectionMessage('Tocca la mappa per impostare partenza, tappe e arrivo.');
@@ -989,41 +1008,22 @@ function CreateEventPage() {
     }
 
     setLocationResolving(true);
-    setLocationSelectionMessage('Cerco il luogo e centro la mappa...');
+    setLocationSearchResults([]);
+    setLocationSelectionMessage('Cerco il nome della palestra, centri sportivi e indirizzi vicini...');
     try {
-      const result = await geocodeAddress(query);
-      if (form.has_route) {
-        let resolvedAddress = null;
-        try {
-          resolvedAddress = await reverseGeocodeCoordinates(result.lat, result.lng);
-        } catch {
-          resolvedAddress = null;
-        }
-        const startLabel = resolvedAddress?.locationName || query;
-        setForm((prev) => ({
-          ...prev,
-          has_route: true,
-          lat: String(result.lat),
-          lng: String(result.lng),
-          city: resolvedAddress?.city || prev.city,
-          location_name: startLabel,
-          route_name: prev.route_name || `${selectedSport?.name || 'Percorso'} ${resolvedAddress?.city || query}`,
-          route_from: startLabel,
-          route_to: '',
-          route_from_lat: String(result.lat),
-          route_from_lng: String(result.lng),
-          route_to_lat: '',
-          route_to_lng: '',
-          route_distance_km: '',
-          route_points: [[result.lat, result.lng]]
-        }));
-        setManualRouteSelection(true);
-        setRoutePicking(true);
-        setLocationSelectionMessage('Partenza impostata. Tocca la mappa per scegliere l’arrivo.');
-      } else {
-        await resolveSelectedCoordinates(result, { source: 'search' });
-      }
-      setLocationMapRevision((revision) => revision + 1);
+      const searchQuery = form.city && !query.includes(',')
+        ? `${query}, ${form.city}`
+        : query;
+      const results = await searchLocations(searchQuery, {
+        center: userLocationCoords || locationPreview,
+        limit: 6,
+        radiusKm: 30
+      });
+      if (!results.length) throw new Error(`Nessun luogo trovato per “${query}”`);
+      setLocationSearchResults(results);
+      setLocationSelectionMessage(
+        `${results.length} ${results.length === 1 ? 'risultato trovato' : 'risultati trovati'}. Seleziona il luogo corretto.`
+      );
     } catch (error) {
       const message = error.message || 'Luogo non trovato';
       setLocationSelectionMessage(message);
@@ -1031,6 +1031,56 @@ function CreateEventPage() {
     } finally {
       setLocationResolving(false);
     }
+  }
+
+  async function selectLocationSearchResult(result) {
+    if (!result) return;
+    const placeName = result.locationName || String(result.label || '').split(',')[0] || locationSearchQuery;
+    setLocationSearchQuery(placeName);
+    setLocationSearchResults([]);
+    setLocationConfirmed(false);
+
+    if (form.has_route) {
+      setForm((prev) => ({
+        ...prev,
+        has_route: true,
+        venue_type: VENUE_TYPE_STANDARD,
+        gym_access_policy: null,
+        lat: String(result.lat),
+        lng: String(result.lng),
+        city: result.city || prev.city,
+        location_name: placeName,
+        route_name: prev.route_name || `${selectedSport?.name || 'Percorso'} ${result.city || placeName}`,
+        route_from: placeName,
+        route_to: '',
+        route_from_lat: String(result.lat),
+        route_from_lng: String(result.lng),
+        route_to_lat: '',
+        route_to_lng: '',
+        route_distance_km: '',
+        route_points: [[result.lat, result.lng]]
+      }));
+      setManualRouteSelection(true);
+      setRoutePicking(true);
+      setLocationMapRevision((revision) => revision + 1);
+      setLocationSelectionMessage(`${placeName} impostato come partenza. Tocca la mappa per scegliere l’arrivo.`);
+      showToast('Luogo di partenza selezionato', 'success');
+      return;
+    }
+
+    await resolveSelectedCoordinates(result, { source: 'search' });
+    setForm((prev) => ({
+      ...prev,
+      city: result.city || prev.city,
+      location_name: placeName,
+      venue_type: result.isSportFacility ? VENUE_TYPE_GYM : VENUE_TYPE_STANDARD,
+      gym_access_policy: result.isSportFacility ? (prev.gym_access_policy || GYM_ACCESS_OPTIONS[0].value) : null
+    }));
+    setLocationSelectionMessage(
+      result.isSportFacility
+        ? `${placeName} riconosciuta come struttura sportiva. Scegli la condizione di accesso e conferma il punto.`
+        : `${placeName} selezionato. Controlla il pin e conferma il punto.`
+    );
   }
 
   function startRoutePointSelection() {
@@ -1168,7 +1218,13 @@ function CreateEventPage() {
     setLocationResolving(true);
     setLocationConfirmed(false);
     setLocationSelectionMessage('Pin centrato. Sto recuperando l’indirizzo...');
-    setForm((prev) => ({ ...prev, lat: String(lat), lng: String(lng) }));
+    setForm((prev) => ({
+      ...prev,
+      lat: String(lat),
+      lng: String(lng),
+      venue_type: source === 'search' ? prev.venue_type : VENUE_TYPE_STANDARD,
+      gym_access_policy: source === 'search' ? prev.gym_access_policy : null
+    }));
     if (source !== 'map') {
       setLocationMapRevision((revision) => revision + 1);
     }
@@ -1251,6 +1307,16 @@ function CreateEventPage() {
     }
     if (!['mixed', 'male', 'female'].includes(form.audience)) {
       nextErrors.audience = 'Scegli la categoria dell evento';
+    }
+    const minAge = Number(form.min_age);
+    const maxAge = Number(form.max_age);
+    if (!Number.isInteger(minAge) || minAge < 18 || minAge > 99) {
+      nextErrors.min_age = 'Età minima tra 18 e 99 anni';
+    }
+    if (!Number.isInteger(maxAge) || maxAge < 18 || maxAge > 99) {
+      nextErrors.max_age = 'Età massima tra 18 e 99 anni';
+    } else if (Number.isInteger(minAge) && minAge > maxAge) {
+      nextErrors.max_age = 'L’età massima deve essere uguale o superiore alla minima';
     }
     if (!['public', 'private'].includes(form.visibility)) {
       nextErrors.visibility = 'Scegli la visibilita dell evento';
@@ -1366,8 +1432,14 @@ function CreateEventPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
-  async function onSubmit(event) {
+  function onWizardSubmit(event) {
     event.preventDefault();
+    if (activeStep < WIZARD_STEPS.length) {
+      goToNextStep();
+    }
+  }
+
+  async function publishEvent() {
     if (submitting || !validate()) return;
 
     setSubmitting(true);
@@ -1429,6 +1501,8 @@ function CreateEventPage() {
         review_bonus_xp: systemRules.reviewBonusXp,
         max_participants: Number(form.max_participants),
         audience: form.audience,
+        min_age: Number(form.min_age),
+        max_age: Number(form.max_age),
         participation_protection: !form.is_personal,
         visibility: form.visibility,
         join_policy: form.join_policy,
@@ -1526,7 +1600,7 @@ function CreateEventPage() {
         )}
       </header>
 
-      <form className={styles.formCard} onSubmit={onSubmit} noValidate>
+      <form className={styles.formCard} onSubmit={onWizardSubmit} noValidate>
         <div className={styles.stepProgress} aria-label={`Passaggio ${activeStep} di ${WIZARD_STEPS.length}`}>
           {WIZARD_STEPS.map((step) => (
             <span
@@ -1817,7 +1891,7 @@ function CreateEventPage() {
                       aria-pressed={selected}
                       onClick={() => setField('audience', option.value)}
                     >
-                      <Icon size={24} aria-hidden="true" />
+                      <Icon size={18} aria-hidden="true" />
                       <strong>{option.label}</strong>
                     </button>
                   );
@@ -1827,6 +1901,56 @@ function CreateEventPage() {
                 {AUDIENCE_OPTIONS.find((option) => option.value === form.audience)?.copy}
               </p>
               {errors.audience && <span className="error">{errors.audience}</span>}
+            </div>
+
+            <div className={styles.ageSection}>
+              <div className={styles.sectionLabelRow}>
+                <span>Età partecipanti</span>
+              </div>
+              <div
+                className={`${styles.ageRange} ${errors.min_age || errors.max_age ? styles.invalidCard : ''}`}
+                style={{
+                  '--age-min-position': `${((Number(form.min_age) - 18) / 81) * 100}%`,
+                  '--age-max-position': `${((Number(form.max_age) - 18) / 81) * 100}%`
+                }}
+              >
+                <div className={styles.ageRangeValues} aria-live="polite">
+                  <span>Da <strong>{form.min_age}</strong> anni</span>
+                  <span>A <strong>{form.max_age}</strong> anni</span>
+                </div>
+                <div className={styles.ageSlider}>
+                  <span className={styles.ageSliderTrack} aria-hidden="true"><i /></span>
+                  <input
+                    className={Number(form.min_age) >= Number(form.max_age) - 4 ? styles.ageSliderFront : ''}
+                    type="range"
+                    min="18"
+                    max="99"
+                    step="1"
+                    value={form.min_age}
+                    onChange={(event) => {
+                      const nextMinimum = Math.min(Number(event.target.value), Number(form.max_age));
+                      setField('min_age', nextMinimum);
+                    }}
+                    aria-label="Età minima dei partecipanti"
+                    aria-valuetext={`${form.min_age} anni`}
+                  />
+                  <input
+                    type="range"
+                    min="18"
+                    max="99"
+                    step="1"
+                    value={form.max_age}
+                    onChange={(event) => {
+                      const nextMaximum = Math.max(Number(event.target.value), Number(form.min_age));
+                      setField('max_age', nextMaximum);
+                    }}
+                    aria-label="Età massima dei partecipanti"
+                    aria-valuetext={`${form.max_age} anni`}
+                  />
+                </div>
+              </div>
+              {errors.min_age && <span className="error">{errors.min_age}</span>}
+              {errors.max_age && <span className="error">{errors.max_age}</span>}
             </div>
           </fieldset>
         ) : null}
@@ -1874,20 +1998,45 @@ function CreateEventPage() {
               <Search size={19} aria-hidden="true" />
               <input
                 value={locationSearchQuery}
-                onChange={(event) => setLocationSearchQuery(event.target.value)}
+                onChange={(event) => {
+                  setLocationSearchQuery(event.target.value);
+                  setLocationSearchResults([]);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
                     void searchLocationForMode();
                   }
                 }}
-                placeholder={form.has_route ? 'Cerca il luogo di partenza' : 'Cerca parco, palestra o indirizzo'}
+                placeholder={form.has_route ? 'Cerca il luogo di partenza' : 'Nome palestra, centro sportivo o indirizzo'}
                 aria-label={form.has_route ? 'Cerca il luogo di partenza' : 'Cerca il punto d’incontro'}
               />
               <button type="button" disabled={locationResolving} onClick={() => void searchLocationForMode()}>
                 Cerca
               </button>
             </div>
+
+            {locationSearchResults.length ? (
+              <div className={styles.locationSearchResults} aria-label="Risultati ricerca luoghi">
+                {locationSearchResults.map((result, index) => (
+                  <button
+                    key={`${result.lat}:${result.lng}:${index}`}
+                    type="button"
+                    onClick={() => void selectLocationSearchResult(result)}
+                    aria-label={`Seleziona ${result.locationName || result.label}`}
+                  >
+                    <span className={result.isSportFacility ? styles.locationSearchSportIcon : ''}>
+                      {result.isSportFacility ? <Dumbbell size={18} aria-hidden="true" /> : <MapPin size={18} aria-hidden="true" />}
+                    </span>
+                    <span>
+                      <strong>{result.locationName || String(result.label || '').split(',')[0]}</strong>
+                      <small>{result.label}</small>
+                    </span>
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             {!form.has_route ? (
               <div className={styles.locationFlowGuide} aria-label="Come scegliere il punto d’incontro">
@@ -2091,6 +2240,41 @@ function CreateEventPage() {
                   </button>
                 </div>
               )}
+
+              {!form.has_route && form.venue_type === VENUE_TYPE_GYM ? (
+                <section className={styles.gymAccessCard} aria-labelledby="gym-access-title">
+                  <div className={styles.gymAccessHeading}>
+                    <span><Dumbbell size={20} aria-hidden="true" /></span>
+                    <div>
+                      <small>STRUTTURA SPORTIVA RILEVATA</small>
+                      <strong id="gym-access-title">Come si accede alla palestra?</strong>
+                    </div>
+                  </div>
+                  <div className={styles.gymAccessOptions} role="radiogroup" aria-label="Condizione di accesso alla palestra">
+                    {GYM_ACCESS_OPTIONS.map((option) => {
+                      const selected = form.gym_access_policy === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={selected ? styles.gymAccessOptionSelected : ''}
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => setField('gym_access_policy', option.value)}
+                        >
+                          <span>{option.value === 'members_only' ? <LockKeyhole size={18} /> : <Users size={18} />}</span>
+                          <span>
+                            <strong>{option.label}</strong>
+                            <small>{option.description}</small>
+                          </span>
+                          <i aria-hidden="true">{selected ? <Check size={13} /> : null}</i>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p>Nessun ingresso è garantito da Motrice: l’accesso va verificato con la struttura.</p>
+                </section>
+              ) : null}
 
               <p className={styles.locationSelectionMessage} role="status">
                 {locationSelectionMessage || userLocationError || (form.has_route
@@ -2496,6 +2680,7 @@ function CreateEventPage() {
                 <div><span>Orario</span><strong>{eventTime}–{eventEndTime}</strong></div>
                 <div><span>Durata</span><strong>{form.duration_minutes} min</strong></div>
                 <div><span>Partecipanti</span><strong>Fino a {form.max_participants}</strong></div>
+                <div><span>Età</span><strong>{form.min_age}–{form.max_age} anni</strong></div>
               </div>
             </section>
 
@@ -2509,6 +2694,11 @@ function CreateEventPage() {
                 <span>{form.city}</span>
                 {form.has_route ? (
                   <small>{form.route_name} · {form.route_distance_km} km · {routePoints.length} punti</small>
+                ) : form.venue_type === VENUE_TYPE_GYM ? (
+                  <small className={styles.reviewGymAccess}>
+                    <LockKeyhole size={14} aria-hidden="true" />
+                    {getGymAccessPresentation(form)?.label}
+                  </small>
                 ) : (
                   <small>Punto d’incontro confermato sulla mappa</small>
                 )}
@@ -2555,7 +2745,7 @@ function CreateEventPage() {
               Avanti <ChevronRight size={23} />
             </button>
           ) : (
-            <button type="submit" className={styles.nextButton} disabled={submitting}>
+            <button type="button" className={styles.nextButton} disabled={submitting} onClick={publishEvent}>
               {submitting ? 'Pubblicazione...' : 'Conferma e pubblica'}{' '}
               <Check size={23} />
             </button>

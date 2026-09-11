@@ -1181,3 +1181,97 @@
   color: #111 !important;
   background: #ff8a2b !important;
 }
+
+.compactEmbeddedCard {
+  gap: 0.72rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.compactManagementOverview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.compactManagementOverview > div {
+  min-width: 0;
+  min-height: 3.15rem;
+  padding: 0.65rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.72rem;
+  background: #101210;
+}
+
+.compactManagementOverview span {
+  overflow: hidden;
+  color: rgb(255 255 255 / 0.48);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compactManagementOverview strong {
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+.compactManagementOverview .compactManagementPending {
+  border-color: rgb(255 150 63 / 0.42);
+  background: rgb(255 150 63 / 0.06);
+}
+
+.compactManagementOverview .compactManagementPending strong {
+  color: #ff963f;
+}
+
+.compactEmbeddedCard .requestSection,
+.compactEmbeddedCard .participantSection,
+.compactEmbeddedCard .organizerActions {
+  margin: 0;
+}
+
+.compactEmbeddedCard .requestSection,
+.compactEmbeddedCard .participantSection {
+  border-radius: 0.8rem;
+}
+
+.compactEmbeddedCard.organizerFlowCard .requestSection,
+.compactEmbeddedCard.organizerFlowCard .participantSection {
+  gap: 0.62rem;
+  padding: 0.72rem;
+}
+
+.compactEmbeddedCard.organizerFlowCard .requestSection {
+  border-color: rgb(255 150 63 / 0.3);
+  background: rgb(255 150 63 / 0.035);
+}
+
+.compactEmbeddedCard.organizerFlowCard .emptyRequests {
+  padding: 0.72rem;
+  border-radius: 0.65rem;
+  font-size: 0.75rem;
+}
+
+.compactEmbeddedCard.organizerFlowCard .emptyParticipants {
+  min-height: 5rem;
+  padding: 0.55rem;
+}
+
+.compactEmbeddedCard.organizerFlowCard .emptyParticipants > span {
+  width: 2.65rem;
+  height: 2.65rem;
+}
+
+.compactEmbeddedCard.organizerFlowCard .participantSectionTitle h3 {
+  font-size: 0.78rem;
+}

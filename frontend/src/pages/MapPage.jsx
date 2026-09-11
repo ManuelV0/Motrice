@@ -29,6 +29,7 @@ import {
   getEventPrimaryActionPath,
   resolveEventPrimaryAction
 } from '../utils/eventParticipationState';
+import { isGymEvent } from '../utils/eventVenueAccess';
 import styles from '../styles/pages/map.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -67,6 +68,8 @@ function getPrimaryActionIcon(action) {
 }
 const EVENT_PIN_FILL = '#a8f000';
 const EVENT_PIN_SAVED_FILL = '#c7f75a';
+const EVENT_GYM_PIN_FILL = '#20d9a7';
+const EVENT_GYM_PIN_SAVED_FILL = '#7ce8c9';
 const EVENT_PIN_PATH = 'M24 2.5C12.5 2.5 3.5 11.1 3.5 22.2c0 8.3 5.1 15 11.9 19.2L24 54.2l8.6-12.8c6.8-4.2 11.9-10.9 11.9-19.2C44.5 11.1 35.5 2.5 24 2.5Z';
 const EMPTY_EVENT_MARKERS = { type: 'FeatureCollection', features: [] };
 const eventMarkerImageCache = new Map();
@@ -171,12 +174,14 @@ function renderEventActivityNodes(activityType, pinFill) {
     .join('');
 }
 
-function getEventPinImageId(activityType, saved = false, selected = false) {
-  return `motrice-pin-${activityType}-${saved ? 'saved' : 'default'}${selected ? '-selected' : ''}`;
+function getEventPinImageId(activityType, saved = false, selected = false, gym = false) {
+  return `motrice-pin-${activityType}-${gym ? 'gym' : 'standard'}-${saved ? 'saved' : 'default'}${selected ? '-selected' : ''}`;
 }
 
-function createEventPinSvg(activityType, { saved = false, selected = false, cluster = false } = {}) {
-  const pinFill = saved ? EVENT_PIN_SAVED_FILL : EVENT_PIN_FILL;
+function createEventPinSvg(activityType, { saved = false, selected = false, cluster = false, gym = false } = {}) {
+  const pinFill = gym
+    ? (saved ? EVENT_GYM_PIN_SAVED_FILL : EVENT_GYM_PIN_FILL)
+    : (saved ? EVENT_PIN_SAVED_FILL : EVENT_PIN_FILL);
   const activityNodes = cluster ? '' : renderEventActivityNodes(activityType, pinFill);
   const selectedOutline = selected
     ? `<path d="${EVENT_PIN_PATH}" fill="none" stroke="#ffffff" stroke-width="4.6" stroke-linejoin="round"/>`
@@ -187,6 +192,7 @@ function createEventPinSvg(activityType, { saved = false, selected = false, clus
     ${selectedOutline}
     <path d="${EVENT_PIN_PATH}" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
     ${cluster ? '' : `<g transform="translate(12 10)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
+    ${gym && !cluster ? '<g aria-hidden="true"><circle cx="38" cy="13" r="5.25" fill="#07100d" stroke="#ffffff" stroke-opacity=".55" stroke-width="1"/><path d="M36.25 13v-1.15a1.75 1.75 0 0 1 3.5 0V13m-4.1 0h4.7v3.4h-4.7z" fill="none" stroke="#20d9a7" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>' : ''}
   </svg>`;
 }
 
@@ -226,9 +232,10 @@ function getRequiredEventMarkerImages(events, selectedEventId) {
     const activityType = getEventActivityType(event);
     const saved = Boolean(event.is_saved);
     const selected = String(event.id) === String(selectedEventId);
+    const gym = isGymEvent(event);
     imageDefinitions.set(
-      getEventPinImageId(activityType, saved, selected),
-      createEventPinSvg(activityType, { saved, selected })
+      getEventPinImageId(activityType, saved, selected, gym),
+      createEventPinSvg(activityType, { saved, selected, gym })
     );
   });
 
@@ -343,6 +350,7 @@ function buildEventMarkerGeoJson(events, selectedEventId) {
       const selected = String(event.id) === String(selectedEventId) ? 1 : 0;
       const activityType = getEventActivityType(event);
       const saved = Boolean(event.is_saved);
+      const gym = isGymEvent(event);
       return {
         type: 'Feature',
         id: String(event.id),
@@ -353,7 +361,7 @@ function buildEventMarkerGeoJson(events, selectedEventId) {
         properties: {
           eventId: String(event.id),
           selected,
-          icon: getEventPinImageId(activityType, saved, Boolean(selected)),
+          icon: getEventPinImageId(activityType, saved, Boolean(selected), gym),
           label: event.sport_name || event.title || 'Evento'
         }
       };
@@ -1759,6 +1767,11 @@ function MapPage({ active = true }) {
               onZoomOut={() => zoomMap('out')}
               onGps={{ onAction: handleGpsAction, active: followUser, requesting }}
             />
+
+            <div className={styles.mapLegend} aria-label="Legenda segnaposto">
+              <span><i className={`${styles.legendDot} ${styles.legendEvent}`} /> Evento</span>
+              <span><i className={`${styles.legendDot} ${styles.legendGym}`} /> Palestra</span>
+            </div>
           </div>
 
           <section

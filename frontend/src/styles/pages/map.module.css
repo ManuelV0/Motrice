@@ -350,7 +350,7 @@
   position: absolute;
   z-index: var(--z-overlay-mid);
   left: var(--s-3);
-  bottom: var(--s-3);
+  bottom: 6.9rem;
   display: inline-flex;
   align-items: center;
   gap: var(--s-3);
@@ -365,6 +365,8 @@
   font-weight: var(--weight-semibold);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
 }
 
 .mapLegend > span {
@@ -388,6 +390,10 @@
 
 .legendSaved {
   background: #fff;
+}
+
+.legendGym {
+  background: #20d9a7;
 }
 
 .legendUser {
@@ -1621,6 +1627,12 @@
   pointer-events: none;
 }
 
+.mapStage[data-sheet-snap='medium'] .mapLegend,
+.mapStage[data-sheet-snap='full'] .mapLegend {
+  opacity: 0;
+  transform: translateY(0.4rem);
+}
+
 .mapStage[data-sheet-snap='medium'] .fab,
 .mapStage[data-sheet-snap='full'] .fab {
   pointer-events: none;
@@ -2358,6 +2370,15 @@
   .mapViewport {
     right: 26rem;
     width: auto;
+  }
+
+  .mapLegend {
+    bottom: var(--s-3);
+  }
+
+  .mapStage[data-sheet-snap] .mapLegend {
+    opacity: 1;
+    transform: none;
   }
 
   .mapTopOverlay {
