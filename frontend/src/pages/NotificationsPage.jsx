@@ -8,11 +8,12 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   LockKeyhole,
   MessageCircle,
   ShieldCheck,
-  Smartphone,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Trash2,
@@ -21,11 +22,6 @@ import {
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
 import ContextInfoButton from '../components/ContextInfoButton';
-import {
-  getNotificationPermissionStatus,
-  requestNotificationPermission,
-  scheduleEventReminders
-} from '../services/notificationCenter';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '../utils/notificationRules';
 import { withTimeout } from '../utils/asyncTimeout';
 import styles from '../styles/pages/notifications.module.css';
@@ -271,8 +267,8 @@ function NotificationsPage() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [preferences, setPreferences] = useState({ ...DEFAULT_NOTIFICATION_PREFERENCES });
-  const [permission, setPermission] = useState({ display: 'unsupported', receive: 'unsupported' });
   const [savingPreference, setSavingPreference] = useState('');
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const loadRequestRef = useRef(0);
@@ -294,12 +290,6 @@ function NotificationsPage() {
       SECONDARY_LOAD_TIMEOUT_MS,
       'Preferenze non disponibili'
     ).catch(() => DEFAULT_NOTIFICATION_PREFERENCES);
-    const permissionRequest = withTimeout(
-      getNotificationPermissionStatus(),
-      SECONDARY_LOAD_TIMEOUT_MS,
-      'Permessi non disponibili'
-    ).catch(() => ({ display: 'unsupported', receive: 'unsupported' }));
-
     try {
       const items = await withTimeout(
         api.listNotifications(),
@@ -317,13 +307,9 @@ function NotificationsPage() {
       if (loadRequestRef.current === requestId) setLoading(false);
     }
 
-    const [nextPreferences, nextPermission] = await Promise.all([
-      preferencesRequest,
-      permissionRequest
-    ]);
+    const nextPreferences = await preferencesRequest;
     if (loadRequestRef.current === requestId) {
       setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...nextPreferences });
-      setPermission(nextPermission);
     }
   }
 
@@ -332,12 +318,6 @@ function NotificationsPage() {
     window.addEventListener('motrice:notifications-changed', load);
     return () => window.removeEventListener('motrice:notifications-changed', load);
   }, []);
-
-  async function enableDeviceNotifications() {
-    const next = await requestNotificationPermission();
-    setPermission(next);
-    if (next.display === 'granted') await scheduleEventReminders();
-  }
 
   async function togglePreference(key) {
     if (key === 'event_security') return;
@@ -375,8 +355,7 @@ function NotificationsPage() {
   }
 
   const unreadCount = notifications.filter((item) => !item.read).length;
-  const permissionGranted = permission.display === 'granted';
-  const permissionUnsupported = permission.display === 'unsupported';
+  const activePreferenceCount = 1 + preferenceRows.filter(({ key }) => preferences[key]).length;
 
   return (
     <section className={styles.page}>
@@ -424,38 +403,24 @@ function NotificationsPage() {
         </div>
       </header>
 
-      <section className={`${styles.phoneCard} ${permissionGranted ? styles.phoneCardActive : ''}`}>
-        <span className={styles.phoneIcon} aria-hidden="true">
-          {permissionGranted ? <BellRing size={21} /> : <Smartphone size={21} />}
-        </span>
-        <div className={styles.phoneCopy}>
-          <div className={styles.phoneTitleRow}>
-            <h2>Notifiche sul telefono</h2>
-            <span className={permissionGranted ? styles.activeStatus : styles.neutralStatus}>
-              {permissionGranted ? 'Attive' : permissionUnsupported ? 'Solo app' : 'Da attivare'}
-            </span>
-          </div>
-          <p>
-            {permissionGranted
-              ? 'Riceverai promemoria importanti anche quando Motrice è chiusa.'
-              : permissionUnsupported
-                ? 'Le notifiche push saranno disponibili nell’app installata sul telefono.'
-                : 'Autorizza Motrice per ricevere promemoria e aggiornamenti importanti.'}
-          </p>
-        </div>
-        {!permissionGranted && !permissionUnsupported ? (
-          <button type="button" className={styles.enableButton} onClick={enableDeviceNotifications}>
-            Attiva
-          </button>
-        ) : null}
-      </section>
-
       <section className={styles.preferencesCard}>
-        <div className={styles.sectionHeading}>
-          <div>
-            <h2>Preferenze</h2>
-            <p>Scegli quali aggiornamenti vuoi ricevere.</p>
-          </div>
+        <div className={styles.preferenceDrawerHeader}>
+          <button
+            type="button"
+            className={styles.preferenceDrawerTrigger}
+            aria-expanded={preferencesOpen}
+            aria-controls="notification-preferences-grid"
+            onClick={() => setPreferencesOpen((current) => !current)}
+          >
+            <span className={styles.preferenceDrawerIcon} aria-hidden="true">
+              <SlidersHorizontal size={18} />
+            </span>
+            <span className={styles.preferenceDrawerCopy}>
+              <strong>Preferenze notifiche</strong>
+              <small>{activePreferenceCount}/4 attive · Sicurezza sempre attiva</small>
+            </span>
+            <ChevronDown className={styles.preferenceDrawerChevron} size={19} aria-hidden="true" />
+          </button>
           <ContextInfoButton
             title="Preferenze notifiche"
             description="Motrice separa gli avvisi essenziali dagli aggiornamenti facoltativi."
@@ -468,36 +433,36 @@ function NotificationsPage() {
           />
         </div>
 
-        <div className={styles.preferenceList}>
-          <div className={styles.preferenceRow}>
-            <span className={styles.preferenceIcon}><ShieldCheck size={19} aria-hidden="true" /></span>
-            <span className={styles.preferenceCopy}>
-              <strong>Eventi e sicurezza</strong>
-              <small>Check-in, variazioni, annullamenti e no-show.</small>
-            </span>
-            <span className={styles.lockedBadge}><LockKeyhole size={12} aria-hidden="true" /> Sempre attiva</span>
-          </div>
+        {preferencesOpen ? (
+          <div
+            id="notification-preferences-grid"
+            className={styles.preferenceGrid}
+            aria-label="Preferenze notifiche"
+          >
+            <div className={`${styles.preferenceTile} ${styles.preferenceTileLocked}`}>
+              <span className={styles.preferenceTileIcon}><ShieldCheck size={18} aria-hidden="true" /></span>
+              <strong>Eventi</strong>
+              <LockKeyhole className={styles.preferenceTileLock} size={14} aria-label="Sempre attiva" />
+            </div>
 
-          {preferenceRows.map(({ key, icon: Icon, title, description }) => (
-            <label className={styles.preferenceRow} key={key}>
-              <span className={styles.preferenceIcon}><Icon size={19} aria-hidden="true" /></span>
-              <span className={styles.preferenceCopy}>
+            {preferenceRows.map(({ key, icon: Icon, title }) => (
+              <label className={styles.preferenceTile} key={key}>
+                <span className={styles.preferenceTileIcon}><Icon size={18} aria-hidden="true" /></span>
                 <strong>{title}</strong>
-                <small>{description}</small>
-              </span>
-              <span className={styles.switch}>
-                <input
-                  type="checkbox"
-                  checked={preferences[key]}
-                  disabled={savingPreference === key}
-                  onChange={() => togglePreference(key)}
-                  aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
-                />
-                <span className={styles.switchTrack} aria-hidden="true" />
-              </span>
-            </label>
-          ))}
-        </div>
+                <span className={styles.switch}>
+                  <input
+                    type="checkbox"
+                    checked={preferences[key]}
+                    disabled={savingPreference === key}
+                    onChange={() => togglePreference(key)}
+                    aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
+                  />
+                  <span className={styles.switchTrack} aria-hidden="true" />
+                </span>
+              </label>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className={styles.activitySection}>

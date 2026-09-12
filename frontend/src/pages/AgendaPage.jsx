@@ -14,6 +14,7 @@ import {
   Route,
   Settings2,
   ShieldCheck,
+  Users,
   XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -911,7 +912,17 @@ function AgendaPage() {
                     variant="standard"
                     context="agenda"
                     status={{ label: 'Da svolgere', tone: 'success' }}
-                    primaryAction={{
+                    secondaryAction={isOrganizer ? {
+                      label: 'Modifica evento',
+                      icon: Settings2,
+                      onClick: (selectedEvent) => navigate(`/events/${selectedEvent.id}?manage=1`)
+                    } : undefined}
+                    primaryAction={isOrganizer ? {
+                      label: 'Gestisci richieste',
+                      icon: Users,
+                      tone: 'warning',
+                      onClick: (selectedEvent) => navigate(`/events/${selectedEvent.id}#organizer-controls`)
+                    } : {
                       label: action.label,
                       icon: ActionIcon,
                       disabled: action.disabled,

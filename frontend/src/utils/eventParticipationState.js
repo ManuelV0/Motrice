@@ -252,7 +252,7 @@ export function resolveEventParticipationState({ event, isOrganizer = false, isF
     tone: 'ready',
     title: approvalRequired ? 'Richiedi il tuo posto' : 'Posto disponibile',
     description: approvalRequired
-      ? 'Invia una richiesta: il deposito verrà bloccato solo dopo l’approvazione.'
+      ? 'Invia una richiesta: il deposito viene riservato e si libera se non viene accettata.'
       : 'Conferma ora: il deposito verrà bloccato e il QR sarà generato subito.',
     badge: approvalRequired ? 'Su richiesta' : 'Accesso diretto',
     stepIndex: 0,

@@ -1548,6 +1548,9 @@ const localApi = {
       participants_count: 1,
       popularity: 70,
       description: payload.description,
+      organizer_notes: '',
+      organizer_alert: '',
+      cover_image_url: '',
       scheda_id: payload.scheda_id || null,
       workout_plan: payload.workout_plan || null,
       organizer: {
@@ -1626,9 +1629,24 @@ const localApi = {
     const graceMinutes = event.is_personal
       ? 0
       : Math.round(Number(payload.checkin_grace_minutes ?? event.checkin_grace_minutes));
+    const maxParticipants = Math.round(Number(payload.max_participants ?? event.max_participants));
+    const requiredLevel = String(payload.required_level ?? event.level ?? 'all').trim().toLowerCase();
+    const organizerNotes = String(payload.organizer_notes ?? event.organizer_notes ?? '').trim();
+    const organizerAlert = String(payload.organizer_alert ?? event.organizer_alert ?? '').trim();
+    const coverImageUrl = String(payload.cover_image_url ?? event.cover_image_url ?? '').trim();
+    const workoutPlanId = String(payload.scheda_id ?? event.scheda_id ?? '').trim();
     const descriptionChanged = description !== String(event.description || '').trim();
     const durationChanged = durationMinutes !== Number(event.duration_minutes);
     const graceChanged = !event.is_personal && graceMinutes !== Number(event.checkin_grace_minutes);
+    const capacityChanged = maxParticipants !== Number(event.max_participants);
+    const levelChanged = requiredLevel !== String(event.level || 'all');
+    const notesChanged = organizerNotes !== String(event.organizer_notes || '').trim();
+    const alertChanged = organizerAlert !== String(event.organizer_alert || '').trim();
+    const coverChanged = coverImageUrl !== String(event.cover_image_url || '').trim();
+    const workoutPlanChanged = workoutPlanId !== String(event.scheda_id || '');
+    const currentDurationMinutes = Number(event.duration_minutes || 120);
+    const currentGraceMinutes = Number(event.checkin_grace_minutes || 15);
+    const currentMaxParticipants = Number(event.max_participants || 2);
 
     if (description.length > 0 && description.length < 20) {
       throw new Error('La descrizione deve contenere almeno 20 caratteri oppure restare vuota');
@@ -1637,9 +1655,28 @@ const localApi = {
     if (!Number.isInteger(durationMinutes) || durationMinutes < 15 || durationMinutes > 360) {
       throw new Error('La durata deve essere compresa tra 15 e 360 minuti');
     }
+    if (
+      durationMinutes < currentDurationMinutes ||
+      durationMinutes > currentDurationMinutes + 30 ||
+      (durationMinutes - currentDurationMinutes) % 15 !== 0
+    ) {
+      throw new Error(`La durata può essere soltanto ampliata, fino a ${currentDurationMinutes + 30} minuti`);
+    }
     if (!event.is_personal && ![15, 20, 30].includes(graceMinutes)) {
       throw new Error('La tolleranza può essere di 15, 20 o 30 minuti');
     }
+    if (!Number.isInteger(maxParticipants) || maxParticipants < Math.max(2, Number(event.participants_count || 0)) || maxParticipants > 500) {
+      throw new Error(`I posti devono essere tra ${Math.max(2, Number(event.participants_count || 0))} e 500`);
+    }
+    if (maxParticipants < currentMaxParticipants || maxParticipants > currentMaxParticipants + 3) {
+      throw new Error(`I posti possono essere soltanto ampliati, fino a ${currentMaxParticipants + 3}`);
+    }
+    if (!['beginner', 'intermediate', 'advanced', 'all'].includes(requiredLevel)) {
+      throw new Error('Livello richiesto non valido');
+    }
+    if (organizerNotes.length > 800) throw new Error('Le indicazioni possono contenere massimo 800 caratteri');
+    if (organizerAlert.length > 280) throw new Error('L aggiornamento urgente può contenere massimo 280 caratteri');
+    if (coverImageUrl.length > 2_000_000) throw new Error('Immagine evento non valida');
     if (descriptionChanged && !policy.canEditDescription) {
       throw new Error('La descrizione non è più modificabile dopo l inizio dell evento');
     }
@@ -1649,8 +1686,26 @@ const localApi = {
     if (graceChanged && !policy.canEditTolerance) {
       throw new Error('La tolleranza ritardi non è più modificabile');
     }
-    if (policy.hasStarted && graceChanged && graceMinutes <= policy.currentTolerance) {
-      throw new Error('Dopo l inizio puoi soltanto aumentare la tolleranza');
+    if ((capacityChanged || levelChanged) && !policy.canEditParticipantSettings) {
+      throw new Error('Partecipanti e livello sono modificabili fino a 2 ore prima dell inizio');
+    }
+    if (levelChanged && Number(event.participants_count || 0) > 1 && requiredLevel !== 'all') {
+      throw new Error('Con partecipanti confermati puoi soltanto rendere il livello aperto a tutti');
+    }
+    if (workoutPlanChanged) {
+      throw new Error('La scheda di allenamento è definita durante la creazione e non può essere modificata');
+    }
+    if (coverChanged) {
+      throw new Error('L immagine dell evento è definita durante la creazione e non può essere modificata');
+    }
+    if (notesChanged && !policy.canEditDescription) {
+      throw new Error('Le indicazioni non sono più modificabili dopo l inizio');
+    }
+    if (alertChanged && !policy.canSendOrganizerAlert) {
+      throw new Error('La finestra per gli aggiornamenti urgenti è terminata');
+    }
+    if (graceChanged && graceMinutes < currentGraceMinutes) {
+      throw new Error('La tolleranza ritardi può essere soltanto ampliata');
     }
 
     const changes = [];
@@ -1665,6 +1720,31 @@ const localApi = {
     if (graceChanged) {
       event.checkin_grace_minutes = graceMinutes;
       changes.push('tolleranza ritardi');
+    }
+    if (capacityChanged) {
+      event.max_participants = maxParticipants;
+      changes.push('posti disponibili');
+    }
+    if (levelChanged) {
+      event.level = requiredLevel;
+      changes.push('livello richiesto');
+    }
+    if (notesChanged) {
+      event.organizer_notes = organizerNotes;
+      changes.push('indicazioni pratiche');
+    }
+    if (alertChanged) {
+      event.organizer_alert = organizerAlert;
+      changes.push('aggiornamento urgente');
+    }
+    if (coverChanged) {
+      event.cover_image_url = coverImageUrl;
+      changes.push('immagine evento');
+    }
+    if (workoutPlanChanged) {
+      event.scheda_id = workoutPlanId || null;
+      event.workout_plan = workoutPlanId ? payload.workout_plan || null : null;
+      changes.push('scheda di allenamento');
     }
 
     if (changes.length > 0) {

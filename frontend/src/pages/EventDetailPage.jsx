@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,6 +17,7 @@ import {
   Dumbbell,
   LockKeyhole,
   MapPin,
+  Megaphone,
   MessageCircle,
   Navigation,
   PencilLine,
@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trophy,
+  Trash2,
   UserMinus,
   UserPlus,
   UserRound,
@@ -44,16 +45,15 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import EventCard from '../components/EventCard';
+import EventMapPreview from '../components/EventMapPreview';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { ensureLeafletIcons } from '../features/coach/utils/leafletIconFix';
 import { downloadEventIcs } from '../utils/ics';
 import { getEventPhaseLabel, getEventTiming } from '../utils/eventLifecycle';
 import { useBilling } from '../context/BillingContext';
 import PaywallModal from '../components/PaywallModal';
 import { calculateCompatibility, getCoachProfile } from '../features/coach/services/coach';
 import { useUserLocation } from '../hooks/useUserLocation';
-import LocationPermissionAlert from '../components/LocationPermissionAlert';
 import { getAuthSession } from '../services/authSession';
 import { markStepByAction } from '../services/tutorialMode';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
@@ -67,10 +67,31 @@ import {
   resolveEventPrimaryAction,
   resolveParticipantOutcome
 } from '../utils/eventParticipationState';
-import { getEventManagementPolicy } from '../utils/eventManagementRules';
+import {
+  EVENT_CAPACITY_MAX_EXTENSION,
+  EVENT_DURATION_MAX_EXTENSION_MINUTES,
+  getCapacityExtensionOptions,
+  getDurationExtensionOptions,
+  getEventManagementPolicy
+} from '../utils/eventManagementRules';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import { getGymAccessPresentation } from '../utils/eventVenueAccess';
+import { getAutomaticMinimumPresenceMinutes } from '../utils/eventCreationRules';
+import { getMyProfileVerification } from '../services/profileVerification';
 import styles from '../styles/pages/eventDetail.module.css';
+
+const RSVP_SKILL_LEVELS = [
+  { value: 'beginner', label: 'Principiante' },
+  { value: 'intermediate', label: 'Intermedio' },
+  { value: 'advanced', label: 'Avanzato' }
+];
+
+const EVENT_LEVEL_OPTIONS = [
+  { value: 'all', label: 'Aperto a tutti' },
+  { value: 'beginner', label: 'Principiante' },
+  { value: 'intermediate', label: 'Intermedio' },
+  { value: 'advanced', label: 'Avanzato' }
+];
 
 const SPORT_DETAIL_VISUALS = [
   {
@@ -184,7 +205,6 @@ function getPrimaryActionIcon(action) {
 }
 
 function EventDetailPage() {
-  ensureLeafletIcons();
 
   function normalizeName(value) {
     const raw = String(value || '').trim();
@@ -220,6 +240,10 @@ function EventDetailPage() {
 
   const [modalOpen, setModalOpen] = useState(false);
   const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
+  const [rsvpNoteOpen, setRsvpNoteOpen] = useState(false);
+  const [creditBlockedOpen, setCreditBlockedOpen] = useState(false);
+  const [creditBlockedLoading, setCreditBlockedLoading] = useState(false);
+  const [creditBlockedWallet, setCreditBlockedWallet] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [cancelCountdown, setCancelCountdown] = useState(3);
   const [cancelReady, setCancelReady] = useState(false);
@@ -229,10 +253,15 @@ function EventDetailPage() {
   const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '' });
   const [organizerEditOpen, setOrganizerEditOpen] = useState(false);
   const [organizerEditSubmitting, setOrganizerEditSubmitting] = useState(false);
+  const [organizerDangerOpen, setOrganizerDangerOpen] = useState(false);
   const [organizerEditForm, setOrganizerEditForm] = useState({
     description: '',
     duration_minutes: 120,
-    checkin_grace_minutes: 15
+    checkin_grace_minutes: 15,
+    max_participants: 2,
+    required_level: 'all',
+    organizer_notes: '',
+    organizer_alert: ''
   });
   const [rsvpForm, setRsvpForm] = useState({
     name: '',
@@ -267,7 +296,13 @@ function EventDetailPage() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '', avatar_url: '' });
-  const [localProfile, setLocalProfile] = useState({ display_name: '', avatar_url: '' });
+  const [localProfile, setLocalProfile] = useState({
+    display_name: '',
+    avatar_url: '',
+    reliability: null,
+    sport_profiles: []
+  });
+  const [profileVerificationStatus, setProfileVerificationStatus] = useState('unverified');
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
   const [groupChatAiLoading, setGroupChatAiLoading] = useState(false);
@@ -276,9 +311,6 @@ function EventDetailPage() {
   const lastParticipationStateRef = useRef('');
   const {
     coords,
-    hasLocation,
-    permission,
-    error: locationError,
     requesting,
     requestLocation,
     originParams
@@ -288,12 +320,14 @@ function EventDetailPage() {
   useEffect(() => {
     setWorkoutPlanOpen(false);
     setParticipantListOpen(false);
-    setPeopleOpen(true);
+    setPeopleOpen(false);
     setActionsOpen(false);
     setRulesOpen(false);
     setOrganizerCancelOpen(false);
     setOrganizerCancelForm({ reasonCode: '', note: '' });
     setOrganizerEditOpen(false);
+    setOrganizerDangerOpen(false);
+    setRsvpNoteOpen(false);
   }, [event?.id]);
 
   useEffect(() => {
@@ -308,8 +342,13 @@ function EventDetailPage() {
     setOrganizerEditForm({
       description: String(event.description || ''),
       duration_minutes: Number(event.duration_minutes || 120),
-      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15)
+      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15),
+      max_participants: Number(event.max_participants || 2),
+      required_level: String(event.level || 'all'),
+      organizer_notes: String(event.organizer_notes || ''),
+      organizer_alert: String(event.organizer_alert || '')
     });
+    setOrganizerDangerOpen(false);
     setOrganizerEditOpen(true);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('manage');
@@ -374,7 +413,11 @@ function EventDetailPage() {
         const displayName = String(profile?.display_name || profile?.name || '').trim();
         setLocalProfile({
           display_name: displayName,
-          avatar_url: String(profile?.avatar_url || '').trim()
+          avatar_url: String(profile?.avatar_url || '').trim(),
+          reliability: Number.isFinite(Number(profile?.reliability ?? profile?.reliability_score))
+            ? Number(profile?.reliability ?? profile?.reliability_score)
+            : null,
+          sport_profiles: Array.isArray(profile?.sport_profiles) ? profile.sport_profiles : []
         });
         if (displayName.length >= 2) {
           setRsvpForm((current) => ({
@@ -385,13 +428,46 @@ function EventDetailPage() {
       })
       .catch(() => {
         if (!active) return;
-        setLocalProfile({ display_name: '', avatar_url: '' });
+        setLocalProfile({ display_name: '', avatar_url: '', reliability: null, sport_profiles: [] });
       });
 
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    getMyProfileVerification()
+      .then((summary) => {
+        if (active) setProfileVerificationStatus(String(summary?.status || 'unverified'));
+      })
+      .catch(() => {
+        if (active) setProfileVerificationStatus('unverified');
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const eventSportId = String(event?.sport_id || '');
+    const eventSportName = normalizeName(event?.sport_name || '');
+    const matchingSport = localProfile.sport_profiles.find((sport) => (
+      (eventSportId && String(sport?.sport_id || sport?.id || '') === eventSportId) ||
+      normalizeName(sport?.sport_name || sport?.name || '') === eventSportName
+    ));
+    const preferredLevel = String(matchingSport?.level || event?.level || 'beginner').toLowerCase();
+    const normalizedLevel = RSVP_SKILL_LEVELS.some((item) => item.value === preferredLevel)
+      ? preferredLevel
+      : 'beginner';
+    setRsvpForm((current) => ({
+      ...current,
+      name: String(localProfile.display_name || current.name || '').trim(),
+      skill_level: normalizedLevel
+    }));
+  }, [event?.level, event?.sport_id, event?.sport_name, localProfile.display_name, localProfile.sport_profiles, modalOpen]);
 
   useEffect(() => {
     let active = true;
@@ -419,6 +495,16 @@ function EventDetailPage() {
 
   useEffect(() => {
     if (!event?.id || String(event.id) !== String(id) || event.sport_id == null) return undefined;
+    const viewerOwnsEvent = Boolean(
+      event.created_by === 'me' ||
+      String(event.organizer?.id || '') === 'me' ||
+      String(event.organizer?.id || '') === String(currentUserId) ||
+      normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
+    );
+    if (viewerOwnsEvent) {
+      setSimilarEvents([]);
+      return undefined;
+    }
     let active = true;
     const timer = window.setTimeout(() => {
       api.listEvents({
@@ -442,7 +528,7 @@ function EventDetailPage() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [event?.id, event?.sport_id, id, originParams]);
+  }, [currentUserId, event, id, localProfile.display_name, originParams]);
 
   useEffect(() => {
     let active = true;
@@ -679,8 +765,28 @@ function EventDetailPage() {
       }
       if (String(err?.message || '').includes('DEPOSIT_REQUIRED')) {
         setModalOpen(false);
-        showToast('Credito insufficiente. L’amministratore può aumentarlo dal Centro operativo.', 'info');
-        navigate('/wallet/credit');
+        setCreditBlockedOpen(true);
+        setCreditBlockedLoading(true);
+        setCreditBlockedWallet(null);
+        try {
+          const wallet = await api.getMoneyWallet();
+          const availableCents = Math.max(0, Number(wallet?.available_cents || 0));
+          const lockedCents = Math.max(0, Number(wallet?.locked_cents || 0));
+          const pendingCents = Math.max(0, Number(wallet?.pending_cents || 0));
+          const withdrawableCents = Math.max(0, Number(wallet?.withdrawable_cents || 0));
+          setCreditBlockedWallet({
+            availableCents,
+            lockedCents,
+            pendingCents,
+            withdrawableCents,
+            totalCents: availableCents + lockedCents + pendingCents + withdrawableCents,
+            requiredCents: Math.max(0, Number(event?.deposit_cents || 1000))
+          });
+        } catch {
+          // L'errore principale resta quello del deposito; il riepilogo può essere ricaricato dal wallet.
+        } finally {
+          setCreditBlockedLoading(false);
+        }
         return;
       }
       showToast(err.message, 'error');
@@ -746,8 +852,13 @@ function EventDetailPage() {
     setOrganizerEditForm({
       description: String(event.description || ''),
       duration_minutes: Number(event.duration_minutes || 120),
-      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15)
+      checkin_grace_minutes: Number(event.checkin_grace_minutes || 15),
+      max_participants: Number(event.max_participants || 2),
+      required_level: String(event.level || 'all'),
+      organizer_notes: String(event.organizer_notes || ''),
+      organizer_alert: String(event.organizer_alert || '')
     });
+    setOrganizerDangerOpen(false);
     setOrganizerEditOpen(true);
   }
 
@@ -757,9 +868,20 @@ function EventDetailPage() {
     const description = String(organizerEditForm.description || '').trim();
     const durationMinutes = Number(organizerEditForm.duration_minutes);
     const graceMinutes = Number(organizerEditForm.checkin_grace_minutes);
+    const maxParticipants = Number(organizerEditForm.max_participants);
+    const requiredLevel = String(organizerEditForm.required_level || 'all');
+    const organizerNotes = String(organizerEditForm.organizer_notes || '').trim();
+    const organizerAlert = String(organizerEditForm.organizer_alert || '').trim();
+    const currentDuration = Number(event.duration_minutes || 120);
+    const currentGrace = Number(event.checkin_grace_minutes || 15);
+    const currentCapacity = Number(event.max_participants || 2);
     const descriptionChanged = description !== String(event.description || '').trim();
-    const durationChanged = durationMinutes !== Number(event.duration_minutes);
-    const graceChanged = !event.is_personal && graceMinutes !== Number(event.checkin_grace_minutes);
+    const durationChanged = durationMinutes !== currentDuration;
+    const graceChanged = !event.is_personal && graceMinutes !== currentGrace;
+    const capacityChanged = maxParticipants !== currentCapacity;
+    const levelChanged = requiredLevel !== String(event.level || 'all');
+    const notesChanged = organizerNotes !== String(event.organizer_notes || '').trim();
+    const alertChanged = organizerAlert !== String(event.organizer_alert || '').trim();
 
     if (description.length > 0 && description.length < 20) {
       showToast('La descrizione deve avere almeno 20 caratteri oppure restare vuota', 'error');
@@ -773,8 +895,47 @@ function EventDetailPage() {
       showToast('La durata è modificabile fino a 2 ore prima', 'error');
       return;
     }
+    if (
+      durationChanged &&
+      (
+        durationMinutes < currentDuration ||
+        durationMinutes > currentDuration + EVENT_DURATION_MAX_EXTENSION_MINUTES ||
+        (durationMinutes - currentDuration) % 15 !== 0
+      )
+    ) {
+      showToast(`Puoi soltanto prolungare l’allenamento fino a ${currentDuration + EVENT_DURATION_MAX_EXTENSION_MINUTES} minuti`, 'error');
+      return;
+    }
     if (graceChanged && !policy.canEditTolerance) {
       showToast('La tolleranza ritardi non è più modificabile', 'error');
+      return;
+    }
+    if (graceChanged && graceMinutes < currentGrace) {
+      showToast('La tolleranza ritardi può essere soltanto ampliata', 'error');
+      return;
+    }
+    if ((capacityChanged || levelChanged) && !policy.canEditParticipantSettings) {
+      showToast('Partecipanti e livello sono modificabili fino a 2 ore prima', 'error');
+      return;
+    }
+    if (notesChanged && !policy.canEditDescription) {
+      showToast('Le indicazioni sono modificabili fino all’inizio', 'error');
+      return;
+    }
+    if (alertChanged && !policy.canSendOrganizerAlert) {
+      showToast('Non puoi più inviare aggiornamenti per questo evento', 'error');
+      return;
+    }
+    if (
+      !Number.isInteger(maxParticipants) ||
+      maxParticipants < currentCapacity ||
+      maxParticipants > currentCapacity + EVENT_CAPACITY_MAX_EXTENSION
+    ) {
+      showToast(`Puoi soltanto ampliare i posti fino a ${currentCapacity + EVENT_CAPACITY_MAX_EXTENSION}`, 'error');
+      return;
+    }
+    if (organizerNotes.length > 800 || organizerAlert.length > 280) {
+      showToast('Riduci il testo prima di salvare', 'error');
       return;
     }
 
@@ -783,7 +944,14 @@ function EventDetailPage() {
       const result = await api.updateManagedEvent(event.id, {
         description,
         duration_minutes: durationMinutes,
-        checkin_grace_minutes: event.is_personal ? 0 : graceMinutes
+        checkin_grace_minutes: event.is_personal ? 0 : graceMinutes,
+        max_participants: maxParticipants,
+        required_level: requiredLevel,
+        organizer_notes: organizerNotes,
+        organizer_alert: organizerAlert,
+        cover_image_url: String(event.cover_image_url || ''),
+        scheda_id: event.scheda_id || null,
+        workout_plan: event.workout_plan || null
       });
       if (result?.event) setEvent(result.event);
       else await reload();
@@ -974,6 +1142,13 @@ function EventDetailPage() {
       normalizeName(localProfile.display_name || '') === normalizeName(event.organizer?.name || '')
     )
   );
+  const isParticipantView = Boolean(event && !event.is_personal && !isOrganizerForEvent);
+
+  useEffect(() => {
+    if (!event?.id) return;
+    setPeopleOpen(isOrganizerForEvent);
+  }, [event?.id, isOrganizerForEvent]);
+
   const participationIsFull = Number(event?.max_participants || 0) > 0 &&
     Number(event?.participants_count || 0) >= Number(event?.max_participants || 0);
   const participationState = resolveEventParticipationState({
@@ -1230,12 +1405,64 @@ function EventDetailPage() {
   const eventManagementPolicy = getEventManagementPolicy(event, checkInNowMs);
   const organizerEditDescription = String(organizerEditForm.description || '').trim();
   const organizerEditDescriptionValid = organizerEditDescription.length === 0 || organizerEditDescription.length >= 20;
+  const organizerDurationOptions = getDurationExtensionOptions(durationMinutes);
+  const organizerEditCapacityMinimum = Number(event.max_participants || 2);
+  const organizerCapacityOptions = getCapacityExtensionOptions(organizerEditCapacityMinimum);
+  const organizerEditCapacityValid = Number.isInteger(Number(organizerEditForm.max_participants)) &&
+    Number(organizerEditForm.max_participants) >= organizerEditCapacityMinimum &&
+    Number(organizerEditForm.max_participants) <= organizerEditCapacityMinimum + EVENT_CAPACITY_MAX_EXTENSION;
   const organizerEditHasChanges = Boolean(
     organizerEditDescription !== String(event.description || '').trim() ||
     Number(organizerEditForm.duration_minutes) !== durationMinutes ||
-    (!event.is_personal && Number(organizerEditForm.checkin_grace_minutes) !== Number(event.checkin_grace_minutes))
+    (!event.is_personal && Number(organizerEditForm.checkin_grace_minutes) !== Number(event.checkin_grace_minutes)) ||
+    Number(organizerEditForm.max_participants) !== Number(event.max_participants) ||
+    String(organizerEditForm.required_level || '') !== String(event.level || 'all') ||
+    String(organizerEditForm.organizer_notes || '').trim() !== String(event.organizer_notes || '').trim() ||
+    String(organizerEditForm.organizer_alert || '').trim() !== String(event.organizer_alert || '').trim()
   );
   const minimumPresenceMinutes = Number(event.minimum_presence_minutes || 45);
+  const organizerEditMinimumPresenceMinutes = getAutomaticMinimumPresenceMinutes(
+    organizerEditForm.duration_minutes,
+    { isPersonal: Boolean(event.is_personal) }
+  );
+  const organizerEditChangeItems = [];
+  if (organizerEditDescription !== String(event.description || '').trim()) {
+    organizerEditChangeItems.push({ label: 'Descrizione', before: 'Attuale', after: 'Aggiornata' });
+  }
+  if (String(organizerEditForm.organizer_notes || '').trim() !== String(event.organizer_notes || '').trim()) {
+    organizerEditChangeItems.push({ label: 'Indicazioni', before: 'Attuali', after: 'Aggiornate' });
+  }
+  if (Number(organizerEditForm.duration_minutes) !== durationMinutes) {
+    organizerEditChangeItems.push({
+      label: 'Durata',
+      before: `${durationMinutes} min`,
+      after: `${organizerEditForm.duration_minutes} min`
+    });
+  }
+  if (!event.is_personal && Number(organizerEditForm.checkin_grace_minutes) !== Number(event.checkin_grace_minutes)) {
+    organizerEditChangeItems.push({
+      label: 'Tolleranza',
+      before: `${event.checkin_grace_minutes} min`,
+      after: `${organizerEditForm.checkin_grace_minutes} min`
+    });
+  }
+  if (Number(organizerEditForm.max_participants) !== Number(event.max_participants)) {
+    organizerEditChangeItems.push({
+      label: 'Posti',
+      before: String(event.max_participants),
+      after: String(organizerEditForm.max_participants)
+    });
+  }
+  if (String(organizerEditForm.required_level || '') !== String(event.level || 'all')) {
+    organizerEditChangeItems.push({
+      label: 'Livello',
+      before: EVENT_LEVEL_OPTIONS.find((option) => option.value === String(event.level || 'all'))?.label || 'Attuale',
+      after: EVENT_LEVEL_OPTIONS.find((option) => option.value === organizerEditForm.required_level)?.label || 'Aggiornato'
+    });
+  }
+  if (String(organizerEditForm.organizer_alert || '').trim() !== String(event.organizer_alert || '').trim()) {
+    organizerEditChangeItems.push({ label: 'Avviso urgente', before: 'Attuale', after: 'Aggiornato' });
+  }
   const completionXp = Number(event.completion_xp || (event.is_personal ? 5 : 50));
   const reviewBonusXp = event.is_personal ? 0 : Number(event.review_bonus_xp || 0);
   const totalAvailableXp = completionXp + reviewBonusXp;
@@ -1344,22 +1571,19 @@ function EventDetailPage() {
     isOrganizerForEvent ||
     ['confirmed', 'checked_in', 'completed'].includes(participationState.id)
   );
+  const showParticipantStickyAction = Boolean(
+    isParticipantView &&
+    !eventIsCancelled &&
+    eventPrimaryAction.target !== 'event'
+  );
 
   return (
-    <div className={styles.page}>
-      <LocationPermissionAlert
-        hasLocation={hasLocation}
-        permission={permission}
-        error={locationError}
-        requesting={requesting}
-        onRequest={requestLocation}
-        compact
-      />
+    <div className={`${styles.page} ${isParticipantView ? styles.participantPage : ''}`}>
       <main className={styles.eventShell}>
         <article className={styles.detailCard}>
           <header
             className={styles.eventHero}
-            style={{ '--event-hero-image': `url("${sportVisual.image}")` }}
+            style={{ '--event-hero-image': `url("${event.cover_image_url || sportVisual.image}")` }}
           >
             <div className={styles.heroControls}>
               <button type="button" className={`${styles.heroIconButton} ${styles.heroBackButton}`} onClick={() => navigate(-1)} aria-label="Torna indietro">
@@ -1417,48 +1641,34 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
+          {!eventIsCancelled && event.organizer_alert ? (
+            <Card as="section" className={styles.organizerAlertBanner}>
+              <span><Megaphone size={20} aria-hidden="true" /></span>
+              <div>
+                <small>Aggiornamento organizzatore</small>
+                <strong>{event.organizer_alert}</strong>
+              </div>
+            </Card>
+          ) : null}
+
+          {!eventIsCancelled && event.organizer_notes ? (
+            <Card as="section" className={styles.organizerNotesBanner}>
+              <span><MapPin size={19} aria-hidden="true" /></span>
+              <div>
+                <small>Indicazioni pratiche</small>
+                <p>{event.organizer_notes}</p>
+              </div>
+            </Card>
+          ) : null}
+
           <Card as="section" className={styles.locationCard}>
             <div className={styles.mapStage}>
-              {routePoints.length >= 2 ? (
-                <MapContainer
-                  center={routePoints[0]}
-                  zoom={11}
+              {(routePoints.length >= 2 || (event.lat != null && event.lng != null)) ? (
+                <EventMapPreview
+                  event={event}
+                  routePoints={routePoints}
                   className={styles.mapFrame}
-                  dragging={false}
-                  touchZoom={false}
-                  doubleClickZoom={false}
-                  scrollWheelZoom={false}
-                  boxZoom={false}
-                  keyboard={false}
-                  zoomControl={false}
-                >
-                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <Polyline positions={routePoints} />
-                  <Marker position={routePoints[0]}>
-                    <Popup>Partenza: {event.route_info?.from_label || 'Punto di partenza'}</Popup>
-                  </Marker>
-                  <Marker position={routePoints[routePoints.length - 1]}>
-                    <Popup>Arrivo: {event.route_info?.to_label || 'Punto di arrivo'}</Popup>
-                  </Marker>
-                </MapContainer>
-              ) : event.lat != null && event.lng != null ? (
-                <MapContainer
-                  center={[event.lat, event.lng]}
-                  zoom={13}
-                  className={styles.mapFrame}
-                  dragging={false}
-                  touchZoom={false}
-                  doubleClickZoom={false}
-                  scrollWheelZoom={false}
-                  boxZoom={false}
-                  keyboard={false}
-                  zoomControl={false}
-                >
-                  <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <Marker position={[event.lat, event.lng]}>
-                    <Popup>{event.location_name}</Popup>
-                  </Marker>
-                </MapContainer>
+                />
               ) : (
                 <div className={styles.mapFallback}>
                   <MapPin size={34} aria-hidden="true" />
@@ -1476,19 +1686,21 @@ function EventDetailPage() {
                 </a>
               </div>
             </div>
-            <div className={styles.locationBody}>
-              <div className={styles.locationHeading}>
-                <span className={styles.locationIcon}><MapPin size={20} aria-hidden="true" /></span>
-                <div>
-                  <h2>{event.location_name || 'Luogo da definire'}</h2>
-                  <p>{event.distance_km != null ? `${Number(event.distance_km).toLocaleString('it-IT')} km da te` : event.city || 'Posizione evento'}</p>
+            <div className={`${styles.locationBody} ${gymAccess ? styles.locationBodyCompact : ''}`}>
+              {!gymAccess ? (
+                <div className={styles.locationHeading}>
+                  <span className={styles.locationIcon}><MapPin size={20} aria-hidden="true" /></span>
+                  <div>
+                    <h2>{event.location_name || 'Luogo da definire'}</h2>
+                    <p>{event.distance_km != null ? `${Number(event.distance_km).toLocaleString('it-IT')} km da te` : event.city || 'Posizione evento'}</p>
+                  </div>
                 </div>
-              </div>
+              ) : null}
               {gymAccess ? (
                 <div className={styles.gymAccessNotice} role="note">
                   <span><LockKeyhole size={19} aria-hidden="true" /></span>
                   <div>
-                    <small>ACCESSO ALLA STRUTTURA</small>
+                    <small>ACCESSO · {event.location_name || 'PALESTRA'}</small>
                     <strong>{gymAccess.label}</strong>
                     <p>{gymAccess.description}</p>
                   </div>
@@ -1532,6 +1744,89 @@ function EventDetailPage() {
             </div>
           </section>
 
+          {isParticipantView ? (
+            <Card subtle className={`${styles.actionCard} ${styles.participantPriorityCard}`}>
+              <div className={styles.participantPriorityHeading}>
+                <h2>La tua partecipazione</h2>
+                <span className={styles.participationStateBadge}>{participationState.badge}</span>
+              </div>
+              <div className={styles.participantDecisionSummary} aria-label="Condizioni principali">
+                <span>
+                  <Users size={16} aria-hidden="true" />
+                  {participantsCount}/{maxParticipants || '∞'} iscritti
+                </span>
+                <span>
+                  <CircleDollarSign size={16} aria-hidden="true" />
+                  {event.participation_protection === false ? 'Nessun deposito' : `${formatCurrencyFromCents(event.deposit_cents)} protetti`}
+                </span>
+                <span>
+                  <Trophy size={16} aria-hidden="true" />
+                  Fino a {totalAvailableXp} PX
+                </span>
+              </div>
+              <section
+                className={`${styles.participationStateBox} ${styles.participantStateCompact} ${styles[`participationState_${participationState.tone}`] || ''}`}
+                aria-live="polite"
+              >
+                <div className={styles.participationStateHeader}>
+                  <span className={styles.participationStateIcon} aria-hidden="true">
+                    {participationState.id === 'pending' ? <Clock3 size={21} /> :
+                      participationState.tone === 'danger' ? <X size={21} /> :
+                        participationState.id === 'joinable' ? <UserPlus size={21} /> :
+                          <CheckCircle2 size={21} />}
+                  </span>
+                  <div>
+                    <strong>{participationState.title}</strong>
+                    <p>{participationState.description}</p>
+                  </div>
+                </div>
+
+                <ol className={styles.participationSteps} aria-label="Avanzamento partecipazione">
+                  {[
+                    event.join_policy === 'approval' ? 'Richiesta' : 'Iscrizione',
+                    'Confermata',
+                    'Check-in',
+                    'Completata'
+                  ].map((label, index) => {
+                    const stepNumber = index + 1;
+                    const isReached = stepNumber <= participationState.stepIndex;
+                    const isCurrent = stepNumber === participationState.stepIndex;
+                    return (
+                      <li
+                        key={label}
+                        className={`${isReached ? styles.participationStepReached : ''} ${isCurrent ? styles.participationStepCurrent : ''}`}
+                        aria-current={isCurrent ? 'step' : undefined}
+                      >
+                        <i aria-hidden="true">{isReached ? '✓' : stepNumber}</i>
+                        <span>{label}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+              {eventPrimaryAction.target !== 'event' ? (
+                <div className={styles.primaryParticipationAction}>
+                  <Button
+                    type="button"
+                    fullWidth
+                    variant={eventPrimaryAction.tone === 'primary' ? 'primary' : 'secondary'}
+                    icon={EventPrimaryActionIcon}
+                    disabled={eventPrimaryAction.disabled}
+                    onClick={handlePrimaryEventAction}
+                  >
+                    {eventPrimaryAction.label}
+                  </Button>
+                </div>
+              ) : null}
+              {gymAccess ? (
+                <p className={styles.participantAccessReminder}>
+                  <LockKeyhole size={15} aria-hidden="true" />
+                  {gymAccess.label}: verifica l’accesso prima di partecipare.
+                </p>
+              ) : null}
+            </Card>
+          ) : null}
+
           {!event.is_personal ? (
             <Card
               id={isOrganizerForEvent ? 'organizer-controls' : undefined}
@@ -1551,7 +1846,7 @@ function EventDetailPage() {
                   <small>
                     {isOrganizerForEvent && !eventIsCancelled
                       ? 'Richieste e iscritti in un unico pannello'
-                      : `Profilo verificato · ${participantsCount}/${maxParticipants || '∞'} iscritti`}
+                      : `${organizerName} · ${organizerReliability}% affidabilità · ${participantsCount}/${maxParticipants || '∞'} iscritti`}
                   </small>
                 </span>
                 <ChevronDown
@@ -1695,7 +1990,7 @@ function EventDetailPage() {
             />
           </div>
 
-          {!event.is_personal && !eventIsCancelled ? (
+          {!event.is_personal && !eventIsCancelled && canOpenAgendaCheckIn ? (
             <Card
               id="verify-presence"
               ref={participationFlowRef}
@@ -1707,24 +2002,15 @@ function EventDetailPage() {
                 <ShieldCheck size={23} />
               </div>
               <div className={styles.checkInBridgeCopy}>
-                <span>Presenza evento</span>
-                <h2>{checkInStatusLabel}</h2>
-                <p>
+                <span>Check-in da I miei eventi</span>
+                <h2>{checkInStatusLabel} · {checkInWindowLabel}</h2>
+                <small>
+                  <Clock3 size={14} aria-hidden="true" />
                   {canOpenAgendaCheckIn
-                    ? isOrganizerForEvent
-                      ? 'Scansiona i QR, verifica la posizione e gestisci la tolleranza da I miei eventi.'
-                      : 'Mostra il tuo QR o verifica la posizione dalla sezione I miei eventi.'
-                    : 'Il check-in sarà disponibile in I miei eventi dopo la conferma della partecipazione.'}
-                </p>
-                <small><Clock3 size={14} aria-hidden="true" /> Finestra check-in {checkInWindowLabel}</small>
+                    ? 'QR e geolocalizzazione disponibili nella tua agenda'
+                    : 'Disponibile dopo la conferma della partecipazione'}
+                </small>
               </div>
-              {canOpenAgendaCheckIn ? (
-                <span className={styles.checkInBridgeLocked}>
-                  {isClosedEvent ? 'Check-in concluso' : 'Da I miei eventi'}
-                </span>
-              ) : (
-                <span className={styles.checkInBridgeLocked}>Prima partecipa</span>
-              )}
             </Card>
           ) : null}
 
@@ -1817,7 +2103,7 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          {!isOrganizerForEvent || event.is_personal ? (
+          {event.is_personal || (!isOrganizerForEvent && canOpenAgendaCheckIn) ? (
             <Card as="section" className={styles.rewardCard}>
               <div className={styles.rewardHeading}>
                 <div>
@@ -1890,51 +2176,8 @@ function EventDetailPage() {
 
           <Card subtle className={styles.actionCard}>
             <h2 className={styles.actionTitle}>
-              {eventIsCancelled ? 'Evento annullato' : isOrganizerForEvent ? 'Azioni evento' : 'Gestisci la partecipazione'}
+              {eventIsCancelled ? 'Evento annullato' : isOrganizerForEvent ? 'Azioni evento' : 'Altre opzioni'}
             </h2>
-            {!event.is_personal && !isOrganizerForEvent ? (
-              <section
-                className={`${styles.participationStateBox} ${styles[`participationState_${participationState.tone}`] || ''}`}
-                aria-live="polite"
-              >
-                <div className={styles.participationStateHeader}>
-                  <span className={styles.participationStateIcon} aria-hidden="true">
-                    {participationState.id === 'pending' ? <Clock3 size={21} /> :
-                      participationState.tone === 'danger' ? <X size={21} /> :
-                        participationState.id === 'joinable' ? <UserPlus size={21} /> :
-                          <CheckCircle2 size={21} />}
-                  </span>
-                  <div>
-                    <strong>{participationState.title}</strong>
-                    <p>{participationState.description}</p>
-                  </div>
-                  <span className={styles.participationStateBadge}>{participationState.badge}</span>
-                </div>
-
-                <ol className={styles.participationSteps} aria-label="Avanzamento partecipazione">
-                  {[
-                    event.join_policy === 'approval' ? 'Richiesta' : 'Iscrizione',
-                    'Confermata',
-                    'Check-in',
-                    'Completata'
-                  ].map((label, index) => {
-                    const stepNumber = index + 1;
-                    const isReached = stepNumber <= participationState.stepIndex;
-                    const isCurrent = stepNumber === participationState.stepIndex;
-                    return (
-                      <li
-                        key={label}
-                        className={`${isReached ? styles.participationStepReached : ''} ${isCurrent ? styles.participationStepCurrent : ''}`}
-                        aria-current={isCurrent ? 'step' : undefined}
-                      >
-                        <i aria-hidden="true">{isReached ? '✓' : stepNumber}</i>
-                        <span>{label}</span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </section>
-            ) : null}
             <div className={styles.primaryParticipationAction}>
               {isOrganizerForEvent && event.is_personal ? (
                 <Button
@@ -1952,19 +2195,7 @@ function EventDetailPage() {
                         : 'Disponibile al termine'}
                 </Button>
               ) : null}
-              {!event.is_personal && !isOrganizerForEvent ? (
-                <Button
-                  type="button"
-                  fullWidth
-                  variant={eventPrimaryAction.tone === 'primary' ? 'primary' : 'secondary'}
-                  icon={EventPrimaryActionIcon}
-                  disabled={eventPrimaryAction.disabled}
-                  onClick={handlePrimaryEventAction}
-                >
-                  {eventPrimaryAction.label}
-                </Button>
-              ) : null}
-              {isOrganizerForEvent && !event.is_personal ? (
+              {isOrganizerForEvent && !event.is_personal && eventPrimaryAction.target !== 'manage' ? (
                 <Button
                   type="button"
                   fullWidth
@@ -1995,17 +2226,6 @@ function EventDetailPage() {
               {isOrganizerForEvent && !eventIsCancelled ? (
                 <Button type="button" variant="secondary" icon={PencilLine} onClick={openOrganizerEditDialog}>
                   Modifica evento
-                </Button>
-              ) : null}
-              {canCancelOrganizedEvent ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className={styles.organizerCancelButton}
-                  icon={Ban}
-                  onClick={() => setOrganizerCancelOpen(true)}
-                >
-                  Cancella evento
                 </Button>
               ) : null}
               {!isOrganizerForEvent && participationState.canCancel ? (
@@ -2066,16 +2286,8 @@ function EventDetailPage() {
             </Card>
           ) : null}
 
-          <Card subtle className={styles.coachCtaCard}>
-            {!coachProfile ? (
-              <>
-                <div className={styles.coachCtaCopy}>
-                  <p>Ricevi una valutazione di compatibilità personalizzata per ogni sessione</p>
-                  <Button type="button" size="sm" onClick={() => navigate('/coach')}>Attiva Coach</Button>
-                </div>
-                <span className={styles.coachCtaIcon}><Sparkles size={35} aria-hidden="true" /></span>
-              </>
-            ) : (
+          {coachProfile ? (
+            <Card subtle className={styles.coachCtaCard}>
               <div className={styles.coachInsightActive}>
                 <div className={styles.metaRow}>
                   <EventBadge label={`${coachInsight.score}% compatibilita`} type="level" />
@@ -2083,12 +2295,12 @@ function EventDetailPage() {
                 </div>
                 <p className="muted">{coachInsight.explanation}</p>
               </div>
-            )}
-          </Card>
+            </Card>
+          ) : null}
 
         </article>
 
-        {similarEvents.length > 0 ? (
+        {!isOrganizerForEvent && similarEvents.length > 0 ? (
           <section className={styles.list}>
             <div className={styles.listHeading}>
               <p>Continua a muoverti</p>
@@ -2110,11 +2322,29 @@ function EventDetailPage() {
         ) : null}
       </main>
 
+      {showParticipantStickyAction ? (
+        <div className={styles.participantStickyAction} aria-label="Azione principale partecipazione">
+          <Button
+            type="button"
+            fullWidth
+            variant={eventPrimaryAction.tone === 'primary' ? 'primary' : 'secondary'}
+            icon={EventPrimaryActionIcon}
+            disabled={eventPrimaryAction.disabled}
+            onClick={handlePrimaryEventAction}
+          >
+            {eventPrimaryAction.label}
+          </Button>
+        </div>
+      ) : null}
+
       <Modal
         open={modalOpen}
         title={event?.join_policy === 'approval' ? 'Richiedi di partecipare' : 'Partecipa alla sessione'}
         onClose={() => {
-          if (!rsvpSubmitting) setModalOpen(false);
+          if (!rsvpSubmitting) {
+            setModalOpen(false);
+            setRsvpNoteOpen(false);
+          }
         }}
         onConfirm={confirmRsvp}
         confirmText={rsvpSubmitting
@@ -2122,59 +2352,161 @@ function EventDetailPage() {
           : event?.join_policy === 'approval'
             ? 'Invia richiesta'
             : 'Blocca deposito e partecipa'}
-        confirmDisabled={rsvpSubmitting}
+        confirmDisabled={rsvpSubmitting || String(localProfile.display_name || '').trim().length < 2}
+        showCloseAction={false}
+        showHeaderClose
       >
-        <label>
-          Nome dal profilo
-          <input
-            value={rsvpForm.name || localProfile.display_name || ''}
-            readOnly={String(localProfile.display_name || '').trim().length >= 2}
-            placeholder="Completa il nome nel profilo"
-            autoComplete="name"
-            maxLength="40"
-            required
-            onChange={(event) => setRsvpForm((current) => ({
-              ...current,
-              name: event.target.value
-            }))}
-          />
-          {String(localProfile.display_name || '').trim().length < 2 ? (
-            <small className="muted">Il nome verrà salvato nel tuo profilo quando invii la richiesta.</small>
-          ) : null}
-        </label>
-        <label>
-          Livello
-          <select
-            value={rsvpForm.skill_level}
-            onChange={(event) => setRsvpForm((prev) => ({ ...prev, skill_level: event.target.value }))}
-          >
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
-        </label>
-        <label>
-          Nota (opzionale)
-          <textarea
-            rows="2"
-            value={rsvpForm.note}
-            onChange={(event) => setRsvpForm((prev) => ({ ...prev, note: event.target.value }))}
-          />
-        </label>
-        <Card subtle>
-          <p>
-            <strong>Riserva partecipazione Motrice:</strong>{' '}
-            {(Number(event?.deposit_cents || 0) / 100).toLocaleString('it-IT', {
-              style: 'currency',
-              currency: 'EUR'
-            })}
-          </p>
-          <p className="muted">
+        <div className={styles.joinRequestForm}>
+          <p className={styles.joinRequestIntro}>
             {event?.join_policy === 'approval'
-              ? 'La riserva viene bloccata solo dopo l’approvazione dell’organizzatore.'
-              : `La riserva viene bloccata nel Wallet. Dopo almeno ${Number(event?.minimum_presence_minutes || 45)} minuti verificati torna disponibile al termine delle 48 ore di tutela.`}
+              ? 'L’organizzatore riceverà la richiesta e potrà approvarla.'
+              : 'Conferma i tuoi dati per riservare il posto.'}
           </p>
-        </Card>
+
+          <div className={styles.joinIdentity} aria-label="Identità utilizzata per la richiesta">
+            <div className={styles.joinIdentityAvatar} aria-hidden="true">
+              {localProfile.avatar_url ? (
+                <img src={localProfile.avatar_url} alt="" />
+              ) : (
+                <span>{String(localProfile.display_name || 'M').slice(0, 1).toUpperCase()}</span>
+              )}
+            </div>
+            <div className={styles.joinIdentityCopy}>
+              <strong>{localProfile.display_name || 'Profilo incompleto'}</strong>
+              <small>
+                {profileVerificationStatus === 'verified' ? (
+                  <><ShieldCheck size={14} aria-hidden="true" /> Profilo verificato</>
+                ) : (
+                  'Identità dal profilo Motrice'
+                )}
+                {localProfile.reliability != null
+                  ? ` · ${Math.round(localProfile.reliability)}% affidabilità`
+                  : ''}
+              </small>
+            </div>
+            {String(localProfile.display_name || '').trim().length < 2 ? (
+              <Link className={styles.joinCompleteProfileLink} to="/account">
+                Completa
+              </Link>
+            ) : null}
+          </div>
+
+          <fieldset className={styles.joinLevelFieldset}>
+            <legend>Il tuo livello per questo evento</legend>
+            <div className={styles.joinLevelChoices}>
+              {RSVP_SKILL_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  className={rsvpForm.skill_level === level.value ? styles.joinLevelChoiceActive : ''}
+                  aria-pressed={rsvpForm.skill_level === level.value}
+                  onClick={() => setRsvpForm((current) => ({ ...current, skill_level: level.value }))}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className={styles.joinNoteSection}>
+            <button
+              type="button"
+              className={styles.joinNoteToggle}
+              aria-expanded={rsvpNoteOpen}
+              onClick={() => setRsvpNoteOpen((current) => !current)}
+            >
+              <span>{rsvpNoteOpen ? 'Nota per l’organizzatore' : '+ Aggiungi una nota all’organizzatore'}</span>
+              <ChevronDown size={18} aria-hidden="true" />
+            </button>
+            {rsvpNoteOpen ? (
+              <label className={styles.joinNoteField}>
+                <textarea
+                  rows="3"
+                  maxLength="240"
+                  aria-label="Nota facoltativa per l’organizzatore"
+                  placeholder="Nota facoltativa per l’organizzatore"
+                  value={rsvpForm.note}
+                  onChange={(event) => setRsvpForm((current) => ({ ...current, note: event.target.value }))}
+                />
+                <small>{String(rsvpForm.note || '').length}/240</small>
+              </label>
+            ) : null}
+          </div>
+
+          <div className={styles.joinDepositSummary}>
+            <CircleDollarSign size={22} aria-hidden="true" />
+            <div>
+              <strong>{formatCurrencyFromCents(event?.deposit_cents)} di deposito</strong>
+              <small>
+                {event?.join_policy === 'approval'
+                  ? 'Riservati all’invio e liberati se la richiesta non viene accettata'
+                  : `Restituiti dopo almeno ${Number(event?.minimum_presence_minutes || 45)} min verificati`}
+              </small>
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={creditBlockedOpen}
+        title="Credito impegnato"
+        onClose={() => setCreditBlockedOpen(false)}
+        onConfirm={() => {
+          setCreditBlockedOpen(false);
+          navigate('/wallet/credit');
+        }}
+        confirmText="Vedi impegni"
+        closeText="Chiudi"
+      >
+        <div className={styles.creditBlockedDialog}>
+          {creditBlockedLoading ? (
+            <div className={styles.creditBlockedLead}>
+              <span className={styles.creditBlockedIcon} aria-hidden="true">
+                <LockKeyhole size={20} />
+              </span>
+              <div>
+                <span>Saldo disponibile</span>
+                <strong>Controllo in corso…</strong>
+              </div>
+            </div>
+          ) : creditBlockedWallet ? (
+            <>
+              <div className={styles.creditBlockedLead}>
+                <span className={styles.creditBlockedIcon} aria-hidden="true">
+                  <LockKeyhole size={20} />
+                </span>
+                <div>
+                  <span>Servono per partecipare</span>
+                  <strong>{formatCurrencyFromCents(creditBlockedWallet.requiredCents)} disponibili</strong>
+                </div>
+                <small>Totale {formatCurrencyFromCents(creditBlockedWallet.totalCents)}</small>
+              </div>
+              <div className={styles.creditBlockedBreakdown} aria-label="Riepilogo credito">
+                <div>
+                  <span>Disponibili</span>
+                  <strong>{formatCurrencyFromCents(creditBlockedWallet.availableCents)}</strong>
+                </div>
+                <div>
+                  <span>Bloccati negli eventi</span>
+                  <strong>{formatCurrencyFromCents(creditBlockedWallet.lockedCents)}</strong>
+                </div>
+              </div>
+              {creditBlockedWallet.lockedCents > 0 ? (
+                <p>Il credito bloccato è già usato da altri eventi o richieste.</p>
+              ) : null}
+            </>
+          ) : (
+            <div className={styles.creditBlockedLead}>
+              <span className={styles.creditBlockedIcon} aria-hidden="true">
+                <LockKeyhole size={20} />
+              </span>
+              <div>
+                <span>Saldo disponibile</span>
+                <strong>Credito insufficiente</strong>
+              </div>
+            </div>
+          )}
+        </div>
       </Modal>
 
       <Modal
@@ -2213,6 +2545,9 @@ function EventDetailPage() {
           organizerEditSubmitting ||
           !organizerEditHasChanges ||
           !organizerEditDescriptionValid ||
+          !organizerEditCapacityValid ||
+          String(organizerEditForm.organizer_notes || '').length > 800 ||
+          String(organizerEditForm.organizer_alert || '').length > 280 ||
           !eventManagementPolicy.canEditAnything
         }
         closeText="Chiudi"
@@ -2222,18 +2557,28 @@ function EventDetailPage() {
           <div className={styles.organizerEditIntro}>
             <PencilLine size={21} aria-hidden="true" />
             <div>
-              <strong>Solo le informazioni adattabili</strong>
-              <p>Sport, luogo, data, accesso, partecipanti e deposito restano invariati.</p>
+              <strong>Modifiche protette per tutti</strong>
+              <p>Ogni campo segue una finestra precisa. Le variazioni salvate vengono comunicate ai partecipanti.</p>
             </div>
           </div>
+
+          <section className={styles.organizerEditContentGroup}>
+            <div className={styles.organizerEditGroupHead}>
+              <span>01</span>
+              <div>
+                <strong>Informazioni</strong>
+                <p>Testi utili per prepararsi e raggiungere il punto d’incontro.</p>
+              </div>
+            </div>
 
           <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDescription}>
             <span className={styles.organizerEditFieldHead}>
               <strong>Descrizione</strong>
-              <small>{eventManagementPolicy.canEditDescription ? 'Fino all’inizio' : 'Modifica chiusa'}</small>
+              <small>{eventManagementPolicy.canEditDescription ? 'Fino all’inizio' : 'Chiusa dopo l’inizio'}</small>
             </span>
             <textarea
-              rows="4"
+              className={styles.organizerEditTextArea}
+              rows="3"
               maxLength="2000"
               value={organizerEditForm.description}
               onChange={(changeEvent) => setOrganizerEditForm((current) => ({
@@ -2249,88 +2594,298 @@ function EventDetailPage() {
             </span>
           </label>
 
-          <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDuration}>
+          <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDescription}>
             <span className={styles.organizerEditFieldHead}>
-              <strong>Tempo di allenamento</strong>
-              <small>{eventManagementPolicy.canEditDuration ? 'Fino a 2 ore prima' : 'Modifica chiusa'}</small>
+              <strong>Indicazioni pratiche</strong>
+              <small>{eventManagementPolicy.canEditDescription ? 'Fino all’inizio' : 'Chiuse dopo l’inizio'}</small>
             </span>
-            <select
-              value={organizerEditForm.duration_minutes}
+            <textarea
+              className={styles.organizerEditTextArea}
+              rows="2"
+              maxLength="800"
+              value={organizerEditForm.organizer_notes}
               onChange={(changeEvent) => setOrganizerEditForm((current) => ({
                 ...current,
-                duration_minutes: Number(changeEvent.target.value)
+                organizer_notes: changeEvent.target.value
               }))}
-              disabled={!eventManagementPolicy.canEditDuration || organizerEditSubmitting}
-            >
-              {[30, 45, 60, 75, 90, 120, 150, 180, 240].map((minutes) => (
-                <option key={minutes} value={minutes}>{minutes} minuti</option>
-              ))}
-              {![30, 45, 60, 75, 90, 120, 150, 180, 240].includes(Number(organizerEditForm.duration_minutes)) ? (
-                <option value={organizerEditForm.duration_minutes}>{organizerEditForm.duration_minutes} minuti</option>
-              ) : null}
-            </select>
-            <small>La presenza minima si ricalcola automaticamente.</small>
+              placeholder="Ingresso, attrezzatura, punto di ritrovo o indicazioni utili..."
+              disabled={!eventManagementPolicy.canEditDescription || organizerEditSubmitting}
+            />
+            <span className={styles.organizerEditFieldFoot}>
+              <small>Informazioni operative, senza cambiare l’accordo dell’evento.</small>
+              <small>{organizerEditForm.organizer_notes.length}/800</small>
+            </span>
           </label>
+          </section>
+
+          <section className={styles.organizerEditAdjustments}>
+            <div className={styles.organizerEditAdjustmentsHead}>
+              <span>02</span>
+              <div>
+                <strong>Impostazioni adattabili</strong>
+                <p>Puoi soltanto ampliare i valori concordati, mai ridurli.</p>
+              </div>
+              <ShieldCheck size={19} aria-hidden="true" />
+            </div>
+
+          <fieldset className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditDuration}>
+            <legend className={styles.organizerEditFieldHead}>
+              <strong>Tempo di allenamento</strong>
+              <small>{eventManagementPolicy.canEditDuration ? `Massimo +${EVENT_DURATION_MAX_EXTENSION_MINUTES} min` : 'Finestra chiusa · T-2h'}</small>
+            </legend>
+            <div className={styles.organizerExtensionOptions}>
+              {organizerDurationOptions.map((minutes) => {
+                const selected = Number(organizerEditForm.duration_minutes) === minutes;
+                const isCurrent = minutes === durationMinutes;
+                return (
+                  <button
+                    key={minutes}
+                    type="button"
+                    className={`${isCurrent ? styles.organizerExtensionCurrent : ''} ${selected && !isCurrent ? styles.organizerExtensionSelected : ''}`}
+                    aria-pressed={selected}
+                    disabled={!eventManagementPolicy.canEditDuration || organizerEditSubmitting}
+                    onClick={() => setOrganizerEditForm((current) => ({
+                      ...current,
+                      duration_minutes: minutes
+                    }))}
+                  >
+                    <strong>{minutes}</strong>
+                    <span>{isCurrent ? 'attuale' : `+${minutes - durationMinutes} min`}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <small className={styles.organizerPresenceImpact}>
+              Presenza minima: {minimumPresenceMinutes} min
+              {organizerEditMinimumPresenceMinutes !== minimumPresenceMinutes
+                ? ` → ${organizerEditMinimumPresenceMinutes} min`
+                : ''}
+            </small>
+          </fieldset>
 
           {!event.is_personal ? (
             <fieldset className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditTolerance}>
               <legend className={styles.organizerEditFieldHead}>
                 <strong>Tolleranza ritardi</strong>
                 <small>
-                  {eventManagementPolicy.canIncreaseToleranceAfterStart
-                    ? 'Puoi solo aumentarla'
-                    : eventManagementPolicy.canEditTolerance
-                      ? '15–30 minuti'
-                      : 'Modifica chiusa'}
+                  {eventManagementPolicy.canEditTolerance
+                    ? 'Solo estensione'
+                    : eventManagementPolicy.currentTolerance >= 30
+                      ? 'Massimo raggiunto'
+                      : 'Finestra chiusa'}
                 </small>
               </legend>
-              <div className={styles.organizerToleranceOptions}>
-                {[15, 20, 30].map((minutes) => {
-                  const optionDisabled = !eventManagementPolicy.canEditTolerance ||
-                    (eventManagementPolicy.hasStarted && minutes <= eventManagementPolicy.currentTolerance);
+              <div className={styles.organizerExtensionOptions}>
+                {eventManagementPolicy.toleranceOptions.map((minutes) => {
                   const selected = Number(organizerEditForm.checkin_grace_minutes) === minutes;
+                  const isCurrent = minutes === eventManagementPolicy.currentTolerance;
                   return (
                     <button
                       key={minutes}
                       type="button"
-                      className={selected ? styles.organizerToleranceSelected : ''}
+                      className={`${isCurrent ? styles.organizerExtensionCurrent : ''} ${selected && !isCurrent ? styles.organizerExtensionSelected : ''}`}
                       aria-pressed={selected}
-                      disabled={optionDisabled || organizerEditSubmitting}
+                      disabled={!eventManagementPolicy.canEditTolerance || organizerEditSubmitting}
                       onClick={() => setOrganizerEditForm((current) => ({
                         ...current,
                         checkin_grace_minutes: minutes
                       }))}
                     >
                       <strong>{minutes}</strong>
-                      <span>min</span>
+                      <span>{isCurrent ? 'attuale' : 'minuti'}</span>
                     </button>
                   );
                 })}
               </div>
-              <small>Dopo l’inizio è consentito soltanto prolungare, entro il limite massimo di 30 minuti.</small>
+              <small>Non può essere ridotta, così nessun partecipante perde la finestra promessa.</small>
             </fieldset>
           ) : null}
+
+          {!event.is_personal ? (
+            <fieldset className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canEditParticipantSettings}>
+              <legend className={styles.organizerEditFieldHead}>
+                <strong>Posti disponibili</strong>
+                <small>Massimo +{EVENT_CAPACITY_MAX_EXTENSION}</small>
+              </legend>
+              <div className={styles.organizerExtensionOptions}>
+                {organizerCapacityOptions.map((capacity) => {
+                  const selected = Number(organizerEditForm.max_participants) === capacity;
+                  const isCurrent = capacity === organizerEditCapacityMinimum;
+                  return (
+                    <button
+                      key={capacity}
+                      type="button"
+                      className={`${isCurrent ? styles.organizerExtensionCurrent : ''} ${selected && !isCurrent ? styles.organizerExtensionSelected : ''}`}
+                      aria-pressed={selected}
+                      disabled={!eventManagementPolicy.canEditParticipantSettings || organizerEditSubmitting}
+                      onClick={() => setOrganizerEditForm((current) => ({
+                        ...current,
+                        max_participants: capacity
+                      }))}
+                    >
+                      <strong>{capacity}</strong>
+                      <span>{isCurrent ? 'attuali' : `+${capacity - organizerEditCapacityMinimum}`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <small>I posti possono soltanto aumentare, senza cambiare il gruppo già confermato.</small>
+            </fieldset>
+          ) : null}
+
+          {!event.is_personal ? (
+            <label
+              className={styles.organizerEditField}
+              data-disabled={!eventManagementPolicy.canEditParticipantSettings}
+              data-changed={String(organizerEditForm.required_level || '') !== String(event.level || 'all')}
+            >
+            <span className={styles.organizerEditFieldHead}>
+              <strong>Livello richiesto</strong>
+              <small>Fino a 2 ore prima</small>
+            </span>
+            <select
+              value={organizerEditForm.required_level}
+              onChange={(changeEvent) => setOrganizerEditForm((current) => ({
+                ...current,
+                required_level: changeEvent.target.value
+              }))}
+              disabled={!eventManagementPolicy.canEditParticipantSettings || organizerEditSubmitting}
+            >
+              {EVENT_LEVEL_OPTIONS.map((level) => (
+                <option
+                  key={level.value}
+                  value={level.value}
+                  disabled={
+                    Number(event.participants_count || 0) > 1 &&
+                    level.value !== 'all' &&
+                    level.value !== String(event.level || 'all')
+                  }
+                >
+                  {level.label}
+                </option>
+              ))}
+            </select>
+            <small>Con iscritti presenti puoi soltanto mantenere il livello o aprire a tutti.</small>
+          </label>
+          ) : null}
+          </section>
+
+          <section className={styles.organizerUrgentSection}>
+            <div className={styles.organizerEditGroupHead}>
+              <span>03</span>
+              <div>
+                <strong>Comunicazione urgente</strong>
+                <p>Un messaggio operativo evidenziato nella notifica ai partecipanti.</p>
+              </div>
+              <Megaphone size={19} aria-hidden="true" />
+            </div>
+
+          <label className={styles.organizerEditField} data-disabled={!eventManagementPolicy.canSendOrganizerAlert}>
+            <span className={styles.organizerEditFieldHead}>
+              <strong>Aggiornamento urgente</strong>
+              <small>{eventManagementPolicy.canSendOrganizerAlert ? 'Fino alla fine' : 'Chiuso a fine evento'}</small>
+            </span>
+            <div className={styles.organizerAlertLabel}>
+              <textarea
+                rows="2"
+                maxLength="280"
+                value={organizerEditForm.organizer_alert}
+                onChange={(changeEvent) => setOrganizerEditForm((current) => ({
+                  ...current,
+                  organizer_alert: changeEvent.target.value
+                }))}
+                placeholder="Es. Ci troviamo all’ingresso laterale."
+                disabled={!eventManagementPolicy.canSendOrganizerAlert || organizerEditSubmitting}
+              />
+            </div>
+            <span className={styles.organizerEditFieldFoot}>
+              <small>Se cambia, viene evidenziato nella notifica ai partecipanti.</small>
+              <small>{organizerEditForm.organizer_alert.length}/280</small>
+            </span>
+          </label>
+          </section>
+
+          <div className={styles.organizerProtectedChanges}>
+            <ShieldCheck size={19} aria-hidden="true" />
+            <div>
+              <strong>Informazioni protette</strong>
+              <p>Sport, data, orario, luogo, immagine, scheda, accesso e deposito restano quelli definiti alla pubblicazione.</p>
+            </div>
+          </div>
 
           {!eventManagementPolicy.canEditAnything ? (
             <p className={styles.organizerEditClosed}>
               <Clock3 size={18} aria-hidden="true" /> Le finestre di modifica sono terminate. L’evento resta consultabile senza variazioni.
             </p>
           ) : organizerEditHasChanges ? (
-            <p className={styles.organizerEditNotice}>
-              I partecipanti riceveranno una notifica con le informazioni cambiate.
-            </p>
+            <section className={styles.organizerEditSummary} aria-label="Riepilogo modifiche">
+              <div className={styles.organizerEditSummaryHead}>
+                <CheckCircle2 size={18} aria-hidden="true" />
+                <div>
+                  <strong>Prima di salvare</strong>
+                  <small>Controlla cosa cambierà per i partecipanti.</small>
+                </div>
+              </div>
+              <div className={styles.organizerEditSummaryList}>
+                {organizerEditChangeItems.map((item) => (
+                  <div key={item.label}>
+                    <span>{item.label}</span>
+                    <small>{item.before}</small>
+                    <ArrowRight size={13} aria-hidden="true" />
+                    <strong>{item.after}</strong>
+                  </div>
+                ))}
+              </div>
+              <p>
+                {Number(event.participants_count || 0) > 0
+                  ? `${event.participants_count} ${Number(event.participants_count) === 1 ? 'partecipante riceverà' : 'partecipanti riceveranno'} una notifica.`
+                  : 'Le modifiche saranno già visibili alle prossime richieste.'}
+              </p>
+            </section>
+          ) : null}
+
+          {canCancelOrganizedEvent ? (
+            <section className={styles.organizerDangerDisclosure} data-open={organizerDangerOpen}>
+              <button
+                type="button"
+                className={styles.organizerDangerToggle}
+                aria-expanded={organizerDangerOpen}
+                onClick={() => setOrganizerDangerOpen((current) => !current)}
+              >
+                <span>
+                  <strong>Elimina evento</strong>
+                  <small>Azione permanente</small>
+                </span>
+                <ChevronDown size={17} aria-hidden="true" />
+              </button>
+              {organizerDangerOpen ? (
+                <div className={styles.organizerDangerZone}>
+                  <p>Chiude iscrizioni e QR, avvisa tutti e restituisce le quote secondo le regole Motrice.</p>
+                  <button
+                type="button"
+                onClick={() => {
+                  setOrganizerEditOpen(false);
+                  setOrganizerCancelOpen(true);
+                }}
+                disabled={organizerEditSubmitting}
+              >
+                <Trash2 size={17} aria-hidden="true" /> Elimina evento
+              </button>
+                </div>
+              ) : null}
+            </section>
           ) : null}
         </div>
       </Modal>
 
       <Modal
         open={organizerCancelOpen}
-        title="Cancella definitivamente l evento"
+        title="Elimina evento"
         onClose={() => {
           if (!organizerCancelSubmitting) setOrganizerCancelOpen(false);
         }}
         onConfirm={cancelOrganizedEvent}
-        confirmText={organizerCancelSubmitting ? 'Annullamento in corso...' : 'Conferma cancellazione'}
+        confirmText={organizerCancelSubmitting ? 'Eliminazione in corso...' : 'Conferma eliminazione'}
         confirmDisabled={!organizerCancelForm.reasonCode || organizerCancelSubmitting}
         confirmClassName={styles.organizerCancelConfirm}
         closeText="Mantieni evento"
@@ -2343,12 +2898,12 @@ function EventDetailPage() {
               <p>Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.</p>
             </div>
             <ContextInfoButton
-              title="Cancellazione evento"
-              description="La cancellazione chiude definitivamente l’attività e informa tutte le persone coinvolte."
+              title="Eliminazione evento"
+              description="L’eliminazione rimuove l’attività dalle sezioni attive e informa tutte le persone coinvolte."
               items={[
                 { title: 'Partecipanti', text: 'Le iscrizioni vengono chiuse e ogni partecipante riceve una notifica.' },
                 { title: 'Depositi', text: 'Le quote interessate vengono restituite secondo le regole mostrate nel riepilogo.' },
-                { title: 'Cancellazione tardiva', text: 'Se mancano meno di 24 ore, l’operazione viene registrata come tardiva.' }
+                { title: 'Eliminazione tardiva', text: 'Se mancano meno di 24 ore, l’operazione viene registrata come tardiva.' }
               ]}
               note="Dopo la conferma l’evento non può essere riattivato."
             />

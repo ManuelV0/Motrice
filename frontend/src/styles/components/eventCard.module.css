@@ -406,6 +406,20 @@
   color: #0b0d0a;
 }
 
+.primaryActionWarning {
+  border-color: #f3ff38;
+  background: #f3ff38;
+  color: #111300;
+  box-shadow: 0 0 1rem rgb(243 255 56 / 20%);
+}
+
+.primaryActionWarning:hover,
+.primaryActionWarning:focus-visible {
+  border-color: #fbff9b;
+  background: #fbff63;
+  box-shadow: 0 0 1.15rem rgb(243 255 56 / 30%);
+}
+
 .detailsAction:hover,
 .secondaryAction:hover {
   border-color: rgb(198 255 0 / 45%);

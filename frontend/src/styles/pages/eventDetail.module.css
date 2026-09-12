@@ -1905,7 +1905,507 @@
   }
 }
 
-/* Mappa evento scura con azioni integrate nella superficie cartografica. */
+.joinRequestForm {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.joinRequestIntro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.joinIdentity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.035);
+}
+
+.joinIdentityAvatar {
+  width: 2.85rem;
+  height: 2.85rem;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--primary) 72%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  color: var(--primary);
+  font-size: 1rem;
+  font-weight: var(--weight-bold);
+}
+
+.joinIdentityAvatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.joinIdentityCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.joinIdentityCopy strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.96rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.joinIdentityCopy small {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.joinIdentityCopy small svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.joinCompleteProfileLink {
+  min-height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  padding-inline: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  border-radius: var(--r-md);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+}
+
+.joinLevelFieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.joinLevelFieldset legend {
+  margin-bottom: 0.55rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: var(--weight-semibold);
+}
+
+.joinLevelChoices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+  padding: 0.25rem;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: rgb(0 0 0 / 0.14);
+}
+
+.joinLevelChoices button {
+  min-width: 0;
+  min-height: 2.65rem;
+  padding: 0.55rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease),
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.joinLevelChoices button:active {
+  transform: scale(0.97);
+}
+
+.joinLevelChoices button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-strong);
+}
+
+.joinLevelChoices .joinLevelChoiceActive {
+  border-color: color-mix(in srgb, var(--primary) 52%, transparent);
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.025);
+}
+
+.joinNoteSection {
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.025);
+}
+
+.joinNoteToggle {
+  width: 100%;
+  min-height: 2.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.joinNoteToggle svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.joinNoteToggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.joinNoteField {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.joinNoteField textarea {
+  min-height: 5.4rem;
+  resize: vertical;
+}
+
+.joinNoteField small {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.joinDepositSummary {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.joinDepositSummary > svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.joinDepositSummary div {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.joinDepositSummary strong {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.joinDepositSummary small {
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.35;
+}
+
+.creditBlockedDialog {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.creditBlockedDialog > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.creditBlockedLead {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--primary) 6%, rgb(255 255 255 / 0.025));
+}
+
+.creditBlockedLead > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.creditBlockedLead > div > span,
+.creditBlockedLead > small {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.creditBlockedLead > div > strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creditBlockedLead > small {
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--r-md);
+  background: rgb(255 255 255 / 0.045);
+  white-space: nowrap;
+}
+
+.creditBlockedIcon {
+  width: 2.55rem;
+  height: 2.55rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.creditBlockedBreakdown {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  background: rgb(255 255 255 / 0.025);
+}
+
+.creditBlockedBreakdown > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.6rem;
+}
+
+.creditBlockedBreakdown > div + div {
+  border-left: 1px solid var(--glass-border);
+}
+
+.creditBlockedBreakdown span {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.creditBlockedBreakdown strong {
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 24rem) {
+  .creditBlockedLead {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .creditBlockedLead > small {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .joinIdentity {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .joinCompleteProfileLink {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .joinLevelChoices button {
+    font-size: 0.7rem;
+  }
+}
+
+/* Vista partecipante: decisione prima, dettagli progressivi dopo. */
+.participantPriorityCard {
+  gap: 0.72rem;
+  padding: 0.85rem;
+  border-color: color-mix(in srgb, var(--primary) 30%, rgb(255 255 255 / 0.08));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 40%),
+    #181a18;
+}
+
+.participantPriorityHeading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.participantPriorityHeading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.participantDecisionSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.72rem;
+  background: #111311;
+}
+
+.participantDecisionSummary span {
+  min-width: 0;
+  min-height: 2.7rem;
+  padding: 0.48rem 0.52rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: rgb(255 255 255 / 0.62);
+  border-right: 1px solid rgb(255 255 255 / 0.07);
+  font-size: 0.66rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.participantDecisionSummary span:last-child {
+  border-right: 0;
+}
+
+.participantDecisionSummary svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+
+.participantStateCompact {
+  gap: 0.7rem;
+  padding: 0.78rem;
+  border-radius: 0.78rem;
+}
+
+.participantStateCompact .participationStateIcon {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.participantStateCompact .participationStateHeader strong {
+  font-size: 0.9rem;
+}
+
+.participantStateCompact .participationStateHeader p {
+  font-size: 0.72rem;
+}
+
+.participantAccessReminder {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: rgb(255 255 255 / 0.48);
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+
+.participantAccessReminder svg {
+  flex: 0 0 auto;
+  color: #20d9a7;
+}
+
+.participantStickyAction {
+  display: none;
+}
+
+@media (max-width: 42rem) {
+  .participantPage {
+    padding-bottom: 4.6rem;
+  }
+
+  .participantStickyAction {
+    position: fixed;
+    z-index: 76;
+    left: 50%;
+    bottom: calc(5.15rem + env(safe-area-inset-bottom));
+    width: min(calc(100% - 1.5rem), 28rem);
+    padding: 0.32rem;
+    display: block;
+    border: 1px solid color-mix(in srgb, var(--primary) 30%, rgb(255 255 255 / 0.1));
+    border-radius: 0.9rem;
+    background: rgb(18 20 18 / 0.88);
+    box-shadow: 0 0.9rem 2.2rem rgb(0 0 0 / 0.4);
+    backdrop-filter: blur(1rem) saturate(130%);
+    transform: translateX(-50%);
+  }
+
+  .participantStickyAction button {
+    min-height: 2.8rem;
+    border-radius: 0.68rem;
+  }
+}
+
+@media (max-width: 24rem) {
+  .participantDecisionSummary span {
+    padding-inline: 0.3rem;
+    font-size: 0.6rem;
+  }
+
+  .participantDecisionSummary svg {
+    display: none;
+  }
+}
+
+/* Dettaglio essenziale: niente duplicazioni tra luogo, check-in e gestione organizer. */
+.locationBodyCompact {
+  padding: 0.78rem 0.85rem 0.85rem;
+  gap: 0;
+}
+
+.locationBodyCompact .gymAccessNotice {
+  padding: 0.72rem 0.78rem;
+}
+
+.locationBodyCompact .gymAccessNotice > span {
+  width: 2.15rem;
+  height: 2.15rem;
+}
+
+.checkInBridgeCopy small {
+  margin-top: 0.08rem;
+}
+
+/* Anteprima coerente con la mappa principale, con azioni integrate. */
 .mapStage {
   position: relative;
   isolation: isolate;
@@ -1921,32 +2421,6 @@
   content: '';
   pointer-events: none;
   background: linear-gradient(180deg, transparent, rgb(5 7 5 / 0.82));
-}
-
-.mapFrame :global(.leaflet-tile-pane) {
-  filter: invert(100%) hue-rotate(180deg) brightness(72%) contrast(112%) saturate(58%);
-}
-
-.mapFrame :global(.leaflet-container) {
-  background: #090b09;
-}
-
-.mapFrame :global(.leaflet-bottom.leaflet-right) {
-  inset: 0.35rem 0.35rem auto auto;
-}
-
-.mapFrame :global(.leaflet-control-attribution) {
-  padding: 0.16rem 0.35rem;
-  border-radius: 0.38rem;
-  color: rgb(255 255 255 / 0.5);
-  background: rgb(8 10 8 / 0.74);
-  font-size: 0.52rem;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.mapFrame :global(.leaflet-control-attribution a) {
-  color: rgb(224 255 144 / 0.78);
 }
 
 .mapStage .locationActions {
@@ -2486,7 +2960,12 @@
 }
 
 .organizerEditField[data-disabled='true'] {
-  opacity: 0.52;
+  opacity: 0.68;
+}
+
+.organizerEditField[data-changed='true'] {
+  border-color: color-mix(in srgb, var(--primary) 52%, rgb(255 255 255 / 0.08));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 7%, transparent);
 }
 
 .organizerEditFieldHead {
@@ -2506,7 +2985,7 @@
   font-weight: 700;
 }
 
-.organizerEditField :is(textarea, select) {
+.organizerEditField :is(textarea, select, input[type='number']) {
   width: 100%;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 0.8rem;
@@ -2519,10 +2998,223 @@
   resize: vertical;
 }
 
-.organizerEditField :is(textarea, select):focus-visible {
+.organizerEditField textarea.organizerEditTextArea {
+  min-height: 4.4rem;
+}
+
+.organizerEditField :is(textarea, select, input[type='number']):focus-visible {
   border-color: var(--primary);
   outline: 2px solid color-mix(in srgb, var(--primary) 22%, transparent);
   outline-offset: 1px;
+}
+
+.organizerEditContentGroup,
+.organizerEditAdjustments,
+.organizerUrgentSection {
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.6rem;
+  border-radius: 1rem;
+}
+
+.organizerEditContentGroup {
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: #0d0f0d;
+}
+
+.organizerEditAdjustments {
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, rgb(255 255 255 / 0.08));
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 42%),
+    #0d0f0d;
+}
+
+.organizerUrgentSection {
+  border: 1px solid color-mix(in srgb, #ffad49 28%, rgb(255 255 255 / 0.08));
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 173 73 / 0.08), transparent 44%),
+    #0f0e0c;
+}
+
+.organizerEditGroupHead,
+.organizerEditAdjustmentsHead {
+  padding: 0.15rem 0.2rem 0.3rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: var(--primary);
+}
+
+.organizerUrgentSection .organizerEditGroupHead {
+  color: #ffad49;
+}
+
+.organizerEditGroupHead > span,
+.organizerEditAdjustmentsHead > span {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 34%, transparent);
+  border-radius: 0.52rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.organizerEditGroupHead div,
+.organizerEditGroupHead p,
+.organizerEditAdjustmentsHead div,
+.organizerEditAdjustmentsHead p {
+  min-width: 0;
+  margin: 0;
+}
+
+.organizerEditGroupHead strong,
+.organizerEditAdjustmentsHead strong {
+  color: #fff;
+  font-size: 0.82rem;
+}
+
+.organizerEditGroupHead p,
+.organizerEditAdjustmentsHead p {
+  margin-top: 0.16rem;
+  color: rgb(255 255 255 / 0.44);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+
+.organizerEditContentGroup .organizerEditField,
+.organizerEditAdjustments .organizerEditField,
+.organizerUrgentSection .organizerEditField {
+  padding: 0.72rem;
+  border-radius: 0.8rem;
+  background: rgb(8 10 8 / 0.82);
+}
+
+.organizerUrgentSection .organizerEditField textarea:focus-visible {
+  border-color: #ffad49;
+  outline-color: rgb(255 173 73 / 0.22);
+}
+
+.organizerAlertLabel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  color: #ffad49;
+}
+
+.organizerAlertLabel textarea {
+  min-height: 4.4rem;
+}
+
+.organizerProtectedChanges {
+  padding: 0.85rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  border-radius: 0.9rem;
+}
+
+.organizerProtectedChanges {
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: rgb(255 255 255 / 0.035);
+  color: var(--primary);
+}
+
+.organizerProtectedChanges div,
+.organizerProtectedChanges p {
+  min-width: 0;
+  margin: 0;
+}
+
+.organizerProtectedChanges strong {
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.organizerProtectedChanges p {
+  margin-top: 0.18rem;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.organizerDangerDisclosure {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, rgb(255 255 255 / 0.08));
+  border-radius: 0.9rem;
+  background: color-mix(in srgb, var(--danger) 7%, #111311);
+}
+
+.organizerDangerToggle {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.7rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+}
+
+.organizerDangerToggle span {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.organizerDangerToggle strong {
+  font-size: 0.76rem;
+}
+
+.organizerDangerToggle small {
+  color: rgb(255 255 255 / 0.38);
+  font-size: 0.62rem;
+}
+
+.organizerDangerToggle svg {
+  color: color-mix(in srgb, var(--danger) 72%, white);
+  transition: transform 180ms ease;
+}
+
+.organizerDangerDisclosure[data-open='true'] .organizerDangerToggle svg {
+  transform: rotate(180deg);
+}
+
+.organizerDangerZone {
+  padding: 0.78rem 0.85rem 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 20%, rgb(255 255 255 / 0.06));
+}
+
+.organizerDangerZone p {
+  min-width: 0;
+  margin: 0;
+  color: rgb(255 255 255 / 0.5);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.organizerDangerZone button {
+  min-height: 2.65rem;
+  padding: 0.65rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--danger) 14%, #111);
+  color: color-mix(in srgb, var(--danger) 82%, white);
+  font-size: 0.7rem;
+  font-weight: 850;
 }
 
 .organizerEditField > small,
@@ -2538,57 +3230,73 @@
   gap: 0.75rem;
 }
 
-.organizerToleranceOptions {
+.organizerExtensionOptions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(4.1rem, 1fr));
+  gap: 0.42rem;
 }
 
-.organizerToleranceOptions button {
-  min-height: 3.5rem;
+.organizerExtensionOptions button {
+  min-height: 3.35rem;
+  padding: 0.45rem;
   border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 0.8rem;
-  display: inline-flex;
-  align-items: baseline;
+  border-radius: 0.68rem;
+  display: grid;
+  align-content: center;
   justify-content: center;
-  gap: 0.2rem;
+  gap: 0.08rem;
   background: #090b09;
   color: rgb(255 255 255 / 0.56);
+  text-align: center;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
-.organizerToleranceOptions button strong {
-  font-size: 1rem;
+.organizerExtensionOptions button strong {
+  font-size: 0.92rem;
 }
 
-.organizerToleranceOptions button span {
-  font-size: 0.65rem;
+.organizerExtensionOptions button span {
+  color: currentColor;
+  font-size: 0.58rem;
   font-weight: 750;
 }
 
-.organizerToleranceOptions button.organizerToleranceSelected {
+.organizerExtensionOptions button.organizerExtensionCurrent {
+  border-color: rgb(255 255 255 / 0.2);
+  background: rgb(255 255 255 / 0.055);
+  color: rgb(255 255 255 / 0.72);
+}
+
+.organizerExtensionOptions button.organizerExtensionSelected {
   border-color: var(--primary);
-  background: var(--primary);
-  color: #071000;
-  box-shadow: 0 0 1.2rem color-mix(in srgb, var(--primary) 20%, transparent);
+  background: color-mix(in srgb, var(--primary) 92%, white);
+  color: #081000;
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
-.organizerToleranceOptions button:disabled:not(.organizerToleranceSelected) {
-  opacity: 0.34;
+.organizerExtensionOptions button:not(:disabled):active {
+  transform: scale(0.97);
 }
 
-.organizerEditNotice,
+.organizerExtensionOptions button:disabled:not(.organizerExtensionSelected) {
+  opacity: 0.42;
+}
+
+.organizerExtensionOptions button.organizerExtensionCurrent:disabled {
+  opacity: 0.72;
+}
+
+.organizerPresenceImpact {
+  color: color-mix(in srgb, var(--primary) 70%, white) !important;
+  font-weight: 760;
+}
+
 .organizerEditClosed {
   margin: 0;
   padding: 0.78rem 0.9rem;
   border-radius: 0.85rem;
   font-size: 0.7rem;
   line-height: 1.45;
-}
-
-.organizerEditNotice {
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
-  background: color-mix(in srgb, var(--primary) 6%, transparent);
-  color: rgb(255 255 255 / 0.66);
 }
 
 .organizerEditClosed {
@@ -2602,6 +3310,100 @@
 
 .organizerEditClosed svg {
   flex: 0 0 auto;
+}
+
+.organizerEditSummary {
+  padding: 0.82rem;
+  display: grid;
+  gap: 0.68rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 34%, rgb(255 255 255 / 0.08));
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--primary) 9%, transparent), transparent 42%),
+    #111311;
+}
+
+.organizerEditSummaryHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--primary);
+}
+
+.organizerEditSummaryHead div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.organizerEditSummaryHead strong {
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.organizerEditSummaryHead small,
+.organizerEditSummary > p {
+  color: rgb(255 255 255 / 0.46);
+  font-size: 0.64rem;
+}
+
+.organizerEditSummaryList {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.organizerEditSummaryList > div {
+  min-height: 2.15rem;
+  padding: 0.42rem 0.55rem;
+  display: grid;
+  grid-template-columns: minmax(4.7rem, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.38rem;
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 0.62rem;
+  background: rgb(0 0 0 / 0.18);
+}
+
+.organizerEditSummaryList span {
+  color: #fff;
+  font-size: 0.67rem;
+  font-weight: 760;
+}
+
+.organizerEditSummaryList small {
+  color: rgb(255 255 255 / 0.4);
+  font-size: 0.62rem;
+}
+
+.organizerEditSummaryList svg {
+  color: rgb(255 255 255 / 0.3);
+}
+
+.organizerEditSummaryList strong {
+  color: var(--primary);
+  font-size: 0.65rem;
+  text-align: right;
+}
+
+.organizerEditSummary > p {
+  margin: 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgb(255 255 255 / 0.07);
+  line-height: 1.4;
+}
+
+@media (max-width: 24rem) {
+  .organizerDangerZone {
+    grid-template-columns: 1fr;
+  }
+
+  .organizerDangerZone button {
+    width: 100%;
+  }
+
+  .organizerEditSummaryList > div {
+    grid-template-columns: minmax(4rem, 1fr) auto auto auto;
+  }
 }
 
 .organizerCancelField > span {
@@ -2693,6 +3495,62 @@
   color: rgb(255 255 255 / 0.52);
   font-size: 0.68rem;
   white-space: nowrap;
+}
+
+.organizerAlertBanner,
+.organizerNotesBanner {
+  padding: 0.85rem 0.95rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 0.7rem;
+  border-radius: 0.95rem;
+}
+
+.organizerAlertBanner {
+  border: 1px solid color-mix(in srgb, var(--primary) 48%, rgb(255 255 255 / 0.08));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 13%, #121512), #121412);
+}
+
+.organizerNotesBanner {
+  border: 1px solid rgb(255 255 255 / 0.09);
+  background: #151715;
+}
+
+.organizerAlertBanner > span,
+.organizerNotesBanner > span {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--primary) 13%, #090b09);
+  color: var(--primary);
+}
+
+.organizerAlertBanner div,
+.organizerNotesBanner div {
+  min-width: 0;
+}
+
+.organizerAlertBanner small,
+.organizerNotesBanner small {
+  display: block;
+  color: var(--primary);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.organizerAlertBanner strong,
+.organizerNotesBanner p {
+  margin: 0.18rem 0 0;
+  display: block;
+  color: #fff;
+  font-size: 0.78rem;
+  line-height: 1.42;
+  overflow-wrap: anywhere;
 }
 
 .cancelGuardBox p {

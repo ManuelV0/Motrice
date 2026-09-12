@@ -81,7 +81,7 @@ function EventCard({
       <span className={styles.imageWrap} aria-hidden="true">
         <img
           className={styles.image}
-          src={getSportHeroImage(event.sport_name, event.title)}
+          src={event.cover_image_url || getSportHeroImage(event.sport_name, event.title)}
           alt=""
           loading="lazy"
           decoding="async"
@@ -181,7 +181,12 @@ function EventCard({
             </button>
           ) : null}
           {primaryAction ? (
-            <button type="button" className={styles.primaryAction} onClick={() => primaryAction.onClick?.(event)} disabled={primaryAction.disabled}>
+            <button
+              type="button"
+              className={`${styles.primaryAction} ${primaryAction.tone === 'warning' ? styles.primaryActionWarning : ''}`}
+              onClick={() => primaryAction.onClick?.(event)}
+              disabled={primaryAction.disabled}
+            >
               {PrimaryIcon ? <PrimaryIcon size={16} aria-hidden="true" /> : null}{primaryAction.label}
             </button>
           ) : null}

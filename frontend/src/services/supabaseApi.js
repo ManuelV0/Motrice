@@ -352,6 +352,9 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     },
     popularity: Math.max(20, participants.length * 14),
     description: rawEvent.description,
+    organizer_notes: rawEvent.organizer_notes || '',
+    organizer_alert: rawEvent.organizer_alert || '',
+    cover_image_url: rawEvent.cover_image_url || '',
     scheda_id: rawEvent.scheda_id || null,
     workout_plan: rawEvent.scheda_id
       ? context.workoutPlans.get(String(rawEvent.scheda_id)) || null
@@ -608,11 +611,17 @@ function createRemoteMethods(localApi) {
     async updateManagedEvent(eventId, payload = {}) {
       const client = requireSupabase();
       requireAuthUserId();
-      const { data, error } = await client.rpc('update_managed_event', {
+      const { data, error } = await client.rpc('update_managed_event_v2', {
         target_event_id: String(eventId),
         requested_description: normalizeText(payload.description),
         requested_duration_minutes: Math.round(Number(payload.duration_minutes)),
-        requested_grace_minutes: Math.round(Number(payload.checkin_grace_minutes))
+        requested_grace_minutes: Math.round(Number(payload.checkin_grace_minutes)),
+        requested_max_participants: Math.round(Number(payload.max_participants)),
+        requested_level: normalizeText(payload.required_level),
+        requested_notes: normalizeText(payload.organizer_notes),
+        requested_alert: normalizeText(payload.organizer_alert),
+        requested_cover_image_url: normalizeText(payload.cover_image_url),
+        requested_workout_plan_id: payload.scheda_id || null
       });
       throwIfError(error);
       const updatedEvent = await fetchEvent(eventId);
