@@ -1,7 +1,7 @@
 const EVENT_PIN_FILL = '#a8f000';
 const EVENT_PIN_SAVED_FILL = '#c7f75a';
-const EVENT_GYM_PIN_FILL = '#20d9a7';
-const EVENT_GYM_PIN_SAVED_FILL = '#7ce8c9';
+const EVENT_GYM_PIN_FILL = '#cf70ff';
+const EVENT_GYM_PIN_SAVED_FILL = '#e6b8ff';
 const EVENT_PIN_PATH = 'M24 2.5C12.5 2.5 3.5 11.1 3.5 22.2c0 8.3 5.1 15 11.9 19.2L24 54.2l8.6-12.8c6.8-4.2 11.9-10.9 11.9-19.2C44.5 11.1 35.5 2.5 24 2.5Z';
 
 const EVENT_ACTIVITY_ICON_NODES = {
@@ -114,6 +114,6 @@ export function createEventPinSvg(activityType, { saved = false, selected = fals
     ${selectedOutline}
     <path d="${EVENT_PIN_PATH}" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
     ${cluster ? '' : `<g transform="translate(12 10)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
-    ${gym && !cluster ? '<g aria-hidden="true"><circle cx="38" cy="13" r="5.25" fill="#07100d" stroke="#ffffff" stroke-opacity=".55" stroke-width="1"/><path d="M36.25 13v-1.15a1.75 1.75 0 0 1 3.5 0V13m-4.1 0h4.7v3.4h-4.7z" fill="none" stroke="#20d9a7" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>' : ''}
+    ${gym && !cluster ? '<g aria-hidden="true"><circle cx="38" cy="13" r="5.25" fill="#0d0712" stroke="#ffffff" stroke-opacity=".55" stroke-width="1"/><path d="M36.25 13v-1.15a1.75 1.75 0 0 1 3.5 0V13m-4.1 0h4.7v3.4h-4.7z" fill="none" stroke="#cf70ff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>' : ''}
   </svg>`;
 }

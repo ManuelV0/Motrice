@@ -20,7 +20,7 @@ import {
   normalizeCheckInGraceMinutes
 } from '../utils/eventLifecycle';
 import { getSystemEventRules } from '../utils/eventCreationRules';
-import { getEventManagementPolicy } from '../utils/eventManagementRules';
+import { getEventManagementPolicy, getParticipantRemovalPolicy } from '../utils/eventManagementRules';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
 import {
   normalizeGymAccessPolicy,
@@ -2128,6 +2128,117 @@ const localApi = {
     request.decided_at = nowIso();
     saveStore(store);
     return withDelay({ success: true, declined: true });
+  },
+
+  async removeEventParticipant(eventId, userId, { reasonCode, note = '' } = {}) {
+    const store = loadStore();
+    const event = ensureEventExists(store, eventId);
+    const organizerUserId = resolveAuthUserId();
+    if (!isEventOrganizerForUser(store, event, organizerUserId)) {
+      throw new Error('Solo l organizzatore può rimuovere un partecipante');
+    }
+
+    const participantUserId = Number(userId);
+    if (!Number.isInteger(participantUserId) || participantUserId <= 0) {
+      throw new Error('Partecipante non valido');
+    }
+    if (participantUserId === Number(organizerUserId)) {
+      throw new Error('L organizzatore non può rimuovere se stesso');
+    }
+
+    const allowedReasons = new Set([
+      'organizer_error',
+      'requirements_mismatch',
+      'safety',
+      'organization_issue',
+      'other'
+    ]);
+    const normalizedReason = String(reasonCode || '').trim();
+    if (!allowedReasons.has(normalizedReason)) throw new Error('Seleziona il motivo della rimozione');
+
+    const policy = getParticipantRemovalPolicy(event, nowMs());
+    if (!policy.canRemove) throw new Error(policy.blockedReason || 'Non puoi più rimuovere partecipanti');
+
+    const eventKey = String(event.id);
+    const participantKey = String(participantUserId);
+    const existing = getEventRsvp(store, event.id, participantUserId);
+    const joinRequest = store.eventJoinRequests?.[eventKey]?.[participantKey];
+    if (String(existing?.status || '') !== 'going' && String(joinRequest?.status || '') !== 'approved') {
+      throw new Error('Il partecipante non risulta più iscritto');
+    }
+
+    let depositReleased = false;
+    try {
+      piggybank.cancelStake({
+        eventId: event.id,
+        accountId: participantKey,
+        note: 'Quota ripristinata: rimozione effettuata dall organizzatore'
+      });
+      depositReleased = true;
+    } catch {
+      // Trial gratuiti e quote già rilasciate non devono bloccare la rimozione.
+    }
+
+    const profile = store.accountProfiles?.[participantKey] || DEFAULT_ACCOUNT_PROFILE;
+    const participantName = normalizeDisplayName(
+      existing?.name || joinRequest?.display_name || profile.display_name || '',
+      'Partecipante'
+    );
+    setEventRsvp(store, event.id, participantUserId, {
+      ...(existing || {}),
+      event_id: event.id,
+      status: 'cancelled',
+      name: participantName,
+      participation_fee_status: depositReleased ? 'released' : (existing?.participation_fee_status || 'waived'),
+      removed_by_organizer: true,
+      removal_reason: normalizedReason,
+      removal_note: String(note || '').trim().slice(0, 300),
+      removal_is_late: policy.isLate,
+      removed_at: nowIso(),
+      updated_at: nowIso()
+    });
+
+    if (joinRequest) {
+      joinRequest.status = 'cancelled';
+      joinRequest.decided_at = nowIso();
+      joinRequest.decided_by = organizerUserId;
+      joinRequest.removal_reason = normalizedReason;
+    }
+
+    event.participants_count = Math.max(1, Number(event.participants_count || 1) - 1);
+    event.participants_preview = (Array.isArray(event.participants_preview) ? event.participants_preview : [])
+      .filter((name) => normalizeNameToken(name) !== normalizeNameToken(participantName))
+      .slice(0, 8);
+    store.participantRemovalAudit = [
+      {
+        id: 'participant_removal_' + Date.now() + '_' + participantUserId,
+        event_id: event.id,
+        organizer_user_id: organizerUserId,
+        participant_user_id: participantUserId,
+        reason_code: normalizedReason,
+        note: String(note || '').trim().slice(0, 300),
+        is_late: policy.isLate,
+        deposit_released: depositReleased,
+        removed_at: nowIso()
+      },
+      ...(Array.isArray(store.participantRemovalAudit) ? store.participantRemovalAudit : [])
+    ].slice(0, 250);
+
+    addNotification(store, {
+      type: 'event_participant_removed',
+      title: 'Partecipazione rimossa',
+      message: (event.title || event.sport_name) + ': l organizzatore ha rimosso la tua partecipazione. La quota è stata resa disponibile.',
+      event_id: event.id,
+      target_user_id: participantUserId
+    });
+    saveStore(store);
+    return withDelay({
+      success: true,
+      removed: true,
+      is_late: policy.isLate,
+      deposit_released: depositReleased,
+      participant_user_id: participantUserId
+    });
   },
 
   async completePersonalEvent(eventId) {

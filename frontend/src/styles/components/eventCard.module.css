@@ -220,10 +220,10 @@
   align-items: center;
   gap: 0.3rem;
   overflow: hidden;
-  border: 1px solid rgb(32 217 167 / 38%);
+  border: 1px solid rgb(207 112 255 / 44%);
   border-radius: 999px;
-  background: rgb(32 217 167 / 10%);
-  color: #55e5bd;
+  background: rgb(207 112 255 / 12%);
+  color: #dc94ff;
   font-size: 0.66rem;
   font-weight: 800;
   text-overflow: ellipsis;

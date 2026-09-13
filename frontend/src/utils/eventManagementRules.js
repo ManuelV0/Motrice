@@ -3,6 +3,8 @@ export const EVENT_DURATION_EXTENSION_STEP_MINUTES = 15;
 export const EVENT_DURATION_MAX_EXTENSION_MINUTES = 30;
 export const EVENT_CAPACITY_MAX_EXTENSION = 3;
 export const EVENT_LATE_TOLERANCE_OPTIONS = Object.freeze([15, 20, 30]);
+export const EVENT_PARTICIPANT_REMOVAL_LATE_HOURS = 12;
+const EVENT_CHECK_IN_LEAD_MINUTES = 30;
 
 export function getDurationExtensionOptions(currentDuration) {
   const duration = Math.max(15, Math.round(Number(currentDuration) || 0));
@@ -24,6 +26,42 @@ export function getCapacityExtensionOptions(currentCapacity) {
 function toTimestamp(value) {
   const parsed = Date.parse(value || '');
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function getParticipantRemovalPolicy(event = {}, referenceTime = Date.now()) {
+  const nowMs = referenceTime instanceof Date ? referenceTime.getTime() : Number(referenceTime);
+  const startsAtMs = toTimestamp(event.event_datetime || event.starts_at);
+  const explicitCheckInOpensAtMs = toTimestamp(event.checkin_opens_at);
+  const checkInOpensAtMs = explicitCheckInOpensAtMs ?? (
+    Number.isFinite(startsAtMs)
+      ? startsAtMs - EVENT_CHECK_IN_LEAD_MINUTES * 60 * 1000
+      : null
+  );
+  const lateWindowStartsAtMs = Number.isFinite(startsAtMs)
+    ? startsAtMs - EVENT_PARTICIPANT_REMOVAL_LATE_HOURS * 60 * 60 * 1000
+    : null;
+  const status = String(event.status || 'scheduled').toLowerCase();
+  const lifecycleState = String(event.lifecycle_state || '').toLowerCase();
+  const hasValidTiming = Number.isFinite(nowMs) && Number.isFinite(startsAtMs) && Number.isFinite(checkInOpensAtMs);
+  const isActive = status === 'scheduled' && !['cancelled', 'completed', 'archived'].includes(lifecycleState);
+  const checkInLocked = ['checkin_open', 'active'].includes(lifecycleState)
+    || (hasValidTiming && nowMs >= checkInOpensAtMs);
+  const canRemove = Boolean(isActive && hasValidTiming && !checkInLocked);
+  const isLate = Boolean(canRemove && nowMs >= lateWindowStartsAtMs);
+
+  let blockedReason = '';
+  if (!isActive) blockedReason = 'L’evento non è più attivo.';
+  else if (!hasValidTiming) blockedReason = 'Orario dell’evento non disponibile.';
+  else if (checkInLocked) blockedReason = 'La lista è definitiva dall’apertura del check-in.';
+
+  return {
+    canRemove,
+    isLate,
+    startsAtMs,
+    checkInOpensAtMs,
+    lateWindowStartsAtMs,
+    blockedReason
+  };
 }
 
 function closestTolerance(value) {

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   getCapacityExtensionOptions,
   getDurationExtensionOptions,
-  getEventManagementPolicy
+  getEventManagementPolicy,
+  getParticipantRemovalPolicy
 } from './eventManagementRules.js';
 
 const start = Date.parse('2026-09-09T18:00:00.000Z');
@@ -78,4 +79,28 @@ test('dopo la fine blocca anche le comunicazioni urgenti', () => {
 test('gli eventi personali non espongono la tolleranza', () => {
   const policy = getEventManagementPolicy({ ...baseEvent, is_personal: true }, start - 3 * 60 * 60 * 1000);
   assert.equal(policy.canEditTolerance, false);
+});
+
+test('la rimozione del partecipante diventa tardiva soltanto nelle ultime 12 ore', () => {
+  const ordinary = getParticipantRemovalPolicy(baseEvent, start - 13 * 60 * 60 * 1000);
+  const late = getParticipantRemovalPolicy(baseEvent, start - 12 * 60 * 60 * 1000);
+  assert.equal(ordinary.canRemove, true);
+  assert.equal(ordinary.isLate, false);
+  assert.equal(late.canRemove, true);
+  assert.equal(late.isLate, true);
+});
+
+test('la rimozione viene bloccata quando apre il check-in', () => {
+  const policy = getParticipantRemovalPolicy(baseEvent, start - 30 * 60 * 1000);
+  assert.equal(policy.canRemove, false);
+  assert.match(policy.blockedReason, /check-in/i);
+});
+
+test('lo stato server di check-in aperto blocca la rimozione anche con un orario client obsoleto', () => {
+  const policy = getParticipantRemovalPolicy(
+    { ...baseEvent, lifecycle_state: 'checkin_open', checkin_opens_at: new Date(start + 60 * 60 * 1000).toISOString() },
+    start - 3 * 60 * 60 * 1000
+  );
+  assert.equal(policy.canRemove, false);
+  assert.match(policy.blockedReason, /check-in/i);
 });

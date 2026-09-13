@@ -412,6 +412,34 @@ function EventDetailPage() {
     }
   }
 
+  function openJoinRequestProfile(request) {
+    const profileId = String(request?.auth_user_id || request?.user_id || '').trim();
+    if (!profileId) {
+      showToast('Profilo del partecipante non disponibile', 'error');
+      return;
+    }
+
+    const displayName = String(request?.display_name || 'Partecipante').trim();
+    navigate(`/profile/${profileId}?event=${event?.id || id}`, {
+      state: {
+        publicProfile: {
+          id: profileId,
+          auth_user_id: request?.auth_user_id || '',
+          user_id: request?.user_id || null,
+          display_name: displayName,
+          name: displayName,
+          avatar_url: String(request?.avatar_url || '').trim(),
+          bio: String(request?.bio || '').trim(),
+          city: String(request?.city || event?.city || '').trim(),
+          reliability_score: Number(request?.reliability_score ?? request?.reliability ?? 0),
+          sport_profiles: request?.skill_level
+            ? [{ sport_id: event?.sport_id, sport_name: event?.sport_name, level: request.skill_level }]
+            : []
+        }
+      }
+    });
+  }
+
   usePageMeta({
     title: event ? `${event.sport_name} a ${event.location_name} | Motrice` : 'Dettaglio Evento | Motrice',
     description: 'Dettaglio evento con RSVP, mappa, organizer e regole.'
@@ -522,13 +550,20 @@ function EventDetailPage() {
       api.listEvents({
         sortBy: 'popular',
         sport: event.sport_id,
+        activeOnly: true,
         limit: 12,
         ...originParams
       })
         .then((allEvents) => {
           if (!active) return;
           setSimilarEvents(
-            allEvents.filter((item) => String(item.id) !== String(id)).slice(0, 3)
+            allEvents
+              .filter((item) => {
+                if (String(item.id) === String(id)) return false;
+                const timing = getEventTiming(item);
+                return timing.isMapVisible && timing.canJoin;
+              })
+              .slice(0, 3)
           );
         })
         .catch(() => {
@@ -1451,12 +1486,19 @@ function EventDetailPage() {
     );
 
   const coachInsight = calculateCompatibility(event, coachProfile);
-  const routePoints = Array.isArray(event?.route_info?.route_points)
+  const storedRoutePoints = Array.isArray(event?.route_info?.route_points)
     ? event.route_info.route_points
         .filter((pair) => Array.isArray(pair) && pair.length >= 2)
         .map((pair) => [Number(pair[0]), Number(pair[1])])
         .filter((pair) => Number.isFinite(pair[0]) && Number.isFinite(pair[1]))
     : [];
+  const routeEndpointPoints = [
+    [event?.route_info?.from_lat, event?.route_info?.from_lng],
+    [event?.route_info?.to_lat, event?.route_info?.to_lng]
+  ]
+    .filter((pair) => pair.every((value) => value != null && value !== '' && Number.isFinite(Number(value))))
+    .map((pair) => pair.map(Number));
+  const routePoints = storedRoutePoints.length >= 2 ? storedRoutePoints : routeEndpointPoints;
   const sportVisual = getSportDetailVisual(event);
   const eventTitle = String(event.title || event.sport_name || 'Evento');
   const gymAccess = getGymAccessPresentation(event, isParticipantView ? participantGymAccessState : null);
@@ -1563,8 +1605,16 @@ function EventDetailPage() {
   if (event.lat != null) mapParams.set('lat', String(event.lat));
   if (event.lng != null) mapParams.set('lng', String(event.lng));
   const mapPath = `/map?${mapParams.toString()}`;
+  const isMappedOutdoorRoute = hasOutdoorTracking && routePoints.length >= 2;
+  const routeMapHref = isMappedOutdoorRoute && /^https?:\/\//i.test(String(event.route_info?.map_url || ''))
+    ? String(event.route_info.map_url)
+    : mapPath;
+  const routeMapIsExternal = /^https?:\/\//i.test(routeMapHref);
+  const routeStart = isMappedOutdoorRoute ? routePoints[0] : null;
   const directionsDestination =
-    event.lat != null && event.lng != null
+    routeStart
+      ? `${routeStart[0]},${routeStart[1]}`
+      : event.lat != null && event.lng != null
       ? `${event.lat},${event.lng}`
       : String(event.location_name || event.city || '');
   const directionsHref = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(directionsDestination)}`;
@@ -1729,7 +1779,7 @@ function EventDetailPage() {
                 <EventMapPreview
                   event={event}
                   routePoints={routePoints}
-                  className={styles.mapFrame}
+                  className={`${styles.mapFrame} ${isMappedOutdoorRoute ? styles.mapFrameRoute : ''}`}
                 />
               ) : (
                 <div className={styles.mapFallback}>
@@ -1738,13 +1788,20 @@ function EventDetailPage() {
                 </div>
               )}
               <div className={styles.locationActions}>
-                <Link to={mapPath} className={styles.locationButton}>
-                  <MapPin size={18} aria-hidden="true" />
-                  Mostra sulla mappa
-                </Link>
+                {routeMapIsExternal ? (
+                  <a href={routeMapHref} target="_blank" rel="noreferrer" className={styles.locationButton}>
+                    <Route size={18} aria-hidden="true" />
+                    Apri percorso
+                  </a>
+                ) : (
+                  <Link to={routeMapHref} className={styles.locationButton}>
+                    {isMappedOutdoorRoute ? <Route size={18} aria-hidden="true" /> : <MapPin size={18} aria-hidden="true" />}
+                    {isMappedOutdoorRoute ? 'Apri percorso' : 'Apri mappa'}
+                  </Link>
+                )}
                 <a href={directionsHref} target="_blank" rel="noreferrer" className={`${styles.locationButton} ${styles.locationButtonPrimary}`}>
                   <Navigation size={18} aria-hidden="true" />
-                  Portami lì
+                  {isMappedOutdoorRoute ? 'Alla partenza' : 'Indicazioni'}
                 </a>
               </div>
             </div>
@@ -1955,6 +2012,7 @@ function EventDetailPage() {
                         requestLocation={requestLocation}
                         showToast={showToast}
                         onEventRefresh={reload}
+                        onOpenParticipantProfile={openJoinRequestProfile}
                         managementOnly
                         compactEmbedded
                       />

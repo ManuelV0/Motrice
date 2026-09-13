@@ -6,7 +6,8 @@ import {
   hasConfirmedEventParticipation,
   resolveEventPrimaryAction,
   resolveEventParticipationState,
-  resolveParticipantOutcome
+  resolveParticipantOutcome,
+  resolveParticipantPresenceStatus
 } from './eventParticipationState.js';
 
 test('a canonical no-show overrides stale check-in and cashback fields', () => {
@@ -61,6 +62,35 @@ test('completed and cancellation outcomes are exposed consistently', () => {
   assert.equal(completed.id, 'completed');
   assert.equal(completed.canAccessChat, true);
   assert.equal(completed.canCancel, false);
+});
+
+test('participant presence copy distinguishes approval from the check-in timeline', () => {
+  const participant = { lifecycle_state: 'confirmed', status: 'going' };
+  const checkInOpensAtMs = Date.parse('2026-09-13T15:00:00.000Z');
+
+  assert.deepEqual(resolveParticipantPresenceStatus({
+    participant,
+    timing: { phase: 'scheduled', isCheckInOpen: false, checkInOpensAtMs }
+  }), {
+    id: 'registered',
+    label: 'Iscritto',
+    checkInOpensAtMs
+  });
+
+  assert.equal(resolveParticipantPresenceStatus({
+    participant,
+    timing: { phase: 'checkin_open', isCheckInOpen: true }
+  }).label, 'In attesa di check-in');
+
+  assert.equal(resolveParticipantPresenceStatus({
+    participant: { status: 'pending' },
+    timing: { phase: 'scheduled', isCheckInOpen: false }
+  }).label, 'Richiesta in attesa');
+
+  assert.equal(resolveParticipantPresenceStatus({
+    participant: { status: 'going', checked_in_at: '2026-09-13T15:05:00.000Z' },
+    timing: { phase: 'live_checkin', isCheckInOpen: true }
+  }).label, 'Presente');
 });
 
 test('the primary action follows the participant through join, check-in and session', () => {

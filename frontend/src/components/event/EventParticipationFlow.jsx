@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Clock3,
   Crown,
+  EllipsisVertical,
+  Eye,
   LocateFixed,
   QrCode,
   RefreshCw,
@@ -26,7 +28,10 @@ import {
   getEventTiming,
   getMaximumCheckInGraceMinutes
 } from '../../utils/eventLifecycle';
-import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
+import {
+  resolveParticipantOutcome,
+  resolveParticipantPresenceStatus
+} from '../../utils/eventParticipationState';
 import {
   EVENT_LOCATION_TRACKING_STATUS_EVENT,
   getActiveEventLocationTracking,
@@ -35,12 +40,18 @@ import {
 } from '../../services/eventLocationTracking';
 import { validateEventLocationProof } from '../../utils/eventLocationProof';
 import { GYM_ENTRY_OPTIONS } from '../../utils/eventVenueAccess';
+import { getParticipantRemovalPolicy } from '../../utils/eventManagementRules';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
   organizerPunctuality: 5,
   descriptionAccuracy: 5,
   wouldJoinAgain: true,
+  note: ''
+};
+
+const EMPTY_PARTICIPANT_REMOVAL = {
+  reasonCode: '',
   note: ''
 };
 
@@ -199,6 +210,7 @@ function EventParticipationFlow({
   requestLocation,
   showToast,
   onEventRefresh,
+  onOpenParticipantProfile,
   managementOnly = false,
   compactEmbedded = false
 }) {
@@ -206,6 +218,9 @@ function EventParticipationFlow({
   const [participants, setParticipants] = useState([]);
   const [joinRequests, setJoinRequests] = useState([]);
   const [requestDecisionBusy, setRequestDecisionBusy] = useState('');
+  const [participantRemovalTarget, setParticipantRemovalTarget] = useState(null);
+  const [participantRemoval, setParticipantRemoval] = useState(EMPTY_PARTICIPANT_REMOVAL);
+  const [participantRemovalBusy, setParticipantRemovalBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
@@ -238,6 +253,10 @@ function EventParticipationFlow({
   const timing = useMemo(
     () => getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs),
     [event, graceMinutes, nowMs]
+  );
+  const participantRemovalPolicy = useMemo(
+    () => getParticipantRemovalPolicy(event, nowMs),
+    [event, nowMs]
   );
   const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
   const extensionOptions = [15, 20, 30].filter(
@@ -681,7 +700,8 @@ function EventParticipationFlow({
     );
     return (Array.isArray(participants) ? participants : []).filter((participant) => {
       const participantIdentity = String(participant.auth_user_id || participant.user_id || '');
-      return !organizerIdentity || participantIdentity !== organizerIdentity;
+      const participantStatus = String(participant.participant_status || participant.status || '').toLowerCase();
+      return participantStatus !== 'cancelled' && (!organizerIdentity || participantIdentity !== organizerIdentity);
     });
   }, [currentUser?.id, event?.organizer?.auth_user_id, event?.organizer?.id, event?.organizerId, participants]);
   const validationSummary = useMemo(() => {
@@ -773,6 +793,44 @@ function EventParticipationFlow({
       showToast(error?.message || 'Richiesta non aggiornata', 'error');
     } finally {
       setRequestDecisionBusy('');
+    }
+  }
+
+  function openParticipantRemoval(participant) {
+    if (!participantRemovalPolicy.canRemove) {
+      showToast(participantRemovalPolicy.blockedReason || 'Non puoi più rimuovere partecipanti', 'info');
+      return;
+    }
+    setParticipantRemovalTarget(participant);
+    setParticipantRemoval(EMPTY_PARTICIPANT_REMOVAL);
+  }
+
+  function closeParticipantRemoval() {
+    if (participantRemovalBusy) return;
+    setParticipantRemovalTarget(null);
+    setParticipantRemoval(EMPTY_PARTICIPANT_REMOVAL);
+  }
+
+  async function confirmParticipantRemoval() {
+    const participantUserId = participantRemovalTarget?.auth_user_id || participantRemovalTarget?.user_id;
+    if (!participantUserId || !participantRemoval.reasonCode || participantRemovalBusy) return;
+    setParticipantRemovalBusy(true);
+    try {
+      const result = await api.removeEventParticipant(event.id, participantUserId, participantRemoval);
+      showToast(
+        result?.is_late
+          ? 'Partecipante rimosso. Rimozione tardiva registrata e quota restituita.'
+          : 'Partecipante rimosso e quota restituita.',
+        'success'
+      );
+      setParticipantRemovalTarget(null);
+      setParticipantRemoval(EMPTY_PARTICIPANT_REMOVAL);
+      await loadFlow({ silent: true });
+      await onEventRefresh?.();
+    } catch (error) {
+      showToast(error?.message || 'Impossibile rimuovere il partecipante', 'error');
+    } finally {
+      setParticipantRemovalBusy(false);
     }
   }
 
@@ -1017,18 +1075,28 @@ function EventParticipationFlow({
                     const requestKey = String(request.auth_user_id || request.user_id || '');
                     const isDeciding = requestDecisionBusy === requestKey;
                     const gymEntryLabel = GYM_ENTRY_OPTIONS.find((option) => option.value === request.gym_access_choice)?.label;
+                    const canOpenProfile = Boolean(requestKey && typeof onOpenParticipantProfile === 'function');
                     return (
                     <article key={request.auth_user_id || request.user_id} className={styles.requestRow}>
-                      <span className={styles.avatar}>
-                        {request.avatar_url
-                          ? <img src={request.avatar_url} alt="" />
-                          : request.display_name?.slice(0, 1)}
-                      </span>
-                      <div className={styles.requestCopy}>
-                        <strong>{request.display_name}</strong>
-                        <span>{request.note || `Livello: ${request.skill_level || 'non indicato'}`}</span>
-                        {gymEntryLabel ? <small>Ingresso palestra · {gymEntryLabel}</small> : null}
-                      </div>
+                      <button
+                        type="button"
+                        className={styles.requestProfileButton}
+                        onClick={() => onOpenParticipantProfile?.(request)}
+                        disabled={!canOpenProfile}
+                        aria-label={canOpenProfile ? `Visualizza il profilo di ${request.display_name || 'partecipante'}` : undefined}
+                      >
+                        <span className={styles.avatar}>
+                          {request.avatar_url
+                            ? <img src={request.avatar_url} alt="" />
+                            : request.display_name?.slice(0, 1)}
+                        </span>
+                        <span className={styles.requestCopy}>
+                          <strong>{request.display_name}</strong>
+                          <span>{request.note || `Livello: ${request.skill_level || 'non indicato'}`}</span>
+                          {gymEntryLabel ? <small>Ingresso palestra · {gymEntryLabel}</small> : null}
+                          {canOpenProfile ? <span className={styles.requestProfileHint}><Eye size={14} aria-hidden="true" /> Vedi profilo</span> : null}
+                        </span>
+                      </button>
                       <div className={styles.requestActions}>
                         <Button
                           type="button"
@@ -1140,25 +1208,64 @@ function EventParticipationFlow({
               </div>
               <div className={styles.participantList} aria-live="polite">
                 {registeredParticipants.length ? registeredParticipants.map((participant) => {
-                  const participantOutcome = resolveParticipantOutcome(participant);
-                  const isPresent = ['checked_in', 'completed'].includes(participantOutcome.id);
-                  const isAbsent = participantOutcome.id === 'no_show' || (!isPresent && (
-                    (event.has_passed && !['cancelled'].includes(String(participant.participant_status || '')))
-                  ));
+                  const presenceStatus = resolveParticipantPresenceStatus({
+                    participant,
+                    timing,
+                    eventHasPassed: Boolean(event.has_passed)
+                  });
+                  const isPresent = presenceStatus.id === 'present';
+                  const isAbsent = presenceStatus.id === 'absent';
+                  const presenceLabel = presenceStatus.id === 'registered' && presenceStatus.checkInOpensAtMs != null
+                    ? `✓ Iscritto · check-in dalle ${formatEventTime(presenceStatus.checkInOpensAtMs)}`
+                    : presenceStatus.id === 'present'
+                      ? `✅ ${presenceStatus.label}`
+                      : presenceStatus.id === 'absent'
+                        ? `❌ ${presenceStatus.label}`
+                        : presenceStatus.id === 'missing_checkin'
+                          ? `⚠️ ${presenceStatus.label}`
+                          : `⏳ ${presenceStatus.label}`;
                   return (
                     <div key={participant.auth_user_id || participant.user_id} className={styles.participantRow}>
-                      <span className={styles.avatar}>
-                        {participant.avatar_url ? <img src={participant.avatar_url} alt="" /> : participant.display_name?.slice(0, 1)}
-                      </span>
-                      <div>
-                        <strong>{participant.display_name}</strong>
-                        <span className={isPresent ? styles.present : isAbsent ? styles.absent : styles.waiting}>
-                          {isPresent ? '✅ Presente' : isAbsent ? '❌ Assente' : '⏳ In attesa'}
+                      <div className={styles.acceptedParticipantIdentity}>
+                        <button
+                          type="button"
+                          className={styles.acceptedParticipantProfile}
+                          onClick={() => onOpenParticipantProfile?.(participant)}
+                          disabled={!(isOrganizer
+                            && (participant.auth_user_id || participant.user_id)
+                            && typeof onOpenParticipantProfile === 'function')}
+                          aria-label={isOrganizer && typeof onOpenParticipantProfile === 'function'
+                            ? 'Visualizza il profilo di ' + (participant.display_name || 'partecipante')
+                            : undefined}
+                        >
+                          <span className={styles.avatar}>
+                            {participant.avatar_url ? <img src={participant.avatar_url} alt="" /> : participant.display_name?.slice(0, 1)}
+                          </span>
+                          <strong>{participant.display_name}</strong>
+                        </button>
+                        <span className={[
+                          styles.acceptedParticipantStatus,
+                          isPresent ? styles.present : isAbsent ? styles.absent : styles.waiting
+                        ].join(' ')}>
+                          {presenceLabel}
                         </span>
                       </div>
-                      <time dateTime={participant.checked_in_at || undefined}>
-                        {isPresent ? formatEventTime(participant.checked_in_at) : '—'}
-                      </time>
+                      <div className={styles.participantRowActions}>
+                        <time dateTime={participant.checked_in_at || undefined}>
+                          {isPresent ? formatEventTime(participant.checked_in_at) : '—'}
+                        </time>
+                        {isOrganizer && participantRemovalPolicy.canRemove ? (
+                          <button
+                            type="button"
+                            className={styles.participantRemoveButton}
+                            onClick={() => openParticipantRemoval(participant)}
+                            aria-label={'Rimuovi ' + (participant.display_name || 'partecipante')}
+                            title="Gestisci partecipante"
+                          >
+                            <EllipsisVertical size={20} strokeWidth={3.2} aria-hidden="true" />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 }) : (
@@ -1222,6 +1329,70 @@ function EventParticipationFlow({
           </form>
         </Card>
       ) : null}
+
+      <Modal
+        open={Boolean(participantRemovalTarget)}
+        title="Rimuovi partecipante"
+        onClose={closeParticipantRemoval}
+        onConfirm={confirmParticipantRemoval}
+        confirmText={participantRemovalBusy ? 'Rimozione...' : 'Conferma rimozione'}
+        confirmDisabled={!participantRemoval.reasonCode || participantRemovalBusy}
+      >
+        <div className={styles.participantRemovalModal}>
+          <div className={styles.participantRemovalIdentity}>
+            <span className={styles.avatar}>
+              {participantRemovalTarget?.avatar_url
+                ? <img src={participantRemovalTarget.avatar_url} alt="" />
+                : participantRemovalTarget?.display_name?.slice(0, 1)}
+            </span>
+            <div>
+              <strong>{participantRemovalTarget?.display_name || 'Partecipante'}</strong>
+              <span>La quota impegnata verrà restituita interamente.</span>
+            </div>
+          </div>
+
+          {participantRemovalPolicy.isLate ? (
+            <div className={styles.participantRemovalWarning}>
+              <AlertTriangle size={20} aria-hidden="true" />
+              <div>
+                <strong>Rimozione nelle ultime 12 ore</strong>
+                <span>L’operazione è consentita, ma verrà registrata come tardiva.</span>
+              </div>
+            </div>
+          ) : null}
+
+          <label className={styles.participantRemovalField}>
+            <span>Motivo</span>
+            <select
+              value={participantRemoval.reasonCode}
+              onChange={(inputEvent) => setParticipantRemoval((current) => ({
+                ...current,
+                reasonCode: inputEvent.target.value
+              }))}
+            >
+              <option value="">Seleziona un motivo</option>
+              <option value="organizer_error">Accettazione per errore</option>
+              <option value="requirements_mismatch">Requisiti non compatibili</option>
+              <option value="safety">Comportamento o sicurezza</option>
+              <option value="organization_issue">Problema organizzativo</option>
+              <option value="other">Altro</option>
+            </select>
+          </label>
+          <label className={styles.participantRemovalField}>
+            <span>Nota facoltativa</span>
+            <textarea
+              rows="3"
+              maxLength="300"
+              value={participantRemoval.note}
+              placeholder="Aggiungi una spiegazione breve"
+              onChange={(inputEvent) => setParticipantRemoval((current) => ({
+                ...current,
+                note: inputEvent.target.value
+              }))}
+            />
+          </label>
+        </div>
+      </Modal>
 
       <Modal
         open={scannerOpen}

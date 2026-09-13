@@ -447,9 +447,9 @@
   display: flex;
   align-items: flex-start;
   gap: var(--s-3);
-  border: 1px solid rgb(32 217 167 / 34%);
+  border: 1px solid rgb(207 112 255 / 40%);
   border-radius: var(--r-lg);
-  background: linear-gradient(135deg, rgb(32 217 167 / 12%), transparent 70%), var(--surface-2);
+  background: linear-gradient(135deg, rgb(207 112 255 / 14%), transparent 70%), var(--surface-2);
 }
 
 .gymAccessNotice > span {
@@ -459,8 +459,8 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgb(32 217 167 / 15%);
-  color: #20d9a7;
+  background: rgb(207 112 255 / 17%);
+  color: #cf70ff;
 }
 
 .gymAccessNotice > div {
@@ -470,7 +470,7 @@
 }
 
 .gymAccessNotice small {
-  color: #20d9a7;
+  color: #cf70ff;
   font-size: 0.62rem;
   font-weight: var(--weight-bold);
   letter-spacing: 0.08em;
@@ -2215,13 +2215,13 @@
   align-items: center;
   gap: 0.7rem;
   padding: 0.72rem 0.8rem;
-  border: 1px solid rgb(32 217 167 / 30%);
+  border: 1px solid rgb(207 112 255 / 36%);
   border-radius: var(--r-lg);
-  background: rgb(32 217 167 / 7%);
+  background: rgb(207 112 255 / 9%);
 }
 
 .joinGymAccessSummary > svg {
-  color: #55e5bd;
+  color: #dc94ff;
 }
 
 .joinGymAccessSummary > div {
@@ -2231,7 +2231,7 @@
 }
 
 .joinGymAccessSummary span {
-  color: #55e5bd;
+  color: #dc94ff;
   font-size: 0.65rem;
   font-weight: 850;
   letter-spacing: 0.07em;
@@ -2498,7 +2498,7 @@
 
 .participantAccessReminder svg {
   flex: 0 0 auto;
-  color: #20d9a7;
+  color: #cf70ff;
 }
 
 .participantAccessReminderBlocked {
@@ -2582,7 +2582,7 @@
   position: absolute;
   z-index: 700;
   inset: auto 0 0;
-  height: 4.6rem;
+  height: 4rem;
   content: '';
   pointer-events: none;
   background: linear-gradient(180deg, transparent, rgb(5 7 5 / 0.82));
@@ -2591,16 +2591,16 @@
 .mapStage .locationActions {
   position: absolute;
   z-index: 1000;
-  inset: auto 0.62rem 0.62rem;
-  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+  inset: auto 0.62rem 0.62rem auto;
+  grid-template-columns: repeat(2, auto);
   gap: 0.45rem;
   pointer-events: none;
 }
 
 .mapStage .locationButton {
   min-width: 0;
-  min-height: 2.55rem;
-  padding: 0 0.62rem;
+  min-height: 2.75rem;
+  padding: 0 0.72rem;
   overflow: hidden;
   border-color: rgb(255 255 255 / 0.16);
   border-radius: 0.72rem;
@@ -2639,15 +2639,16 @@
 
 @media (max-width: 24rem) {
   .mapStage .locationActions {
-    inset-inline: 0.5rem;
+    right: 0.5rem;
+    left: auto;
     bottom: 0.5rem;
     gap: 0.35rem;
   }
 
   .mapStage .locationButton {
-    min-height: 2.4rem;
-    padding-inline: 0.45rem;
-    font-size: 0.61rem;
+    min-height: 2.65rem;
+    padding-inline: 0.58rem;
+    font-size: 0.64rem;
   }
 }
 
@@ -4983,7 +4984,11 @@
 
 .mapFrame,
 .mapFallback {
-  height: clamp(10.5rem, 35vw, 15rem);
+  height: clamp(12rem, 38vw, 17rem);
+}
+
+.mapFrame.mapFrameRoute {
+  height: clamp(14.5rem, 48vw, 19rem);
 }
 
 .locationBody {

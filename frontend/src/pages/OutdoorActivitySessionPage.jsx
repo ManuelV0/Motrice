@@ -47,6 +47,7 @@ import {
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
 import AnimatedNumber from '../components/AnimatedNumber';
+import EventMapPreview from '../components/EventMapPreview';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -73,27 +74,6 @@ function isOrganizerForEvent(event, auth) {
     identities.includes(String(event?.organizer?.auth_user_id || '')) ||
     event?.organizer?.id === 'me'
   );
-}
-
-function buildTracePoints(samples, width = 320, height = 126) {
-  const points = (Array.isArray(samples) ? samples : []).filter((item) => (
-    Number.isFinite(Number(item?.lat)) && Number.isFinite(Number(item?.lng))
-  ));
-  if (points.length < 2) return '';
-  const latitudes = points.map((point) => Number(point.lat));
-  const longitudes = points.map((point) => Number(point.lng));
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-  const latSpan = Math.max(0.00001, maxLat - minLat);
-  const lngSpan = Math.max(0.00001, maxLng - minLng);
-  const padding = 12;
-  return points.map((point) => {
-    const x = padding + ((Number(point.lng) - minLng) / lngSpan) * (width - padding * 2);
-    const y = height - padding - ((Number(point.lat) - minLat) / latSpan) * (height - padding * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
 }
 
 function OutdoorActivitySessionPage() {
@@ -287,7 +267,32 @@ function OutdoorActivitySessionPage() {
   const averagePace = getOutdoorPaceSecondsPerKm(session?.distanceM, elapsedMs);
   const currentPace = getCurrentPaceSecondsPerKm(session?.currentSpeedMps);
   const steps = estimateOutdoorSteps(session?.distanceM, kind);
-  const tracePoints = useMemo(() => buildTracePoints(session?.samples), [session?.samples]);
+  const plannedRoutePoints = useMemo(() => {
+    const stored = Array.isArray(event?.route_info?.route_points)
+      ? event.route_info.route_points
+          .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+          .map((pair) => [Number(pair[0]), Number(pair[1])])
+          .filter((pair) => pair.every(Number.isFinite))
+      : [];
+    if (stored.length >= 2) return stored;
+    return [
+      [event?.route_info?.from_lat, event?.route_info?.from_lng],
+      [event?.route_info?.to_lat, event?.route_info?.to_lng]
+    ]
+      .filter((pair) => pair.every((value) => value != null && value !== '' && Number.isFinite(Number(value))))
+      .map((pair) => pair.map(Number));
+  }, [event?.route_info]);
+  const liveRoutePoints = useMemo(
+    () => (Array.isArray(session?.samples) ? session.samples : [])
+      .filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng)))
+      .map((point) => [Number(point.lat), Number(point.lng)]),
+    [session?.samples]
+  );
+  const canRenderLiveMap = Boolean(
+    plannedRoutePoints.length >= 2 ||
+    liveRoutePoints.length > 0 ||
+    (event?.lat != null && event?.lng != null)
+  );
   const organizer = isOrganizerForEvent(event, auth);
   const qrVerified = String(event?.verification_mode || 'both') !== 'geo' && Boolean(participation?.checked_in_at || organizer);
   const paceDelta = currentPace && averagePace ? currentPace - averagePace : 0;
@@ -466,16 +471,20 @@ function OutdoorActivitySessionPage() {
             </span>
           </div>
           <div className={styles.traceCanvas}>
-            <svg viewBox="0 0 320 126" role="img" aria-label="Traccia GPS dell’attività">
-              <defs>
-                <linearGradient id="routeGradient" x1="0" x2="1">
-                  <stop offset="0" stopColor="#7fa500" />
-                  <stop offset="1" stopColor="#ccff00" />
-                </linearGradient>
-              </defs>
-              {tracePoints ? <polyline points={tracePoints} fill="none" stroke="url(#routeGradient)" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /> : null}
-            </svg>
-            {!tracePoints ? <div><Route size={27} /><span>La traccia apparirà appena inizi a muoverti</span></div> : null}
+            {canRenderLiveMap ? (
+              <EventMapPreview
+                event={event}
+                routePoints={plannedRoutePoints}
+                liveRoutePoints={liveRoutePoints}
+                liveMode
+                className={styles.traceMap}
+              />
+            ) : (
+              <div className={styles.traceEmpty}>
+                <Route size={27} />
+                <span>La traccia apparirà appena inizi a muoverti</span>
+              </div>
+            )}
           </div>
           {routeTargetKm > 0 ? (
             <div className={styles.routeGoal}>

@@ -57,6 +57,34 @@ export function resolveParticipantOutcome(source) {
   return { id: 'none', lifecycleState, status, attendance: attendance || null, isPresent: false };
 }
 
+export function resolveParticipantPresenceStatus({ participant, timing = {}, eventHasPassed = false }) {
+  const outcome = resolveParticipantOutcome(participant);
+  const isPresent = ['checked_in', 'completed'].includes(outcome.id);
+  const isCancelled = ['cancelled', 'cancelled_late', 'rejected'].includes(outcome.id);
+
+  if (isPresent) return { id: 'present', label: 'Presente' };
+  if (outcome.id === 'no_show' || (eventHasPassed && !isCancelled)) {
+    return { id: 'absent', label: 'Assente' };
+  }
+  if (outcome.id === 'requested') {
+    return { id: 'request_pending', label: 'Richiesta in attesa' };
+  }
+  if (timing.phase === 'scheduled') {
+    return {
+      id: 'registered',
+      label: 'Iscritto',
+      checkInOpensAtMs: timing.checkInOpensAtMs ?? null
+    };
+  }
+  if (timing.isCheckInOpen || ['checkin_open', 'live_checkin'].includes(timing.phase)) {
+    return { id: 'waiting_checkin', label: 'In attesa di check-in' };
+  }
+  if (timing.phase === 'in_progress') {
+    return { id: 'missing_checkin', label: 'Check-in non registrato' };
+  }
+  return { id: 'registered', label: 'Iscritto', checkInOpensAtMs: timing.checkInOpensAtMs ?? null };
+}
+
 export function hasConfirmedEventParticipation(event) {
   const outcome = resolveParticipantOutcome(event);
   return ['confirmed', 'checked_in', 'completed'].includes(outcome.id) || (

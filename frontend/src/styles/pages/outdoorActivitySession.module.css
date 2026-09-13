@@ -326,7 +326,7 @@
 
 .traceCanvas {
   position: relative;
-  height: 126px;
+  height: clamp(12.5rem, 42vw, 16rem);
   overflow: hidden;
   border: 1px solid #292c28;
   border-radius: 16px;
@@ -337,13 +337,13 @@
   background-size: 24px 24px;
 }
 
-.traceCanvas svg {
+.traceMap {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 0 7px rgba(204, 255, 0, 0.32));
+  min-height: 100%;
 }
 
-.traceCanvas > div {
+.traceEmpty {
   position: absolute;
   inset: 0;
   display: grid;

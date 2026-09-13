@@ -781,6 +781,20 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
+    async removeEventParticipant(eventId, userId, { reasonCode, note = '' } = {}) {
+      const client = requireSupabase();
+      const targetParticipantId = resolveProfileUuid(userId);
+      if (!targetParticipantId) throw new Error('Partecipante non valido');
+      const { data, error } = await client.rpc('remove_event_participant', {
+        target_event_id: String(eventId),
+        target_participant_id: targetParticipantId,
+        reason_code: normalizeText(reasonCode),
+        organizer_note: normalizeText(note)
+      });
+      throwIfError(error);
+      return data;
+    },
+
     async completePersonalEvent(eventId) {
       const client = requireSupabase();
       const { data, error } = await client.rpc('complete_personal_event', {
@@ -1591,6 +1605,7 @@ export function createSupabaseApi(localApi) {
       joinEvent: requireSecureBackend,
       approveEventJoinRequest: requireSecureBackend,
       declineEventJoinRequest: requireSecureBackend,
+      removeEventParticipant: requireSecureBackend,
       cancelEvent: requireSecureBackend,
       updateManagedEvent: requireSecureBackend,
       completePersonalEvent: requireSecureBackend,
