@@ -22,7 +22,12 @@ import {
 import { getSystemEventRules } from '../utils/eventCreationRules';
 import { getEventManagementPolicy } from '../utils/eventManagementRules';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
-import { normalizeGymAccessPolicy, normalizeVenueType } from '../utils/eventVenueAccess';
+import {
+  normalizeGymAccessPolicy,
+  normalizeGymVenueKey,
+  normalizeVenueType,
+  resolveGymViewerAccess
+} from '../utils/eventVenueAccess';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
@@ -937,6 +942,8 @@ function buildInitialStore() {
     conventionCoursePromos: [],
     conventionAgreementRecords: [],
     conventionContractTemplates: [],
+    gymVenueMemberships: [],
+    gymTrialUsages: [],
     revokedAuthUserIds: [],
     notifications: [],
     pushDevices: [],
@@ -1072,6 +1079,12 @@ function loadStore() {
     }
     if (!Array.isArray(merged.conventionContractTemplates)) {
       merged.conventionContractTemplates = [];
+    }
+    if (!Array.isArray(merged.gymVenueMemberships)) {
+      merged.gymVenueMemberships = [];
+    }
+    if (!Array.isArray(merged.gymTrialUsages)) {
+      merged.gymTrialUsages = [];
     }
     if (!Array.isArray(merged.revokedAuthUserIds)) {
       merged.revokedAuthUserIds = [];
@@ -1273,6 +1286,7 @@ function enrichEvent(event, store, origin) {
     max_age: Number(event.max_age || 99),
     venue_type: normalizeVenueType(event.venue_type),
     gym_access_policy: normalizeGymAccessPolicy(event.venue_type, event.gym_access_policy),
+    gym_venue_key: normalizeGymVenueKey(event.gym_venue_key, `${event.location_name || ''}-${event.city || ''}`),
     participation_protection: event.participation_protection !== false,
     visibility: String(event.visibility || 'public'),
     join_policy: String(event.join_policy || 'open'),
@@ -1458,7 +1472,57 @@ function getCreationStats(store) {
   };
 }
 
+function getLocalGymAccessState(store, event, userId) {
+  const venueKey = normalizeGymVenueKey(
+    event?.gym_venue_key,
+    `${event?.location_name || ''}-${event?.city || ''}`
+  );
+  const membership = (store.gymVenueMemberships || []).find((item) => (
+    Number(item?.user_id) === Number(userId) &&
+    normalizeGymVenueKey(item?.venue_key) === venueKey &&
+    String(item?.status || '') === 'active'
+  ));
+  const trialUsed = (store.gymTrialUsages || []).some((item) => (
+    Number(item?.user_id) === Number(userId) &&
+    normalizeGymVenueKey(item?.venue_key) === venueKey &&
+    String(item?.status || 'used') === 'used'
+  ));
+  return {
+    ...resolveGymViewerAccess(event, membership, trialUsed),
+    venue_key: venueKey,
+    membership_verified: Boolean(membership),
+    trial_used: trialUsed,
+    source: 'local'
+  };
+}
+
+function consumeLocalGymTrial(store, event, userId) {
+  const access = getLocalGymAccessState(store, event, userId);
+  if (access?.status !== 'trial_available' || !access.venue_key) return false;
+  store.gymTrialUsages = [
+    ...(store.gymTrialUsages || []).filter((item) => !(
+      Number(item?.user_id) === Number(userId) &&
+      normalizeGymVenueKey(item?.venue_key) === access.venue_key
+    )),
+    {
+      venue_key: access.venue_key,
+      user_id: Number(userId),
+      event_id: event.id,
+      status: 'used',
+      used_at: nowIso()
+    }
+  ];
+  return true;
+}
+
 const localApi = {
+  async getMyGymAccess(eventId) {
+    const store = loadStore();
+    const userId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    return withDelay(getLocalGymAccessState(store, event, userId));
+  },
+
   async getMoneyWallet() {
     return withDelay(piggybank.getWallet());
   },
@@ -1577,6 +1641,9 @@ const localApi = {
       max_age: Number(payload.max_age || 99),
       venue_type: normalizeVenueType(payload.venue_type),
       gym_access_policy: normalizeGymAccessPolicy(payload.venue_type, payload.gym_access_policy),
+      gym_venue_key: normalizeVenueType(payload.venue_type) === 'gym'
+        ? normalizeGymVenueKey(payload.gym_venue_key, `${payload.location_name || ''}-${payload.city || ''}`)
+        : null,
       participation_protection: !Boolean(payload.is_personal),
       visibility: String(payload.visibility || 'public'),
       join_policy: String(payload.join_policy || 'open'),
@@ -1788,6 +1855,13 @@ const localApi = {
     }
     if (event.status === 'cancelled') {
       throw new Error('Questo evento e stato annullato');
+    }
+    const gymAccess = getLocalGymAccessState(store, event, currentUserId);
+    if (gymAccess?.can_participate === false) {
+      if (gymAccess.status === 'trial_used') {
+        throw new Error('GYM_TRIAL_ALREADY_USED: la prova gratuita in questa palestra è già stata utilizzata');
+      }
+      throw new Error('GYM_MEMBERSHIP_REQUIRED: serve un abbonamento attivo e verificato con questa palestra');
     }
     if (!isProfileCompleteForGroup(accountProfile)) {
       throw new Error('Completa profilo (nome utente, bio e immagine) prima di prenotare un gruppo');
@@ -2564,6 +2638,7 @@ const localApi = {
         }
       }
     };
+    consumeLocalGymTrial(store, event, currentUserId);
 
     const eventMeta = resolveEventMeetingMeta(store, event.id);
     Object.keys(store.checkinRecordsByEvent?.[eventKey] || {}).forEach((userIdRaw) => {
@@ -2862,6 +2937,7 @@ const localApi = {
       cashback_percent: 60,
       updated_at: nowIso()
     });
+    consumeLocalGymTrial(store, event, currentUserId);
     saveStore(store);
     return withDelay({
       ok: true,

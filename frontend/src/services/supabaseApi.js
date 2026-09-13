@@ -5,7 +5,12 @@ import { assertProfileVerified } from './profileVerification';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../utils/eventParticipationState';
 import { getSystemEventRules } from '../utils/eventCreationRules';
-import { normalizeGymAccessPolicy, normalizeVenueType } from '../utils/eventVenueAccess';
+import {
+  normalizeGymAccessPolicy,
+  normalizeGymVenueKey,
+  normalizeVenueType,
+  resolveGymViewerAccess
+} from '../utils/eventVenueAccess';
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
@@ -402,6 +407,10 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     max_age: Number(rawEvent.max_age || 99),
     venue_type: normalizeVenueType(rawEvent.venue_type),
     gym_access_policy: normalizeGymAccessPolicy(rawEvent.venue_type, rawEvent.gym_access_policy),
+    gym_venue_key: normalizeGymVenueKey(
+      rawEvent.gym_venue_key,
+      `${rawEvent.location_name || ''}-${rawEvent.city || ''}`
+    ),
     participation_protection: rawEvent.participation_protection !== false,
     visibility: rawEvent.visibility || 'public',
     join_policy: rawEvent.join_policy || 'open',
@@ -494,6 +503,26 @@ async function fetchEvent(id, filters = {}) {
 
 function createRemoteMethods(localApi) {
   return {
+    async getMyGymAccess(eventId) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      const { data, error } = await client.rpc('get_my_event_gym_access', {
+        target_event_id: String(eventId)
+      });
+      if (error?.code === 'PGRST202' || error?.code === '42883') {
+        const event = await fetchEvent(eventId);
+        return {
+          ...resolveGymViewerAccess(event),
+          venue_key: event.gym_venue_key,
+          membership_verified: false,
+          trial_used: false,
+          source: 'compatibility_fallback'
+        };
+      }
+      throwIfError(error);
+      return data;
+    },
+
     async listEvents(filters = {}) {
       return fetchEvents(filters);
     },
@@ -596,6 +625,9 @@ function createRemoteMethods(localApi) {
           max_age: Number(payload.max_age || 99),
           venue_type: normalizeVenueType(payload.venue_type),
           gym_access_policy: normalizeGymAccessPolicy(payload.venue_type, payload.gym_access_policy),
+          gym_venue_key: normalizeVenueType(payload.venue_type) === 'gym'
+            ? normalizeGymVenueKey(payload.gym_venue_key, `${payload.location_name || ''}-${payload.city || ''}`)
+            : null,
           participation_protection: !payload.is_personal,
           visibility: payload.visibility || 'public',
           join_policy: payload.join_policy || 'open',

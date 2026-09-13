@@ -53,7 +53,8 @@ import {
   GYM_ACCESS_OPTIONS,
   VENUE_TYPE_GYM,
   VENUE_TYPE_STANDARD,
-  getGymAccessPresentation
+  getGymAccessPresentation,
+  normalizeGymVenueKey
 } from '../utils/eventVenueAccess';
 import {
   ensurePersonalWorkoutPlanRemote,
@@ -91,6 +92,7 @@ const initialState = {
   lng: '',
   venue_type: VENUE_TYPE_STANDARD,
   gym_access_policy: null,
+  gym_venue_key: null,
   description: '',
   scheda_id: null,
   has_route: false,
@@ -162,6 +164,7 @@ const STEP_ERROR_FIELDS = {
     'city',
     'location_name',
     'coordinates',
+    'gym_access_policy',
     'route_name',
     'route_from',
     'route_to',
@@ -966,7 +969,8 @@ function CreateEventPage() {
       ...prev,
       has_route: hasRoute,
       venue_type: hasRoute ? VENUE_TYPE_STANDARD : prev.venue_type,
-      gym_access_policy: hasRoute ? null : prev.gym_access_policy
+      gym_access_policy: hasRoute ? null : prev.gym_access_policy,
+      gym_venue_key: hasRoute ? null : prev.gym_venue_key
     }));
     setLocationConfirmed(false);
     setLocationSearchResults([]);
@@ -1046,6 +1050,7 @@ function CreateEventPage() {
         has_route: true,
         venue_type: VENUE_TYPE_STANDARD,
         gym_access_policy: null,
+        gym_venue_key: null,
         lat: String(result.lat),
         lng: String(result.lng),
         city: result.city || prev.city,
@@ -1074,7 +1079,10 @@ function CreateEventPage() {
       city: result.city || prev.city,
       location_name: placeName,
       venue_type: result.isSportFacility ? VENUE_TYPE_GYM : VENUE_TYPE_STANDARD,
-      gym_access_policy: result.isSportFacility ? (prev.gym_access_policy || GYM_ACCESS_OPTIONS[0].value) : null
+      gym_access_policy: result.isSportFacility ? (prev.gym_access_policy || GYM_ACCESS_OPTIONS[0].value) : null,
+      gym_venue_key: result.isSportFacility
+        ? normalizeGymVenueKey(result.venueKey, `${placeName}-${result.city || prev.city}`)
+        : null
     }));
     setLocationSelectionMessage(
       result.isSportFacility
@@ -1223,7 +1231,8 @@ function CreateEventPage() {
       lat: String(lat),
       lng: String(lng),
       venue_type: source === 'search' ? prev.venue_type : VENUE_TYPE_STANDARD,
-      gym_access_policy: source === 'search' ? prev.gym_access_policy : null
+      gym_access_policy: source === 'search' ? prev.gym_access_policy : null,
+      gym_venue_key: source === 'search' ? prev.gym_venue_key : null
     }));
     if (source !== 'map') {
       setLocationMapRevision((revision) => revision + 1);
@@ -1292,6 +1301,13 @@ function CreateEventPage() {
     }
     if (!form.city || form.city.length < 2) nextErrors.city = 'Citta richiesta';
     if (!form.location_name || form.location_name.length < 3) nextErrors.location_name = 'Location troppo corta';
+    if (
+      !form.has_route &&
+      form.venue_type === VENUE_TYPE_GYM &&
+      !GYM_ACCESS_OPTIONS.some((option) => option.value === form.gym_access_policy)
+    ) {
+      nextErrors.gym_access_policy = 'Scegli la condizione di accesso alla palestra';
+    }
     if (!form.event_datetime) nextErrors.event_datetime = 'Data/ora richiesta';
     if (Number(form.duration_minutes) < 15 || Number(form.duration_minutes) > 360) {
       nextErrors.duration_minutes = 'Durata tra 15 e 360 minuti';
@@ -2247,7 +2263,7 @@ function CreateEventPage() {
                     <span><Dumbbell size={20} aria-hidden="true" /></span>
                     <div>
                       <small>STRUTTURA SPORTIVA RILEVATA</small>
-                      <strong id="gym-access-title">Come si accede alla palestra?</strong>
+                      <strong id="gym-access-title">Imposta l’accesso per i partecipanti</strong>
                     </div>
                   </div>
                   <div className={styles.gymAccessOptions} role="radiogroup" aria-label="Condizione di accesso alla palestra">
@@ -2262,7 +2278,13 @@ function CreateEventPage() {
                           aria-checked={selected}
                           onClick={() => setField('gym_access_policy', option.value)}
                         >
-                          <span>{option.value === 'members_only' ? <LockKeyhole size={18} /> : <Users size={18} />}</span>
+                          <span>
+                            {option.value === 'members_only'
+                              ? <LockKeyhole size={18} />
+                              : option.value === 'members_or_trial'
+                                ? <Sparkles size={18} />
+                                : <Users size={18} />}
+                          </span>
                           <span>
                             <strong>{option.label}</strong>
                             <small>{option.description}</small>
@@ -2272,7 +2294,8 @@ function CreateEventPage() {
                       );
                     })}
                   </div>
-                  <p>Nessun ingresso è garantito da Motrice: l’accesso va verificato con la struttura.</p>
+                  {errors.gym_access_policy ? <span className="error">{errors.gym_access_policy}</span> : null}
+                  <p>Chi possiede un abbonamento verificato avrà accesso diretto. La prova gratuita è separata dagli eventi prova Motrice.</p>
                 </section>
               ) : null}
 

@@ -75,7 +75,7 @@ import {
   getEventManagementPolicy
 } from '../utils/eventManagementRules';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
-import { getGymAccessPresentation } from '../utils/eventVenueAccess';
+import { getGymAccessPresentation, isGymEvent } from '../utils/eventVenueAccess';
 import { getAutomaticMinimumPresenceMinutes } from '../utils/eventCreationRules';
 import { getMyProfileVerification } from '../services/profileVerification';
 import styles from '../styles/pages/eventDetail.module.css';
@@ -303,6 +303,8 @@ function EventDetailPage() {
     sport_profiles: []
   });
   const [profileVerificationStatus, setProfileVerificationStatus] = useState('unverified');
+  const [gymViewerAccess, setGymViewerAccess] = useState(null);
+  const [gymViewerAccessLoading, setGymViewerAccessLoading] = useState(false);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [pendingNewCount, setPendingNewCount] = useState(0);
   const [groupChatAiLoading, setGroupChatAiLoading] = useState(false);
@@ -709,6 +711,11 @@ function EventDetailPage() {
 
   async function confirmRsvp() {
     if (rsvpSubmitting) return;
+    if (gymViewerAccess?.can_participate === false) {
+      const access = getGymAccessPresentation(event, gymViewerAccess);
+      showToast(access?.description || 'Verifica prima l’accesso alla palestra', 'error');
+      return;
+    }
     const profileDisplayName = String(localProfile.display_name || '').trim();
     const participantName = String(rsvpForm.name || profileDisplayName || '').trim().slice(0, 40);
     if (participantName.length < 2) {
@@ -1145,6 +1152,31 @@ function EventDetailPage() {
   const isParticipantView = Boolean(event && !event.is_personal && !isOrganizerForEvent);
 
   useEffect(() => {
+    let active = true;
+    setGymViewerAccess(null);
+    if (!event?.id || !isGymEvent(event) || isOrganizerForEvent) {
+      setGymViewerAccessLoading(false);
+      return undefined;
+    }
+
+    setGymViewerAccessLoading(true);
+    api.getMyGymAccess(event.id)
+      .then((access) => {
+        if (active) setGymViewerAccess(access || null);
+      })
+      .catch(() => {
+        if (active) setGymViewerAccess(null);
+      })
+      .finally(() => {
+        if (active) setGymViewerAccessLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [event?.id, event?.venue_type, isOrganizerForEvent]);
+
+  useEffect(() => {
     if (!event?.id) return;
     setPeopleOpen(isOrganizerForEvent);
   }, [event?.id, isOrganizerForEvent]);
@@ -1162,12 +1194,27 @@ function EventDetailPage() {
   const eventHasEnded = eventTiming.hasEnded;
   const participantOutcome = resolveParticipantOutcome(event);
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
-  const eventPrimaryAction = resolveEventPrimaryAction({
+  const baseEventPrimaryAction = resolveEventPrimaryAction({
     event,
     isOrganizer: isOrganizerForEvent,
     isFull: participationIsFull,
     referenceTime: checkInNowMs
   });
+  const participantGymAccess = getGymAccessPresentation(event, gymViewerAccess);
+  const gymAccessBlocksJoin = Boolean(
+    isParticipantView &&
+    gymViewerAccess &&
+    !gymViewerAccessLoading &&
+    baseEventPrimaryAction.target === 'join' &&
+    participantGymAccess?.canParticipate === false
+  );
+  const eventPrimaryAction = gymAccessBlocksJoin
+    ? {
+        ...baseEventPrimaryAction,
+        label: participantGymAccess?.status === 'trial_used' ? 'Accesso da verificare' : 'Abbonamento richiesto',
+        disabled: true
+      }
+    : baseEventPrimaryAction;
   const EventPrimaryActionIcon = getPrimaryActionIcon(eventPrimaryAction);
   const canInviteFriendsFromGroupChat = Boolean(
     participantOutcome.id === 'completed'
@@ -1397,7 +1444,7 @@ function EventDetailPage() {
     : [];
   const sportVisual = getSportDetailVisual(event);
   const eventTitle = String(event.title || event.sport_name || 'Evento');
-  const gymAccess = getGymAccessPresentation(event);
+  const gymAccess = getGymAccessPresentation(event, isParticipantView ? gymViewerAccess : null);
   const eventDescription = String(event.description || '').trim();
   const showHeroDescription = hasMeaningfulDescription(eventDescription);
   const showHeroDateSport = normalizeName(eventTitle) !== normalizeName(event.sport_name);
@@ -1697,12 +1744,12 @@ function EventDetailPage() {
                 </div>
               ) : null}
               {gymAccess ? (
-                <div className={styles.gymAccessNotice} role="note">
+                <div className={`${styles.gymAccessNotice} ${styles[`gymAccessNotice_${gymAccess.tone || 'neutral'}`] || ''}`} role="note">
                   <span><LockKeyhole size={19} aria-hidden="true" /></span>
                   <div>
                     <small>ACCESSO · {event.location_name || 'PALESTRA'}</small>
-                    <strong>{gymAccess.label}</strong>
-                    <p>{gymAccess.description}</p>
+                    <strong>{gymViewerAccessLoading && isParticipantView ? 'Verifica accesso…' : gymAccess.label}</strong>
+                    <p>{gymViewerAccessLoading && isParticipantView ? 'Controlliamo automaticamente il tuo abbonamento con questa struttura.' : gymAccess.description}</p>
                   </div>
                 </div>
               ) : null}
@@ -1819,9 +1866,13 @@ function EventDetailPage() {
                 </div>
               ) : null}
               {gymAccess ? (
-                <p className={styles.participantAccessReminder}>
-                  <LockKeyhole size={15} aria-hidden="true" />
-                  {gymAccess.label}: verifica l’accesso prima di partecipare.
+                <p className={`${styles.participantAccessReminder} ${gymAccess.canParticipate === false ? styles.participantAccessReminderBlocked : ''}`}>
+                  {gymAccess.tone === 'success' ? <ShieldCheck size={15} aria-hidden="true" /> : <LockKeyhole size={15} aria-hidden="true" />}
+                  {gymViewerAccessLoading
+                    ? 'Verifica automatica dell’accesso alla palestra…'
+                    : gymAccess.canParticipate === false
+                      ? `${gymAccess.label}. Chiedi alla palestra di verificare il tuo abbonamento.`
+                      : `${gymAccess.label}. La caparra Motrice resta separata dall’ingresso.`}
                 </p>
               ) : null}
             </Card>
@@ -2352,7 +2403,12 @@ function EventDetailPage() {
           : event?.join_policy === 'approval'
             ? 'Invia richiesta'
             : 'Blocca deposito e partecipa'}
-        confirmDisabled={rsvpSubmitting || String(localProfile.display_name || '').trim().length < 2}
+        confirmDisabled={
+          rsvpSubmitting ||
+          gymViewerAccessLoading ||
+          gymViewerAccess?.can_participate === false ||
+          String(localProfile.display_name || '').trim().length < 2
+        }
         showCloseAction={false}
         showHeaderClose
       >
@@ -2432,6 +2488,19 @@ function EventDetailPage() {
               </label>
             ) : null}
           </div>
+
+          {gymAccess ? (
+            <div className={`${styles.joinGymAccessSummary} ${styles[`joinGymAccessSummary_${gymAccess.tone || 'neutral'}`] || ''}`}>
+              {gymAccess.tone === 'success'
+                ? <ShieldCheck size={22} aria-hidden="true" />
+                : <LockKeyhole size={22} aria-hidden="true" />}
+              <div>
+                <span>Ingresso palestra</span>
+                <strong>{gymAccess.label}</strong>
+                <small>{gymAccess.description}</small>
+              </div>
+            </div>
+          ) : null}
 
           <div className={styles.joinDepositSummary}>
             <CircleDollarSign size={22} aria-hidden="true" />

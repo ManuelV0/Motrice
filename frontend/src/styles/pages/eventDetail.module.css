@@ -479,6 +479,26 @@
 .gymAccessNotice strong { color: var(--text); font-size: var(--text-sm); }
 .gymAccessNotice p { margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
 
+.gymAccessNotice_success {
+  border-color: rgb(198 255 0 / 34%);
+  background: linear-gradient(135deg, rgb(198 255 0 / 10%), transparent 70%), var(--surface-2);
+}
+
+.gymAccessNotice_success > span,
+.gymAccessNotice_success small {
+  color: var(--primary);
+}
+
+.gymAccessNotice_warning {
+  border-color: rgb(255 201 71 / 34%);
+  background: linear-gradient(135deg, rgb(255 201 71 / 9%), transparent 70%), var(--surface-2);
+}
+
+.gymAccessNotice_warning > span,
+.gymAccessNotice_warning small {
+  color: #ffd05b;
+}
+
 .locationIcon,
 .sectionIcon {
   flex: 0 0 auto;
@@ -2112,6 +2132,66 @@
   background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 
+.joinGymAccessSummary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid rgb(32 217 167 / 30%);
+  border-radius: var(--r-lg);
+  background: rgb(32 217 167 / 7%);
+}
+
+.joinGymAccessSummary > svg {
+  color: #55e5bd;
+}
+
+.joinGymAccessSummary > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.joinGymAccessSummary span {
+  color: #55e5bd;
+  font-size: 0.65rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.joinGymAccessSummary strong {
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.joinGymAccessSummary small {
+  color: var(--muted);
+  font-size: 0.71rem;
+  line-height: 1.35;
+}
+
+.joinGymAccessSummary_success {
+  border-color: rgb(198 255 0 / 33%);
+  background: rgb(198 255 0 / 7%);
+}
+
+.joinGymAccessSummary_success > svg,
+.joinGymAccessSummary_success span {
+  color: var(--primary);
+}
+
+.joinGymAccessSummary_warning {
+  border-color: rgb(255 201 71 / 34%);
+  background: rgb(255 201 71 / 7%);
+}
+
+.joinGymAccessSummary_warning > svg,
+.joinGymAccessSummary_warning span {
+  color: #ffd05b;
+}
+
 .joinDepositSummary > svg {
   flex: 0 0 auto;
   color: var(--primary);
@@ -2342,6 +2422,14 @@
 .participantAccessReminder svg {
   flex: 0 0 auto;
   color: #20d9a7;
+}
+
+.participantAccessReminderBlocked {
+  color: #e5c267;
+}
+
+.participantAccessReminderBlocked svg {
+  color: #ffd05b;
 }
 
 .participantStickyAction {

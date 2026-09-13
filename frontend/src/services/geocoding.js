@@ -5,6 +5,7 @@ const geocodeCache = new Map();
 
 const MOTRICE_SPORT_VENUES = [
   {
+    venueKey: 'phisiko-restyle-gym-ascoli-piceno',
     locationName: 'Phisiko Restyle Gym',
     aliases: ['phisiko', 'physiko', 'phisiko restyle gym', 'physiko restyle gym'],
     city: 'Ascoli Piceno',
@@ -17,6 +18,7 @@ const MOTRICE_SPORT_VENUES = [
     source: 'motrice'
   },
   {
+    venueKey: 'tonic-ascoli-piceno',
     locationName: 'Tonic Ascoli Piceno',
     aliases: ['tonic', 'tonic ascoli', 'tonic ascoli piceno', 'tonic club'],
     city: 'Ascoli Piceno',
@@ -29,6 +31,7 @@ const MOTRICE_SPORT_VENUES = [
     source: 'motrice'
   },
   {
+    venueKey: 'ludus-srl-dilettantistica-ascoli-piceno',
     locationName: 'Ludus Srl Dilettantistica',
     aliases: ['ludus', 'ludus ascoli', 'ludus ascoli piceno', 'ludus srl dilettantistica'],
     city: 'Ascoli Piceno',
