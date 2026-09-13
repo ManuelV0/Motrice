@@ -34,6 +34,7 @@ import {
   stopEventLocationTracking
 } from '../../services/eventLocationTracking';
 import { validateEventLocationProof } from '../../utils/eventLocationProof';
+import { GYM_ENTRY_OPTIONS } from '../../utils/eventVenueAccess';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
@@ -1015,6 +1016,7 @@ function EventParticipationFlow({
                   {joinRequests.length ? joinRequests.map((request) => {
                     const requestKey = String(request.auth_user_id || request.user_id || '');
                     const isDeciding = requestDecisionBusy === requestKey;
+                    const gymEntryLabel = GYM_ENTRY_OPTIONS.find((option) => option.value === request.gym_access_choice)?.label;
                     return (
                     <article key={request.auth_user_id || request.user_id} className={styles.requestRow}>
                       <span className={styles.avatar}>
@@ -1025,6 +1027,7 @@ function EventParticipationFlow({
                       <div className={styles.requestCopy}>
                         <strong>{request.display_name}</strong>
                         <span>{request.note || `Livello: ${request.skill_level || 'non indicato'}`}</span>
+                        {gymEntryLabel ? <small>Ingresso palestra · {gymEntryLabel}</small> : null}
                       </div>
                       <div className={styles.requestActions}>
                         <Button

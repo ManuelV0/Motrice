@@ -504,6 +504,16 @@
   white-space: nowrap;
 }
 
+.requestCopy small {
+  width: fit-content;
+  padding: 0.18rem 0.38rem;
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  font-size: 0.62rem;
+  font-weight: 750;
+}
+
 .requestActions {
   display: flex;
   align-items: center;

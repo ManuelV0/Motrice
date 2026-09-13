@@ -75,7 +75,15 @@ import {
   getEventManagementPolicy
 } from '../utils/eventManagementRules';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
-import { getGymAccessPresentation, isGymEvent } from '../utils/eventVenueAccess';
+import {
+  GYM_ENTRY_DAY_PASS,
+  GYM_ENTRY_MEMBER,
+  GYM_ENTRY_OPTIONS,
+  GYM_ENTRY_TRIAL,
+  getGymAccessPresentation,
+  isGymEvent,
+  resolveGymViewerAccess
+} from '../utils/eventVenueAccess';
 import { getAutomaticMinimumPresenceMinutes } from '../utils/eventCreationRules';
 import { getMyProfileVerification } from '../services/profileVerification';
 import styles from '../styles/pages/eventDetail.module.css';
@@ -267,6 +275,7 @@ function EventDetailPage() {
     name: '',
     skill_level: 'beginner',
     note: '',
+    gym_access_choice: '',
     participation_fee_cents: 1000
   });
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -330,6 +339,7 @@ function EventDetailPage() {
     setOrganizerEditOpen(false);
     setOrganizerDangerOpen(false);
     setRsvpNoteOpen(false);
+    setRsvpForm((current) => ({ ...current, gym_access_choice: '' }));
   }, [event?.id]);
 
   useEffect(() => {
@@ -711,9 +721,12 @@ function EventDetailPage() {
 
   async function confirmRsvp() {
     if (rsvpSubmitting) return;
-    if (gymViewerAccess?.can_participate === false) {
-      const access = getGymAccessPresentation(event, gymViewerAccess);
-      showToast(access?.description || 'Verifica prima l’accesso alla palestra', 'error');
+    if (isGymEvent(event) && !rsvpForm.gym_access_choice) {
+      showToast('Scegli come accederai alla palestra', 'error');
+      return;
+    }
+    if (isGymEvent(event) && rsvpForm.gym_access_choice === GYM_ENTRY_TRIAL && gymViewerAccess?.trial_used) {
+      showToast('La prima entrata gratuita in questa palestra risulta già utilizzata', 'error');
       return;
     }
     const profileDisplayName = String(localProfile.display_name || '').trim();
@@ -1162,7 +1175,14 @@ function EventDetailPage() {
     setGymViewerAccessLoading(true);
     api.getMyGymAccess(event.id)
       .then((access) => {
-        if (active) setGymViewerAccess(access || null);
+        if (!active) return;
+        setGymViewerAccess(access || null);
+        if (access?.selected_choice) {
+          setRsvpForm((current) => ({
+            ...current,
+            gym_access_choice: current.gym_access_choice || access.selected_choice
+          }));
+        }
       })
       .catch(() => {
         if (active) setGymViewerAccess(null);
@@ -1200,21 +1220,16 @@ function EventDetailPage() {
     isFull: participationIsFull,
     referenceTime: checkInNowMs
   });
-  const participantGymAccess = getGymAccessPresentation(event, gymViewerAccess);
-  const gymAccessBlocksJoin = Boolean(
-    isParticipantView &&
-    gymViewerAccess &&
-    !gymViewerAccessLoading &&
-    baseEventPrimaryAction.target === 'join' &&
-    participantGymAccess?.canParticipate === false
-  );
-  const eventPrimaryAction = gymAccessBlocksJoin
-    ? {
-        ...baseEventPrimaryAction,
-        label: participantGymAccess?.status === 'trial_used' ? 'Accesso da verificare' : 'Abbonamento richiesto',
-        disabled: true
-      }
-    : baseEventPrimaryAction;
+  const participantGymAccessState = isParticipantView && isGymEvent(event)
+    ? resolveGymViewerAccess(
+        event,
+        gymViewerAccess?.membership_verified ? { status: 'active' } : null,
+        Boolean(gymViewerAccess?.trial_used),
+        rsvpForm.gym_access_choice || gymViewerAccess?.selected_choice
+      )
+    : gymViewerAccess;
+  const participantGymAccess = getGymAccessPresentation(event, participantGymAccessState);
+  const eventPrimaryAction = baseEventPrimaryAction;
   const EventPrimaryActionIcon = getPrimaryActionIcon(eventPrimaryAction);
   const canInviteFriendsFromGroupChat = Boolean(
     participantOutcome.id === 'completed'
@@ -1444,7 +1459,7 @@ function EventDetailPage() {
     : [];
   const sportVisual = getSportDetailVisual(event);
   const eventTitle = String(event.title || event.sport_name || 'Evento');
-  const gymAccess = getGymAccessPresentation(event, isParticipantView ? gymViewerAccess : null);
+  const gymAccess = getGymAccessPresentation(event, isParticipantView ? participantGymAccessState : null);
   const eventDescription = String(event.description || '').trim();
   const showHeroDescription = hasMeaningfulDescription(eventDescription);
   const showHeroDateSport = normalizeName(eventTitle) !== normalizeName(event.sport_name);
@@ -2406,7 +2421,8 @@ function EventDetailPage() {
         confirmDisabled={
           rsvpSubmitting ||
           gymViewerAccessLoading ||
-          gymViewerAccess?.can_participate === false ||
+          (isGymEvent(event) && !rsvpForm.gym_access_choice) ||
+          (isGymEvent(event) && rsvpForm.gym_access_choice === GYM_ENTRY_TRIAL && gymViewerAccess?.trial_used) ||
           String(localProfile.display_name || '').trim().length < 2
         }
         showCloseAction={false}
@@ -2489,13 +2505,56 @@ function EventDetailPage() {
             ) : null}
           </div>
 
-          {gymAccess ? (
+          {isGymEvent(event) ? (
+            <fieldset className={styles.joinGymChoiceFieldset}>
+              <legend>Come accederai alla palestra?</legend>
+              <div className={styles.joinGymChoices}>
+                {GYM_ENTRY_OPTIONS.map((option) => {
+                  const selected = rsvpForm.gym_access_choice === option.value;
+                  const trialUnavailable = option.value === GYM_ENTRY_TRIAL && Boolean(gymViewerAccess?.trial_used);
+                  const Icon = option.value === GYM_ENTRY_MEMBER
+                    ? ShieldCheck
+                    : option.value === GYM_ENTRY_TRIAL
+                      ? Sparkles
+                      : CircleDollarSign;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={selected ? styles.joinGymChoiceActive : ''}
+                      aria-pressed={selected}
+                      disabled={trialUnavailable}
+                      onClick={() => setRsvpForm((current) => ({ ...current, gym_access_choice: option.value }))}
+                    >
+                      <span className={styles.joinGymChoiceIcon}><Icon size={18} aria-hidden="true" /></span>
+                      <span>
+                        <strong>{option.label}</strong>
+                        <small>
+                          {trialUnavailable
+                            ? 'Già utilizzata in questa palestra'
+                            : option.value === GYM_ENTRY_MEMBER && gymViewerAccess?.membership_verified
+                              ? 'Abbonamento già verificato'
+                              : option.description}
+                        </small>
+                      </span>
+                      <i aria-hidden="true">{selected ? <CheckCircle2 size={15} /> : null}</i>
+                    </button>
+                  );
+                })}
+              </div>
+              {rsvpForm.gym_access_choice === GYM_ENTRY_DAY_PASS ? (
+                <p>Il pagamento dell’ingresso palestra è separato dal deposito Motrice.</p>
+              ) : null}
+            </fieldset>
+          ) : null}
+
+          {gymAccess && rsvpForm.gym_access_choice ? (
             <div className={`${styles.joinGymAccessSummary} ${styles[`joinGymAccessSummary_${gymAccess.tone || 'neutral'}`] || ''}`}>
               {gymAccess.tone === 'success'
                 ? <ShieldCheck size={22} aria-hidden="true" />
                 : <LockKeyhole size={22} aria-hidden="true" />}
               <div>
-                <span>Ingresso palestra</span>
+                <span>Ingresso palestra selezionato</span>
                 <strong>{gymAccess.label}</strong>
                 <small>{gymAccess.description}</small>
               </div>

@@ -7,6 +7,7 @@ import { resolveParticipantOutcome } from '../utils/eventParticipationState';
 import { getSystemEventRules } from '../utils/eventCreationRules';
 import {
   normalizeGymAccessPolicy,
+  normalizeGymEntryChoice,
   normalizeGymVenueKey,
   normalizeVenueType,
   resolveGymViewerAccess
@@ -693,12 +694,21 @@ function createRemoteMethods(localApi) {
       await assertProfileVerified('partecipare a un evento.');
       const eventResult = await client
         .from('events')
-        .select('id,join_policy,is_personal')
+        .select('id,join_policy,is_personal,venue_type')
         .eq('id', String(id))
         .single();
       throwIfError(eventResult.error);
       if (eventResult.data?.is_personal) {
         throw new Error('Questo evento e un promemoria personale');
+      }
+      if (normalizeVenueType(eventResult.data?.venue_type) === 'gym') {
+        const gymEntryChoice = normalizeGymEntryChoice(payload.gym_access_choice);
+        if (!gymEntryChoice) throw new Error('Scegli come accederai alla palestra');
+        const choiceResult = await client.rpc('choose_event_gym_access', {
+          target_event_id: String(id),
+          requested_choice: gymEntryChoice
+        });
+        throwIfError(choiceResult.error);
       }
       const rpcName = eventResult.data?.join_policy === 'approval' ? 'request_event_join' : 'join_event';
       const { data, error } = await client.rpc(rpcName, {
@@ -713,19 +723,31 @@ function createRemoteMethods(localApi) {
     async listEventJoinRequests(eventId) {
       const client = requireSupabase();
       requireAuthUserId();
-      const { data, error } = await client
-        .from('event_join_requests')
-        .select(
-          'event_id,user_id,status,skill_level,note,requested_at,profile:profiles!event_join_requests_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
-        )
-        .eq('event_id', String(eventId))
-        .eq('status', 'pending')
-        .order('requested_at', { ascending: true });
-      throwIfError(error);
+      const [requestsResult, accessChoicesResult] = await Promise.all([
+        client
+          .from('event_join_requests')
+          .select(
+            'event_id,user_id,status,skill_level,note,requested_at,profile:profiles!event_join_requests_user_id_fkey(id,display_name,avatar_url,bio,reliability_score)'
+          )
+          .eq('event_id', String(eventId))
+          .eq('status', 'pending')
+          .order('requested_at', { ascending: true }),
+        client
+          .from('gym_event_access_choices')
+          .select('user_id,choice')
+          .eq('event_id', String(eventId))
+      ]);
+      throwIfError(requestsResult.error);
+      throwIfError(accessChoicesResult.error);
+      const accessChoiceByUserId = new Map(
+        (accessChoicesResult.data || []).map((item) => [String(item.user_id), item.choice])
+      );
+      const data = requestsResult.data;
       return (data || []).map((request) => {
         rememberProfile(request.profile);
         return {
           ...request,
+          gym_access_choice: accessChoiceByUserId.get(String(request.user_id)) || null,
           user_id: legacyProfileId(request.user_id),
           auth_user_id: request.user_id,
           display_name: request.profile?.display_name || 'Partecipante',

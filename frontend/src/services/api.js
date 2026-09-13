@@ -24,6 +24,7 @@ import { getEventManagementPolicy } from '../utils/eventManagementRules';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
 import {
   normalizeGymAccessPolicy,
+  normalizeGymEntryChoice,
   normalizeGymVenueKey,
   normalizeVenueType,
   resolveGymViewerAccess
@@ -943,6 +944,7 @@ function buildInitialStore() {
     conventionAgreementRecords: [],
     conventionContractTemplates: [],
     gymVenueMemberships: [],
+    gymEventAccessChoices: [],
     gymTrialUsages: [],
     revokedAuthUserIds: [],
     notifications: [],
@@ -1082,6 +1084,9 @@ function loadStore() {
     }
     if (!Array.isArray(merged.gymVenueMemberships)) {
       merged.gymVenueMemberships = [];
+    }
+    if (!Array.isArray(merged.gymEventAccessChoices)) {
+      merged.gymEventAccessChoices = [];
     }
     if (!Array.isArray(merged.gymTrialUsages)) {
       merged.gymTrialUsages = [];
@@ -1472,7 +1477,7 @@ function getCreationStats(store) {
   };
 }
 
-function getLocalGymAccessState(store, event, userId) {
+function getLocalGymAccessState(store, event, userId, requestedChoice = null) {
   const venueKey = normalizeGymVenueKey(
     event?.gym_venue_key,
     `${event?.location_name || ''}-${event?.city || ''}`
@@ -1487,8 +1492,12 @@ function getLocalGymAccessState(store, event, userId) {
     normalizeGymVenueKey(item?.venue_key) === venueKey &&
     String(item?.status || 'used') === 'used'
   ));
+  const savedChoice = (store.gymEventAccessChoices || []).find((item) => (
+    Number(item?.user_id) === Number(userId) && String(item?.event_id) === String(event?.id)
+  ));
+  const selectedChoice = normalizeGymEntryChoice(requestedChoice || savedChoice?.choice);
   return {
-    ...resolveGymViewerAccess(event, membership, trialUsed),
+    ...resolveGymViewerAccess(event, membership, trialUsed, selectedChoice),
     venue_key: venueKey,
     membership_verified: Boolean(membership),
     trial_used: trialUsed,
@@ -1856,7 +1865,24 @@ const localApi = {
     if (event.status === 'cancelled') {
       throw new Error('Questo evento e stato annullato');
     }
-    const gymAccess = getLocalGymAccessState(store, event, currentUserId);
+    const gymEntryChoice = normalizeGymEntryChoice(payload?.gym_access_choice);
+    if (normalizeVenueType(event.venue_type) === 'gym' && !gymEntryChoice) {
+      throw new Error('Scegli come accederai alla palestra');
+    }
+    if (gymEntryChoice) {
+      store.gymEventAccessChoices = [
+        ...(store.gymEventAccessChoices || []).filter((item) => !(
+          Number(item?.user_id) === Number(currentUserId) && String(item?.event_id) === String(event.id)
+        )),
+        {
+          event_id: event.id,
+          user_id: currentUserId,
+          choice: gymEntryChoice,
+          selected_at: nowIso()
+        }
+      ];
+    }
+    const gymAccess = getLocalGymAccessState(store, event, currentUserId, gymEntryChoice);
     if (gymAccess?.can_participate === false) {
       if (gymAccess.status === 'trial_used') {
         throw new Error('GYM_TRIAL_ALREADY_USED: la prova gratuita in questa palestra è già stata utilizzata');
@@ -1889,6 +1915,7 @@ const localApi = {
             user_id: currentUserId,
             status: 'pending',
             skill_level: payload?.skill_level || 'beginner',
+            gym_access_choice: gymEntryChoice,
             note: payload?.note || '',
             display_name: participantName,
             avatar_url: accountProfile.avatar_url || '',
@@ -1974,6 +2001,7 @@ const localApi = {
       status: 'going',
       name: participantName,
       skill_level: payload.skill_level,
+      gym_access_choice: gymEntryChoice,
       note: payload.note || '',
       participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
       participation_fee_status: 'frozen',
@@ -1991,6 +2019,7 @@ const localApi = {
           user_id: currentUserId,
           status: 'approved',
           skill_level: payload?.skill_level || 'beginner',
+          gym_access_choice: gymEntryChoice,
           note: payload?.note || '',
           display_name: participantName,
           avatar_url: accountProfile.avatar_url || '',
@@ -2060,6 +2089,7 @@ const localApi = {
       status: 'going',
       name: normalizeDisplayName(request.display_name || '', 'Partecipante'),
       skill_level: request.skill_level || 'beginner',
+      gym_access_choice: request.gym_access_choice || null,
       note: request.note || '',
       participation_fee_cents: Number(event.deposit_cents ?? EVENT_JOIN_STAKE_CENTS),
       participation_fee_status: 'frozen',

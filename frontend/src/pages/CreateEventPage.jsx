@@ -50,7 +50,7 @@ import {
   GROUP_CHECK_IN_GRACE_MINUTES
 } from '../utils/eventCreationRules';
 import {
-  GYM_ACCESS_OPTIONS,
+  GYM_ACCESS_PARTICIPANT_CHOICE,
   VENUE_TYPE_GYM,
   VENUE_TYPE_STANDARD,
   getGymAccessPresentation,
@@ -164,7 +164,6 @@ const STEP_ERROR_FIELDS = {
     'city',
     'location_name',
     'coordinates',
-    'gym_access_policy',
     'route_name',
     'route_from',
     'route_to',
@@ -1079,14 +1078,14 @@ function CreateEventPage() {
       city: result.city || prev.city,
       location_name: placeName,
       venue_type: result.isSportFacility ? VENUE_TYPE_GYM : VENUE_TYPE_STANDARD,
-      gym_access_policy: result.isSportFacility ? (prev.gym_access_policy || GYM_ACCESS_OPTIONS[0].value) : null,
+      gym_access_policy: result.isSportFacility ? GYM_ACCESS_PARTICIPANT_CHOICE : null,
       gym_venue_key: result.isSportFacility
         ? normalizeGymVenueKey(result.venueKey, `${placeName}-${result.city || prev.city}`)
         : null
     }));
     setLocationSelectionMessage(
       result.isSportFacility
-        ? `${placeName} riconosciuta come struttura sportiva. Scegli la condizione di accesso e conferma il punto.`
+        ? `${placeName} riconosciuta come struttura sportiva. Ogni partecipante sceglierà il proprio tipo di ingresso.`
         : `${placeName} selezionato. Controlla il pin e conferma il punto.`
     );
   }
@@ -1301,13 +1300,6 @@ function CreateEventPage() {
     }
     if (!form.city || form.city.length < 2) nextErrors.city = 'Citta richiesta';
     if (!form.location_name || form.location_name.length < 3) nextErrors.location_name = 'Location troppo corta';
-    if (
-      !form.has_route &&
-      form.venue_type === VENUE_TYPE_GYM &&
-      !GYM_ACCESS_OPTIONS.some((option) => option.value === form.gym_access_policy)
-    ) {
-      nextErrors.gym_access_policy = 'Scegli la condizione di accesso alla palestra';
-    }
     if (!form.event_datetime) nextErrors.event_datetime = 'Data/ora richiesta';
     if (Number(form.duration_minutes) < 15 || Number(form.duration_minutes) > 360) {
       nextErrors.duration_minutes = 'Durata tra 15 e 360 minuti';
@@ -2263,39 +2255,10 @@ function CreateEventPage() {
                     <span><Dumbbell size={20} aria-hidden="true" /></span>
                     <div>
                       <small>STRUTTURA SPORTIVA RILEVATA</small>
-                      <strong id="gym-access-title">Imposta l’accesso per i partecipanti</strong>
+                      <strong id="gym-access-title">L’accesso viene scelto dal partecipante</strong>
                     </div>
                   </div>
-                  <div className={styles.gymAccessOptions} role="radiogroup" aria-label="Condizione di accesso alla palestra">
-                    {GYM_ACCESS_OPTIONS.map((option) => {
-                      const selected = form.gym_access_policy === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={selected ? styles.gymAccessOptionSelected : ''}
-                          role="radio"
-                          aria-checked={selected}
-                          onClick={() => setField('gym_access_policy', option.value)}
-                        >
-                          <span>
-                            {option.value === 'members_only'
-                              ? <LockKeyhole size={18} />
-                              : option.value === 'members_or_trial'
-                                ? <Sparkles size={18} />
-                                : <Users size={18} />}
-                          </span>
-                          <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.description}</small>
-                          </span>
-                          <i aria-hidden="true">{selected ? <Check size={13} /> : null}</i>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {errors.gym_access_policy ? <span className="error">{errors.gym_access_policy}</span> : null}
-                  <p>Chi possiede un abbonamento verificato avrà accesso diretto. La prova gratuita è separata dagli eventi prova Motrice.</p>
+                  <p>Quando richiede di partecipare, ogni utente indicherà se è già abbonato, usa la prima entrata gratuita oppure acquista un ingresso giornaliero. Queste condizioni restano separate dalla caparra Motrice.</p>
                 </section>
               ) : null}
 
