@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  EVENT_FINANCIAL_REVIEW_HOURS,
   EVENT_LIFECYCLE_STATES,
+  POST_EVENT_ACTIONS_HOURS,
   getEffectiveEventLifecycleState,
   getEventPhaseLabel,
   getEventTiming
@@ -56,6 +58,53 @@ test('closes and removes an event from the map at its effective end', () => {
   assert.equal(timing.hasEnded, true);
   assert.equal(timing.isMapVisible, false);
   assert.equal(timing.canJoin, false);
+  assert.equal(timing.isPostEventWindow, true);
+  assert.equal(timing.isFinancialReviewOpen, true);
+  assert.equal(timing.isPostEventReadOnly, false);
+});
+
+test('archives the event visually after twenty-four hours while keeping financial review open', () => {
+  const timing = getEventTiming(
+    { ...baseEvent, status: 'completed', completed_at: baseEvent.ends_at },
+    new Date('2026-09-06T20:00:00.000Z')
+  );
+
+  assert.equal(POST_EVENT_ACTIONS_HOURS, 24);
+  assert.equal(EVENT_FINANCIAL_REVIEW_HOURS, 48);
+  assert.equal(timing.lifecycleState, EVENT_LIFECYCLE_STATES.ARCHIVED);
+  assert.equal(timing.phase, 'archived');
+  assert.equal(timing.isPostEventWindow, false);
+  assert.equal(timing.isFinancialReviewOpen, true);
+  assert.equal(timing.isPostEventReadOnly, false);
+});
+
+test('makes a concluded event read-only after the forty-eight-hour financial window', () => {
+  const timing = getEventTiming(
+    { ...baseEvent, status: 'completed', completed_at: baseEvent.ends_at },
+    new Date('2026-09-07T20:00:00.000Z')
+  );
+
+  assert.equal(timing.lifecycleState, EVENT_LIFECYCLE_STATES.ARCHIVED);
+  assert.equal(timing.isFinancialReviewOpen, false);
+  assert.equal(timing.isPostEventReadOnly, true);
+});
+
+test('uses the authoritative settlement release time for the financial review deadline', () => {
+  const timing = getEventTiming(
+    {
+      ...baseEvent,
+      status: 'completed',
+      completed_at: baseEvent.ends_at,
+      money_settlement: {
+        status: 'pending',
+        release_at: '2026-09-06T19:00:00.000Z'
+      }
+    },
+    new Date('2026-09-06T18:59:00.000Z')
+  );
+
+  assert.equal(timing.isFinancialReviewOpen, true);
+  assert.equal(timing.financialReviewEndsAtMs, Date.parse('2026-09-06T19:00:00.000Z'));
 });
 
 test('server terminal states take precedence over local time', () => {

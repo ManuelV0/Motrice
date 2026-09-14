@@ -224,14 +224,38 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
   const authUserId = currentAuthUserId();
 
   if (!eventIds.length) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map(), workoutPlans: new Map() };
+    return {
+      participants: [],
+      savedEventIds: new Set(),
+      organizers: new Map(),
+      joinRequests: new Map(),
+      workoutPlans: new Map(),
+      moneySettlements: new Map(),
+      moneyDisputes: new Map()
+    };
   }
 
   if (!authUserId) {
-    return { participants: [], savedEventIds: new Set(), organizers: new Map(), joinRequests: new Map(), workoutPlans: new Map() };
+    return {
+      participants: [],
+      savedEventIds: new Set(),
+      organizers: new Map(),
+      joinRequests: new Map(),
+      workoutPlans: new Map(),
+      moneySettlements: new Map(),
+      moneyDisputes: new Map()
+    };
   }
 
-  const [participantsResult, savedResult, organizersResult, joinRequestsResult, workoutPlansResult] = await Promise.all([
+  const [
+    participantsResult,
+    savedResult,
+    organizersResult,
+    joinRequestsResult,
+    workoutPlansResult,
+    moneySettlementsResult,
+    moneyDisputesResult
+  ] = await Promise.all([
     client
       .from('event_participants')
       .select(
@@ -259,7 +283,17 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
           .from('personal_workout_plans')
           .select('id,client_id,title,sport_id,workout_type,duration_minutes,level,equipment,exercises')
           .in('id', workoutPlanIds)
-      : Promise.resolve({ data: [], error: null })
+      : Promise.resolve({ data: [], error: null }),
+    client
+      .from('event_money_settlements')
+      .select('id,event_id,status,attendee_count,no_show_count,returned_cents,platform_cents,redistributed_cents,release_at,created_at,released_at')
+      .in('event_id', eventIds),
+    client
+      .from('money_disputes')
+      .select('id,event_id,settlement_id,reason,status,created_at,resolved_at,resolution_note')
+      .eq('opened_by', authUserId)
+      .in('event_id', eventIds)
+      .order('created_at', { ascending: false })
   ]);
 
   throwIfError(participantsResult.error);
@@ -267,11 +301,18 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
   throwIfError(organizersResult.error);
   throwIfError(joinRequestsResult.error);
   throwIfError(workoutPlansResult.error);
+  throwIfError(moneySettlementsResult.error);
+  throwIfError(moneyDisputesResult.error);
 
   const participants = participantsResult.data || [];
   participants.forEach((participant) => rememberProfile(participant.profile));
   const organizerRows = organizersResult.data || [];
   organizerRows.forEach(rememberProfile);
+  const moneyDisputes = new Map();
+  (moneyDisputesResult.data || []).forEach((dispute) => {
+    const eventKey = String(dispute.event_id);
+    if (!moneyDisputes.has(eventKey)) moneyDisputes.set(eventKey, dispute);
+  });
 
   return {
     participants,
@@ -280,6 +321,10 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
     joinRequests: new Map(
       (joinRequestsResult.data || []).map((request) => [String(request.event_id), request])
     ),
+    moneySettlements: new Map(
+      (moneySettlementsResult.data || []).map((settlement) => [String(settlement.event_id), settlement])
+    ),
+    moneyDisputes,
     workoutPlans: new Map(
       (workoutPlansResult.data || []).map((plan) => [String(plan.id), {
         id: plan.client_id || plan.id,
@@ -390,6 +435,8 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     ends_at: rawEvent.ends_at || null,
     archived_at: rawEvent.archived_at || null,
     completed_at: rawEvent.completed_at || null,
+    money_settlement: context.moneySettlements.get(String(rawEvent.id)) || null,
+    money_dispute: context.moneyDisputes.get(String(rawEvent.id)) || null,
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
     status: rawEvent.status || 'scheduled',

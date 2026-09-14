@@ -4084,6 +4084,139 @@
   white-space: nowrap;
 }
 
+.postEventLifecycle {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, rgb(255 255 255 / 0.07));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--primary) 6%, #111311);
+}
+
+.postEventLifecycle[data-disputed='true'] {
+  border-color: rgb(255 194 77 / 0.28);
+  background: rgb(255 194 77 / 0.06);
+}
+
+.postEventLifecycleReadOnly {
+  border-color: rgb(255 255 255 / 0.07);
+  background: rgb(255 255 255 / 0.025);
+}
+
+.postEventLifecycleIcon {
+  width: 2.15rem;
+  height: 2.15rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.postEventLifecycle[data-disputed='true'] .postEventLifecycleIcon {
+  color: #ffc24d;
+  background: rgb(255 194 77 / 0.12);
+}
+
+.postEventLifecycle > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.postEventLifecycle strong {
+  color: #fff;
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.postEventLifecycle small {
+  color: rgb(255 255 255 / 0.5);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.postEventLifecycle > button {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgb(255 194 77 / 0.34);
+  border-radius: var(--r-md);
+  background: rgb(255 194 77 / 0.1);
+  color: #ffd16f;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.postEventLifecycle > button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-strong);
+}
+
+.moneyDisputeDialog {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.moneyDisputeDialog > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(255 194 77 / 0.22);
+  border-radius: var(--r-lg);
+  background: rgb(255 194 77 / 0.06);
+  color: #ffd16f;
+}
+
+.moneyDisputeDialog p {
+  margin: 0;
+  color: rgb(255 255 255 / 0.68);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.moneyDisputeDialog label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.moneyDisputeDialog label > span {
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.moneyDisputeDialog textarea {
+  width: 100%;
+  min-height: 6.5rem;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: var(--r-lg);
+  background: #111311;
+  color: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.moneyDisputeDialog textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 58%, transparent);
+  outline: none;
+  box-shadow: var(--focus-strong);
+}
+
+.moneyDisputeDialog label > small {
+  justify-self: end;
+  color: rgb(255 255 255 / 0.38);
+  font-size: 0.68rem;
+}
+
 .organizerFlowPriority {
   scroll-margin-top: 1rem;
 }
@@ -4231,7 +4364,7 @@
 /* 1.0.74: mappa subito dopo la data e contenuti ripetuti consolidati. */
 .routeInlineFacts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 0.07);
   border-radius: 1rem;
@@ -5451,6 +5584,15 @@
 }
 
 @media (max-width: 24rem) {
+  .postEventLifecycle {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .postEventLifecycle > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
   .peopleParticipantsRow {
     grid-template-columns: minmax(0, 1fr) auto;
   }

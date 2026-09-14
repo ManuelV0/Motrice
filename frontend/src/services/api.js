@@ -1250,7 +1250,25 @@ function enrichEvent(event, store, origin) {
   const rsvp = getEventRsvp(store, event.id, currentUserId);
   const joinRequest = store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)] || null;
   const isSaved = Boolean(store.savedEvents && store.savedEvents[String(event.id)]);
-  const hasPassed = getEventTiming(event, nowMs()).hasEnded;
+  const rawTiming = getEventTiming(event, nowMs());
+  const hasPassed = rawTiming.hasEnded;
+  const completedAtMs = Date.parse(event.completed_at || event.ends_at || '');
+  const fallbackCompletedAtMs = Number.isFinite(completedAtMs)
+    ? completedAtMs
+    : Date.parse(event.event_datetime || '') + Math.max(1, Number(event.duration_minutes || 120)) * 60 * 1000;
+  const localDispute = store.moneyDisputesByEvent?.[String(event.id)]?.[String(currentUserId)] || null;
+  const localSettlement = hasPassed && !event.is_personal && Number.isFinite(fallbackCompletedAtMs)
+    ? {
+        id: `local-settlement-${event.id}`,
+        event_id: event.id,
+        status: localDispute?.status === 'open'
+          ? 'disputed'
+          : nowMs() < fallbackCompletedAtMs + 48 * 60 * 60 * 1000
+            ? 'pending'
+            : 'released',
+        release_at: new Date(fallbackCompletedAtMs + 48 * 60 * 60 * 1000).toISOString()
+      }
+    : null;
   const distance_km =
     origin && event.lat != null && event.lng != null
       ? Number(haversineKm(origin.lat, origin.lng, event.lat, event.lng).toFixed(1))
@@ -1284,6 +1302,8 @@ function enrichEvent(event, store, origin) {
     ends_at: event.ends_at || null,
     archived_at: event.archived_at || null,
     completed_at: event.completed_at || null,
+    money_settlement: event.money_settlement || localSettlement,
+    money_dispute: event.money_dispute || localDispute,
     completion_xp: Number(event.completion_xp ?? 50),
     review_bonus_xp: Number(event.review_bonus_xp ?? 25),
     audience: String(event.audience || 'mixed'),
@@ -1538,6 +1558,51 @@ const localApi = {
 
   async listMoneyLedger({ limit = 50 } = {}) {
     return withDelay(piggybank.listLedger({ limit }));
+  },
+
+  async openEventMoneyDispute(eventId, reason) {
+    const store = loadStore();
+    const userId = resolveAuthUserId();
+    const event = ensureEventExists(store, eventId);
+    const cleanReason = String(reason || '').trim();
+    if (cleanReason.length < 5) throw new Error('Descrivi il problema');
+    if (event.is_personal) throw new Error('Questo evento non prevede un regolamento economico');
+
+    const isOrganizer = isEventOrganizerForUser(store, event, userId);
+    const participant = getEventRsvp(store, event.id, userId);
+    if (!isOrganizer && !participant) {
+      throw new Error('Puoi contestare soltanto un evento a cui hai partecipato');
+    }
+
+    const timing = getEventTiming(event, nowMs());
+    if (!timing.hasEnded) throw new Error('Il regolamento sarà disponibile al termine dell evento');
+    if (!timing.isFinancialReviewOpen) throw new Error('La finestra di contestazione è chiusa');
+
+    const eventKey = String(event.id);
+    const userKey = String(userId);
+    const existing = store.moneyDisputesByEvent?.[eventKey]?.[userKey];
+    if (existing?.status === 'open') return withDelay(clone(existing));
+
+    const dispute = {
+      id: `local-dispute-${eventKey}-${userKey}-${Date.now()}`,
+      event_id: event.id,
+      settlement_id: `local-settlement-${eventKey}`,
+      opened_by: userId,
+      reason: cleanReason.slice(0, 500),
+      status: 'open',
+      created_at: nowIso(),
+      resolved_at: null,
+      resolution_note: null
+    };
+    store.moneyDisputesByEvent = {
+      ...(store.moneyDisputesByEvent || {}),
+      [eventKey]: {
+        ...(store.moneyDisputesByEvent?.[eventKey] || {}),
+        [userKey]: dispute
+      }
+    };
+    saveStore(store);
+    return withDelay(clone(dispute));
   },
 
   async listEvents(filters = {}) {

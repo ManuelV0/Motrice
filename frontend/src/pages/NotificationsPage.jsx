@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -8,26 +8,32 @@ import {
   Check,
   CheckCheck,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   LockKeyhole,
   MessageCircle,
+  MoreHorizontal,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Star,
   Trash2,
-  WalletCards
+  WalletCards,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
-import ContextInfoButton from '../components/ContextInfoButton';
 import { DEFAULT_NOTIFICATION_PREFERENCES } from '../utils/notificationRules';
 import { withTimeout } from '../utils/asyncTimeout';
 import styles from '../styles/pages/notifications.module.css';
 
 const NOTIFICATIONS_LOAD_TIMEOUT_MS = 8000;
 const SECONDARY_LOAD_TIMEOUT_MS = 4500;
+const SWIPE_COMMIT_DISTANCE = 84;
+const SWIPE_FAST_MIN_DISTANCE = 56;
+const SWIPE_FAST_VELOCITY = 0.9;
+const SWIPE_LINEAR_DISTANCE = 48;
+const SWIPE_RESISTANCE_RANGE = 64;
+const SWIPE_RESISTANCE_DECAY = 60;
 
 const typeIcons = {
   rsvp_confirmed: CheckCircle2,
@@ -85,6 +91,128 @@ const preferenceRows = [
   }
 ];
 
+const notificationFilters = [
+  { key: 'all', label: 'Tutte' },
+  { key: 'action', label: 'Da gestire' },
+  { key: 'events', label: 'Eventi' },
+  { key: 'wallet', label: 'Wallet' }
+];
+
+const actionableTypes = new Set([
+  'event_join_requested',
+  'event_starting_soon',
+  'wallet_withdrawal_failed',
+  'profile_verification_rejected',
+  'profile_suspended',
+  'convention_application_rejected'
+]);
+
+const aggregateTypes = {
+  wallet_deposit_locked: {
+    title: 'Depositi evento bloccati',
+    message: (count) => `${count} quote sono al sicuro fino alla conclusione degli eventi.`
+  },
+  wallet_deposit_returned: {
+    title: 'Depositi evento restituiti',
+    message: (count) => `${count} quote sono tornate nel credito disponibile.`
+  }
+};
+
+function getCalendarDayKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function isNotificationActionable(item) {
+  return !item.read && actionableTypes.has(item.type);
+}
+
+function getNotificationCategory(type = '') {
+  if (type.startsWith('wallet_')) return 'wallet';
+  if (type.startsWith('event_') || type.startsWith('rsvp_') || type.includes('chat')) return 'events';
+  return 'other';
+}
+
+function getNotificationActionLabel(type = '') {
+  if (type === 'event_join_requested') return 'Gestisci';
+  if (type === 'event_starting_soon') return 'Apri evento';
+  if (type === 'wallet_withdrawal_failed') return 'Controlla';
+  if (type.includes('verification_rejected') || type.includes('suspended')) return 'Verifica';
+  if (type === 'convention_application_rejected') return 'Controlla';
+  return '';
+}
+
+function aggregateNotifications(items) {
+  const aggregated = [];
+  const groupIndexes = new Map();
+
+  items.forEach((item) => {
+    const aggregateConfig = aggregateTypes[item.type];
+    if (!aggregateConfig) {
+      aggregated.push({ ...item, memberIds: [item.id], groupCount: 1 });
+      return;
+    }
+
+    const groupKey = `${item.type}:${getCalendarDayKey(item.created_at)}`;
+    const existingIndex = groupIndexes.get(groupKey);
+    if (existingIndex === undefined) {
+      groupIndexes.set(groupKey, aggregated.length);
+      aggregated.push({ ...item, memberIds: [item.id], groupCount: 1 });
+      return;
+    }
+
+    const existing = aggregated[existingIndex];
+    const memberIds = [...existing.memberIds, item.id];
+    aggregated[existingIndex] = {
+      ...existing,
+      title: aggregateConfig.title,
+      message: aggregateConfig.message(memberIds.length),
+      body: aggregateConfig.message(memberIds.length),
+      read: existing.read && item.read,
+      memberIds,
+      groupCount: memberIds.length
+    };
+  });
+
+  return aggregated;
+}
+
+function getDateGroup(item) {
+  const date = new Date(item.created_at);
+  if (Number.isNaN(date.getTime())) return 'Precedenti';
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayDifference = Math.round((startOfToday - startOfDate) / 86400000);
+  if (dayDifference === 0) return 'Oggi';
+  if (dayDifference === 1) return 'Ieri';
+  return 'Precedenti';
+}
+
+function groupNotifications(items, filter) {
+  if (items.length === 0) return [];
+
+  const groups = [];
+  const remainingItems = [...items];
+  if (filter === 'all') {
+    const actionable = remainingItems.filter(isNotificationActionable);
+    if (actionable.length > 0) groups.push({ key: 'action', title: 'Da gestire', items: actionable });
+  }
+
+  const actionIds = new Set(groups.flatMap((group) => group.items.map((item) => item.id)));
+  const chronologicalItems = filter === 'all'
+    ? remainingItems.filter((item) => !actionIds.has(item.id))
+    : remainingItems;
+
+  ['Oggi', 'Ieri', 'Precedenti'].forEach((title) => {
+    const groupedItems = chronologicalItems.filter((item) => getDateGroup(item) === title);
+    if (groupedItems.length > 0) groups.push({ key: title.toLowerCase(), title, items: groupedItems });
+  });
+  return groups;
+}
+
 function formatNotificationDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -95,8 +223,7 @@ function formatNotificationDate(value) {
   const dayDifference = Math.round((startOfToday - startOfDate) / 86400000);
   const time = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
 
-  if (dayDifference === 0) return `Oggi, ${time}`;
-  if (dayDifference === 1) return `Ieri, ${time}`;
+  if (dayDifference === 0 || dayDifference === 1) return time;
   return date.toLocaleString('it-IT', {
     day: '2-digit',
     month: 'short',
@@ -114,7 +241,17 @@ function getNotificationTone(type = '') {
   return styles.eventTone;
 }
 
+function getResistedSwipeOffset(deltaX) {
+  const direction = Math.sign(deltaX);
+  const distance = Math.abs(deltaX);
+  const linearDistance = Math.min(distance, SWIPE_LINEAR_DISTANCE);
+  const resistedDistance = Math.max(0, distance - SWIPE_LINEAR_DISTANCE);
+  const rubberBandDistance = SWIPE_RESISTANCE_RANGE * (1 - Math.exp(-resistedDistance / SWIPE_RESISTANCE_DECAY));
+  return direction * (linearDistance + rubberBandDistance);
+}
+
 function SwipeableNotificationRow({ item, onRead, onDelete }) {
+  const navigate = useNavigate();
   const dragRef = useRef(null);
   const frameRef = useRef(null);
   const pendingOffsetRef = useRef(0);
@@ -123,6 +260,7 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
   const [dragging, setDragging] = useState(false);
   const Icon = typeIcons[item.type] || BellRing;
   const destination = item.action_path || (item.event_id ? `/events/${item.event_id}` : '');
+  const actionLabel = getNotificationActionLabel(item.type);
 
   useEffect(() => () => {
     if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
@@ -158,7 +296,8 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
       lastX: event.clientX,
       lastTime: performance.now(),
       velocity: 0,
-      recognized: false
+      recognized: false,
+      armedDirection: ''
     };
   }
 
@@ -183,7 +322,16 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
     drag.velocity = (event.clientX - drag.lastX) / Math.max(1, now - drag.lastTime);
     drag.lastX = event.clientX;
     drag.lastTime = now;
-    const resistedOffset = Math.sign(deltaX) * Math.min(112, Math.abs(deltaX) * 0.82);
+    const resistedOffset = getResistedSwipeOffset(deltaX);
+    const nextArmedDirection = resistedOffset <= -SWIPE_COMMIT_DISTANCE
+      ? 'delete'
+      : !item.read && resistedOffset >= SWIPE_COMMIT_DISTANCE
+        ? 'read'
+        : '';
+    if (nextArmedDirection !== drag.armedDirection) {
+      if (nextArmedDirection) vibrate(12);
+      drag.armedDirection = nextArmedDirection;
+    }
     scheduleOffset(resistedOffset);
   }
 
@@ -198,14 +346,17 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
     }
     setDragging(false);
 
-    const swipedToRead = !item.read && (pendingOffsetRef.current >= 68 || drag.velocity >= 0.5);
-    const swipedToDelete = pendingOffsetRef.current <= -68 || drag.velocity <= -0.5;
+    const swipedToRead = !item.read && (
+      pendingOffsetRef.current >= SWIPE_COMMIT_DISTANCE
+      || (pendingOffsetRef.current >= SWIPE_FAST_MIN_DISTANCE && drag.velocity >= SWIPE_FAST_VELOCITY)
+    );
+    const swipedToDelete = pendingOffsetRef.current <= -SWIPE_COMMIT_DISTANCE;
     if (swipedToDelete) {
       pendingOffsetRef.current = -window.innerWidth;
       setOffset(-window.innerWidth);
       vibrate(35);
       actionTimerRef.current = window.setTimeout(() => {
-        Promise.resolve(onDelete(item.id)).catch(() => {
+        Promise.resolve(onDelete(item)).catch(() => {
           pendingOffsetRef.current = 0;
           setOffset(0);
         });
@@ -217,23 +368,31 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
     setOffset(0);
     if (swipedToRead) {
       vibrate(25);
-      Promise.resolve(onRead(item.id)).catch(() => undefined);
+      Promise.resolve(onRead(item)).catch(() => undefined);
     }
   }
 
+  function openNotification(event) {
+    if (!destination || dragging) return;
+    if (event.target instanceof Element && event.target.closest('button, a, input, label')) return;
+    if (!item.read) Promise.resolve(onRead(item)).catch(() => undefined);
+    navigate(destination);
+  }
+
   return (
-    <div className={styles.swipeShell}>
+    <div className={`${styles.swipeShell} ${offset <= -SWIPE_COMMIT_DISTANCE ? styles.swipeDeleteArmed : ''} ${!item.read && offset >= SWIPE_COMMIT_DISTANCE ? styles.swipeReadArmed : ''}`}>
       <div className={styles.swipeActions} aria-hidden="true">
         <span className={styles.swipeRead}><Check size={18} /> Letta</span>
         <span className={styles.swipeDelete}><Trash2 size={18} /> Elimina</span>
       </div>
       <article
-        className={`${styles.notificationRow} ${!item.read ? styles.unreadRow : ''} ${dragging ? styles.notificationRowDragging : ''}`}
+        className={`${styles.notificationRow} ${destination ? styles.clickableRow : ''} ${!item.read ? styles.unreadRow : ''} ${dragging ? styles.notificationRowDragging : ''}`}
         style={offset ? { transform: `translate3d(${offset}px, 0, 0)` } : undefined}
         onPointerDown={startSwipe}
         onPointerMove={moveSwipe}
         onPointerUp={finishSwipe}
         onPointerCancel={finishSwipe}
+        onClick={openNotification}
       >
         <span className={`${styles.notificationIcon} ${getNotificationTone(item.type)}`}>
           <Icon size={19} aria-hidden="true" />
@@ -241,19 +400,21 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
         <div className={styles.notificationCopy}>
           <div className={styles.notificationTitleRow}>
             <h3>{item.title}</h3>
-            {!item.read ? <span className={styles.unreadDot} aria-label="Non letta" /> : null}
+            {item.groupCount > 1 ? <span className={styles.groupCount}>{item.groupCount}</span> : null}
+            {!item.read ? <span className={styles.visuallyHidden}>Non letta</span> : null}
           </div>
           <p>{item.message || item.body}</p>
           <time dateTime={item.created_at}>{formatNotificationDate(item.created_at)}</time>
         </div>
         <div className={styles.notificationActions}>
           {!item.read ? (
-            <button type="button" className={styles.readButton} onClick={() => onRead(item.id)} aria-label={`Segna come letta: ${item.title}`} title="Segna come letta">
+            <button type="button" className={styles.readButton} onClick={() => onRead(item)} aria-label={`Segna come letta: ${item.title}`} title="Segna come letta">
               <Check size={17} aria-hidden="true" />
             </button>
           ) : null}
           {destination ? (
             <Link className={styles.openLink} to={destination} aria-label={`Apri: ${item.title}`}>
+              {actionLabel ? <span>{actionLabel}</span> : null}
               <ChevronRight size={20} aria-hidden="true" />
             </Link>
           ) : null}
@@ -269,6 +430,8 @@ function NotificationsPage() {
   const [preferences, setPreferences] = useState({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [savingPreference, setSavingPreference] = useState('');
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const loadRequestRef = useRef(0);
@@ -319,6 +482,17 @@ function NotificationsPage() {
     return () => window.removeEventListener('motrice:notifications-changed', load);
   }, []);
 
+  useEffect(() => {
+    if (!preferencesOpen && !actionsOpen) return undefined;
+    function handleEscape(event) {
+      if (event.key !== 'Escape') return;
+      setPreferencesOpen(false);
+      setActionsOpen(false);
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [preferencesOpen, actionsOpen]);
+
   async function togglePreference(key) {
     if (key === 'event_security') return;
     setSavingPreference(key);
@@ -330,184 +504,241 @@ function NotificationsPage() {
     }
   }
 
-  async function markAsRead(id) {
-    await api.markNotificationRead(id);
-    await load();
+  async function markAsRead(item) {
+    const memberIds = item?.memberIds || [item?.id || item];
+    const memberIdSet = new Set(memberIds.map(String));
+    setNotifications((current) => current.map((notification) => (
+      memberIdSet.has(String(notification.id)) ? { ...notification, read: true } : notification
+    )));
+    await Promise.all(memberIds.map((id) => api.markNotificationRead(id)));
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
   async function markAll() {
+    setActionsOpen(false);
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })));
     await api.markAllNotificationsRead();
-    await load();
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
-  async function deleteOne(id) {
-    await api.deleteNotification(id);
-    setNotifications((current) => current.filter((item) => String(item.id) !== String(id)));
+  async function deleteOne(item) {
+    const memberIds = item?.memberIds || [item?.id || item];
+    const memberIdSet = new Set(memberIds.map(String));
+    setNotifications((current) => current.filter((notification) => !memberIdSet.has(String(notification.id))));
+    await Promise.all(memberIds.map((id) => api.deleteNotification(id)));
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
   async function clearAll() {
+    setActionsOpen(false);
     await api.clearNotifications();
-    await load();
+    setNotifications([]);
     window.dispatchEvent(new Event('motrice:notifications-changed'));
   }
 
   const unreadCount = notifications.filter((item) => !item.read).length;
   const activePreferenceCount = 1 + preferenceRows.filter(({ key }) => preferences[key]).length;
+  const preparedNotifications = useMemo(() => aggregateNotifications(notifications), [notifications]);
+  const actionableCount = preparedNotifications.filter(isNotificationActionable).length;
+  const filteredNotifications = useMemo(() => preparedNotifications.filter((item) => {
+    if (activeFilter === 'action') return isNotificationActionable(item);
+    if (activeFilter === 'events') return getNotificationCategory(item.type) === 'events';
+    if (activeFilter === 'wallet') return getNotificationCategory(item.type) === 'wallet';
+    return true;
+  }), [preparedNotifications, activeFilter]);
+  const notificationGroups = useMemo(
+    () => groupNotifications(filteredNotifications, activeFilter),
+    [filteredNotifications, activeFilter]
+  );
 
   return (
-    <section className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <p className={styles.eyebrow}>CENTRO NOTIFICHE</p>
-          <div className={styles.titleRow}>
-            <h1>Notifiche</h1>
-            {!loading && unreadCount > 0 ? <span className={styles.unreadBadge}>{unreadCount}</span> : null}
-          </div>
-          <p className={styles.subtitle}>
-            {loading
-              ? 'Aggiornamento in corso…'
-              : loadError
-                ? 'Aggiornamento non riuscito. Puoi riprovare.'
-              : unreadCount > 0
-                ? `${unreadCount} ${unreadCount === 1 ? 'aggiornamento da leggere' : 'aggiornamenti da leggere'}`
-                : 'Sei al passo con tutte le attività.'}
-          </p>
-        </div>
-
-        <div className={styles.headerActions}>
-          <button
-            type="button"
-            className={styles.headerButton}
-            onClick={markAll}
-            disabled={loading || unreadCount === 0}
-            aria-label="Segna tutte le notifiche come lette"
-            title="Segna tutte come lette"
-          >
-            <CheckCheck size={18} aria-hidden="true" />
-            <span>Leggi tutte</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.headerButton} ${styles.deleteButton}`}
-            onClick={clearAll}
-            disabled={loading || notifications.length === 0}
-            aria-label="Elimina tutte le notifiche"
-            title="Elimina notifiche"
-          >
-            <Trash2 size={17} aria-hidden="true" />
-            <span>Elimina</span>
-          </button>
-        </div>
-      </header>
-
-      <section className={styles.preferencesCard}>
-        <div className={styles.preferenceDrawerHeader}>
-          <button
-            type="button"
-            className={styles.preferenceDrawerTrigger}
-            aria-expanded={preferencesOpen}
-            aria-controls="notification-preferences-grid"
-            onClick={() => setPreferencesOpen((current) => !current)}
-          >
-            <span className={styles.preferenceDrawerIcon} aria-hidden="true">
-              <SlidersHorizontal size={18} />
-            </span>
-            <span className={styles.preferenceDrawerCopy}>
-              <strong>Preferenze notifiche</strong>
-              <small>{activePreferenceCount}/4 attive · Sicurezza sempre attiva</small>
-            </span>
-            <ChevronDown className={styles.preferenceDrawerChevron} size={19} aria-hidden="true" />
-          </button>
-          <ContextInfoButton
-            title="Preferenze notifiche"
-            description="Motrice separa gli avvisi essenziali dagli aggiornamenti facoltativi."
-            items={[
-              { title: 'Eventi e sicurezza', text: 'Restano sempre attivi per check-in, variazioni, annullamenti e no-show.' },
-              { title: 'Chat e wallet', text: 'Puoi disattivarli separatamente senza perdere gli avvisi di sicurezza.' },
-              { title: 'Suggerimenti', text: 'Comprendono eventi consigliati, novità e comunicazioni promozionali.' }
-            ]}
-            note="Le preferenze modificano gli avvisi facoltativi, non le operazioni già registrate nel tuo account."
-          />
-        </div>
-
-        {preferencesOpen ? (
-          <div
-            id="notification-preferences-grid"
-            className={styles.preferenceGrid}
-            aria-label="Preferenze notifiche"
-          >
-            <div className={`${styles.preferenceTile} ${styles.preferenceTileLocked}`}>
-              <span className={styles.preferenceTileIcon}><ShieldCheck size={18} aria-hidden="true" /></span>
-              <strong>Eventi</strong>
-              <LockKeyhole className={styles.preferenceTileLock} size={14} aria-label="Sempre attiva" />
+    <>
+      <section className={styles.page}>
+        <header className={styles.header}>
+          <div className={styles.titleBlock}>
+            <div className={styles.titleRow}>
+              <h1>Notifiche</h1>
+              {!loading && unreadCount > 0 ? <span className={styles.unreadBadge}>{unreadCount}</span> : null}
             </div>
+            <p className={styles.subtitle}>
+              {loading
+                ? 'Aggiornamento in corso…'
+                : loadError
+                  ? 'Aggiornamento non riuscito'
+                  : unreadCount > 0
+                    ? `${unreadCount} ${unreadCount === 1 ? 'da leggere' : 'da leggere'}`
+                    : 'Tutto aggiornato'}
+            </p>
+          </div>
 
-            {preferenceRows.map(({ key, icon: Icon, title }) => (
-              <label className={styles.preferenceTile} key={key}>
-                <span className={styles.preferenceTileIcon}><Icon size={18} aria-hidden="true" /></span>
-                <strong>{title}</strong>
-                <span className={styles.switch}>
-                  <input
-                    type="checkbox"
-                    checked={preferences[key]}
-                    disabled={savingPreference === key}
-                    onChange={() => togglePreference(key)}
-                    aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
-                  />
-                  <span className={styles.switchTrack} aria-hidden="true" />
-                </span>
-              </label>
-            ))}
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.headerButton}
+              onClick={() => {
+                setActionsOpen(false);
+                setPreferencesOpen(true);
+              }}
+              aria-label="Apri preferenze notifiche"
+              title="Preferenze"
+            >
+              <SlidersHorizontal size={18} aria-hidden="true" />
+            </button>
+            <div className={styles.actionMenuShell}>
+              <button
+                type="button"
+                className={styles.headerButton}
+                onClick={() => setActionsOpen((current) => !current)}
+                aria-expanded={actionsOpen}
+                aria-haspopup="menu"
+                aria-label="Altre azioni sulle notifiche"
+              >
+                <MoreHorizontal size={20} aria-hidden="true" />
+              </button>
+              {actionsOpen ? (
+                <div className={styles.actionMenu} role="menu">
+                  <button type="button" role="menuitem" onClick={markAll} disabled={loading || unreadCount === 0}>
+                    <CheckCheck size={17} aria-hidden="true" />
+                    Segna tutte come lette
+                  </button>
+                  <button type="button" role="menuitem" className={styles.dangerMenuItem} onClick={clearAll} disabled={loading || notifications.length === 0}>
+                    <Trash2 size={17} aria-hidden="true" />
+                    Elimina tutte
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </header>
+
+        <nav className={styles.filterBar} aria-label="Filtra le notifiche">
+          {notificationFilters.map(({ key, label }) => (
+            <button
+              type="button"
+              key={key}
+              className={activeFilter === key ? styles.activeFilter : ''}
+              aria-pressed={activeFilter === key}
+              onClick={() => setActiveFilter(key)}
+            >
+              <span>{label}</span>
+              {key === 'action' && actionableCount > 0 ? <small>{actionableCount}</small> : null}
+            </button>
+          ))}
+        </nav>
+
+        {loadError && notifications.length > 0 ? (
+          <div className={styles.inlineError} role="status">
+            <span>Non è stato possibile aggiornare l’elenco.</span>
+            <button type="button" onClick={() => load({ showLoading: true })}>Riprova</button>
           </div>
         ) : null}
-      </section>
 
-      <section className={styles.activitySection}>
-        <div className={styles.sectionHeading}>
-          <div>
-            <h2>Attività recente</h2>
-            <p>{notifications.length > 0 ? `${notifications.length} ${notifications.length === 1 ? 'notifica' : 'notifiche'}` : 'Nessun aggiornamento'}</p>
-          </div>
-        </div>
-
-        <div className={styles.notificationList} aria-live="polite" aria-busy={loading}>
-          {loading ? (
-            Array.from({ length: 3 }, (_, index) => (
-              <div className={styles.skeletonRow} key={index} aria-hidden="true">
-                <span className={styles.skeletonIcon} />
-                <span className={styles.skeletonCopy}><i /><i /><i /></span>
+        <section className={styles.activitySection}>
+          <div className={styles.notificationList} aria-live="polite" aria-busy={loading}>
+            {loading ? (
+              Array.from({ length: 3 }, (_, index) => (
+                <div className={styles.skeletonRow} key={index} aria-hidden="true">
+                  <span className={styles.skeletonIcon} />
+                  <span className={styles.skeletonCopy}><i /><i /><i /></span>
+                </div>
+              ))
+            ) : loadError && notifications.length === 0 ? (
+              <div className={styles.emptyState} role="alert">
+                <span><BellOff size={24} aria-hidden="true" /></span>
+                <h3>Notifiche non disponibili</h3>
+                <p>{loadError}</p>
+                <button type="button" onClick={() => load({ showLoading: true })}>Riprova</button>
               </div>
-            ))
-          ) : loadError && notifications.length === 0 ? (
-            <div className={styles.emptyState} role="alert">
-              <span><BellOff size={24} aria-hidden="true" /></span>
-              <h3>Notifiche non disponibili</h3>
-              <p>{loadError}</p>
-              <button type="button" onClick={() => load({ showLoading: true })}>Riprova</button>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className={styles.emptyState}>
-              <span><BellOff size={24} aria-hidden="true" /></span>
-              <h3>Nessuna notifica</h3>
-              <p>Sei aggiornato. I prossimi avvisi compariranno qui.</p>
-              <button type="button" onClick={() => navigate('/map')}>Esplora gli eventi</button>
-            </div>
-          ) : (
-            notifications.map((item) => (
-              <SwipeableNotificationRow
-                key={item.id}
-                item={item}
-                onRead={markAsRead}
-                onDelete={deleteOne}
-              />
-            ))
-          )}
-        </div>
+            ) : notifications.length === 0 ? (
+              <div className={styles.emptyState}>
+                <span><BellOff size={24} aria-hidden="true" /></span>
+                <h3>Nessuna notifica</h3>
+                <p>Sei aggiornato. I prossimi avvisi compariranno qui.</p>
+                <button type="button" onClick={() => navigate('/map')}>Esplora gli eventi</button>
+              </div>
+            ) : notificationGroups.length === 0 ? (
+              <div className={styles.emptyState}>
+                <span><CheckCircle2 size={24} aria-hidden="true" /></span>
+                <h3>Niente in questa sezione</h3>
+                <p>Non ci sono notifiche corrispondenti al filtro selezionato.</p>
+                <button type="button" onClick={() => setActiveFilter('all')}>Mostra tutte</button>
+              </div>
+            ) : (
+              notificationGroups.map((group) => (
+                <section className={styles.notificationGroup} key={group.key} aria-labelledby={`notification-group-${group.key}`}>
+                  <div className={styles.groupHeading}>
+                    <h2 id={`notification-group-${group.key}`}>{group.title}</h2>
+                    <span>{group.items.length}</span>
+                  </div>
+                  {group.items.map((item) => (
+                    <SwipeableNotificationRow
+                      key={item.memberIds.join('-')}
+                      item={item}
+                      onRead={markAsRead}
+                      onDelete={deleteOne}
+                    />
+                  ))}
+                </section>
+              ))
+            )}
+          </div>
+        </section>
       </section>
-    </section>
+
+      {actionsOpen ? <button type="button" className={styles.menuScrim} aria-label="Chiudi menu" onClick={() => setActionsOpen(false)} /> : null}
+
+      {preferencesOpen ? (
+        <div className={styles.sheetBackdrop} onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setPreferencesOpen(false);
+        }}>
+          <section className={styles.preferencesSheet} role="dialog" aria-modal="true" aria-labelledby="notification-preferences-title">
+            <div className={styles.sheetHandle} aria-hidden="true" />
+            <header className={styles.sheetHeader}>
+              <div>
+                <p>PERSONALIZZA</p>
+                <h2 id="notification-preferences-title">Preferenze notifiche</h2>
+                <span>{activePreferenceCount}/4 attive · sicurezza sempre attiva</span>
+              </div>
+              <button type="button" onClick={() => setPreferencesOpen(false)} aria-label="Chiudi preferenze">
+                <X size={19} aria-hidden="true" />
+              </button>
+            </header>
+
+            <div className={styles.preferenceList}>
+              <div className={`${styles.preferenceRow} ${styles.preferenceRowLocked}`}>
+                <span className={styles.preferenceIcon}><ShieldCheck size={18} aria-hidden="true" /></span>
+                <span className={styles.preferenceCopy}>
+                  <strong>Eventi e sicurezza</strong>
+                  <small>Check-in, variazioni, annullamenti e no-show.</small>
+                </span>
+                <span className={styles.lockedBadge}><LockKeyhole size={13} aria-hidden="true" /> Sempre attiva</span>
+              </div>
+
+              {preferenceRows.map(({ key, icon: Icon, title, description }) => (
+                <label className={styles.preferenceRow} key={key}>
+                  <span className={styles.preferenceIcon}><Icon size={18} aria-hidden="true" /></span>
+                  <span className={styles.preferenceCopy}>
+                    <strong>{title}</strong>
+                    <small>{description}</small>
+                  </span>
+                  <span className={styles.switch}>
+                    <input
+                      type="checkbox"
+                      checked={preferences[key]}
+                      disabled={savingPreference === key}
+                      onChange={() => togglePreference(key)}
+                      aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
+                    />
+                    <span className={styles.switchTrack} aria-hidden="true" />
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className={styles.sheetNote}>Gli avvisi essenziali restano attivi per proteggere eventi, presenze e credito.</p>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 }
 

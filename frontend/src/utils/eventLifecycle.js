@@ -1,6 +1,10 @@
 export const CHECK_IN_LEAD_MINUTES = 30;
 export const DEFAULT_CHECK_IN_GRACE_MINUTES = 15;
 export const MAX_CHECK_IN_GRACE_MINUTES = 30;
+export const POST_EVENT_ACTIONS_HOURS = 24;
+export const EVENT_FINANCIAL_REVIEW_HOURS = 48;
+
+const HOUR_MS = 60 * 60 * 1000;
 
 export const EVENT_LIFECYCLE_STATES = Object.freeze({
   DRAFT: 'draft',
@@ -48,6 +52,8 @@ export function getEffectiveEventLifecycleState(event = {}, referenceTime = Date
     ? startsAtMs + durationMinutes * 60 * 1000
     : null;
   const endsAtMs = timestamp(event.ends_at, fallbackEndsAtMs);
+  const completedAtMs = timestamp(event.completed_at, endsAtMs);
+  const cancelledAtMs = timestamp(event.cancelled_at, timestamp(event.lifecycle_updated_at));
   const fallbackCheckInOpensAtMs = Number.isFinite(startsAtMs)
     ? startsAtMs - CHECK_IN_LEAD_MINUTES * 60 * 1000
     : null;
@@ -57,6 +63,9 @@ export function getEffectiveEventLifecycleState(event = {}, referenceTime = Date
     return EVENT_LIFECYCLE_STATES.ARCHIVED;
   }
   if (legacyStatus === 'cancelled' || persistedState === EVENT_LIFECYCLE_STATES.CANCELLED) {
+    if (Number.isFinite(cancelledAtMs) && nowMs >= cancelledAtMs + POST_EVENT_ACTIONS_HOURS * HOUR_MS) {
+      return EVENT_LIFECYCLE_STATES.ARCHIVED;
+    }
     return EVENT_LIFECYCLE_STATES.CANCELLED;
   }
   if (persistedState === EVENT_LIFECYCLE_STATES.DRAFT) {
@@ -67,6 +76,9 @@ export function getEffectiveEventLifecycleState(event = {}, referenceTime = Date
     persistedState === EVENT_LIFECYCLE_STATES.COMPLETED ||
     (Number.isFinite(endsAtMs) && nowMs >= endsAtMs)
   ) {
+    if (Number.isFinite(completedAtMs) && nowMs >= completedAtMs + POST_EVENT_ACTIONS_HOURS * HOUR_MS) {
+      return EVENT_LIFECYCLE_STATES.ARCHIVED;
+    }
     return EVENT_LIFECYCLE_STATES.COMPLETED;
   }
   if (
@@ -128,11 +140,17 @@ export function getEventTiming(event = {}, referenceTime = Date.now()) {
       checkInClosesAtMs: null,
       extensionDeadlineMs: null,
       endsAtMs: null,
+      completedAtMs: null,
+      archiveAtMs: null,
+      financialReviewEndsAtMs: null,
       latestJoinAtMs: null,
       checkInGraceMinutes: normalizeCheckInGraceMinutes(event),
       isCheckInOpen: false,
       canExtendCheckIn: false,
       hasEnded: [EVENT_LIFECYCLE_STATES.COMPLETED, EVENT_LIFECYCLE_STATES.ARCHIVED].includes(lifecycleState),
+      isPostEventWindow: false,
+      isFinancialReviewOpen: false,
+      isPostEventReadOnly: lifecycleState === EVENT_LIFECYCLE_STATES.ARCHIVED,
       canJoin: false,
       isMapVisible: false
     };
@@ -152,6 +170,18 @@ export function getEventTiming(event = {}, referenceTime = Date.now()) {
     event.ends_at,
     startsAtMs + durationMinutes * 60 * 1000
   );
+  const completedAtMs = timestamp(event.completed_at, endsAtMs);
+  const archiveAtMs = Number.isFinite(completedAtMs)
+    ? completedAtMs + POST_EVENT_ACTIONS_HOURS * HOUR_MS
+    : null;
+  const settlementReleaseAtMs = timestamp(
+    event.money_settlement?.release_at || event.money_release_at
+  );
+  const financialReviewEndsAtMs = Number.isFinite(settlementReleaseAtMs)
+    ? settlementReleaseAtMs
+    : Number.isFinite(completedAtMs)
+      ? completedAtMs + EVENT_FINANCIAL_REVIEW_HOURS * HOUR_MS
+      : null;
   const minimumPresenceMinutes = Math.max(
     0,
     finiteNumber(event.minimum_presence_minutes, 45)
@@ -171,6 +201,30 @@ export function getEventTiming(event = {}, referenceTime = Date.now()) {
   else phase = 'in_progress';
 
   const isActiveLifecycle = ACTIVE_LIFECYCLE_STATES.has(lifecycleState);
+  const isPostEventWindow =
+    !event?.is_personal &&
+    lifecycleState === EVENT_LIFECYCLE_STATES.COMPLETED &&
+    Number.isFinite(completedAtMs) &&
+    nowMs >= completedAtMs &&
+    nowMs < archiveAtMs;
+  const settlementStatus = String(event.money_settlement?.status || '').toLowerCase();
+  const hasOpenDispute = String(event.money_dispute?.status || '').toLowerCase() === 'open';
+  const isFinancialReviewOpen =
+    !event?.is_personal &&
+    hasEnded &&
+    !hasOpenDispute &&
+    settlementStatus !== 'disputed' &&
+    settlementStatus !== 'released' &&
+    Number.isFinite(completedAtMs) &&
+    nowMs >= completedAtMs &&
+    Number.isFinite(financialReviewEndsAtMs) &&
+    nowMs < financialReviewEndsAtMs;
+  const isPostEventReadOnly =
+    hasEnded &&
+    !hasOpenDispute &&
+    settlementStatus !== 'disputed' &&
+    Number.isFinite(financialReviewEndsAtMs) &&
+    nowMs >= financialReviewEndsAtMs;
 
   return {
     phase,
@@ -180,11 +234,17 @@ export function getEventTiming(event = {}, referenceTime = Date.now()) {
     checkInClosesAtMs,
     extensionDeadlineMs,
     endsAtMs,
+    completedAtMs,
+    archiveAtMs,
+    financialReviewEndsAtMs,
     latestJoinAtMs,
     checkInGraceMinutes,
     isCheckInOpen: isActiveLifecycle && nowMs >= checkInOpensAtMs && nowMs <= checkInClosesAtMs,
     canExtendCheckIn: isActiveLifecycle && nowMs >= checkInOpensAtMs && nowMs <= extensionDeadlineMs && !hasEnded,
     hasEnded,
+    isPostEventWindow,
+    isFinancialReviewOpen,
+    isPostEventReadOnly,
     canJoin: isActiveLifecycle && nowMs < latestJoinAtMs,
     isMapVisible: isActiveLifecycle && nowMs < endsAtMs
   };

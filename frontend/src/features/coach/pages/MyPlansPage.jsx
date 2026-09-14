@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowLeft,
@@ -138,9 +138,11 @@ function MyPlansPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerCategory, setPickerCategory] = useState('petto');
   const [pickerQuery, setPickerQuery] = useState('');
+  const [pendingExerciseIds, setPendingExerciseIds] = useState([]);
   const [editingExercise, setEditingExercise] = useState(null);
   const [draggedExerciseIndex, setDraggedExerciseIndex] = useState(null);
   const [syncState, setSyncState] = useState(remoteSyncEnabled ? 'syncing' : 'local');
+  const lastExerciseRef = useRef(null);
 
   usePageMeta({
     title: 'Schede personali | Motrice',
@@ -361,16 +363,50 @@ function MyPlansPage() {
     }
   }
 
-  function addExercise(item) {
+  function openExercisePicker() {
+    setPendingExerciseIds([]);
+    setPickerOpen(true);
+  }
+
+  function closeExercisePicker() {
+    setPendingExerciseIds([]);
+    setPickerOpen(false);
+  }
+
+  function togglePickerExercise(item) {
     if (addedExerciseIds.has(item.id)) {
       showToast('Esercizio già presente nella scheda', 'error');
       return;
     }
+
+    setPendingExerciseIds((current) => current.includes(item.id)
+      ? current.filter((id) => id !== item.id)
+      : [...current, item.id]);
+  }
+
+  function confirmExerciseSelection() {
+    const selectedExercises = pendingExerciseIds
+      .map((id) => PERSONAL_EXERCISE_LIBRARY.find((item) => item.id === id))
+      .filter(Boolean);
+    if (!selectedExercises.length) return;
+
     setDraft((current) => ({
       ...current,
-      exercises: [...current.exercises, exerciseFromCatalog(item)]
+      exercises: [...current.exercises, ...selectedExercises.map(exerciseFromCatalog)]
     }));
-    showToast(`${item.name} aggiunto`, 'success');
+    setPendingExerciseIds([]);
+    setPickerOpen(false);
+    showToast(
+      selectedExercises.length === 1
+        ? `${selectedExercises[0].name} aggiunto alla scheda`
+        : `${selectedExercises.length} esercizi aggiunti alla scheda`,
+      'success'
+    );
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        lastExerciseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
   }
 
   function removeExercise(index) {
@@ -514,6 +550,7 @@ function MyPlansPage() {
     return (
       <article
         key={exercise.instanceId}
+        ref={index === draft.exercises.length - 1 ? lastExerciseRef : undefined}
         className={styles.exerciseCard}
         draggable
         onDragStart={() => setDraggedExerciseIndex(index)}
@@ -617,7 +654,7 @@ function MyPlansPage() {
           <small>tieni premuto o usa le frecce per riordinare</small>
         </div>
         <div className={styles.exerciseList}>{draft.exercises.map(renderExerciseCard)}</div>
-        <button type="button" className={styles.addExerciseButton} onClick={() => setPickerOpen(true)}>
+        <button type="button" className={styles.addExerciseButton} onClick={openExercisePicker}>
           <Plus size={19} aria-hidden="true" /> Aggiungi esercizio
         </button>
 
@@ -742,7 +779,7 @@ function MyPlansPage() {
       {pickerOpen ? (
         <div className={styles.fullscreenOverlay} role="dialog" aria-modal="true" aria-label="Aggiungi esercizio">
           <div className={styles.fullscreenPanel}>
-            <header className={styles.modalHeader}><h2>Aggiungi esercizio</h2><button type="button" onClick={() => setPickerOpen(false)} aria-label="Chiudi catalogo esercizi"><X size={22} /></button></header>
+            <header className={styles.modalHeader}><h2>Aggiungi esercizio</h2><button type="button" onClick={closeExercisePicker} aria-label="Annulla selezione esercizi"><X size={22} /></button></header>
             <label className={styles.searchBox}><Search size={19} aria-hidden="true" /><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="Cerca esercizio..." autoFocus /></label>
             <div className={styles.categoryScroller}>
               {EXERCISE_CATEGORIES.map((category) => (
@@ -752,15 +789,39 @@ function MyPlansPage() {
             <div className={styles.catalogList}>
               {filteredExercises.length ? filteredExercises.map((exercise) => {
                 const added = addedExerciseIds.has(exercise.id);
+                const selected = pendingExerciseIds.includes(exercise.id);
                 return (
-                  <article key={exercise.id}>
+                  <article key={exercise.id} data-selected={selected ? 'true' : 'false'}>
                     <div><strong>{exercise.shortName || exercise.name}</strong><small>{getCategoryLabel(exercise.category)} · {exercise.equipment}</small></div>
-                    <button type="button" className={added ? styles.catalogAdded : ''} onClick={() => addExercise(exercise)} aria-label={`Aggiungi ${exercise.name}`}>{added ? <Check size={20} /> : <Plus size={20} />}</button>
+                    <button
+                      type="button"
+                      className={added || selected ? styles.catalogAdded : ''}
+                      onClick={() => togglePickerExercise(exercise)}
+                      aria-label={added ? `${exercise.name} già presente` : selected ? `Rimuovi ${exercise.name} dalla selezione` : `Seleziona ${exercise.name}`}
+                      aria-pressed={selected}
+                      disabled={added}
+                    >
+                      {added || selected ? <Check size={20} /> : <Plus size={20} />}
+                    </button>
                   </article>
                 );
               }) : <p className={styles.noResults}>Nessun esercizio trovato</p>}
             </div>
-            <Button type="button" fullWidth variant="secondary" onClick={() => setPickerOpen(false)}>Fine</Button>
+            <div className={styles.pickerFooter}>
+              <span aria-live="polite">
+                <strong>{pendingExerciseIds.length}</strong>
+                {pendingExerciseIds.length === 1 ? ' esercizio selezionato' : ' esercizi selezionati'}
+              </span>
+              <Button
+                type="button"
+                fullWidth
+                icon={Check}
+                disabled={!pendingExerciseIds.length}
+                onClick={confirmExerciseSelection}
+              >
+                Salva e torna alla scheda
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

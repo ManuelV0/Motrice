@@ -360,7 +360,9 @@ export function resolveEventPrimaryAction({
   const approvalRequired = normalized(event?.join_policy) === 'approval';
   const cancelled = timing.phase === 'cancelled' || normalized(event?.status) === 'cancelled';
   const completed = timing.hasEnded || timing.phase === 'completed' || normalized(event?.status) === 'completed';
-  const feedbackEligible = Boolean(isOrganizer || outcome.id === 'completed');
+  const feedbackEligible = Boolean(
+    timing.isPostEventWindow && (isOrganizer || outcome.id === 'completed')
+  );
 
   if (cancelled) {
     return {

@@ -6,7 +6,30 @@
   overflow: hidden;
   background: #0d100d;
   touch-action: pan-x pan-y;
+  transition: border-radius 220ms ease, box-shadow 220ms ease;
 }
+
+.preview[data-expanded='true'] {
+  position: fixed;
+  z-index: 10000;
+  inset: max(0.45rem, env(safe-area-inset-top)) 0.45rem max(0.45rem, env(safe-area-inset-bottom));
+  width: auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 1rem;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.72), 0 1.4rem 4rem rgb(0 0 0 / 0.72);
+}
+
+.previewExpanded {
+  min-height: 0;
+}
+
+.previewPlaceholder {
+  pointer-events: none;
+}
+
 
 .preview .mapCanvas {
   position: absolute;
@@ -25,6 +48,39 @@
   opacity: 0.32;
 }
 
+.routeOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.routeOverlay_shadow {
+  stroke: #050705;
+  stroke-width: 9;
+  opacity: 0.7;
+}
+
+.routeOverlay_glow {
+  stroke: #c6ff00;
+  stroke-width: 12;
+  opacity: 0.13;
+  filter: blur(2px);
+}
+
+.routeOverlay_main {
+  stroke: #c6ff00;
+  stroke-width: 5;
+  opacity: 0.9;
+}
+
+.preview :global(.maplibregl-marker) {
+  z-index: 3;
+}
+
 .eventMarker {
   width: 3rem;
   height: 3.5rem;
@@ -39,8 +95,7 @@
   display: block;
 }
 
-.routeEndpoint,
-.routeDirection {
+.routeEndpoint {
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -58,12 +113,11 @@
   background: #111511;
 }
 
-.routeStartDot {
-  width: 0.56rem;
-  height: 0.56rem;
-  border-radius: 50%;
-  background: #a8f000;
-  box-shadow: 0 0 0 0.18rem rgb(168 240 0 / 0.16);
+.routeStartLabel {
+  color: #b7ff24;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
 }
 
 .routeFinish {
@@ -77,25 +131,6 @@
   width: 1.05rem;
   height: 1.05rem;
   display: block;
-}
-
-.routeDirection {
-  width: 1.32rem;
-  height: 1.32rem;
-  color: #10130f;
-  border: 2px solid #10130f;
-  border-radius: 50%;
-  background: #a8f000;
-  box-shadow: 0 0.3rem 0.65rem rgb(0 0 0 / 0.42);
-}
-
-.routeDirectionGlyph {
-  display: grid;
-  place-items: center;
-  font-size: 0.69rem;
-  font-weight: 950;
-  line-height: 1;
-  transform-origin: center;
 }
 
 .livePosition {
@@ -162,6 +197,108 @@
   white-space: nowrap;
 }
 
+.routingNotice {
+  position: absolute;
+  z-index: 7;
+  left: 0.58rem;
+  bottom: 0.58rem;
+  min-height: 1.8rem;
+  padding: 0.3rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: rgb(244 247 239 / 0.78);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.52rem;
+  background: rgb(11 14 10 / 0.78);
+  box-shadow: 0 0.35rem 0.9rem rgb(0 0 0 / 0.24);
+  font-size: 0.57rem;
+  font-weight: 750;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.routingNotice span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border: 1.5px solid rgb(198 255 0 / 0.26);
+  border-top-color: #c6ff00;
+  border-radius: 50%;
+  animation: mapPreviewSpin 700ms linear infinite;
+}
+
+.routeSummary {
+  position: absolute;
+  z-index: 6;
+  top: 3.55rem;
+  left: 0.58rem;
+  max-width: calc(100% - 4.6rem);
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.13);
+  border-radius: 0.62rem;
+  color: #f4f7ef;
+  background: rgb(11 14 10 / 0.78);
+  box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.routeSummary > span {
+  min-width: 0;
+  padding: 0.38rem 0.52rem;
+  display: grid;
+  gap: 0.04rem;
+}
+
+.routeSummary > span + span {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.routeSummary small {
+  color: rgb(255 255 255 / 0.52);
+  font-size: 0.49rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.routeSummary strong {
+  overflow: hidden;
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expandButton {
+  position: absolute;
+  z-index: 8;
+  top: 0.55rem;
+  right: 0.52rem;
+  min-height: 2.35rem;
+  padding: 0 0.62rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: #f4f7ef;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.62rem;
+  background: rgb(12 15 11 / 0.82);
+  box-shadow: 0 0.45rem 1rem rgb(0 0 0 / 0.3);
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.expandButton:active {
+  transform: scale(0.96);
+}
+
 .loadingOverlay,
 .errorOverlay {
   position: absolute;
@@ -215,6 +352,10 @@
 .preview :global(.maplibregl-ctrl-top-right) {
   top: 0.52rem;
   right: 0.52rem;
+}
+
+.preview[data-expandable='true'] :global(.maplibregl-ctrl-top-right) {
+  top: 3.35rem;
 }
 
 .preview :global(.maplibregl-ctrl-group) {
@@ -284,9 +425,38 @@
     height: 2.35rem;
   }
 
+  .routeSummary {
+    max-width: calc(100% - 3.9rem);
+  }
+
+  .routeSummary > span {
+    padding-inline: 0.42rem;
+  }
+
+  .expandButton {
+    width: 2.35rem;
+    padding: 0;
+  }
+
+  .expandButton span {
+    display: none;
+  }
+
+}
+
+@media (max-width: 47.99rem) {
+  .preview[data-expanded='true'] {
+    inset:
+      calc(var(--nav-h) + 0.35rem)
+      0.45rem
+      calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px) + 0.35rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .preview {
+    transition: none;
+  }
   .mapCanvas {
     transition: none;
   }

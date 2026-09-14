@@ -179,6 +179,27 @@ function formatEventTime(value) {
   }).format(date);
 }
 
+function formatLifecycleDeadline(value) {
+  const date = new Date(Number(value));
+  if (Number.isNaN(date.getTime())) return 'orario non disponibile';
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date).replaceAll('.', '');
+}
+
+function formatLifecycleTimeLeft(deadlineMs, referenceTime = Date.now()) {
+  const remainingMinutes = Math.max(0, Math.ceil((Number(deadlineMs) - Number(referenceTime)) / 60000));
+  if (!Number.isFinite(remainingMinutes) || remainingMinutes <= 0) return 'scaduta';
+  const hours = Math.floor(remainingMinutes / 60);
+  const minutes = remainingMinutes % 60;
+  if (hours >= 24) return `${Math.ceil(hours / 24)} giorni`;
+  if (hours > 0) return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+  return `${minutes} min`;
+}
+
 function formatCurrencyFromCents(value) {
   return (Number(value || 0) / 100).toLocaleString('it-IT', {
     style: 'currency',
@@ -303,6 +324,9 @@ function EventDetailPage() {
   const [peopleOpen, setPeopleOpen] = useState(true);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [moneyDisputeOpen, setMoneyDisputeOpen] = useState(false);
+  const [moneyDisputeSubmitting, setMoneyDisputeSubmitting] = useState(false);
+  const [moneyDisputeReason, setMoneyDisputeReason] = useState('');
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '', avatar_url: '' });
   const [localProfile, setLocalProfile] = useState({
@@ -334,6 +358,8 @@ function EventDetailPage() {
     setPeopleOpen(false);
     setActionsOpen(false);
     setRulesOpen(false);
+    setMoneyDisputeOpen(false);
+    setMoneyDisputeReason('');
     setOrganizerCancelOpen(false);
     setOrganizerCancelForm({ reasonCode: '', note: '' });
     setOrganizerEditOpen(false);
@@ -1472,6 +1498,30 @@ function EventDetailPage() {
     }
   }
 
+  async function submitMoneyDispute() {
+    const reason = String(moneyDisputeReason || '').trim();
+    if (reason.length < 5 || moneyDisputeSubmitting) return;
+    setMoneyDisputeSubmitting(true);
+    try {
+      const dispute = await api.openEventMoneyDispute(event.id, reason);
+      setEvent((current) => current ? {
+        ...current,
+        money_dispute: dispute,
+        money_settlement: current.money_settlement ? {
+          ...current.money_settlement,
+          status: 'disputed'
+        } : current.money_settlement
+      } : current);
+      setMoneyDisputeOpen(false);
+      setMoneyDisputeReason('');
+      showToast('Contestazione inviata al centro di controllo', 'success');
+    } catch (disputeError) {
+      showToast(disputeError.message || 'Impossibile inviare la contestazione', 'error');
+    } finally {
+      setMoneyDisputeSubmitting(false);
+    }
+  }
+
   if (loading) return <LoadingSkeleton rows={2} />;
   if (error)
     return (
@@ -1572,6 +1622,8 @@ function EventDetailPage() {
   const totalAvailableXp = completionXp + reviewBonusXp;
   const routeDistance = Number(event.route_info?.distance_km);
   const hasRouteDistance = Number.isFinite(routeDistance) && routeDistance > 0;
+  const routeElevation = Number(event.route_info?.elevation_gain_m);
+  const hasRouteElevation = Number.isFinite(routeElevation) && routeElevation > 0;
   const participantsCount = Number(event.participants_count || 0);
   const maxParticipants = Number(event.max_participants || 0);
   const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
@@ -1606,6 +1658,31 @@ function EventDetailPage() {
   if (event.lng != null) mapParams.set('lng', String(event.lng));
   const mapPath = `/map?${mapParams.toString()}`;
   const isMappedOutdoorRoute = hasOutdoorTracking && routePoints.length >= 2;
+  const runningPaceMinutes = isMappedOutdoorRoute && /running|corsa|jogging/i.test(String(event.sport_name || '')) && hasRouteDistance
+    ? durationMinutes / routeDistance
+    : null;
+  const runningPaceSeconds = Number.isFinite(runningPaceMinutes) ? Math.round(runningPaceMinutes * 60) : null;
+  const runningPaceLabel = Number.isFinite(runningPaceSeconds)
+    ? `${Math.floor(runningPaceSeconds / 60)}'${String(runningPaceSeconds % 60).padStart(2, '0')}\"/km`
+    : null;
+  const trekkingDifficulty = isMappedOutdoorRoute
+    && (hasRouteDistance || hasRouteElevation)
+    && /trekking|trail|hiking|camminata/i.test(String(event.sport_name || ''))
+    ? (routeDistance > 12 || routeElevation > 650 ? 'Impegnativo' : routeDistance > 6 || routeElevation > 250 ? 'Intermedio' : 'Facile')
+    : null;
+  const routeMapSummary = isMappedOutdoorRoute
+    ? [
+        hasRouteDistance ? { label: 'Distanza', value: `${routeDistance.toLocaleString('it-IT')} km` } : null,
+        hasRouteElevation
+          ? { label: 'Dislivello', value: `+${routeElevation.toLocaleString('it-IT')} m` }
+          : runningPaceLabel
+            ? { label: 'Passo', value: runningPaceLabel }
+            : trekkingDifficulty
+              ? { label: 'Difficoltà', value: trekkingDifficulty }
+              : null,
+        { label: 'Durata', value: `${durationMinutes} min` }
+      ].filter(Boolean)
+    : [];
   const routeMapHref = isMappedOutdoorRoute && /^https?:\/\//i.test(String(event.route_info?.map_url || ''))
     ? String(event.route_info.map_url)
     : mapPath;
@@ -1627,6 +1704,27 @@ function EventDetailPage() {
   ).slice(0, 5);
   const eventIsCancelled = event.status === 'cancelled';
   const isClosedEvent = Boolean(!eventIsCancelled && (event.status === 'completed' || event.has_passed || eventHasEnded));
+  const isArchivedEvent = eventTiming.lifecycleState === 'archived';
+  const moneySettlementStatus = String(event.money_settlement?.status || '').toLowerCase();
+  const moneyDisputeStatus = String(event.money_dispute?.status || '').toLowerCase();
+  const moneyDisputePending = Boolean(moneyDisputeStatus === 'open' || moneySettlementStatus === 'disputed');
+  const hasSettlementReady = Boolean(event.money_settlement?.id);
+  const canOpenMoneyDispute = Boolean(
+    isClosedEvent &&
+    !event.is_personal &&
+    !moneyDisputePending &&
+    hasSettlementReady &&
+    moneySettlementStatus === 'pending' &&
+    eventTiming.isFinancialReviewOpen &&
+    (isOrganizerForEvent || event.user_rsvp)
+  );
+  const postEventStateLabel = moneyDisputePending
+    ? 'Contestazione inviata · regolamento sospeso'
+    : eventTiming.isPostEventReadOnly
+      ? 'Chiusura definitiva · sola lettura'
+      : isArchivedEvent
+        ? `Archiviato · verifica economica ancora aperta per ${formatLifecycleTimeLeft(eventTiming.financialReviewEndsAtMs, checkInNowMs)}`
+        : `Azioni post-evento disponibili per ${formatLifecycleTimeLeft(eventTiming.archiveAtMs, checkInNowMs)}`;
   const canCancelOrganizedEvent = Boolean(
     isOrganizerForEvent &&
     !event.is_personal &&
@@ -1779,6 +1877,8 @@ function EventDetailPage() {
                 <EventMapPreview
                   event={event}
                   routePoints={routePoints}
+                  routeSummary={routeMapSummary}
+                  expandable={isMappedOutdoorRoute}
                   className={`${styles.mapFrame} ${isMappedOutdoorRoute ? styles.mapFrameRoute : ''}`}
                 />
               ) : (
@@ -1791,12 +1891,12 @@ function EventDetailPage() {
                 {routeMapIsExternal ? (
                   <a href={routeMapHref} target="_blank" rel="noreferrer" className={styles.locationButton}>
                     <Route size={18} aria-hidden="true" />
-                    Apri percorso
+                    Mappa completa
                   </a>
                 ) : (
                   <Link to={routeMapHref} className={styles.locationButton}>
                     {isMappedOutdoorRoute ? <Route size={18} aria-hidden="true" /> : <MapPin size={18} aria-hidden="true" />}
-                    {isMappedOutdoorRoute ? 'Apri percorso' : 'Apri mappa'}
+                    {isMappedOutdoorRoute ? 'Mappa completa' : 'Apri mappa'}
                   </Link>
                 )}
                 <a href={directionsHref} target="_blank" rel="noreferrer" className={`${styles.locationButton} ${styles.locationButtonPrimary}`}>
@@ -1829,8 +1929,8 @@ function EventDetailPage() {
                 <div className={styles.routeInlineFacts} aria-label="Riepilogo percorso">
                   <span><small>Partenza</small><strong>{event.route_info.from_label || event.location_name}</strong></span>
                   <span><small>Arrivo</small><strong>{event.route_info.to_label || event.location_name}</strong></span>
-                  {hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
-                  {event.route_info.elevation_gain_m ? <span><small>Dislivello</small><strong>+{event.route_info.elevation_gain_m} m</strong></span> : null}
+                  {!isMappedOutdoorRoute && hasRouteDistance ? <span><small>Distanza</small><strong>{routeDistance.toLocaleString('it-IT')} km</strong></span> : null}
+                  {!isMappedOutdoorRoute && hasRouteElevation ? <span><small>Dislivello</small><strong>+{routeElevation.toLocaleString('it-IT')} m</strong></span> : null}
                 </div>
               ) : null}
             </div>
@@ -2066,8 +2166,8 @@ function EventDetailPage() {
               <div className={styles.closedSummaryHeading}>
                 <span><CheckCircle2 size={19} aria-hidden="true" /></span>
                 <div>
-                  <p>Evento concluso</p>
-                  <h2>Riepilogo verificato</h2>
+                  <p>{isArchivedEvent ? 'Evento archiviato' : 'Evento concluso'}</p>
+                  <h2>{eventTiming.isPostEventReadOnly ? 'Riepilogo definitivo' : 'Riepilogo verificato'}</h2>
                 </div>
                 <strong>{closedPresentCount}/{closedTotalCount || participantsCount || 0} presenti</strong>
               </div>
@@ -2088,6 +2188,33 @@ function EventDetailPage() {
                   </>
                 )}
               </div>
+              <div
+                className={`${styles.postEventLifecycle} ${eventTiming.isPostEventReadOnly ? styles.postEventLifecycleReadOnly : ''}`}
+                data-disputed={moneyDisputePending ? 'true' : 'false'}
+              >
+                <span className={styles.postEventLifecycleIcon} aria-hidden="true">
+                  {eventTiming.isPostEventReadOnly ? <LockKeyhole size={18} /> : <Clock3 size={18} />}
+                </span>
+                <div>
+                  <strong>{postEventStateLabel}</strong>
+                  <small>
+                    {moneyDisputePending
+                      ? 'Il credito resta sospeso fino alla verifica amministrativa.'
+                      : eventTiming.isPostEventReadOnly
+                        ? 'Valutazioni e regolamento economico sono chiusi. I dettagli restano consultabili.'
+                        : eventTiming.isPostEventWindow
+                          ? `Valutazioni entro ${formatLifecycleDeadline(eventTiming.archiveAtMs)} · contestazioni entro ${formatLifecycleDeadline(eventTiming.financialReviewEndsAtMs)}`
+                          : hasSettlementReady
+                            ? `Contestazioni disponibili fino al ${formatLifecycleDeadline(eventTiming.financialReviewEndsAtMs)}`
+                            : 'Il regolamento economico è in elaborazione e sarà disponibile a breve.'}
+                  </small>
+                </div>
+                {canOpenMoneyDispute ? (
+                  <button type="button" onClick={() => setMoneyDisputeOpen(true)}>
+                    Contesta
+                  </button>
+                ) : null}
+              </div>
             </Card>
           ) : null}
 
@@ -2096,6 +2223,7 @@ function EventDetailPage() {
               eventId={event.id}
               enabled={Boolean(
                 isClosedEvent &&
+                eventTiming.isPostEventWindow &&
                 !event.is_personal &&
                 (isOrganizerForEvent || participantWasPresent)
               )}
@@ -2114,7 +2242,7 @@ function EventDetailPage() {
             />
           </div>
 
-          {!event.is_personal && !eventIsCancelled && canOpenAgendaCheckIn ? (
+          {!event.is_personal && !eventIsCancelled && !isClosedEvent && canOpenAgendaCheckIn ? (
             <Card
               id="verify-presence"
               ref={participationFlowRef}
@@ -2347,7 +2475,7 @@ function EventDetailPage() {
             </button> : null}
             {actionsOpen ? (
             <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
-              {isOrganizerForEvent && !eventIsCancelled ? (
+              {isOrganizerForEvent && !eventIsCancelled && !isClosedEvent ? (
                 <Button type="button" variant="secondary" icon={PencilLine} onClick={openOrganizerEditDialog}>
                   Modifica evento
                 </Button>
@@ -2692,6 +2820,40 @@ function EventDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={moneyDisputeOpen}
+        title="Contesta regolamento"
+        onClose={() => {
+          if (!moneyDisputeSubmitting) setMoneyDisputeOpen(false);
+        }}
+        onConfirm={submitMoneyDispute}
+        confirmText={moneyDisputeSubmitting ? 'Invio...' : 'Invia contestazione'}
+        confirmDisabled={moneyDisputeSubmitting || String(moneyDisputeReason || '').trim().length < 5}
+        closeText="Annulla"
+      >
+        <div className={styles.moneyDisputeDialog}>
+          <div>
+            <AlertTriangle size={20} aria-hidden="true" />
+            <p>
+              Segnala soltanto problemi relativi a presenza, deposito o ripartizione del credito.
+              Il regolamento resterà sospeso durante la verifica.
+            </p>
+          </div>
+          <label>
+            <span>Descrivi cosa non risulta corretto</span>
+            <textarea
+              rows="4"
+              minLength="5"
+              maxLength="500"
+              value={moneyDisputeReason}
+              onChange={(changeEvent) => setMoneyDisputeReason(changeEvent.target.value)}
+              placeholder="Esempio: la mia presenza è stata registrata come no-show"
+            />
+            <small>{String(moneyDisputeReason || '').length}/500</small>
+          </label>
         </div>
       </Modal>
 

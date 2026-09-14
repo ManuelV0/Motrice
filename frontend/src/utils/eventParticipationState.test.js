@@ -180,4 +180,9 @@ test('the organizer sees management, check-in, live session and feedback in orde
     event,
     referenceTime: startsAt + 61 * 60 * 1000
   }).id, 'feedback');
+
+  assert.equal(resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt + 26 * 60 * 60 * 1000
+  }).id, 'summary');
 });

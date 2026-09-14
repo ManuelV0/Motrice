@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Clock3,
   Dumbbell,
+  Info,
   LockKeyhole,
   LocateFixed,
   MapPin,
@@ -15,6 +16,7 @@ import {
   Settings2,
   ShieldCheck,
   Users,
+  X,
   XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -32,6 +34,31 @@ import {
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
+
+function isHistoricalEvent(event, referenceTime = Date.now()) {
+  if (event?.status === 'cancelled') return true;
+  return getEventTiming(event, referenceTime).hasEnded;
+}
+
+function getPendingRequestsCount(events) {
+  return events.reduce((total, event) => {
+    const explicitCount = Number(event?.pending_requests_count ?? event?.pending_join_requests_count);
+    if (Number.isFinite(explicitCount)) return total + Math.max(0, explicitCount);
+    const requests = Array.isArray(event?.join_requests) ? event.join_requests : [];
+    return total + requests.filter((request) => String(request?.status || 'pending').toLowerCase() === 'pending').length;
+  }, 0);
+}
+
+function getAgendaEventCardData(event) {
+  const title = String(event?.title || '').trim();
+  const sport = String(event?.sport_name || '').trim();
+  const location = String(event?.location_name || event?.city || '').trim();
+  if (!title || !sport || !location) return event;
+
+  const normalize = (value) => value.toLocaleLowerCase('it-IT').replace(/\s+/g, ' ').trim();
+  const automaticTitles = [`${sport} · ${location}`, `${sport} - ${location}`].map(normalize);
+  return automaticTitles.includes(normalize(title)) ? { ...event, title: sport } : event;
+}
 
 function toDateKey(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -363,8 +390,12 @@ function AgendaPage() {
   const { showToast } = useToast();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [activeSection, setActiveSection] = useState('all');
+  const [activeTimeline, setActiveTimeline] = useState('upcoming');
   const [selectedRange, setSelectedRange] = useState(null);
+  const [calendarSheetSnap, setCalendarSheetSnap] = useState('medium');
+  const [legendOpen, setLegendOpen] = useState(false);
   const [verificationEventId, setVerificationEventId] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   const now = useMemo(() => new Date(nowMs), [nowMs]);
@@ -373,6 +404,11 @@ function AgendaPage() {
     year: now.getFullYear(),
     month: now.getMonth()
   }));
+  const calendarSheetRef = useRef(null);
+  const calendarSheetDragRef = useRef(null);
+  const calendarSheetMoveFrameRef = useRef(null);
+  const calendarSheetTransitionTimerRef = useRef(null);
+  const pendingCalendarSheetHeightRef = useRef(null);
 
   usePageMeta({
     title: 'Eventi | Motrice',
@@ -381,11 +417,14 @@ function AgendaPage() {
 
   const loadEvents = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
+    setLoadError('');
     try {
       const nextEvents = await api.listEvents({ dateRange: 'all', includePast: true, includeCancelled: true, sortBy: 'soonest' });
       setEvents(Array.isArray(nextEvents) ? nextEvents : []);
     } catch (error) {
-      showToast(error?.message || 'Impossibile aggiornare gli eventi', 'error');
+      const message = error?.message || 'Impossibile aggiornare gli eventi';
+      setLoadError(message);
+      showToast(message, 'error');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -400,6 +439,22 @@ function AgendaPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!selectedRange) return undefined;
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setSelectedRange(null);
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [selectedRange]);
+
+  useEffect(() => () => {
+    if (calendarSheetMoveFrameRef.current) window.cancelAnimationFrame(calendarSheetMoveFrameRef.current);
+    if (calendarSheetTransitionTimerRef.current) window.clearTimeout(calendarSheetTransitionTimerRef.current);
+  }, []);
+
   const ownedEvents = useMemo(
     () => events.filter((event) => event.created_by === 'me'),
     [events]
@@ -409,13 +464,29 @@ function AgendaPage() {
     [events]
   );
 
-  const participatingCount = participatingEvents.length;
-  const hasItems = ownedEvents.length > 0 || participatingCount > 0;
   const calendarEvents = useMemo(() => {
     const byId = new Map();
     [...ownedEvents, ...participatingEvents].forEach((event) => byId.set(String(event.id), event));
     return Array.from(byId.values()).sort((a, b) => Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
   }, [ownedEvents, participatingEvents]);
+  const timelineCalendarEvents = useMemo(
+    () => calendarEvents.filter((event) => activeTimeline === 'history'
+      ? isHistoricalEvent(event, nowMs)
+      : !isHistoricalEvent(event, nowMs)),
+    [activeTimeline, calendarEvents, nowMs]
+  );
+  const timelineOwnedEvents = useMemo(
+    () => timelineCalendarEvents.filter((event) => event.created_by === 'me'),
+    [timelineCalendarEvents]
+  );
+  const timelineParticipatingEvents = useMemo(
+    () => timelineCalendarEvents.filter((event) => event.created_by !== 'me' && (event.is_going || event.user_rsvp)),
+    [timelineCalendarEvents]
+  );
+  const pendingRequestsCount = useMemo(
+    () => getPendingRequestsCount(timelineOwnedEvents),
+    [timelineOwnedEvents]
+  );
   const todaySession = useMemo(() => {
     const candidates = calendarEvents
       .filter((event) => {
@@ -494,6 +565,7 @@ function AgendaPage() {
     }
 
     setActiveSection('all');
+    setActiveTimeline(isHistoricalEvent(requestedAgendaEvent) ? 'history' : 'upcoming');
     setVerificationEventId(requestedEventId);
 
     window.setTimeout(() => {
@@ -501,10 +573,10 @@ function AgendaPage() {
     }, 120);
   }, [requestedAgendaEvent, requestedEventId]);
   const visibleCalendarEvents = useMemo(() => {
-    if (activeSection === 'created') return ownedEvents;
-    if (activeSection === 'participating') return participatingEvents;
-    return calendarEvents;
-  }, [activeSection, calendarEvents, ownedEvents, participatingEvents]);
+    if (activeSection === 'created') return timelineOwnedEvents;
+    if (activeSection === 'participating') return timelineParticipatingEvents;
+    return timelineCalendarEvents;
+  }, [activeSection, timelineCalendarEvents, timelineOwnedEvents, timelineParticipatingEvents]);
   const eventsByDate = useMemo(() => {
     const byDate = new Map();
     visibleCalendarEvents.forEach((event) => {
@@ -518,6 +590,7 @@ function AgendaPage() {
     () => getCalendarCells(calendarCursor.year, calendarCursor.month),
     [calendarCursor]
   );
+  const isCurrentCalendarMonth = calendarCursor.year === now.getFullYear() && calendarCursor.month === now.getMonth();
   const selectedEvents = useMemo(() => {
     if (!selectedRange) return [];
     return visibleCalendarEvents
@@ -540,10 +613,10 @@ function AgendaPage() {
     setSelectedRange(null);
 
     const targetEvents = section === 'created'
-      ? ownedEvents
+      ? timelineOwnedEvents
       : section === 'participating'
-        ? participatingEvents
-        : calendarEvents;
+        ? timelineParticipatingEvents
+        : timelineCalendarEvents;
     const monthHasEvents = targetEvents.some((event) => {
       const eventDate = new Date(event.event_datetime);
       return !Number.isNaN(eventDate.getTime()) &&
@@ -564,14 +637,133 @@ function AgendaPage() {
     }
   }
 
+  function changeActiveTimeline(timeline) {
+    setActiveTimeline(timeline);
+    setSelectedRange(null);
+
+    const matchesTimeline = (event) => timeline === 'history'
+      ? isHistoricalEvent(event, nowMs)
+      : !isHistoricalEvent(event, nowMs);
+    const roleEvents = activeSection === 'created'
+      ? ownedEvents
+      : activeSection === 'participating'
+        ? participatingEvents
+        : calendarEvents;
+    const targetEvents = roleEvents.filter(matchesTimeline);
+    if (targetEvents.length === 0) return;
+
+    const sorted = [...targetEvents].sort((a, b) => timeline === 'history'
+      ? Date.parse(b.event_datetime) - Date.parse(a.event_datetime)
+      : Date.parse(a.event_datetime) - Date.parse(b.event_datetime));
+    const targetDate = new Date(sorted[0].event_datetime);
+    if (!Number.isNaN(targetDate.getTime())) {
+      setCalendarCursor({ year: targetDate.getFullYear(), month: targetDate.getMonth() });
+    }
+  }
+
+  function returnToToday() {
+    setSelectedRange(null);
+    setCalendarCursor({ year: now.getFullYear(), month: now.getMonth() });
+  }
+
   function selectCalendarDay(dateKey) {
     if (!eventsByDate.has(dateKey)) return;
-    setSelectedRange((current) => {
-      if (!current || current.start !== current.end) return { start: dateKey, end: dateKey };
-      if (current.start === dateKey) return current;
-      return dateKey < current.start
-        ? { start: dateKey, end: current.start }
-        : { start: current.start, end: dateKey };
+    setCalendarSheetSnap('medium');
+    setSelectedRange((current) => current?.start === dateKey
+      ? null
+      : { start: dateKey, end: dateKey });
+  }
+
+  function getCalendarSheetSnapHeights() {
+    const rootFontSize = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const usableHeight = Math.max(0, viewportHeight - 4.5 * rootFontSize);
+    const compact = 7.4 * rootFontSize;
+    const medium = Math.min(27 * rootFontSize, Math.max(compact, usableHeight * 0.62));
+    const full = Math.max(medium, usableHeight - 4.5 * rootFontSize);
+    return { compact, medium, full };
+  }
+
+  function onCalendarSheetPointerDown(event) {
+    const sheet = calendarSheetRef.current;
+    if (!sheet) return;
+    if (calendarSheetTransitionTimerRef.current) window.clearTimeout(calendarSheetTransitionTimerRef.current);
+    sheet.style.removeProperty('height');
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const currentHeight = sheet.getBoundingClientRect().height;
+    calendarSheetDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      lastTime: performance.now(),
+      velocity: 0,
+      startHeight: currentHeight,
+      currentHeight,
+      moved: false
+    };
+    sheet.classList.add(styles.calendarDetailsDragging);
+  }
+
+  function onCalendarSheetPointerMove(event) {
+    const drag = calendarSheetDragRef.current;
+    const sheet = calendarSheetRef.current;
+    if (!drag || !sheet || drag.pointerId !== event.pointerId) return;
+    const timestamp = performance.now();
+    const elapsed = Math.max(1, timestamp - drag.lastTime);
+    drag.velocity = (event.clientY - drag.lastY) / elapsed;
+    drag.lastY = event.clientY;
+    drag.lastTime = timestamp;
+    const heights = getCalendarSheetSnapHeights();
+    drag.currentHeight = Math.min(heights.full, Math.max(heights.compact, drag.startHeight - (event.clientY - drag.startY)));
+    drag.moved ||= Math.abs(event.clientY - drag.startY) > 5;
+    pendingCalendarSheetHeightRef.current = drag.currentHeight;
+
+    if (!calendarSheetMoveFrameRef.current) {
+      calendarSheetMoveFrameRef.current = window.requestAnimationFrame(() => {
+        calendarSheetMoveFrameRef.current = null;
+        if (calendarSheetRef.current && pendingCalendarSheetHeightRef.current != null) {
+          calendarSheetRef.current.style.height = `${pendingCalendarSheetHeightRef.current}px`;
+        }
+      });
+    }
+  }
+
+  function finishCalendarSheetDrag(event) {
+    const drag = calendarSheetDragRef.current;
+    const sheet = calendarSheetRef.current;
+    if (!drag || !sheet || drag.pointerId !== event.pointerId) return;
+    if (calendarSheetMoveFrameRef.current) {
+      window.cancelAnimationFrame(calendarSheetMoveFrameRef.current);
+      calendarSheetMoveFrameRef.current = null;
+    }
+    pendingCalendarSheetHeightRef.current = null;
+    const heights = getCalendarSheetSnapHeights();
+    const snaps = [
+      ['compact', heights.compact],
+      ['medium', heights.medium],
+      ['full', heights.full]
+    ];
+    let nextSnap = calendarSheetSnap;
+
+    if (event.type !== 'pointercancel' && !drag.moved) {
+      nextSnap = calendarSheetSnap === 'compact' ? 'medium' : calendarSheetSnap === 'medium' ? 'full' : 'medium';
+    } else if (event.type !== 'pointercancel') {
+      const projectedHeight = drag.currentHeight - drag.velocity * 150;
+      nextSnap = snaps.reduce((best, candidate) =>
+        Math.abs(candidate[1] - projectedHeight) < Math.abs(best[1] - projectedHeight) ? candidate : best
+      )[0];
+    }
+
+    calendarSheetDragRef.current = null;
+    sheet.classList.remove(styles.calendarDetailsDragging);
+    sheet.style.height = `${drag.currentHeight}px`;
+    setCalendarSheetSnap(nextSnap);
+    window.requestAnimationFrame(() => {
+      if (!calendarSheetRef.current) return;
+      calendarSheetRef.current.style.height = `${heights[nextSnap]}px`;
+      calendarSheetTransitionTimerRef.current = window.setTimeout(() => {
+        calendarSheetRef.current?.style.removeProperty('height');
+      }, 280);
     });
   }
 
@@ -605,7 +797,7 @@ function AgendaPage() {
       <div className={styles.head}>
         <div>
           <h1>I miei eventi</h1>
-          <p>Il calendario filtra attività future e storico</p>
+          <p>Programma, check-in e storico in un’unica agenda</p>
         </div>
       </div>
 
@@ -617,6 +809,7 @@ function AgendaPage() {
         const exerciseCount = Array.isArray(workoutPlan?.exercises) ? workoutPlan.exercises.length : 0;
         const workoutDuration = Number(workoutPlan?.duration || event.duration_minutes || 0);
         const workoutTitle = event.title || workoutPlan?.title || event.sport_name || 'Sessione Motrice';
+        const isCompactFocus = ['completed', 'closed'].includes(state.key);
         const StatusIcon = state.key === 'locked'
           ? LockKeyhole
           : state.key === 'completed'
@@ -635,7 +828,7 @@ function AgendaPage() {
         return (
           <section
             id="agenda-focus-event"
-            className={`${styles.todayWorkoutCard} ${styles[`todayWorkoutCard_${state.key}`]}`}
+            className={`${styles.todayWorkoutCard} ${styles[`todayWorkoutCard_${state.key}`]} ${isCompactFocus ? styles.todayWorkoutCardCompact : ''}`}
             aria-labelledby="today-workout-title"
           >
             <div className={styles.todayWorkoutTopline}>
@@ -643,7 +836,7 @@ function AgendaPage() {
                 {hasOutdoorTracking ? <Route size={22} /> : hasWorkout ? <Dumbbell size={22} /> : <CalendarDays size={22} />}
               </span>
               <div>
-                <small>{state.eyebrow}</small>
+                <small>{isCompactFocus ? 'AZIONE RICHIESTA' : 'DA FARE ORA'} · {state.eyebrow}</small>
                 <strong id="today-workout-title">{workoutTitle}</strong>
               </div>
               <time dateTime={event.event_datetime}>{formatEventTime(event.event_datetime)}</time>
@@ -654,26 +847,35 @@ function AgendaPage() {
               <span>{state.status}</span>
             </div>
 
-            <div className={styles.todayWorkoutMeta}>
-              <span><Dumbbell size={15} aria-hidden="true" /> {event.sport_name || 'Sport'}</span>
-              {hasOutdoorTracking ? <span>GPS live</span> : exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : <span>Sessione libera</span>}
-              <span><Clock3 size={15} aria-hidden="true" /> {workoutDuration} min</span>
-              <span><MapPin size={15} aria-hidden="true" /> {event.location_name || event.city || 'Luogo evento'}</span>
-            </div>
+            {!isCompactFocus ? (
+              <>
+                <div className={styles.todayWorkoutMeta}>
+                  <span><Dumbbell size={15} aria-hidden="true" /> {event.sport_name || 'Sport'}</span>
+                  {hasOutdoorTracking ? <span>GPS live</span> : exerciseCount > 0 ? <span>{exerciseCount} esercizi</span> : <span>Sessione libera</span>}
+                  <span><Clock3 size={15} aria-hidden="true" /> {workoutDuration} min</span>
+                  <span><MapPin size={15} aria-hidden="true" /> {event.location_name || event.city || 'Luogo evento'}</span>
+                </div>
 
-            <div className={styles.todayWorkoutProgress}>
-              <div
-                role="progressbar"
-                aria-label="Progresso temporale della sessione"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow={state.progress}
-              >
-                <span style={{ width: `${state.progress}%` }} />
+                <div className={styles.todayWorkoutProgress}>
+                  <div
+                    role="progressbar"
+                    aria-label="Progresso temporale della sessione"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow={state.progress}
+                  >
+                    <span style={{ width: `${state.progress}%` }} />
+                  </div>
+                  <small>{state.progressLabel}</small>
+                  <strong>{state.progress}%</strong>
+                </div>
+              </>
+            ) : (
+              <div className={styles.compactFocusSummary}>
+                <span><Dumbbell size={14} aria-hidden="true" /> {event.sport_name || 'Sport'}</span>
+                <span><Clock3 size={14} aria-hidden="true" /> {workoutDuration} min</span>
               </div>
-              <small>{state.progressLabel}</small>
-              <strong>{state.progress}%</strong>
-            </div>
+            )}
 
             <button
               type="button"
@@ -701,6 +903,27 @@ function AgendaPage() {
         );
       })() : null}
 
+      <div className={styles.timelineFilters} role="tablist" aria-label="Mostra eventi in programma o conclusi">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTimeline === 'upcoming'}
+          className={activeTimeline === 'upcoming' ? styles.timelineFilterActive : undefined}
+          onClick={() => changeActiveTimeline('upcoming')}
+        >
+          In programma
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTimeline === 'history'}
+          className={activeTimeline === 'history' ? styles.timelineFilterActive : undefined}
+          onClick={() => changeActiveTimeline('history')}
+        >
+          Conclusi
+        </button>
+      </div>
+
       <div className={styles.eventFilters} role="tablist" aria-label="Seleziona gli eventi da mostrare">
         <span className={styles.eventFilterGlider} data-active={activeSection} aria-hidden="true" />
         <button
@@ -710,7 +933,7 @@ function AgendaPage() {
           className={activeSection === 'all' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('all')}
         >
-          Tutti <span>{calendarEvents.length}</span>
+          Tutti <span>{timelineCalendarEvents.length}</span>
         </button>
         <button
           type="button"
@@ -719,7 +942,7 @@ function AgendaPage() {
           className={activeSection === 'participating' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('participating')}
         >
-          Partecipo <span>{participatingCount}</span>
+          Partecipo <span>{timelineParticipatingEvents.length}</span>
         </button>
         <button
           type="button"
@@ -728,7 +951,8 @@ function AgendaPage() {
           className={activeSection === 'created' ? styles.filterActive : undefined}
           onClick={() => changeActiveSection('created')}
         >
-          Creati <span>{ownedEvents.length}</span>
+          Organizzo <span>{timelineOwnedEvents.length}</span>
+          {pendingRequestsCount > 0 ? <em aria-label={`${pendingRequestsCount} richieste in attesa`}>{pendingRequestsCount}</em> : null}
         </button>
       </div>
 
@@ -744,7 +968,10 @@ function AgendaPage() {
           </button>
           <div className={styles.calendarHeading}>
             <h2 id="events-calendar-title">{formatCalendarMonth(calendarCursor.year, calendarCursor.month)}</h2>
-            {selectedRange ? <small>{formatSelectedRange(selectedRange)}</small> : <small>Tocca un giorno con eventi</small>}
+            <div className={styles.calendarHeadingMeta}>
+              {selectedRange ? <small>{formatSelectedRange(selectedRange)}</small> : <small>Tocca un giorno con eventi</small>}
+              {!isCurrentCalendarMonth ? <button type="button" onClick={returnToToday}>Oggi</button> : null}
+            </div>
           </div>
           <button
             type="button"
@@ -773,6 +1000,7 @@ function AgendaPage() {
             const allPast = hasEvents && dayTimings.every((timing) => timing.hasEnded);
             const hasPast = dayTimings.some((timing) => timing.hasEnded);
             const hasFuture = dayTimings.some((timing) => !timing.hasEnded);
+            const allCancelled = hasEvents && dayEvents.every((event) => event.status === 'cancelled');
             const timingLabel = allPast
               ? 'svolto'
               : hasPast && hasFuture
@@ -803,15 +1031,11 @@ function AgendaPage() {
                 <span className={styles.calendarDayNumber}>{day}</span>
                 {isToday && !hasEvents ? <small className={styles.calendarTodayLabel}>OGGI</small> : null}
                 {hasEvents ? (
-                  <span className={styles.calendarEventDots} aria-hidden="true">
-                    {Array.from({ length: Math.min(2, dayEvents.length) }, (_, dotIndex) => (
-                      <i
-                        key={dotIndex}
-                        className={dayEvents[dotIndex]?.status === 'cancelled'
-                          ? styles.eventDotCancelled
-                          : dayTimings[dotIndex]?.hasEnded ? styles.eventDotPast : styles.eventDotFuture}
-                      />
-                    ))}
+                  <span
+                    className={`${styles.calendarEventCount} ${allCancelled ? styles.calendarEventCountCancelled : allPast ? styles.calendarEventCountPast : styles.calendarEventCountFuture}`}
+                    aria-hidden="true"
+                  >
+                    {dayEvents.length > 9 ? '9+' : dayEvents.length}
                   </span>
                 ) : null}
               </button>
@@ -819,47 +1043,92 @@ function AgendaPage() {
           })}
         </div>
 
-        <div className={styles.calendarLegend} aria-label="Legenda calendario">
-          <span><i className={styles.legendFuture} aria-hidden="true" /> Da svolgere</span>
-          <span><i className={styles.legendPast} aria-hidden="true" /> Svolto</span>
-          <span><i className={styles.legendCancelled} aria-hidden="true" /> Annullato</span>
-          <small>Due dot = più eventi</small>
+        <div className={styles.calendarLegendArea}>
+          <button
+            type="button"
+            className={styles.calendarLegendTrigger}
+            aria-expanded={legendOpen}
+            onClick={() => setLegendOpen((current) => !current)}
+          >
+            <Info size={14} aria-hidden="true" /> Legenda
+          </button>
+          {legendOpen ? (
+            <div className={styles.calendarLegend} aria-label="Legenda calendario">
+              <span><i className={styles.legendFuture} aria-hidden="true" /> Da svolgere</span>
+              <span><i className={styles.legendPast} aria-hidden="true" /> Svolto</span>
+              <span><i className={styles.legendCancelled} aria-hidden="true" /> Annullato</span>
+              <small>Il numero indica gli eventi del giorno</small>
+            </div>
+          ) : null}
         </div>
 
         {loading ? (
           <p className={styles.calendarState}><CalendarDays size={17} aria-hidden="true" /> Aggiornamento eventi…</p>
-        ) : !hasItems ? (
-          <p className={styles.calendarState}><CalendarDays size={17} aria-hidden="true" /> Nessun evento presente</p>
+        ) : loadError && visibleCalendarEvents.length === 0 ? (
+          <div className={styles.calendarState} role="alert">
+            <CalendarDays size={17} aria-hidden="true" />
+            <span>Eventi non disponibili</span>
+            <button type="button" onClick={() => loadEvents()}>Riprova</button>
+          </div>
+        ) : visibleCalendarEvents.length === 0 ? (
+          <p className={styles.calendarState}>
+            <CalendarDays size={17} aria-hidden="true" />
+            {activeTimeline === 'history' ? 'Nessun evento concluso' : 'Nessun evento in programma'}
+          </p>
         ) : null}
 
         {selectedRange ? (
-          <section className={styles.calendarDetails} aria-label={`Eventi dal ${formatSelectedRange(selectedRange)}`}>
-            <i className={styles.sheetHandle} aria-hidden="true" />
+            <section
+              ref={calendarSheetRef}
+              className={`${styles.calendarDetails} ${styles[`calendarDetails${calendarSheetSnap[0].toUpperCase()}${calendarSheetSnap.slice(1)}`]}`}
+              role="region"
+              aria-label={`Eventi del ${formatSelectedRange(selectedRange)}`}
+            >
+            <button
+              type="button"
+              className={styles.calendarSheetHandle}
+              onPointerDown={onCalendarSheetPointerDown}
+              onPointerMove={onCalendarSheetPointerMove}
+              onPointerUp={finishCalendarSheetDrag}
+              onPointerCancel={finishCalendarSheetDrag}
+              aria-label={calendarSheetSnap === 'full' ? 'Riduci pannello eventi' : 'Espandi pannello eventi'}
+              aria-expanded={calendarSheetSnap === 'full'}
+            >
+              <span aria-hidden="true" />
+            </button>
             <header className={styles.calendarDetailsHeader}>
               <div>
-                <small>{selectedRange.start === selectedRange.end ? 'GIORNO SELEZIONATO' : 'INTERVALLO SELEZIONATO'}</small>
+                <small>GIORNO SELEZIONATO</small>
                 <strong>{formatSelectedRange(selectedRange)}</strong>
                 <span>{selectedEvents.length} {selectedEvents.length === 1 ? 'evento' : 'eventi'}</span>
               </div>
-              <button type="button" onClick={() => setSelectedRange(null)} aria-label="Chiudi dettagli calendario">
-                <span className={styles.closeGlyph} aria-hidden="true">×</span>
+              <button
+                type="button"
+                className={styles.calendarSheetClose}
+                onClick={() => setSelectedRange(null)}
+                aria-label="Chiudi dettagli calendario"
+              >
+                <X size={23} strokeWidth={2.4} aria-hidden="true" />
               </button>
             </header>
 
             <div className={styles.calendarEventList}>
               {selectedEvents.map((event) => {
-                const isPast = getEventTiming(event, nowMs).hasEnded;
+                const timing = getEventTiming(event, nowMs);
+                const isPast = timing.hasEnded;
+                const isArchived = timing.lifecycleState === 'archived';
                 const isCancelled = event.status === 'cancelled';
                 const participants = Math.max(0, Number(event.participants_count || 0));
                 const capacity = Math.max(participants, Number(event.max_participants || 0));
+                const cardEvent = getAgendaEventCardData(event);
 
                 if (isCancelled) {
                   return (
                     <EventCard
                       key={event.id}
-                      event={event}
-                      variant="standard"
-                      context="agenda"
+                      event={cardEvent}
+                      variant="compact"
+                      context="agendaSheet"
                       status={{ label: 'Annullato', tone: 'danger', icon: XCircle }}
                       metaItems={[
                         { label: event.cancellation_note || 'Cancellato dall’organizer' },
@@ -878,17 +1147,34 @@ function AgendaPage() {
                 if (isPast) {
                   const stats = getClosedEventStats(event);
                   const StatusIcon = stats.attendance.tone === 'danger' ? XCircle : CheckCircle2;
+                  const outcomeLabel = stats.attendance.key === 'host'
+                    ? 'Completato'
+                    : stats.attendance.key === 'present'
+                      ? 'Verificata'
+                      : stats.attendance.key === 'no-show'
+                        ? 'No-show'
+                        : stats.attendance.key === 'late-cancel'
+                          ? 'Tardiva'
+                          : 'In attesa';
                   return (
                     <EventCard
                       key={event.id}
-                      event={event}
-                      variant="standard"
-                      context="agenda"
-                      status={{ label: stats.attendance.label, tone: stats.attendance.tone, icon: StatusIcon }}
+                      event={cardEvent}
+                      variant="compact"
+                      context="agendaSheet"
+                      status={{
+                        label: isArchived
+                          ? 'Archiviato'
+                          : stats.attendance.key === 'host'
+                            ? 'Concluso'
+                            : stats.attendance.label,
+                        tone: isArchived ? 'neutral' : stats.attendance.tone,
+                        icon: StatusIcon
+                      }}
                       stats={[
                         { value: `+${stats.earnedXp} XP`, label: 'Guadagnati' },
                         { value: `${stats.trainedMinutes} min`, label: 'Allenati' },
-                        { value: stats.reliability, label: 'Affidabilità' },
+                        { value: outcomeLabel, label: 'Esito' },
                         { value: `${stats.presentCount}/${stats.totalCount}`, label: 'Presenti' }
                       ]}
                       showProgress={false}
@@ -908,9 +1194,9 @@ function AgendaPage() {
                 return (
                   <EventCard
                     key={event.id}
-                    event={event}
-                    variant="standard"
-                    context="agenda"
+                    event={cardEvent}
+                    variant="compact"
+                    context="agendaSheet"
                     status={{ label: 'Da svolgere', tone: 'success' }}
                     secondaryAction={isOrganizer ? {
                       label: 'Modifica evento',
@@ -934,7 +1220,7 @@ function AgendaPage() {
                 );
               })}
             </div>
-          </section>
+            </section>
         ) : null}
       </section>
     </section>

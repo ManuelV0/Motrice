@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import maplibregl from 'maplibre-gl';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
+import { requestPedestrianRoute } from '../services/routeGeometry';
 import styles from '../styles/components/eventMapPreview.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -17,6 +20,7 @@ const ROUTE_LAYER = 'event-detail-route-line';
 const LIVE_ROUTE_SOURCE = 'event-live-route';
 const LIVE_ROUTE_GLOW_LAYER = 'event-live-route-glow';
 const LIVE_ROUTE_LAYER = 'event-live-route-line';
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 function createRouteGeoJson(points) {
   if (!Array.isArray(points) || points.length < 2) {
@@ -27,55 +31,6 @@ function createRouteGeoJson(points) {
     properties: {},
     geometry: { type: 'LineString', coordinates: points }
   };
-}
-
-function getRouteBearing(from, to) {
-  const fromLng = Number(from?.[0]);
-  const fromLat = Number(from?.[1]);
-  const toLng = Number(to?.[0]);
-  const toLat = Number(to?.[1]);
-  if (![fromLng, fromLat, toLng, toLat].every(Number.isFinite)) return 0;
-  const toRadians = (value) => value * Math.PI / 180;
-  const fromLatRad = toRadians(fromLat);
-  const toLatRad = toRadians(toLat);
-  const deltaLng = toRadians(toLng - fromLng);
-  const y = Math.sin(deltaLng) * Math.cos(toLatRad);
-  const x = Math.cos(fromLatRad) * Math.sin(toLatRad)
-    - Math.sin(fromLatRad) * Math.cos(toLatRad) * Math.cos(deltaLng);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-}
-
-function getRouteDirections(points) {
-  if (!Array.isArray(points) || points.length < 2) return [];
-  const segments = [];
-  let totalLength = 0;
-
-  for (let index = 1; index < points.length; index += 1) {
-    const from = points[index - 1];
-    const to = points[index];
-    const averageLat = ((from[1] + to[1]) / 2) * Math.PI / 180;
-    const deltaLng = (to[0] - from[0]) * Math.cos(averageLat);
-    const deltaLat = to[1] - from[1];
-    const length = Math.hypot(deltaLng, deltaLat);
-    if (length <= 0) continue;
-    segments.push({ from, to, length, startsAt: totalLength });
-    totalLength += length;
-  }
-
-  if (!segments.length || totalLength <= 0) return [];
-  const ratios = totalLength > 0.015 ? [0.22, 0.48, 0.74] : [0.32, 0.68];
-  return ratios.map((ratio) => {
-    const target = totalLength * ratio;
-    const segment = segments.find((item) => target <= item.startsAt + item.length) || segments.at(-1);
-    const progress = Math.min(1, Math.max(0, (target - segment.startsAt) / segment.length));
-    return {
-      coordinate: [
-        segment.from[0] + ((segment.to[0] - segment.from[0]) * progress),
-        segment.from[1] + ((segment.to[1] - segment.from[1]) * progress)
-      ],
-      bearing: getRouteBearing(segment.from, segment.to)
-    };
-  });
 }
 
 function getSavedMapTheme() {
@@ -102,29 +57,38 @@ function createMarkerElement(svgMarkup) {
   return marker;
 }
 
+function createRouteOverlayElement() {
+  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  svg.classList.add(styles.routeOverlay);
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  const lines = ['shadow', 'glow', 'main'].map((variant) => {
+    const line = document.createElementNS(SVG_NAMESPACE, 'polyline');
+    line.classList.add(styles[`routeOverlay_${variant}`]);
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke-linecap', 'round');
+    line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(line);
+    return line;
+  });
+
+  return { svg, lines };
+}
+
 function createRouteEndpointElement(type) {
   const marker = document.createElement('span');
   marker.className = `${styles.routeEndpoint} ${type === 'start' ? styles.routeStart : styles.routeFinish}`;
   marker.setAttribute('aria-hidden', 'true');
   const glyph = document.createElement('span');
   if (type === 'start') {
-    glyph.className = styles.routeStartDot;
+    glyph.className = styles.routeStartLabel;
+    glyph.textContent = 'A';
   } else {
     glyph.className = styles.routeFinishFlag;
     glyph.innerHTML = '<svg viewBox="0 0 18 18" aria-hidden="true"><path d="M4 15.5V2.4m.5.8h8.2l-1.8 2.4 1.8 2.4H4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   }
-  marker.appendChild(glyph);
-  return marker;
-}
-
-function createRouteDirectionElement(bearing) {
-  const marker = document.createElement('span');
-  marker.className = styles.routeDirection;
-  marker.setAttribute('aria-hidden', 'true');
-  const glyph = document.createElement('span');
-  glyph.className = styles.routeDirectionGlyph;
-  glyph.textContent = '➤';
-  glyph.style.transform = `rotate(${bearing - 90}deg)`;
   marker.appendChild(glyph);
   return marker;
 }
@@ -142,12 +106,17 @@ export default function EventMapPreview({
   routePoints = [],
   liveRoutePoints = [],
   liveMode = false,
+  routeSummary = [],
+  expandable = false,
   className = ''
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const liveMarkerRef = useRef(null);
   const [status, setStatus] = useState('loading');
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [routedRoute, setRoutedRoute] = useState([]);
+  const [routingStatus, setRoutingStatus] = useState('idle');
   const theme = useMemo(getSavedMapTheme, []);
   const usableRoute = routePoints
     .filter(validPoint)
@@ -167,12 +136,14 @@ export default function EventMapPreview({
     ? [eventLng, eventLat]
     : usableRoute[0] || usableLiveRoute.at(-1) || null;
   const centerKey = center ? center.join(',') : '';
-  const routeKey = usableRoute.map((point) => point.join(',')).join('|');
+  const manualRouteKey = usableRoute.map((point) => point.join(',')).join('|');
   const liveRouteKey = usableLiveRoute.map((point) => point.join(',')).join('|');
   const locationName = String(event?.location_name || event?.city || 'Punto dell evento').trim();
   const activityType = getEventActivityType(event);
   const isRoutePreview = usableRoute.length >= 2
     && (activityType === 'running' || activityType === 'trekking');
+  const displayRoute = routedRoute.length >= 2 ? routedRoute : usableRoute;
+  const routeKey = displayRoute.map((point) => point.join(',')).join('|');
   const routeTypeLabel = activityType === 'trekking' ? 'TREKKING' : 'RUNNING';
   const markerSvg = useMemo(
     () => createEventPinSvg(activityType, {
@@ -184,9 +155,57 @@ export default function EventMapPreview({
   );
 
   useEffect(() => {
+    if (!isRoutePreview || liveMode) {
+      setRoutedRoute([]);
+      setRoutingStatus('idle');
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let disposed = false;
+    setRoutedRoute([]);
+    setRoutingStatus('loading');
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    requestPedestrianRoute(routePoints, { signal: controller.signal })
+      .then((points) => {
+        if (!Array.isArray(points) || controller.signal.aborted || disposed) return;
+        setRoutedRoute(points.map(([lat, lng]) => [Number(lng), Number(lat)]));
+        setRoutingStatus('ready');
+      })
+      .catch(() => {
+        if (disposed) return;
+        setRoutedRoute([]);
+        setRoutingStatus('fallback');
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      disposed = true;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [activityType, isRoutePreview, liveMode, manualRouteKey]);
+
+  useEffect(() => {
+    if (!isExpanded || typeof document === 'undefined') return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (eventKey) => {
+      if (eventKey.key === 'Escape') setIsExpanded(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExpanded]);
+
+  useEffect(() => {
     if (!containerRef.current || !center) return undefined;
 
     let mapLoaded = false;
+    let routeOverlay = null;
+    let updateRouteOverlay = null;
     setStatus('loading');
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -213,20 +232,12 @@ export default function EventMapPreview({
         new maplibregl.Marker({
           element: createRouteEndpointElement('start'),
           anchor: 'center'
-        }).setLngLat(usableRoute[0]).addTo(map),
+        }).setLngLat(displayRoute[0]).addTo(map),
         new maplibregl.Marker({
           element: createRouteEndpointElement('finish'),
           anchor: 'center'
-        }).setLngLat(usableRoute.at(-1)).addTo(map)
+        }).setLngLat(displayRoute.at(-1)).addTo(map)
       );
-      getRouteDirections(usableRoute).forEach(({ coordinate, bearing }) => {
-        markers.push(
-          new maplibregl.Marker({
-            element: createRouteDirectionElement(bearing),
-            anchor: 'center'
-          }).setLngLat(coordinate).addTo(map)
-        );
-      });
     } else {
       markers.push(
         new maplibregl.Marker({
@@ -248,7 +259,7 @@ export default function EventMapPreview({
       if (usableRoute.length >= 2) {
         map.addSource(ROUTE_SOURCE, {
           type: 'geojson',
-          data: createRouteGeoJson(usableRoute)
+          data: createRouteGeoJson(displayRoute)
         });
         map.addLayer({
           id: ROUTE_SHADOW_LAYER,
@@ -257,13 +268,32 @@ export default function EventMapPreview({
           paint: {
             'line-color': '#050705',
             'line-width': liveMode ? 7 : isRoutePreview ? 9 : 7,
-            'line-opacity': 0.82
+            'line-opacity': isRoutePreview ? 0.68 : 0.9
           },
           layout: {
             'line-cap': 'round',
             'line-join': 'round'
           }
         });
+
+        if (isRoutePreview && !liveMode) {
+          routeOverlay = createRouteOverlayElement();
+          map.getCanvasContainer().appendChild(routeOverlay.svg);
+          updateRouteOverlay = () => {
+            const canvas = map.getCanvas();
+            const width = Math.max(1, canvas.clientWidth);
+            const height = Math.max(1, canvas.clientHeight);
+            const points = displayRoute
+              .map((point) => map.project(point))
+              .map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`)
+              .join(' ');
+            routeOverlay.svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            routeOverlay.lines.forEach((line) => line.setAttribute('points', points));
+          };
+          map.on('move', updateRouteOverlay);
+          map.on('resize', updateRouteOverlay);
+          updateRouteOverlay();
+        }
         map.addLayer({
           id: ROUTE_GLOW_LAYER,
           type: 'line',
@@ -271,8 +301,8 @@ export default function EventMapPreview({
           paint: {
             'line-color': '#b7ff24',
             'line-width': isRoutePreview ? 12 : 9,
-            'line-opacity': liveMode ? 0 : isRoutePreview ? 0.24 : 0.14,
-            'line-blur': isRoutePreview ? 4 : 3
+            'line-opacity': liveMode ? 0 : isRoutePreview ? 0.18 : 0.14,
+            'line-blur': isRoutePreview ? 3 : 3
           },
           layout: {
             'line-cap': 'round',
@@ -284,9 +314,9 @@ export default function EventMapPreview({
           type: 'line',
           source: ROUTE_SOURCE,
           paint: {
-            'line-color': liveMode ? '#8b9188' : '#b7ff24',
-            'line-width': liveMode ? 4.2 : isRoutePreview ? 5.8 : 3.8,
-            'line-opacity': liveMode ? 0.72 : 0.98,
+            'line-color': liveMode ? '#8b9188' : '#c6ff00',
+            'line-width': liveMode ? 4.2 : isRoutePreview ? 5.2 : 3.8,
+            'line-opacity': liveMode ? 0.72 : isRoutePreview ? 0.9 : 0.98,
             ...(liveMode ? { 'line-dasharray': [1.8, 1.3] } : {})
           },
           layout: {
@@ -296,8 +326,8 @@ export default function EventMapPreview({
         });
 
         const bounds = new maplibregl.LngLatBounds();
-        usableRoute.forEach((point) => bounds.extend(point));
-        if (hasEventCoordinates) bounds.extend([eventLng, eventLat]);
+        displayRoute.forEach((point) => bounds.extend(point));
+        if (hasEventCoordinates && !isRoutePreview) bounds.extend([eventLng, eventLat]);
         map.fitBounds(bounds, {
           padding: isRoutePreview
             ? { top: 82, right: 58, bottom: 92, left: 58 }
@@ -360,13 +390,18 @@ export default function EventMapPreview({
     return () => {
       window.clearTimeout(loadingTimeout);
       resizeObserver?.disconnect();
+      if (updateRouteOverlay) {
+        map.off('move', updateRouteOverlay);
+        map.off('resize', updateRouteOverlay);
+      }
+      routeOverlay?.svg.remove();
       markers.forEach((marker) => marker.remove());
       liveMarkerRef.current?.remove();
       liveMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, [centerKey, isRoutePreview, liveMode, markerSvg, routeKey, theme]);
+  }, [centerKey, isExpanded, isRoutePreview, liveMode, markerSvg, routeKey, theme]);
 
   useEffect(() => {
     if (!liveMode || status !== 'ready' || !mapRef.current) return;
@@ -395,14 +430,37 @@ export default function EventMapPreview({
     }
   }, [liveMode, liveRouteKey, routeKey, status]);
 
+  useEffect(() => {
+    if (status !== 'ready' || !mapRef.current) return undefined;
+    const map = mapRef.current;
+    const frame = window.requestAnimationFrame(() => {
+      map.resize();
+      if (displayRoute.length >= 2) {
+        const bounds = new maplibregl.LngLatBounds();
+        displayRoute.forEach((point) => bounds.extend(point));
+        map.fitBounds(bounds, {
+          padding: isExpanded
+            ? { top: 118, right: 82, bottom: 112, left: 82 }
+            : { top: 88, right: 58, bottom: 92, left: 58 },
+          maxZoom: isExpanded ? 15.5 : 14.5,
+          duration: 260
+        });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isExpanded, routeKey, status]);
+
   if (!center) return null;
 
-  return (
+  const preview = (
     <div
-      className={[styles.preview, className].filter(Boolean).join(' ')}
+      className={[styles.preview, isExpanded ? styles.previewExpanded : className].filter(Boolean).join(' ')}
       data-theme={theme}
       data-status={status}
       data-variant={liveMode ? 'live' : isRoutePreview ? activityType : 'point'}
+      data-expandable={expandable && isRoutePreview ? 'true' : 'false'}
+      data-expanded={isExpanded ? 'true' : 'false'}
+      data-routing={routingStatus}
       role="region"
       aria-label={'Mappa interattiva dell evento ' + (event?.title || event?.sport_name || '')}
     >
@@ -411,6 +469,34 @@ export default function EventMapPreview({
         <small>{liveMode ? 'ATTIVITÀ IN CORSO' : isRoutePreview ? `PERCORSO ${routeTypeLabel}` : usableRoute.length >= 2 ? 'PERCORSO EVENTO' : 'PUNTO DI RITROVO'}</small>
         <strong>{locationName}</strong>
       </div>
+      {routingStatus === 'loading' ? (
+        <div className={styles.routingNotice} role="status" aria-live="polite">
+          <span />
+          Aggancio a strade e sentieri
+        </div>
+      ) : null}
+      {isExpanded && isRoutePreview && Array.isArray(routeSummary) && routeSummary.length ? (
+        <div className={styles.routeSummary} aria-label="Dati essenziali del percorso">
+          {routeSummary.slice(0, 3).map((item) => (
+            <span key={item.label}>
+              <small>{item.label}</small>
+              <strong>{item.value}</strong>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {expandable && isRoutePreview ? (
+        <button
+          type="button"
+          className={styles.expandButton}
+          onClick={() => setIsExpanded((current) => !current)}
+          aria-label={isExpanded ? 'Riduci il percorso' : 'Espandi il percorso'}
+          aria-pressed={isExpanded}
+        >
+          {isExpanded ? <Minimize2 size={17} aria-hidden="true" /> : <Maximize2 size={17} aria-hidden="true" />}
+          <span>{isExpanded ? 'Riduci' : 'Espandi'}</span>
+        </button>
+      ) : null}
       {status === 'loading' ? (
         <div className={styles.loadingOverlay} aria-live="polite">
           <span />
@@ -425,4 +511,15 @@ export default function EventMapPreview({
       ) : null}
     </div>
   );
+
+  if (isExpanded && typeof document !== 'undefined') {
+    return (
+      <>
+        <div className={[styles.preview, styles.previewPlaceholder, className].filter(Boolean).join(' ')} aria-hidden="true" />
+        {createPortal(preview, document.body)}
+      </>
+    );
+  }
+
+  return preview;
 }
