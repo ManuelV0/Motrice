@@ -615,6 +615,36 @@
   width: 100%;
 }
 
+.drawerLocked {
+  cursor: not-allowed;
+  opacity: 0.66;
+  filter: saturate(0.38);
+}
+
+.drawerLocked:hover,
+.drawerLocked:active {
+  transform: none;
+  border-color: var(--menu-metal-border);
+  background: var(--menu-metal-bg);
+  box-shadow: var(--menu-metal-shadow);
+}
+
+.mobileNav .drawerLocked::after {
+  content: none !important;
+}
+
+.drawerLockBadge {
+  margin-left: auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 0.65rem;
+  background: rgb(0 0 0 / 18%);
+  color: color-mix(in srgb, var(--menu-metal-text) 82%, transparent);
+}
+
 .authLink {
   font: inherit;
   cursor: pointer;

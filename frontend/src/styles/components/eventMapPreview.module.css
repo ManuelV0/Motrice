@@ -48,6 +48,70 @@
   opacity: 0.32;
 }
 
+.leafletMapCanvas {
+  z-index: 0;
+  background: #0d100d;
+}
+
+.preview[data-theme='dark'] .leafletMapCanvas :global(.leaflet-tile-pane) {
+  filter: invert(1) hue-rotate(180deg) brightness(0.72) contrast(1.08) saturate(0.62);
+}
+
+.preview[data-theme='light'] .leafletMapCanvas :global(.leaflet-tile-pane) {
+  filter: contrast(1.04) saturate(0.92);
+}
+
+.leafletEventIcon,
+.leafletEndpointIcon,
+.leafletLiveIcon {
+  border: 0;
+  background: transparent;
+}
+
+.leafletEventIcon .eventMarker,
+.leafletEndpointIcon .routeEndpoint,
+.leafletLiveIcon .livePosition {
+  position: absolute;
+  inset: 0;
+}
+
+.preview :global(.leaflet-control-attribution) {
+  padding: 0.08rem 0.24rem;
+  color: rgb(255 255 255 / 0.58);
+  background: rgb(7 9 7 / 0.62);
+  font-size: 0.46rem;
+}
+
+.preview :global(.leaflet-control-attribution a) {
+  color: inherit;
+}
+
+.preview :global(.leaflet-top.leaflet-right) {
+  top: 0.52rem;
+  right: 0.52rem;
+}
+
+.preview[data-expandable='true'] :global(.leaflet-top.leaflet-right) {
+  top: 3.35rem;
+}
+
+.preview :global(.leaflet-control-zoom) {
+  margin: 0;
+  border: 0;
+  background: rgb(12 15 11 / 0.78);
+  box-shadow: none;
+}
+
+.preview :global(.leaflet-control-zoom a),
+.preview :global(.leaflet-control-zoom a:hover) {
+  width: 2.45rem;
+  height: 2.45rem;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  line-height: 2.45rem;
+}
+
 .routeOverlay {
   position: absolute;
   z-index: 2;

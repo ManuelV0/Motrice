@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import * as maplibregl from 'maplibre-gl';
+import L from 'leaflet';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
@@ -13,6 +14,8 @@ const MAP_STYLES = {
   dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
   light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 };
+const FALLBACK_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const FALLBACK_TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
 const ROUTE_SOURCE = 'event-detail-route';
 const ROUTE_SHADOW_LAYER = 'event-detail-route-shadow';
 const ROUTE_GLOW_LAYER = 'event-detail-route-glow';
@@ -47,6 +50,16 @@ function validPoint(point) {
     && point.length >= 2
     && Number.isFinite(Number(point[0]))
     && Number.isFinite(Number(point[1]));
+}
+
+function canUseMapLibreRenderer() {
+  if (typeof document === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2'));
+  } catch {
+    return false;
+  }
 }
 
 function createMarkerElement(svgMarkup) {
@@ -101,6 +114,189 @@ function createLivePositionElement() {
   return marker;
 }
 
+function createLeafletIcon(element, className, size, anchor) {
+  return L.divIcon({
+    className,
+    html: element.outerHTML,
+    iconSize: size,
+    iconAnchor: anchor
+  });
+}
+
+function LeafletEventMap({
+  center,
+  displayRoute,
+  usableLiveRoute,
+  isRoutePreview,
+  liveMode,
+  markerSvg,
+  isExpanded,
+  onStatusChange
+}) {
+  const nodeRef = useRef(null);
+  const centerKey = center.join(',');
+  const routeKey = displayRoute.map((point) => point.join(',')).join('|');
+  const liveRouteKey = usableLiveRoute.map((point) => point.join(',')).join('|');
+
+  useEffect(() => {
+    if (!nodeRef.current) return undefined;
+
+    onStatusChange('loading');
+    const map = L.map(nodeRef.current, {
+      attributionControl: true,
+      zoomControl: false,
+      preferCanvas: true,
+      fadeAnimation: true,
+      markerZoomAnimation: true,
+      scrollWheelZoom: false
+    });
+    map.attributionControl.setPrefix(false);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    let tilesLoaded = false;
+    const loadingTimeout = window.setTimeout(() => {
+      if (!tilesLoaded) onStatusChange('error');
+    }, 8000);
+    const tiles = L.tileLayer(FALLBACK_TILE_URL, {
+      attribution: FALLBACK_TILE_ATTRIBUTION,
+      maxZoom: 19,
+      crossOrigin: true,
+      updateWhenIdle: false,
+      keepBuffer: 3
+    })
+      .on('load', () => {
+        tilesLoaded = true;
+        window.clearTimeout(loadingTimeout);
+        onStatusChange('ready');
+      })
+      .addTo(map);
+
+    const routeLatLngs = displayRoute.map(([lng, lat]) => [lat, lng]);
+    const liveLatLngs = usableLiveRoute.map(([lng, lat]) => [lat, lng]);
+    const layers = [];
+    const addLayer = (layer) => {
+      layer.addTo(map);
+      layers.push(layer);
+      return layer;
+    };
+
+    if (routeLatLngs.length >= 2) {
+      addLayer(L.polyline(routeLatLngs, {
+        color: '#050705',
+        weight: isRoutePreview ? 9 : 7,
+        opacity: isRoutePreview ? 0.68 : 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+        interactive: false
+      }));
+      addLayer(L.polyline(routeLatLngs, {
+        color: liveMode ? '#8b9188' : '#c6ff00',
+        weight: liveMode ? 4.2 : isRoutePreview ? 5.2 : 3.8,
+        opacity: liveMode ? 0.72 : 0.9,
+        dashArray: liveMode ? '8 6' : undefined,
+        lineCap: 'round',
+        lineJoin: 'round',
+        interactive: false
+      }));
+
+      if (isRoutePreview) {
+        addLayer(L.marker(routeLatLngs[0], {
+          icon: createLeafletIcon(
+            createRouteEndpointElement('start'),
+            styles.leafletEndpointIcon,
+            [32, 32],
+            [16, 16]
+          ),
+          keyboard: false,
+          interactive: false
+        }));
+        addLayer(L.marker(routeLatLngs.at(-1), {
+          icon: createLeafletIcon(
+            createRouteEndpointElement('finish'),
+            styles.leafletEndpointIcon,
+            [32, 32],
+            [16, 16]
+          ),
+          keyboard: false,
+          interactive: false
+        }));
+      }
+    } else {
+      addLayer(L.marker([center[1], center[0]], {
+        icon: createLeafletIcon(
+          createMarkerElement(markerSvg),
+          styles.leafletEventIcon,
+          [48, 56],
+          [24, 56]
+        ),
+        keyboard: false,
+        interactive: false
+      }));
+    }
+
+    if (liveLatLngs.length >= 2) {
+      addLayer(L.polyline(liveLatLngs, {
+        color: '#c6ff00',
+        weight: 5.8,
+        opacity: 1,
+        lineCap: 'round',
+        lineJoin: 'round',
+        interactive: false
+      }));
+    }
+    if (liveMode && liveLatLngs.length) {
+      addLayer(L.marker(liveLatLngs.at(-1), {
+        icon: createLeafletIcon(
+          createLivePositionElement(),
+          styles.leafletLiveIcon,
+          [20, 20],
+          [10, 10]
+        ),
+        keyboard: false,
+        interactive: false
+      }));
+    }
+
+    const visiblePoints = routeLatLngs.length >= 2 ? routeLatLngs : liveLatLngs;
+    if (visiblePoints.length >= 2) {
+      map.fitBounds(L.latLngBounds(visiblePoints), {
+        paddingTopLeft: isExpanded ? [82, 118] : [58, 88],
+        paddingBottomRight: isExpanded ? [82, 112] : [58, 92],
+        maxZoom: isExpanded ? 15 : 14.5,
+        animate: false
+      });
+    } else {
+      map.setView([center[1], center[0]], 15, { animate: false });
+    }
+
+    let resizeFrame = window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+    const resizeObserver = typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+        window.cancelAnimationFrame(resizeFrame);
+        resizeFrame = window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+      })
+      : null;
+    resizeObserver?.observe(nodeRef.current);
+
+    return () => {
+      window.clearTimeout(loadingTimeout);
+      window.cancelAnimationFrame(resizeFrame);
+      resizeObserver?.disconnect();
+      tiles.off();
+      layers.forEach((layer) => layer.remove());
+      map.remove();
+    };
+  }, [centerKey, isExpanded, isRoutePreview, liveMode, liveRouteKey, markerSvg, onStatusChange, routeKey]);
+
+  return (
+    <div
+      ref={nodeRef}
+      className={`${styles.mapCanvas} ${styles.leafletMapCanvas}`}
+      aria-label="Mappa compatibile dell evento"
+    />
+  );
+}
+
 export default function EventMapPreview({
   event,
   routePoints = [],
@@ -114,6 +310,7 @@ export default function EventMapPreview({
   const mapRef = useRef(null);
   const liveMarkerRef = useRef(null);
   const [status, setStatus] = useState('loading');
+  const [renderer, setRenderer] = useState(() => canUseMapLibreRenderer() ? 'maplibre' : 'raster');
   const [isExpanded, setIsExpanded] = useState(false);
   const [routedRoute, setRoutedRoute] = useState([]);
   const [routingStatus, setRoutingStatus] = useState('idle');
@@ -201,23 +398,30 @@ export default function EventMapPreview({
   }, [isExpanded]);
 
   useEffect(() => {
-    if (!containerRef.current || !center) return undefined;
+    if (renderer !== 'maplibre' || !containerRef.current || !center) return undefined;
 
     let mapLoaded = false;
     let routeOverlay = null;
     let updateRouteOverlay = null;
     setStatus('loading');
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: MAP_STYLES[theme],
-      center,
-      zoom: usableRoute.length >= 2 ? 13 : 15,
-      attributionControl: false,
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
-      cooperativeGestures: false
-    });
+    let map;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: MAP_STYLES[theme],
+        center,
+        zoom: usableRoute.length >= 2 ? 13 : 15,
+        attributionControl: false,
+        dragRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
+        cooperativeGestures: false
+      });
+    } catch (error) {
+      console.warn('Anteprima MapLibre non disponibile, attivo la mappa compatibile.', error);
+      setRenderer('raster');
+      return undefined;
+    }
     mapRef.current = map;
     map.scrollZoom.disable();
     map.touchZoomRotate.disableRotation();
@@ -248,8 +452,8 @@ export default function EventMapPreview({
     }
 
     const loadingTimeout = window.setTimeout(() => {
-      if (!mapLoaded) setStatus('error');
-    }, 8000);
+      if (!mapLoaded) setRenderer('raster');
+    }, 4500);
 
     const onLoad = () => {
       mapLoaded = true;
@@ -382,6 +586,14 @@ export default function EventMapPreview({
 
     map.once('load', onLoad);
 
+    const onMapError = (event) => {
+      const message = String(event?.error?.message || event?.error || '');
+      if (/webgl|context|worker|offscreencanvas/i.test(message)) setRenderer('raster');
+    };
+    const onContextLost = () => setRenderer('raster');
+    map.on('error', onMapError);
+    map.getCanvas().addEventListener('webglcontextlost', onContextLost);
+
     const resizeObserver = typeof ResizeObserver === 'function'
       ? new ResizeObserver(() => map.resize())
       : null;
@@ -398,10 +610,12 @@ export default function EventMapPreview({
       markers.forEach((marker) => marker.remove());
       liveMarkerRef.current?.remove();
       liveMarkerRef.current = null;
+      map.off('error', onMapError);
+      map.getCanvas().removeEventListener('webglcontextlost', onContextLost);
       map.remove();
       mapRef.current = null;
     };
-  }, [centerKey, isExpanded, isRoutePreview, liveMode, markerSvg, routeKey, theme]);
+  }, [centerKey, isExpanded, isRoutePreview, liveMode, markerSvg, renderer, routeKey, theme]);
 
   useEffect(() => {
     if (!liveMode || status !== 'ready' || !mapRef.current) return;
@@ -461,10 +675,24 @@ export default function EventMapPreview({
       data-expandable={expandable && isRoutePreview ? 'true' : 'false'}
       data-expanded={isExpanded ? 'true' : 'false'}
       data-routing={routingStatus}
+      data-renderer={renderer}
       role="region"
       aria-label={'Mappa interattiva dell evento ' + (event?.title || event?.sport_name || '')}
     >
-      <div ref={containerRef} className={styles.mapCanvas} />
+      {renderer === 'raster' ? (
+        <LeafletEventMap
+          center={center}
+          displayRoute={displayRoute}
+          usableLiveRoute={usableLiveRoute}
+          isRoutePreview={isRoutePreview}
+          liveMode={liveMode}
+          markerSvg={markerSvg}
+          isExpanded={isExpanded}
+          onStatusChange={setStatus}
+        />
+      ) : (
+        <div ref={containerRef} className={styles.mapCanvas} />
+      )}
       <div className={styles.placeLabel}>
         <small>{liveMode ? 'ATTIVITÀ IN CORSO' : isRoutePreview ? `PERCORSO ${routeTypeLabel}` : usableRoute.length >= 2 ? 'PERCORSO EVENTO' : 'PUNTO DI RITROVO'}</small>
         <strong>{locationName}</strong>

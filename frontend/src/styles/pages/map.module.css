@@ -344,11 +344,22 @@
 }
 
 .themeDark .rasterMapCanvas :global(.leaflet-tile-pane) {
-  filter: brightness(1.14) contrast(1.06) saturate(0.82);
+  filter: invert(1) hue-rotate(180deg) brightness(0.72) contrast(1.08) saturate(0.62);
 }
 
 .themeLight .rasterMapCanvas :global(.leaflet-tile-pane) {
   filter: contrast(1.04) saturate(0.92);
+}
+
+.rasterMapCanvas :global(.leaflet-control-attribution) {
+  padding: 0.08rem 0.24rem;
+  color: rgb(255 255 255 / 0.58);
+  background: rgb(7 9 7 / 0.62);
+  font-size: 0.48rem;
+}
+
+.rasterMapCanvas :global(.leaflet-control-attribution a) {
+  color: inherit;
 }
 
 .mapCanvas :global(.maplibregl-canvas) {

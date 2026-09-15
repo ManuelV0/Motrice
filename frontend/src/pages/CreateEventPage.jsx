@@ -36,6 +36,7 @@ import { usePageMeta } from '../hooks/usePageMeta';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { useToast } from '../context/ToastContext';
 import { useBilling } from '../context/BillingContext';
+import { PREMIUM_FEATURES_FREE } from '../services/entitlements';
 import PaywallModal from '../components/PaywallModal';
 import Modal from '../components/Modal';
 import Button from '../components/Button';
@@ -515,7 +516,7 @@ function CreateEventPage() {
   const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
   const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const creationLimit = creationStats.is_unlimited
+  const creationLimit = PREMIUM_FEATURES_FREE || creationStats.is_unlimited
     ? Number.POSITIVE_INFINITY
     : Number.isFinite(Number(creationStats.max_events_per_month))
       ? Number(creationStats.max_events_per_month)
@@ -1460,7 +1461,7 @@ function CreateEventPage() {
         return;
       }
 
-      const latestCreationLimit = latestCreationStats.is_unlimited
+      const latestCreationLimit = PREMIUM_FEATURES_FREE || latestCreationStats.is_unlimited
         ? Number.POSITIVE_INFINITY
         : Number.isFinite(Number(latestCreationStats.max_events_per_month))
           ? Number(latestCreationStats.max_events_per_month)

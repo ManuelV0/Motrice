@@ -5159,8 +5159,18 @@
   height: clamp(12rem, 38vw, 17rem);
 }
 
+.mapStage > .mapFrame {
+  height: clamp(12rem, 38vw, 17rem);
+  min-height: 12rem;
+}
+
 .mapFrame.mapFrameRoute {
   height: clamp(14.5rem, 48vw, 19rem);
+}
+
+.mapStage > .mapFrame.mapFrameRoute {
+  height: clamp(14.5rem, 48vw, 19rem);
+  min-height: 14.5rem;
 }
 
 .locationBody {
@@ -5566,6 +5576,16 @@
   .mapFrame,
   .mapFallback {
     height: 10.75rem;
+  }
+
+  .mapStage > .mapFrame {
+    height: 10.75rem;
+    min-height: 10.75rem;
+  }
+
+  .mapStage > .mapFrame.mapFrameRoute {
+    height: 13rem;
+    min-height: 13rem;
   }
 
   .statGrid {

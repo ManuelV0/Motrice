@@ -1,4 +1,4 @@
-import { getEntitlements } from './entitlements';
+import { getEntitlements, PREMIUM_FEATURES_FREE } from './entitlements';
 import { getAuthSession } from './authSession';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import {
@@ -226,8 +226,8 @@ export function getSubscriptionWithEntitlements(subscription) {
   const baseEntitlements = getEntitlements(effectivePlan);
   const entitlements = {
     ...baseEntitlements,
-    // Product rule: coach chat is reserved to active paid Premium only.
-    canUseCoachChat: normalized.plan === 'premium'
+    // Outside the open beta this remains reserved to active paid Premium.
+    canUseCoachChat: PREMIUM_FEATURES_FREE || normalized.plan === 'premium'
   };
   return {
     ...normalized,

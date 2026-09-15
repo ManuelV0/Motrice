@@ -475,12 +475,13 @@ function RasterMapFallback({
     if (!nodeRef.current || leafletMapRef.current) return undefined;
 
     const map = L.map(nodeRef.current, {
-      attributionControl: false,
+      attributionControl: true,
       zoomControl: false,
       preferCanvas: true,
       fadeAnimation: true,
       markerZoomAnimation: true
     }).setView(initialCenterRef.current, coords ? 10.4 : 6.1);
+    map.attributionControl.setPrefix(false);
 
     const markers = L.layerGroup().addTo(map);
     leafletMapRef.current = map;
@@ -551,11 +552,8 @@ function RasterMapFallback({
     const map = leafletMapRef.current;
     if (!map) return;
     tileLayerRef.current?.remove();
-    const tiles = theme === 'light'
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-    tileLayerRef.current = L.tileLayer(tiles, {
-      subdomains: 'abcd',
+    tileLayerRef.current = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
       crossOrigin: true,
       updateWhenIdle: false,

@@ -8,6 +8,7 @@ import {
   UserRound,
   MessageCircle,
   Bell,
+  LockKeyhole,
   Menu,
   Target,
   LogIn,
@@ -55,8 +56,8 @@ const drawerSections = [
   {
     title: 'Altro',
     items: [
-      { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake },
+      { to: '/coach', label: 'Coach', icon: Target, locked: true },
+      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake, locked: true },
       { to: '/notifications', label: 'Notifiche', icon: Bell }
     ]
   }
@@ -593,6 +594,23 @@ function Navbar({ forceMobile = false }) {
               <div className={styles.mobileSectionList}>
                 {section.items.map((item) => {
                   const Icon = item.icon;
+                  if (item.locked) {
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        className={`${styles.link} ${styles.drawerLink} ${styles.drawerLocked}`}
+                        disabled
+                        aria-label={`${item.label}, sezione temporaneamente bloccata`}
+                      >
+                        <Icon size={18} aria-hidden="true" />
+                        <span>{item.label}</span>
+                        <span className={styles.drawerLockBadge} aria-hidden="true">
+                          <LockKeyhole size={15} strokeWidth={2.3} />
+                        </span>
+                      </button>
+                    );
+                  }
                   return (
                     <NavLink
                       key={item.to}

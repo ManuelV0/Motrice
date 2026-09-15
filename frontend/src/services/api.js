@@ -1,5 +1,6 @@
 import { localUserSeed, seededEvents, seededHotspots, seededProfiles, seededSports } from '../data/mockData';
 import { loadSubscription, getSubscriptionWithEntitlements } from './subscriptionStore';
+import { PREMIUM_FEATURES_FREE } from './entitlements';
 import { getAuthSession } from './authSession';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { piggybank } from './piggybank';
@@ -240,7 +241,7 @@ function buildInitialAccountProfiles() {
 
 function canAccessEventGroupChat({ rsvp, subscription }) {
   if (!rsvp || rsvp.status !== 'going') return false;
-  if (subscription?.plan === 'premium') return true;
+  if (PREMIUM_FEATURES_FREE || subscription?.plan === 'premium') return true;
   const fee = Number(rsvp.participation_fee_cents || 0);
   return fee === 1000;
 }
