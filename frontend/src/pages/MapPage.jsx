@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import * as maplibregl from 'maplibre-gl';
+import L from 'leaflet';
 import {
   ArrowRight,
   Check,
@@ -58,6 +59,16 @@ const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
 const EVENT_PINS_LAYER = 'motrice-event-pins';
 const EVENT_CLUSTERS_LAYER = 'motrice-event-clusters';
 const EVENT_SELECTED_LABEL_LAYER = 'motrice-event-selected-label';
+
+function canUseMapLibreRenderer() {
+  if (typeof document === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return Boolean(canvas.getContext('webgl2'));
+  } catch {
+    return false;
+  }
+}
 
 function getPrimaryActionIcon(action) {
   if (action?.target === 'verify') return ShieldCheck;
@@ -426,6 +437,204 @@ function getMapFitPadding(map, sheetElement, minimumBottom = 72) {
   );
 
   return { top, right: 42, bottom, left: 42 };
+}
+
+function RasterMapFallback({
+  active,
+  events,
+  selectedEventId,
+  coords,
+  radiusKm,
+  theme,
+  controllerRef,
+  onEventSelect,
+  onViewportChange,
+  onReady,
+  onMarkersReady
+}) {
+  const nodeRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const tileLayerRef = useRef(null);
+  const markerLayerRef = useRef(null);
+  const radiusLayerRef = useRef(null);
+  const userLayerRef = useRef(null);
+  const eventSelectRef = useRef(onEventSelect);
+  const viewportChangeRef = useRef(onViewportChange);
+  const readyRef = useRef(onReady);
+  const markersReadyRef = useRef(onMarkersReady);
+  const initialCenterRef = useRef(coords ? [coords.lat, coords.lng] : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+
+  useEffect(() => {
+    eventSelectRef.current = onEventSelect;
+    viewportChangeRef.current = onViewportChange;
+    readyRef.current = onReady;
+    markersReadyRef.current = onMarkersReady;
+  }, [onEventSelect, onMarkersReady, onReady, onViewportChange]);
+
+  useEffect(() => {
+    if (!nodeRef.current || leafletMapRef.current) return undefined;
+
+    const map = L.map(nodeRef.current, {
+      attributionControl: false,
+      zoomControl: false,
+      preferCanvas: true,
+      fadeAnimation: true,
+      markerZoomAnimation: true
+    }).setView(initialCenterRef.current, coords ? 10.4 : 6.1);
+
+    const markers = L.layerGroup().addTo(map);
+    leafletMapRef.current = map;
+    markerLayerRef.current = markers;
+
+    const syncBounds = () => {
+      const bounds = map.getBounds();
+      viewportChangeRef.current?.({
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest()
+      });
+    };
+
+    map.on('moveend zoomend', syncBounds);
+    controllerRef.current = {
+      zoomIn: () => map.zoomIn(1, { animate: true }),
+      zoomOut: () => map.zoomOut(1, { animate: true }),
+      resize: () => {
+        map.invalidateSize({ animate: false });
+        syncBounds();
+      },
+      focusEvent: (event) => {
+        map.flyTo([event.lat, event.lng], Math.max(14, map.getZoom()), { animate: true, duration: 0.42 });
+      },
+      fitEvents: (nextEvents) => {
+        if (!nextEvents.length) return;
+        if (nextEvents.length === 1) {
+          map.flyTo([nextEvents[0].lat, nextEvents[0].lng], 14.2, { animate: true, duration: 0.34 });
+          return;
+        }
+        const bounds = L.latLngBounds(nextEvents.map((event) => [event.lat, event.lng]));
+        map.fitBounds(bounds, { paddingTopLeft: [42, 92], paddingBottomRight: [42, 170], maxZoom: 13, animate: true });
+      },
+      focusUser: (position, focusRadius) => {
+        const rawBounds = computeBounds(position.lat, position.lng, focusRadius);
+        map.fitBounds(
+          L.latLngBounds([
+            [rawBounds[0][1], rawBounds[0][0]],
+            [rawBounds[1][1], rawBounds[1][0]]
+          ]),
+          { paddingTopLeft: [42, 92], paddingBottomRight: [42, 150], maxZoom: 13, animate: true }
+        );
+      }
+    };
+
+    window.requestAnimationFrame(() => {
+      map.invalidateSize({ animate: false });
+      syncBounds();
+      readyRef.current?.(true);
+    });
+
+    return () => {
+      map.off('moveend zoomend', syncBounds);
+      map.remove();
+      leafletMapRef.current = null;
+      markerLayerRef.current = null;
+      tileLayerRef.current = null;
+      radiusLayerRef.current = null;
+      userLayerRef.current = null;
+      controllerRef.current = null;
+      readyRef.current?.(false);
+    };
+  }, [controllerRef]);
+
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    tileLayerRef.current?.remove();
+    const tiles = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    tileLayerRef.current = L.tileLayer(tiles, {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      crossOrigin: true,
+      updateWhenIdle: false,
+      keepBuffer: 3
+    }).addTo(map);
+    tileLayerRef.current.bringToBack();
+  }, [theme]);
+
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    const layer = markerLayerRef.current;
+    if (!map || !layer) return;
+    markersReadyRef.current?.(false);
+    layer.clearLayers();
+
+    events.forEach((event) => {
+      const selected = String(event.id) === String(selectedEventId);
+      const svg = createEventPinSvg(getEventActivityType(event), {
+        saved: Boolean(event.is_saved),
+        selected,
+        gym: isGymEvent(event)
+      });
+      const icon = L.divIcon({
+        className: styles.rasterEventMarker,
+        html: svg,
+        iconSize: selected ? [53, 62] : [48, 56],
+        iconAnchor: selected ? [26, 62] : [24, 56]
+      });
+      L.marker([event.lat, event.lng], {
+        icon,
+        keyboard: true,
+        title: event.sport_name || event.title || 'Evento Motrice',
+        riseOnHover: true
+      })
+        .on('click', () => eventSelectRef.current?.(event))
+        .addTo(layer);
+    });
+
+    markersReadyRef.current?.(true);
+  }, [events, selectedEventId]);
+
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    radiusLayerRef.current?.remove();
+    userLayerRef.current?.remove();
+    radiusLayerRef.current = null;
+    userLayerRef.current = null;
+    if (!coords) return;
+
+    if (radiusKm) {
+      radiusLayerRef.current = L.circle([coords.lat, coords.lng], {
+        radius: radiusKm * 1000,
+        color: theme === 'light' ? '#729900' : '#ccff00',
+        weight: 1.5,
+        opacity: 0.8,
+        fillColor: '#ccff00',
+        fillOpacity: theme === 'light' ? 0.08 : 0.1,
+        interactive: false
+      }).addTo(map);
+    }
+
+    userLayerRef.current = L.circleMarker([coords.lat, coords.lng], {
+      radius: 7,
+      color: '#ffffff',
+      weight: 2,
+      fillColor: '#2f80ff',
+      fillOpacity: 1,
+      interactive: false
+    }).addTo(map);
+  }, [coords, radiusKm, theme]);
+
+  useEffect(() => {
+    if (!active) return;
+    const frame = window.requestAnimationFrame(() => controllerRef.current?.resize());
+    return () => window.cancelAnimationFrame(frame);
+  }, [active, controllerRef]);
+
+  return <div ref={nodeRef} className={`${styles.mapCanvas} ${styles.rasterMapCanvas}`} aria-label="Mappa compatibile degli eventi" />;
 }
 
 function buildRadiusPolygon(lat, lng, radiusKm) {
@@ -955,6 +1164,7 @@ function MapPage({ active = true }) {
 
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
+  const rasterMapControllerRef = useRef(null);
   const resultsSheetRef = useRef(null);
   const filterButtonRef = useRef(null);
   const userMarkerRef = useRef(null);
@@ -973,6 +1183,7 @@ function MapPage({ active = true }) {
   const wasActiveRef = useRef(active);
   const [mapReady, setMapReady] = useState(false);
   const [markersReady, setMarkersReady] = useState(false);
+  const [mapRenderer, setMapRenderer] = useState(() => (canUseMapLibreRenderer() ? 'maplibre' : 'raster'));
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [searchInput, setSearchInput] = useState(() => filters.q || '');
@@ -1200,12 +1411,17 @@ function MapPage({ active = true }) {
 
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
-    if (!map || !event) return;
+    const rasterController = rasterMapControllerRef.current;
+    if (!event || (!map && !rasterController)) return;
     setSelectedEventId(String(event.id));
     setSheetSnap('medium');
 
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
     const centerEvent = () => {
+      if (mapRenderer === 'raster') {
+        rasterMapControllerRef.current?.focusEvent(event);
+        return;
+      }
       if (mapRef.current !== map) return;
 
       let offset = [0, 0];
@@ -1237,7 +1453,7 @@ function MapPage({ active = true }) {
 
     if (sheetSnap === 'medium') window.requestAnimationFrame(centerEvent);
     else focusTimerRef.current = window.setTimeout(centerEvent, 285);
-  }, [sheetSnap]);
+  }, [mapRenderer, sheetSnap]);
 
   useEffect(() => {
     focusEventRef.current = focusEvent;
@@ -1378,6 +1594,11 @@ function MapPage({ active = true }) {
   }
 
   function zoomMap(direction) {
+    if (mapRenderer === 'raster') {
+      if (direction === 'in') rasterMapControllerRef.current?.zoomIn();
+      else rasterMapControllerRef.current?.zoomOut();
+      return;
+    }
     const map = mapRef.current;
     if (!map) return;
     const nextZoom = direction === 'in' ? map.getZoom() + 1 : map.getZoom() - 1;
@@ -1410,6 +1631,11 @@ function MapPage({ active = true }) {
     if (wasActiveRef.current) return undefined;
     wasActiveRef.current = true;
 
+    if (mapRenderer === 'raster') {
+      const frame = window.requestAnimationFrame(() => rasterMapControllerRef.current?.resize());
+      return () => window.cancelAnimationFrame(frame);
+    }
+
     // The WebGL canvas stayed mounted while hidden. Resize it only after the
     // map route has its full-bleed dimensions again, then refresh bounds.
     const frame = window.requestAnimationFrame(() => {
@@ -1419,29 +1645,43 @@ function MapPage({ active = true }) {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [active, syncViewport]);
+  }, [active, mapRenderer, syncViewport]);
 
   useEffect(() => {
+    if (mapRenderer !== 'maplibre') return undefined;
     if (!mapNodeRef.current || mapRef.current) return;
 
     const startCenter = coords ? [coords.lng, coords.lat] : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat];
+    let map;
+    try {
+      map = new maplibregl.Map({
+        container: mapNodeRef.current,
+        style: mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark,
+        center: startCenter,
+        zoom: coords ? 10.4 : 6.1,
+        pitch: 0,
+        bearing: 0,
+        maxZoom: 18,
+        minZoom: 3,
+        dragRotate: false,
+        pitchWithRotate: false,
+        touchPitch: false,
+        attributionControl: false
+      });
+    } catch (error) {
+      console.warn('MapLibre non disponibile, attivo la mappa compatibile.', error);
+      setMapRenderer('raster');
+      return undefined;
+    }
 
-    const map = new maplibregl.Map({
-      container: mapNodeRef.current,
-      style: mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark,
-      center: startCenter,
-      zoom: coords ? 10.4 : 6.1,
-      pitch: 0,
-      bearing: 0,
-      maxZoom: 18,
-      minZoom: 3,
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
-      attributionControl: false
-    });
+    let hasLoaded = false;
+    const fallbackTimer = window.setTimeout(() => {
+      if (!hasLoaded && mapRef.current === map) setMapRenderer('raster');
+    }, 4500);
 
     const handleMapLoad = () => {
+      hasLoaded = true;
+      window.clearTimeout(fallbackTimer);
       setMapReady(true);
       syncViewport();
     };
@@ -1498,6 +1738,11 @@ function MapPage({ active = true }) {
     const handleMapMouseLeave = () => {
       map.getCanvas().style.cursor = '';
     };
+    const handleMapError = (event) => {
+      const message = String(event?.error?.message || event?.error || '');
+      if (/webgl|context|worker|offscreencanvas/i.test(message)) setMapRenderer('raster');
+    };
+    const handleContextLost = () => setMapRenderer('raster');
 
     mapStyleThemeRef.current = mapTheme;
     map.on('load', handleMapLoad);
@@ -1506,7 +1751,9 @@ function MapPage({ active = true }) {
     map.on('moveend', handleMoveEnd);
     map.on('click', handleMapClick);
     map.on('mousemove', handleMapMouseMove);
+    map.on('error', handleMapError);
     map.getCanvas().addEventListener('mouseleave', handleMapMouseLeave);
+    map.getCanvas().addEventListener('webglcontextlost', handleContextLost);
 
     mapRef.current = map;
     let resizeFrame = null;
@@ -1526,8 +1773,8 @@ function MapPage({ active = true }) {
     };
     window.addEventListener('resize', syncResize, { passive: true });
 
-    const observer = new ResizeObserver(syncResize);
-    observer.observe(mapNodeRef.current);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(syncResize) : null;
+    observer?.observe(mapNodeRef.current);
 
     const vv = window.visualViewport;
     vv?.addEventListener('resize', syncResize);
@@ -1536,8 +1783,9 @@ function MapPage({ active = true }) {
     requestAnimationFrame(syncResize);
 
     return () => {
+      window.clearTimeout(fallbackTimer);
       if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
-      observer.disconnect();
+      observer?.disconnect();
       vv?.removeEventListener('resize', syncResize);
       window.removeEventListener('orientationchange', syncResize);
       if (userMarkerRef.current) {
@@ -1550,15 +1798,18 @@ function MapPage({ active = true }) {
       map.off('moveend', handleMoveEnd);
       map.off('click', handleMapClick);
       map.off('mousemove', handleMapMouseMove);
+      map.off('error', handleMapError);
       map.getCanvas().removeEventListener('mouseleave', handleMapMouseLeave);
+      map.getCanvas().removeEventListener('webglcontextlost', handleContextLost);
       window.removeEventListener('resize', syncResize);
       map.remove();
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [syncViewport]);
+  }, [mapRenderer, syncViewport]);
 
   useEffect(() => {
+    if (mapRenderer !== 'maplibre') return;
     const map = mapRef.current;
     if (!map) return;
     if (mapStyleThemeRef.current === mapTheme) return;
@@ -1567,9 +1818,10 @@ function MapPage({ active = true }) {
     setMapReady(false);
     setMarkersReady(false);
     map.setStyle(mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark);
-  }, [mapTheme]);
+  }, [mapRenderer, mapTheme]);
 
   useEffect(() => {
+    if (mapRenderer !== 'maplibre') return undefined;
     const map = mapRef.current;
     if (!map || !active) return;
     let cancelled = false;
@@ -1609,7 +1861,7 @@ function MapPage({ active = true }) {
       map.off('load', applyMarkerData);
       map.off('style.load', applyMarkerData);
     };
-  }, [active, eventsInRadius, mapTheme, selectedEventId]);
+  }, [active, eventsInRadius, mapRenderer, mapTheme, selectedEventId]);
 
   useEffect(() => () => {
     if (focusTimerRef.current) window.clearTimeout(focusTimerRef.current);
@@ -1624,12 +1876,18 @@ function MapPage({ active = true }) {
   useEffect(() => {
     if (!active || !requestedEventId || !markersReady) return;
     const requestedEvent = withCoords.find((event) => String(event.id) === String(requestedEventId));
-    if (!requestedEvent || !mapRef.current) return;
+    if (!requestedEvent || (mapRenderer === 'maplibre' ? !mapRef.current : !rasterMapControllerRef.current)) return;
     hasAutoFitEventsRef.current = true;
     focusEvent(requestedEvent);
-  }, [active, focusEvent, markersReady, requestedEventId, withCoords]);
+  }, [active, focusEvent, mapRenderer, markersReady, requestedEventId, withCoords]);
 
   useEffect(() => {
+    if (mapRenderer === 'raster') {
+      if (!active || !mapReady || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
+      hasAutoFitEventsRef.current = true;
+      rasterMapControllerRef.current?.fitEvents(eventsInRadius);
+      return;
+    }
     const map = mapRef.current;
     if (!active || !map || !mapReady || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
     hasAutoFitEventsRef.current = true;
@@ -1646,9 +1904,18 @@ function MapPage({ active = true }) {
       duration: 280,
       maxZoom: 13
     });
-  }, [active, eventsInRadius, mapReady]);
+  }, [active, eventsInRadius, mapReady, mapRenderer]);
 
   useEffect(() => {
+    if (mapRenderer === 'raster') {
+      if (!active || !coords) return;
+      const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
+      if (shouldRecenterRef.current || followUser) {
+        rasterMapControllerRef.current?.focusUser(coords, focusRadius);
+        if (shouldRecenterRef.current) shouldRecenterRef.current = false;
+      }
+      return;
+    }
     const map = mapRef.current;
     if (!active || !map || !coords) return;
 
@@ -1683,9 +1950,14 @@ function MapPage({ active = true }) {
 
     if (map.isStyleLoaded()) applyFocus();
     else map.once('style.load', applyFocus);
-  }, [active, coords, followUser, mapTheme, selectedRadiusKm, syncViewport]);
+  }, [active, coords, followUser, mapRenderer, mapTheme, selectedRadiusKm, syncViewport]);
 
   useEffect(() => {
+    if (mapRenderer === 'raster') {
+      if (!active || !coords || !selectedRadiusKm) return;
+      rasterMapControllerRef.current?.focusUser(coords, selectedRadiusKm);
+      return;
+    }
     const map = mapRef.current;
     if (!active || !map || !coords || !selectedRadiusKm) return;
     map.fitBounds(computeBounds(coords.lat, coords.lng, selectedRadiusKm), {
@@ -1694,7 +1966,7 @@ function MapPage({ active = true }) {
       maxZoom: 13
     });
     syncViewport();
-  }, [active, coords, selectedRadiusKm, syncViewport]);
+  }, [active, coords, mapRenderer, selectedRadiusKm, syncViewport]);
 
   async function toggleSaveEvent(event) {
     const eventId = event.id;
@@ -1737,9 +2009,26 @@ function MapPage({ active = true }) {
           data-sheet-snap={sheetSnap}
           data-map-ready={mapReady ? 'true' : 'false'}
           data-markers-ready={markersReady ? 'true' : 'false'}
+          data-map-renderer={mapRenderer}
         >
           <div className={styles.mapViewport}>
-            <div ref={mapNodeRef} className={styles.mapCanvas} />
+            {mapRenderer === 'maplibre' ? (
+              <div ref={mapNodeRef} className={styles.mapCanvas} />
+            ) : (
+              <RasterMapFallback
+                active={active}
+                events={eventsInRadius}
+                selectedEventId={selectedEventId}
+                coords={coords}
+                radiusKm={selectedRadiusKm}
+                theme={mapTheme}
+                controllerRef={rasterMapControllerRef}
+                onEventSelect={focusEvent}
+                onViewportChange={setViewportBounds}
+                onReady={setMapReady}
+                onMarkersReady={setMarkersReady}
+              />
+            )}
             <div className={styles.mapShade} aria-hidden="true" />
 
             <div className={styles.mapTopOverlay}>
