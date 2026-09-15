@@ -46,6 +46,7 @@ import { markStepByAction } from '../services/tutorialMode';
 import { ai, getAiSettings } from '../services/ai';
 import { geocodeEventLocation, reverseGeocodeCoordinates, searchLocations } from '../services/geocoding';
 import { downloadEventIcs } from '../utils/ics';
+import { getHighDefinitionRasterTiles } from '../utils/mapRendering';
 import {
   getSystemEventRules,
   GROUP_CHECK_IN_GRACE_MINUTES
@@ -64,6 +65,7 @@ import {
 import styles from '../styles/pages/createEvent.module.css';
 
 const initialGroupRules = getSystemEventRules({ durationMinutes: 120 });
+const CREATE_EVENT_MAP_TILES = getHighDefinitionRasterTiles('light');
 
 const initialState = {
   title: '',
@@ -2099,8 +2101,8 @@ function CreateEventPage() {
                   doubleClickZoom={!form.has_route || !routePicking}
                 >
                   <TileLayer
-                    attribution='&copy; OpenStreetMap contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    {...CREATE_EVENT_MAP_TILES.options}
+                    url={CREATE_EVENT_MAP_TILES.url}
                   />
 
                   {!form.has_route ? <LocationRadiusPreview radius={geofenceRadius} /> : null}

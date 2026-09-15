@@ -344,11 +344,11 @@
 }
 
 .themeDark .rasterMapCanvas :global(.leaflet-tile-pane) {
-  filter: invert(1) hue-rotate(180deg) brightness(0.72) contrast(1.08) saturate(0.62);
+  filter: none;
 }
 
 .themeLight .rasterMapCanvas :global(.leaflet-tile-pane) {
-  filter: contrast(1.04) saturate(0.92);
+  filter: none;
 }
 
 .rasterMapCanvas :global(.leaflet-control-attribution) {
@@ -367,11 +367,11 @@
 }
 
 .themeDark .mapCanvas :global(.maplibregl-canvas-container) {
-  filter: brightness(1.18) contrast(1.08) saturate(0.82);
+  filter: none;
 }
 
 .themeLight .mapCanvas :global(.maplibregl-canvas-container) {
-  filter: contrast(1.04) saturate(0.92);
+  filter: none;
 }
 
 .mapShade {

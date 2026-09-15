@@ -31,6 +31,11 @@ import {
   resolveEventPrimaryAction
 } from '../utils/eventParticipationState';
 import { isGymEvent } from '../utils/eventVenueAccess';
+import {
+  getHighDefinitionPixelRatio,
+  getHighDefinitionRasterTiles,
+  MAPLIBRE_STYLES
+} from '../utils/mapRendering';
 import styles from '../styles/pages/map.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -46,10 +51,6 @@ const baseFilters = {
 
 const DEFAULT_CENTER = { lat: 42.6, lng: 12.5 };
 const MAP_THEME_KEY = 'motrice.map.theme';
-const MAP_STYLES = {
-  dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-};
 const USER_RADIUS_SOURCE = 'user-radius-src';
 const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
@@ -552,13 +553,8 @@ function RasterMapFallback({
     const map = leafletMapRef.current;
     if (!map) return;
     tileLayerRef.current?.remove();
-    tileLayerRef.current = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-      crossOrigin: true,
-      updateWhenIdle: false,
-      keepBuffer: 3
-    }).addTo(map);
+    const tileDefinition = getHighDefinitionRasterTiles(theme);
+    tileLayerRef.current = L.tileLayer(tileDefinition.url, tileDefinition.options).addTo(map);
     tileLayerRef.current.bringToBack();
   }, [theme]);
 
@@ -1654,9 +1650,11 @@ function MapPage({ active = true }) {
     try {
       map = new maplibregl.Map({
         container: mapNodeRef.current,
-        style: mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark,
+        style: mapTheme === 'light' ? MAPLIBRE_STYLES.light : MAPLIBRE_STYLES.dark,
         center: startCenter,
         zoom: coords ? 10.4 : 6.1,
+        pixelRatio: getHighDefinitionPixelRatio(),
+        antialias: true,
         pitch: 0,
         bearing: 0,
         maxZoom: 18,
@@ -1815,7 +1813,7 @@ function MapPage({ active = true }) {
     mapStyleThemeRef.current = mapTheme;
     setMapReady(false);
     setMarkersReady(false);
-    map.setStyle(mapTheme === 'light' ? MAP_STYLES.light : MAP_STYLES.dark);
+    map.setStyle(mapTheme === 'light' ? MAPLIBRE_STYLES.light : MAPLIBRE_STYLES.dark);
   }, [mapRenderer, mapTheme]);
 
   useEffect(() => {

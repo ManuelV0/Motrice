@@ -6,16 +6,15 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
 import { requestPedestrianRoute } from '../services/routeGeometry';
+import {
+  getHighDefinitionPixelRatio,
+  getHighDefinitionRasterTiles,
+  MAPLIBRE_STYLES
+} from '../utils/mapRendering';
 import styles from '../styles/components/eventMapPreview.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const MAP_THEME_KEY = 'motrice.map.theme';
-const MAP_STYLES = {
-  dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-  light: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-};
-const FALLBACK_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const FALLBACK_TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
 const ROUTE_SOURCE = 'event-detail-route';
 const ROUTE_SHADOW_LAYER = 'event-detail-route-shadow';
 const ROUTE_GLOW_LAYER = 'event-detail-route-glow';
@@ -125,6 +124,7 @@ function createLeafletIcon(element, className, size, anchor) {
 
 function LeafletEventMap({
   center,
+  theme,
   displayRoute,
   usableLiveRoute,
   isRoutePreview,
@@ -157,13 +157,8 @@ function LeafletEventMap({
     const loadingTimeout = window.setTimeout(() => {
       if (!tilesLoaded) onStatusChange('error');
     }, 8000);
-    const tiles = L.tileLayer(FALLBACK_TILE_URL, {
-      attribution: FALLBACK_TILE_ATTRIBUTION,
-      maxZoom: 19,
-      crossOrigin: true,
-      updateWhenIdle: false,
-      keepBuffer: 3
-    })
+    const tileDefinition = getHighDefinitionRasterTiles(theme);
+    const tiles = L.tileLayer(tileDefinition.url, tileDefinition.options)
       .on('load', () => {
         tilesLoaded = true;
         window.clearTimeout(loadingTimeout);
@@ -286,7 +281,7 @@ function LeafletEventMap({
       layers.forEach((layer) => layer.remove());
       map.remove();
     };
-  }, [centerKey, isExpanded, isRoutePreview, liveMode, liveRouteKey, markerSvg, onStatusChange, routeKey]);
+  }, [centerKey, isExpanded, isRoutePreview, liveMode, liveRouteKey, markerSvg, onStatusChange, routeKey, theme]);
 
   return (
     <div
@@ -408,9 +403,11 @@ export default function EventMapPreview({
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: MAP_STYLES[theme],
+        style: MAPLIBRE_STYLES[theme],
         center,
         zoom: usableRoute.length >= 2 ? 13 : 15,
+        pixelRatio: getHighDefinitionPixelRatio(),
+        antialias: true,
         attributionControl: false,
         dragRotate: false,
         pitchWithRotate: false,
@@ -682,6 +679,7 @@ export default function EventMapPreview({
       {renderer === 'raster' ? (
         <LeafletEventMap
           center={center}
+          theme={theme}
           displayRoute={displayRoute}
           usableLiveRoute={usableLiveRoute}
           isRoutePreview={isRoutePreview}
