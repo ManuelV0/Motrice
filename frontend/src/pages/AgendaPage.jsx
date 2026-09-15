@@ -32,6 +32,7 @@ import {
   resolveParticipantOutcome
 } from '../utils/eventParticipationState';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
+import { resolveEventPostSummary } from '../utils/eventPostSummary';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -121,6 +122,12 @@ function getAttendanceState(event) {
   const outcome = resolveParticipantOutcome(event);
 
   if (event?.created_by === 'me') {
+    if (outcome.id === 'completed') {
+      return { key: 'host-present', label: 'Presente · Organizer', tone: 'success' };
+    }
+    if (outcome.id === 'no_show') {
+      return { key: 'host-no-show', label: 'No-show · Organizer', tone: 'danger' };
+    }
     return { key: 'host', label: 'Svolto · Organizer', tone: 'neutral' };
   }
   if (outcome.id === 'completed') {
@@ -132,13 +139,15 @@ function getAttendanceState(event) {
   if (outcome.id === 'cancelled_late') {
     return { key: 'late-cancel', label: 'Cancellazione tardiva', tone: 'danger' };
   }
+  if (outcome.id === 'requested') {
+    return { key: 'request-expired', label: 'Richiesta non accettata', tone: 'neutral' };
+  }
   return { key: 'unverified', label: 'Non verificata', tone: 'neutral' };
 }
 
 function getClosedEventStats(event) {
   const attendance = getAttendanceState(event);
-  const isVerifiedPresence = attendance.key === 'present';
-  const isHost = attendance.key === 'host';
+  const isVerifiedPresence = ['present', 'host-present'].includes(attendance.key);
   const explicitXp = Number(event?.earned_xp ?? event?.xp_earned ?? event?.user_rsvp?.earned_xp);
   const earnedXp = Number.isFinite(explicitXp)
     ? Math.max(0, explicitXp)
@@ -148,27 +157,29 @@ function getClosedEventStats(event) {
   const explicitMinutes = Number(event?.trained_minutes ?? event?.minutes_trained);
   const trainedMinutes = Number.isFinite(explicitMinutes)
     ? Math.max(0, explicitMinutes)
-    : isVerifiedPresence || isHost
-      ? Math.max(0, Number(event?.duration_minutes || 0))
+    : isVerifiedPresence
+      ? Math.max(0, Number(event?.user_rsvp?.elapsed_minutes ?? event?.minimum_presence_minutes ?? 0))
       : 0;
-  const presentCount = Math.max(0, Number(
-    event?.participants_present_count
-    ?? event?.participant_stats?.present
-    ?? (isVerifiedPresence ? 1 : 0)
-  ));
-  const totalCount = Math.max(
-    presentCount,
-    Number(event?.participants_total_count ?? event?.participant_stats?.total ?? event?.participants_count ?? 0)
-  );
+  const summary = resolveEventPostSummary(event);
 
   let reliability = 'Nessun impatto';
   if (attendance.key === 'present') reliability = '+ Presenza verificata';
   if (attendance.key === 'no-show') reliability = '− No-show registrato';
   if (attendance.key === 'late-cancel') reliability = '− Cancellazione tardiva';
   if (attendance.key === 'host') reliability = 'Evento completato';
+  if (attendance.key === 'host-present') reliability = '+ Presenza organizer';
+  if (attendance.key === 'host-no-show') reliability = '− Assenza organizer';
   if (attendance.key === 'unverified') reliability = 'In attesa di esito';
 
-  return { attendance, earnedXp, trainedMinutes, presentCount, totalCount, reliability };
+  return {
+    attendance,
+    earnedXp,
+    trainedMinutes,
+    presentCount: summary.presentCount,
+    noShowCount: summary.noShowCount,
+    totalCount: summary.totalCount,
+    reliability
+  };
 }
 
 function getVerificationCta(event, { isOrganizer = false } = {}) {
@@ -1155,7 +1166,7 @@ function AgendaPage() {
                         ? 'No-show'
                         : stats.attendance.key === 'late-cancel'
                           ? 'Tardiva'
-                          : 'In attesa';
+                          : stats.attendance.label;
                   return (
                     <EventCard
                       key={event.id}

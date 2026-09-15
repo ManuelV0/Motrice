@@ -86,7 +86,7 @@ function EventCard({
           loading="lazy"
           decoding="async"
           onError={(imageEvent) => {
-            imageEvent.currentTarget.src = '/images/hero-sport-default-v2.jpg';
+            imageEvent.currentTarget.src = '/images/hero-sport-default-v2.webp';
           }}
         />
         <span className={styles.imageShade} />

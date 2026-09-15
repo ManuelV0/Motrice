@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -11,7 +11,10 @@ import {
   MapPin,
   Pause,
   Play,
-  RotateCcw,
+  Star,
+  Undo2,
+  Volume2,
+  VolumeX,
   ShieldCheck
 } from 'lucide-react';
 import { api } from '../services/api';
@@ -22,6 +25,7 @@ import {
   createWorkoutSession,
   normalizeWorkoutExercises,
   recordWorkoutSet,
+  removeWorkoutSet,
   saveWorkoutSession
 } from '../features/workout/services/workoutSessionStore';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
@@ -58,9 +62,25 @@ function WorkoutSessionPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [openExerciseId, setOpenExerciseId] = useState('');
+  const [rewardsOpen, setRewardsOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [undoAction, setUndoAction] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [restTimer, setRestTimer] = useState({ exerciseId: '', remaining: 0, running: false });
+  const [restTimer, setRestTimer] = useState({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+  const [editingExerciseId, setEditingExerciseId] = useState('');
+  const [exerciseDraft, setExerciseDraft] = useState(null);
+  const [selfRatingDismissed, setSelfRatingDismissed] = useState(false);
+  const [reviewTargetCount, setReviewTargetCount] = useState(0);
+  const [countdownSoundEnabled, setCountdownSoundEnabled] = useState(() => {
+    try {
+      return window.localStorage.getItem('motrice.workoutCountdownSound') !== 'off';
+    } catch {
+      return true;
+    }
+  });
+  const audioContextRef = useRef(null);
+  const previousRestRemainingRef = useRef(0);
+  const metricPressTimerRef = useRef(null);
   const auth = useMemo(() => getAuthSession(), []);
 
   usePageMeta({ title: 'Allenamento live · Motrice', description: 'Sessione allenamento Motrice' });
@@ -99,7 +119,6 @@ function WorkoutSessionPage() {
         setEvent(eventResult);
         setParticipation(progress);
         setSession(nextSession);
-        setOpenExerciseId(nextSession.currentExerciseId || exercises[0].id);
       } catch (loadError) {
         if (active) setError(loadError?.message || 'Allenamento non disponibile.');
       } finally {
@@ -114,9 +133,13 @@ function WorkoutSessionPage() {
     () => normalizeWorkoutExercises(event?.workout_plan?.exercises),
     [event?.workout_plan?.exercises]
   );
+  const liveExercises = useMemo(() => exercises.map((exercise) => ({
+    ...exercise,
+    ...(session?.exerciseOverrides?.[exercise.id] || {})
+  })), [exercises, session?.exerciseOverrides]);
   const totals = useMemo(() => {
-    const totalSets = exercises.reduce((sum, exercise) => sum + exercise.sets, 0);
-    const completedSets = exercises.reduce(
+    const totalSets = liveExercises.reduce((sum, exercise) => sum + exercise.sets, 0);
+    const completedSets = liveExercises.reduce(
       (sum, exercise) => sum + Math.min(exercise.sets, Number(session?.completedSets?.[exercise.id] || 0)),
       0
     );
@@ -125,12 +148,18 @@ function WorkoutSessionPage() {
       completedSets,
       percent: totalSets ? Math.round((completedSets / totalSets) * 100) : 0
     };
-  }, [exercises, session?.completedSets]);
+  }, [liveExercises, session?.completedSets]);
 
   useEffect(() => {
-    if (!session?.startedAt || session?.completedAt) return undefined;
-    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - Date.parse(session.startedAt)) / 1000)));
+    if (!session?.startedAt) return undefined;
+    const startedAtMs = Date.parse(session.startedAt);
+    const completedAtMs = session.completedAt ? Date.parse(session.completedAt) : null;
+    const tick = () => {
+      const endAtMs = Number.isFinite(completedAtMs) ? completedAtMs : Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((endAtMs - startedAtMs) / 1000)));
+    };
     tick();
+    if (Number.isFinite(completedAtMs)) return undefined;
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
   }, [session?.completedAt, session?.startedAt]);
@@ -141,13 +170,72 @@ function WorkoutSessionPage() {
       setRestTimer((current) => {
         if (!current.running || current.remaining <= 1) {
           if (current.remaining === 1 && navigator.vibrate) navigator.vibrate([80, 60, 80]);
-          return { ...current, remaining: 0, running: false };
+          return { ...current, remaining: 0, running: false, finished: true };
         }
+        if (current.remaining === 10 && navigator.vibrate) navigator.vibrate(40);
         return { ...current, remaining: current.remaining - 1 };
       });
     }, 1000);
     return () => window.clearInterval(timer);
   }, [restTimer.remaining, restTimer.running]);
+
+  useEffect(() => {
+    if (!restTimer.finished) return undefined;
+    const timeout = window.setTimeout(() => {
+      setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+    }, 2600);
+    return () => window.clearTimeout(timeout);
+  }, [restTimer.finished]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('motrice.workoutCountdownSound', countdownSoundEnabled ? 'on' : 'off');
+    } catch {
+      // Il timer resta utilizzabile anche quando lo storage del browser è indisponibile.
+    }
+  }, [countdownSoundEnabled]);
+
+  useEffect(() => () => {
+    const context = audioContextRef.current;
+    if (context && context.state !== 'closed') context.close().catch(() => undefined);
+    if (metricPressTimerRef.current) window.clearTimeout(metricPressTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const previous = previousRestRemainingRef.current;
+    const remaining = restTimer.remaining;
+    previousRestRemainingRef.current = remaining;
+
+    if (!countdownSoundEnabled || !restTimer.exerciseId) return;
+    if (restTimer.running && remaining > 0 && remaining <= 5 && previous !== remaining) {
+      playCountdownTone(680 + ((5 - remaining) * 75), false);
+    } else if (remaining === 0 && previous === 1) {
+      playCountdownTone(1080, true);
+    }
+  }, [countdownSoundEnabled, restTimer.exerciseId, restTimer.remaining, restTimer.running]);
+
+  useEffect(() => {
+    if (!undoAction?.expiresAt) return undefined;
+    const timeout = window.setTimeout(
+      () => setUndoAction(null),
+      Math.max(0, undoAction.expiresAt - Date.now())
+    );
+    return () => window.clearTimeout(timeout);
+  }, [undoAction?.expiresAt]);
+
+  useEffect(() => {
+    if (!editingExerciseId) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (keyboardEvent) => {
+      if (keyboardEvent.key === 'Escape') closeExerciseEditor();
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [editingExerciseId]);
 
   useEffect(() => {
     if (!session || totals.percent < 60 || session.sixtyPercentAwarded) return;
@@ -184,13 +272,131 @@ function WorkoutSessionPage() {
     setSession(saveWorkoutSession(id, next));
   }
 
+  function adjustExerciseLoad(exercise, delta) {
+    updateExerciseLoad(exercise, Math.max(0, getExerciseLoad(exercise) + delta));
+  }
+
+  function ensureCountdownAudio(force = false) {
+    if (!force && !countdownSoundEnabled) return null;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContextClass();
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => undefined);
+    }
+    return audioContextRef.current;
+  }
+
+  function playCountdownTone(frequency, completed) {
+    const context = ensureCountdownAudio();
+    if (!context) return;
+
+    const scheduleTone = (offset, toneFrequency, duration, volume = 0.09) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startAt = context.currentTime + offset;
+      oscillator.type = completed ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(toneFrequency, startAt);
+      gain.gain.setValueAtTime(0.0001, startAt);
+      gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startAt);
+      oscillator.stop(startAt + duration + 0.02);
+    };
+
+    scheduleTone(0, frequency, completed ? 0.15 : 0.09, completed ? 0.12 : 0.075);
+    if (completed) scheduleTone(0.17, 1360, 0.22, 0.13);
+  }
+
+  function toggleCountdownSound() {
+    const nextEnabled = !countdownSoundEnabled;
+    setCountdownSoundEnabled(nextEnabled);
+    if (nextEnabled) ensureCountdownAudio(true);
+  }
+
+  function openExerciseEditor(exercise) {
+    if (!exercise || session?.completedAt) return;
+    if (metricPressTimerRef.current) window.clearTimeout(metricPressTimerRef.current);
+    metricPressTimerRef.current = null;
+    setEditingExerciseId(exercise.id);
+    setExerciseDraft({
+      sets: exercise.sets,
+      reps: exercise.reps,
+      rir: exercise.rir,
+      recovery: exercise.recovery
+    });
+    if (navigator.vibrate) navigator.vibrate(35);
+  }
+
+  function startMetricPress(exercise) {
+    if (session?.completedAt) return;
+    if (metricPressTimerRef.current) window.clearTimeout(metricPressTimerRef.current);
+    metricPressTimerRef.current = window.setTimeout(() => openExerciseEditor(exercise), 600);
+  }
+
+  function cancelMetricPress() {
+    if (metricPressTimerRef.current) window.clearTimeout(metricPressTimerRef.current);
+    metricPressTimerRef.current = null;
+  }
+
+  function closeExerciseEditor() {
+    cancelMetricPress();
+    setEditingExerciseId('');
+    setExerciseDraft(null);
+  }
+
+  function updateExerciseDraft(field, value) {
+    setExerciseDraft((current) => current ? { ...current, [field]: value } : current);
+  }
+
+  function applyExerciseDraft() {
+    if (!session || !exerciseDraft || !editingExerciseId) return;
+    const exercise = liveExercises.find((item) => item.id === editingExerciseId);
+    if (!exercise) return;
+    const completed = Math.max(0, Number(session.completedSets?.[exercise.id] || 0));
+    const previousRecovery = exercise.recovery;
+    const nextOverride = {
+      sets: Math.max(1, completed, Math.min(20, Math.round(Number(exerciseDraft.sets) || exercise.sets))),
+      reps: String(exerciseDraft.reps || '').trim().slice(0, 12) || exercise.reps,
+      rir: Math.max(0, Math.min(10, Math.round(Number(exerciseDraft.rir) || 0))),
+      recovery: Math.max(0, Math.min(900, Math.round(Number(exerciseDraft.recovery) || 0)))
+    };
+    const nextSession = {
+      ...session,
+      exerciseOverrides: {
+        ...(session.exerciseOverrides || {}),
+        [exercise.id]: nextOverride
+      }
+    };
+    setSession(saveWorkoutSession(id, nextSession));
+    setRestTimer((current) => {
+      if (current.exerciseId !== exercise.id || current.remaining <= 0) return current;
+      const recoveryDelta = nextOverride.recovery - previousRecovery;
+      const nextRemaining = Math.max(0, Math.min(nextOverride.recovery, current.remaining + recoveryDelta));
+      return {
+        ...current,
+        duration: nextOverride.recovery,
+        remaining: nextRemaining,
+        running: nextRemaining > 0 && current.running,
+        finished: nextRemaining === 0
+      };
+    });
+    closeExerciseEditor();
+    showToast('Parametri aggiornati solo per questa sessione', 'success');
+  }
+
   function completeSet(exercise) {
     if (!session || session.completedAt) return;
+    ensureCountdownAudio();
     const current = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
     if (current >= exercise.sets) return;
     const completedNow = current + 1;
-    const exerciseIndex = exercises.findIndex((item) => item.id === exercise.id);
-    const nextExercise = exercises[exerciseIndex + 1];
+    const exerciseIndex = liveExercises.findIndex((item) => item.id === exercise.id);
+    const nextExercise = liveExercises[exerciseIndex + 1];
     const nextExerciseId = completedNow >= exercise.sets && nextExercise ? nextExercise.id : exercise.id;
     const loadKg = getExerciseLoad(exercise);
     const completedLoads = Array.isArray(session.completedSetLoads?.[exercise.id])
@@ -207,22 +413,62 @@ function WorkoutSessionPage() {
       }
     };
     setSession(saveWorkoutSession(id, next));
-    recordWorkoutSet({
+    const recordedSet = recordWorkoutSet({
       eventId: id,
       exercise,
       setNumber: completedNow,
       weightKg: loadKg,
-      reps: exercise.reps
+      reps: exercise.reps,
+      rir: exercise.rir
     });
-    setOpenExerciseId(nextExerciseId);
-    if (exercise.recovery > 0 && completedNow < exercise.sets) {
-      setRestTimer({ exerciseId: exercise.id, remaining: exercise.recovery, running: true });
+    api.recordWorkoutExerciseSet(recordedSet).catch(() => {});
+    setUndoAction({
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      setNumber: completedNow,
+      expiresAt: Date.now() + 7000
+    });
+    if (exercise.recovery > 0 && (completedNow < exercise.sets || nextExercise)) {
+      setRestTimer({
+        exerciseId: exercise.id,
+        duration: exercise.recovery,
+        remaining: exercise.recovery,
+        running: true,
+        finished: false
+      });
     }
     if (navigator.vibrate) navigator.vibrate(45);
   }
 
-  function resetRest(exercise) {
-    setRestTimer({ exerciseId: exercise.id, remaining: exercise.recovery, running: exercise.recovery > 0 });
+  function undoLastSet(action = undoAction) {
+    if (!action || !session || session.completedAt) return;
+    const exercise = liveExercises.find((item) => item.id === action.exerciseId);
+    if (!exercise) return;
+    const current = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
+    if (current < action.setNumber) {
+      setUndoAction(null);
+      return;
+    }
+    const completedLoads = Array.isArray(session.completedSetLoads?.[exercise.id])
+      ? session.completedSetLoads[exercise.id].slice(0, Math.max(0, action.setNumber - 1))
+      : [];
+    const next = {
+      ...session,
+      currentExerciseId: exercise.id,
+      completedSets: {
+        ...session.completedSets,
+        [exercise.id]: Math.max(0, action.setNumber - 1)
+      },
+      completedSetLoads: {
+        ...(session.completedSetLoads || {}),
+        [exercise.id]: completedLoads
+      }
+    };
+    setSession(saveWorkoutSession(id, next));
+    removeWorkoutSet({ eventId: id, exerciseId: exercise.id, setNumber: action.setNumber });
+    api.removeWorkoutExerciseSet({ eventId: id, exerciseId: exercise.id, setNumber: action.setNumber }).catch(() => {});
+    setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+    setUndoAction(null);
   }
 
   async function finishWorkout() {
@@ -245,6 +491,15 @@ function WorkoutSessionPage() {
     }
   }
 
+  function rateCompletedWorkout(rating) {
+    if (!session?.completedAt) return;
+    const selfRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 1)));
+    const next = { ...session, selfRating };
+    setSession(saveWorkoutSession(id, next));
+    if (navigator.vibrate) navigator.vibrate(35);
+    showToast('Autovalutazione allenamento salvata', 'success');
+  }
+
   if (loading) {
     return <section className={styles.statePage}><div className={styles.loader} /><p>Preparo la tua scheda…</p></section>;
   }
@@ -263,57 +518,84 @@ function WorkoutSessionPage() {
   const organizer = isOrganizerForEvent(event, auth);
   const verificationMode = String(event.verification_mode || 'both');
   const qrVerified = verificationMode !== 'geo' && Boolean(participation?.checked_in_at || organizer);
-  const restExercise = exercises.find((exercise) => exercise.id === restTimer.exerciseId);
-  const firstIncompleteExerciseIndex = exercises.findIndex((exercise) => (
+  const restExercise = liveExercises.find((exercise) => exercise.id === restTimer.exerciseId);
+  const firstIncompleteExerciseIndex = liveExercises.findIndex((exercise) => (
     Number(session.completedSets?.[exercise.id] || 0) < exercise.sets
   ));
   const currentExerciseIndex = firstIncompleteExerciseIndex >= 0
     ? firstIncompleteExerciseIndex
-    : Math.max(0, exercises.length - 1);
-  const currentExercise = exercises[currentExerciseIndex] || exercises[0];
-  const queuedExercises = exercises
+    : Math.max(0, liveExercises.length - 1);
+  const currentExercise = liveExercises[currentExerciseIndex] || liveExercises[0];
+  const queuedExercises = liveExercises
     .map((exercise, index) => ({ exercise, index }))
     .filter(({ exercise }) => exercise.id !== currentExercise?.id);
+  const nextExercise = firstIncompleteExerciseIndex >= 0
+    ? liveExercises[firstIncompleteExerciseIndex + 1] || null
+    : null;
+  const editingExercise = liveExercises.find((exercise) => exercise.id === editingExerciseId) || null;
+  const editingExerciseCompletedSets = editingExercise
+    ? Math.max(0, Number(session.completedSets?.[editingExercise.id] || 0))
+    : 0;
+  const rewardSummary = session.completedAt || session.completionAwarded
+    ? 'Tutti i traguardi raggiunti'
+    : session.sixtyPercentAwarded
+      ? 'Prossimo traguardo: conclusione'
+      : 'Prossimo traguardo: 60% della scheda';
 
-  function renderExerciseCard(exercise, index, featured = false) {
+  function renderExerciseCard(exercise, index) {
     const completed = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
     const isComplete = completed === exercise.sets;
-    const open = featured || openExerciseId === exercise.id;
+    const metricPressProps = {
+      onPointerDown: () => startMetricPress(exercise),
+      onPointerUp: cancelMetricPress,
+      onPointerCancel: cancelMetricPress,
+      onPointerLeave: cancelMetricPress,
+      onContextMenu: (contextEvent) => contextEvent.preventDefault(),
+      onClick: (clickEvent) => {
+        if (clickEvent.detail === 0) openExerciseEditor(exercise);
+      }
+    };
 
     return (
       <article
         key={exercise.id}
-        className={`${styles.exerciseCard} ${featured ? styles.exerciseCurrent : ''} ${isComplete ? styles.exerciseComplete : ''}`}
+        className={`${styles.exerciseCard} ${styles.exerciseCurrent} ${isComplete ? styles.exerciseComplete : ''}`}
       >
-        <button
-          type="button"
+        <div
           className={styles.exerciseSummary}
-          onClick={() => setOpenExerciseId(open && !featured ? '' : exercise.id)}
-          aria-expanded={open}
         >
           <span className={styles.exerciseIndex}>{isComplete ? <Check size={18} /> : String(index + 1).padStart(2, '0')}</span>
           <div>
-            <small className={styles.exerciseState}>{featured && !isComplete ? 'IN CORSO' : isComplete ? 'COMPLETATO' : `ESERCIZIO ${index + 1}`}</small>
+            <small className={styles.exerciseState}>{isComplete ? 'COMPLETATO' : 'IN CORSO'}</small>
             <strong>{exercise.name}</strong>
             <small>{exercise.sets} × {exercise.reps}{getExerciseLoad(exercise) ? ` · ${getExerciseLoad(exercise)} kg` : ' · Corpo libero'}</small>
           </div>
           <span className={styles.setCounter}>{completed}/{exercise.sets}</span>
-          <ChevronDown className={open ? styles.chevronOpen : ''} />
-        </button>
-        {open ? (
-          <div className={styles.exerciseDetails}>
-            <div className={styles.exerciseMetrics}>
-              <span><small>SERIE</small><strong>{exercise.sets}</strong></span>
-              <span><small>RIPETIZIONI</small><strong>{exercise.reps}</strong></span>
-              <span><small>CARICO</small><strong>{getExerciseLoad(exercise) ? `${getExerciseLoad(exercise)} kg` : 'Corpo libero'}</strong></span>
-              <span><small>RIR</small><strong>{exercise.rir}</strong></span>
-              <span><small>RECUPERO</small><strong>{exercise.recovery ? `${exercise.recovery}s` : '—'}</strong></span>
-            </div>
-            <label className={styles.loadEditor}>
-              <span>
-                <small>CARICO DELLA PROSSIMA SERIE</small>
-                <strong>Modificalo prima di completare la serie</strong>
-              </span>
+        </div>
+        <div className={styles.exerciseDetails}>
+          <div className={styles.exerciseMetrics}>
+            <button type="button" {...metricPressProps} aria-label={`Serie: ${exercise.sets}. Tieni premuto per modificare`}><strong>{exercise.sets}</strong><small>serie</small></button>
+            <button type="button" {...metricPressProps} aria-label={`Ripetizioni: ${exercise.reps}. Tieni premuto per modificare`}><strong>{exercise.reps}</strong><small>ripetizioni</small></button>
+            <button type="button" {...metricPressProps} aria-label={`RIR target: ${exercise.rir}. Tieni premuto per modificare`}><strong>{exercise.rir}</strong><small>RIR target</small></button>
+            <button type="button" {...metricPressProps} aria-label={`Recupero: ${formatClock(exercise.recovery)}. Tieni premuto per modificare`}><strong>{exercise.recovery ? formatClock(exercise.recovery) : '—'}</strong><small>recupero</small></button>
+          </div>
+          <div className={styles.metricEditHint}>
+            <span>Tieni premuto un valore per modificarlo</span>
+          </div>
+          <div className={styles.loadEditor}>
+            <span>
+              <small>CARICO PROSSIMA SERIE</small>
+              <strong>Regolalo prima di confermare</strong>
+            </span>
+            <span className={styles.loadStepper}>
+              <button
+                type="button"
+                onClick={() => adjustExerciseLoad(exercise, -2.5)}
+                disabled={Boolean(session.completedAt) || isComplete || getExerciseLoad(exercise) <= 0}
+                aria-label={`Riduci il carico di ${exercise.name}`}
+              >
+                <span aria-hidden="true">−</span>
+              </button>
               <span className={styles.loadInput}>
                 <input
                   type="number"
@@ -327,30 +609,49 @@ function WorkoutSessionPage() {
                 />
                 <b>kg</b>
               </span>
-            </label>
-            <div className={styles.setProgressLabel}>
-              <span>PROGRESSO SERIE</span>
-              <strong>{completed} di {exercise.sets}</strong>
-            </div>
-            <div className={styles.setDots}>
-              {Array.from({ length: exercise.sets }, (_, setIndex) => (
-                <button
-                  key={`${exercise.id}-set-${setIndex + 1}`}
-                  type="button"
-                  className={setIndex < completed ? styles.setDone : undefined}
-                  onClick={() => setIndex === completed && completeSet(exercise)}
-                  disabled={setIndex > completed || Boolean(session.completedAt)}
-                  aria-label={`Serie ${setIndex + 1} ${setIndex < completed ? 'completata' : ''}`}
-                >{setIndex < completed ? <Check size={18} /> : setIndex + 1}</button>
-              ))}
-            </div>
-            {completed < exercise.sets ? (
-              <button type="button" className={styles.completeSetButton} onClick={() => completeSet(exercise)} disabled={Boolean(session.completedAt)}>
-                <CheckCircle2 size={19} /> Completa serie {completed + 1}
+              <button
+                type="button"
+                onClick={() => adjustExerciseLoad(exercise, 2.5)}
+                disabled={Boolean(session.completedAt) || isComplete}
+                aria-label={`Aumenta il carico di ${exercise.name}`}
+              >
+                <span aria-hidden="true">+</span>
               </button>
-            ) : <p className={styles.exerciseDoneLabel}><CheckCircle2 size={18} /> Esercizio completato</p>}
+            </span>
           </div>
-        ) : null}
+          <div className={styles.setProgressLabel}>
+            <span>PROGRESSO SERIE</span>
+            <span>
+              {completed > 0 && !isComplete ? (
+                <button
+                  type="button"
+                  className={styles.inlineUndoButton}
+                  onClick={() => undoLastSet({
+                    exerciseId: exercise.id,
+                    exerciseName: exercise.name,
+                    setNumber: completed
+                  })}
+                >Annulla ultima serie</button>
+              ) : null}
+              <strong>{completed} di {exercise.sets}</strong>
+            </span>
+          </div>
+          <div className={styles.setDots} role="list" aria-label={`Progresso serie di ${exercise.name}`}>
+            {Array.from({ length: exercise.sets }, (_, setIndex) => (
+              <span
+                key={`${exercise.id}-set-${setIndex + 1}`}
+                className={setIndex < completed ? styles.setDone : undefined}
+                role="listitem"
+                aria-label={`Serie ${setIndex + 1} ${setIndex < completed ? 'completata' : 'da completare'}`}
+              >{setIndex < completed ? <Check size={18} /> : setIndex + 1}</span>
+            ))}
+          </div>
+          {completed < exercise.sets ? (
+            <button type="button" className={styles.completeSetButton} onClick={() => completeSet(exercise)} disabled={Boolean(session.completedAt)}>
+              <CheckCircle2 size={19} /> Completa serie {completed + 1}
+            </button>
+          ) : <p className={styles.exerciseDoneLabel}><CheckCircle2 size={18} /> Esercizio completato</p>}
+        </div>
       </article>
     );
   }
@@ -358,9 +659,60 @@ function WorkoutSessionPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <button type="button" onClick={() => navigate(`/events/${id}`)} aria-label="Torna al dettaglio evento"><ArrowLeft /></button>
+        <button type="button" onClick={() => navigate(`/events/${id}`)} aria-label="Torna al dettaglio evento"><span aria-hidden="true">←</span></button>
         <div><small>ALLENAMENTO LIVE</small><strong>{event.workout_plan?.title || event.title}</strong></div>
-        <time>{formatClock(elapsedSeconds)}</time>
+        <time className={restExercise && (restTimer.remaining > 0 || restTimer.running || restTimer.finished) ? styles.sessionTimerDimmed : undefined}>
+          <small>SESSIONE</small><span>{formatClock(elapsedSeconds)}</span>
+        </time>
+        {restExercise && (restTimer.remaining > 0 || restTimer.running || restTimer.finished) ? (
+          <aside
+            className={`${styles.restDock} ${restTimer.remaining > 0 && restTimer.remaining <= 5 ? styles.restDockUrgent : ''} ${restTimer.finished ? styles.restDockFinished : ''}`}
+            aria-label={`Recupero ${restExercise.name}`}
+          >
+            <div className={styles.restDockInfo}>
+              <small>RECUPERO · {restExercise.name}</small>
+              <strong>{restTimer.finished ? 'Recupero terminato' : formatClock(restTimer.remaining)}</strong>
+              <span className={styles.restProgress}><i style={{ width: `${restTimer.duration ? Math.min(100, (restTimer.remaining / restTimer.duration) * 100) : 0}%` }} /></span>
+            </div>
+            <div className={styles.restDockControls}>
+              <button
+                type="button"
+                onClick={() => setRestTimer((current) => ({ ...current, running: !current.running }))}
+                aria-label={restTimer.running ? 'Pausa timer' : 'Avvia timer'}
+                disabled={restTimer.finished}
+              >
+                {restTimer.running ? <Pause size={18} strokeWidth={2.5} aria-hidden="true" /> : <Play size={18} strokeWidth={2.5} aria-hidden="true" />}
+              </button>
+              <button
+                type="button"
+                className={styles.soundToggle}
+                onClick={toggleCountdownSound}
+                aria-label={countdownSoundEnabled ? 'Disattiva suono recupero' : 'Attiva suono recupero'}
+                aria-pressed={countdownSoundEnabled}
+              >
+                {countdownSoundEnabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+              </button>
+              <button
+                type="button"
+                className={styles.addRestButton}
+                onClick={() => setRestTimer((current) => ({
+                  ...current,
+                  duration: current.duration + 30,
+                  remaining: current.remaining + 30,
+                  running: true,
+                  finished: false
+                }))}
+                aria-label="Aggiungi 30 secondi al recupero"
+              >+30</button>
+            </div>
+            <button
+              type="button"
+              className={styles.skipRestButton}
+              onClick={() => setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false })}
+            >{restTimer.finished ? 'Chiudi' : 'Salta'}</button>
+            {restTimer.finished ? <span className={styles.visuallyHidden} aria-live="assertive">Recupero terminato</span> : null}
+          </aside>
+        ) : null}
       </header>
 
       <main className={styles.content}>
@@ -393,33 +745,65 @@ function WorkoutSessionPage() {
             </div>
             <div className={styles.progress}><span style={{ width: `${totals.percent}%` }} /></div>
           </div>
-          <div className={styles.rewardTimeline} aria-label="Ricompense allenamento">
-            <span className={qrVerified ? styles.rewardReached : undefined}>
-              <i>{qrVerified ? <Check size={14} /> : '1'}</i><b>Verifica</b><small>{qrVerified ? '+5 MOT · +25 XP' : '+2 MOT posizione'}</small>
-            </span>
-            <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>
-              <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>60% scheda</b><small>+3 MOT</small>
-            </span>
-            <span className={session.completionAwarded ? styles.rewardReached : undefined}>
-              <i>{session.completionAwarded ? <Check size={14} /> : '3'}</i><b>Conclusione</b><small>+25 XP</small>
-            </span>
-          </div>
+          <button
+            type="button"
+            className={styles.rewardSummary}
+            onClick={() => setRewardsOpen((open) => !open)}
+            aria-expanded={rewardsOpen}
+          >
+            <span><small>RICOMPENSE</small><strong>{rewardSummary}</strong></span>
+            <ChevronDown className={rewardsOpen ? styles.chevronOpen : ''} aria-hidden="true" />
+          </button>
+          {rewardsOpen ? (
+            <div className={styles.rewardTimeline} aria-label="Ricompense allenamento">
+              <span className={qrVerified ? styles.rewardReached : undefined}>
+                <i>{qrVerified ? <Check size={14} /> : '1'}</i><b>Verifica</b><small>{qrVerified ? '+5 MOT · +25 XP' : '+2 MOT posizione'}</small>
+              </span>
+              <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>
+                <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>60% scheda</b><small>+3 MOT</small>
+              </span>
+              <span className={session.completionAwarded ? styles.rewardReached : undefined}>
+                <i>{session.completionAwarded ? <Check size={14} /> : '3'}</i><b>Conclusione</b><small>+25 XP</small>
+              </span>
+            </div>
+          ) : null}
         </section>
 
         <section className={styles.exerciseSection}>
           <div className={styles.sectionHeading}>
-            <div><small>ESERCIZIO ATTUALE</small><h2>{currentExercise?.name || 'Scheda completata'}</h2></div>
-            <strong>{Math.min(currentExerciseIndex + 1, exercises.length)}/{exercises.length}</strong>
+            <h2>ESERCIZIO ATTUALE</h2>
+            <strong>{Math.min(currentExerciseIndex + 1, liveExercises.length)}/{liveExercises.length}</strong>
           </div>
           <div className={styles.exerciseList}>
-            {currentExercise ? renderExerciseCard(currentExercise, currentExerciseIndex, true) : null}
+            {currentExercise ? renderExerciseCard(currentExercise, currentExerciseIndex) : null}
           </div>
           {queuedExercises.length ? (
             <div className={styles.exerciseQueue}>
-              <div><span>SCALLETTA ESERCIZI</span><small>{queuedExercises.length} rimanenti e completati</small></div>
-              <div className={styles.exerciseList}>
-                {queuedExercises.map(({ exercise, index }) => renderExerciseCard(exercise, index))}
+              <div className={styles.queuePreview}>
+                <div>
+                  <small>{nextExercise ? 'PROSSIMO ESERCIZIO' : 'SCHEDA COMPLETATA'}</small>
+                  <strong>{nextExercise?.name || 'Tutte le serie completate'}</strong>
+                  {nextExercise ? <span>{nextExercise.sets} × {nextExercise.reps} · recupero {formatClock(nextExercise.recovery)}</span> : null}
+                </div>
+                <button type="button" onClick={() => setQueueOpen((open) => !open)} aria-expanded={queueOpen}>
+                  {queueOpen ? 'Nascondi' : 'Vedi scheda'}
+                  <ChevronDown className={queueOpen ? styles.chevronOpen : ''} aria-hidden="true" />
+                </button>
               </div>
+              {queueOpen ? (
+                <div className={styles.queueList}>
+                  {queuedExercises.map(({ exercise, index }) => {
+                    const completed = Number(session.completedSets?.[exercise.id] || 0) >= exercise.sets;
+                    return (
+                      <article key={exercise.id} className={completed ? styles.queueItemComplete : undefined}>
+                        <span>{completed ? <Check size={17} aria-hidden="true" /> : String(index + 1).padStart(2, '0')}</span>
+                        <div><strong>{exercise.name}</strong><small>{exercise.sets} × {exercise.reps} · {getExerciseLoad(exercise) ? `${getExerciseLoad(exercise)} kg` : 'Corpo libero'}</small></div>
+                        <small>{completed ? 'Fatto' : 'Da fare'}</small>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </section>
@@ -427,10 +811,22 @@ function WorkoutSessionPage() {
         {session.completedAt ? (
           <section className={styles.completedCard}>
             <span><Check size={30} /></span>
-            <div><small>SESSIONE COMPLETATA</small><h2>Ottimo allenamento</h2><p>+25 XP accreditati. Completa il questionario per altri +25 XP.</p></div>
+            <div>
+              <small>SESSIONE COMPLETATA</small>
+              <h2>Ottimo allenamento</h2>
+              <p>
+                +25 XP accreditati.
+                {reviewTargetCount > 0 ? ' Puoi ottenere altri +25 XP valutando chi si è allenato con te.' : ''}
+              </p>
+              {session.selfRating ? (
+                <span className={styles.savedSelfRating} aria-label={`Autovalutazione ${session.selfRating} su 5`}>
+                  <Star size={14} fill="currentColor" aria-hidden="true" /> La tua valutazione: {session.selfRating}/5
+                </span>
+              ) : null}
+            </div>
           </section>
         ) : (
-          <button type="button" className={styles.finishButton} disabled={totals.percent < 100 || busy} onClick={finishWorkout}>
+          <button type="button" className={`${styles.finishButton} ${totals.percent >= 100 ? styles.finishButtonReady : ''}`} disabled={totals.percent < 100 || busy} onClick={finishWorkout}>
             <CheckCircle2 /> {totals.percent < 100 ? `Completa ancora ${totals.totalSets - totals.completedSets} serie` : busy ? 'Salvataggio…' : 'Termina allenamento · +25 XP'}
           </button>
         )}
@@ -439,6 +835,9 @@ function WorkoutSessionPage() {
           eventId={id}
           enabled={Boolean(session.completedAt)}
           bonusXp={Number(event.review_bonus_xp || 25)}
+          presentation="completionDock"
+          promptVisible={Boolean(session.selfRating || selfRatingDismissed)}
+          onTargetsChange={(targets) => setReviewTargetCount(targets.filter((target) => !target.reviewed).length)}
           onCompleted={() => {
             const next = { ...session, reviewSubmitted: true };
             setSession(saveWorkoutSession(id, next));
@@ -446,16 +845,113 @@ function WorkoutSessionPage() {
         />
       </main>
 
-      {restExercise && (restTimer.remaining > 0 || restTimer.running) ? (
-        <aside className={styles.restDock} aria-live="polite">
-          <div><small>RECUPERO · {restExercise.name}</small><strong>{formatClock(restTimer.remaining)}</strong></div>
-          <button type="button" onClick={() => setRestTimer((current) => ({ ...current, running: !current.running }))} aria-label={restTimer.running ? 'Pausa timer' : 'Avvia timer'}>
-            {restTimer.running ? <Pause /> : <Play />}
-          </button>
-          <button type="button" onClick={() => resetRest(restExercise)} aria-label="Riavvia recupero"><RotateCcw /></button>
-          <button type="button" onClick={() => setRestTimer({ exerciseId: '', remaining: 0, running: false })}>Salta</button>
-        </aside>
+      {editingExercise && exerciseDraft ? createPortal(
+        <div className={styles.liveEditorBackdrop} onPointerDown={closeExerciseEditor}>
+          <section
+            className={styles.liveEditorSheet}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="live-exercise-editor-title"
+            onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+          >
+            <span className={styles.liveEditorHandle} aria-hidden="true" />
+            <header className={styles.liveEditorHeader}>
+              <div>
+                <small>MODIFICA SESSIONE LIVE</small>
+                <h2 id="live-exercise-editor-title">{editingExercise.name}</h2>
+              </div>
+              <button type="button" onClick={closeExerciseEditor}>Annulla</button>
+            </header>
+
+            <div className={styles.liveEditorGrid}>
+              <article>
+                <span><small>SERIE</small><strong>{exerciseDraft.sets}</strong></span>
+                <div className={styles.liveEditorStepper}>
+                  <button
+                    type="button"
+                    onClick={() => updateExerciseDraft('sets', Math.max(1, editingExerciseCompletedSets, Number(exerciseDraft.sets) - 1))}
+                    disabled={Number(exerciseDraft.sets) <= Math.max(1, editingExerciseCompletedSets)}
+                    aria-label="Riduci serie"
+                  >−</button>
+                  <button
+                    type="button"
+                    onClick={() => updateExerciseDraft('sets', Math.min(20, Number(exerciseDraft.sets) + 1))}
+                    disabled={Number(exerciseDraft.sets) >= 20}
+                    aria-label="Aumenta serie"
+                  >+</button>
+                </div>
+                <small>{editingExerciseCompletedSets ? `${editingExerciseCompletedSets} già completate` : 'Massimo 20'}</small>
+              </article>
+
+              <article>
+                <label htmlFor="live-reps"><small>RIPETIZIONI</small></label>
+                <input
+                  id="live-reps"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength="12"
+                  value={exerciseDraft.reps}
+                  onChange={(changeEvent) => updateExerciseDraft('reps', changeEvent.target.value)}
+                  aria-label="Ripetizioni della sessione"
+                />
+                <small>Numero o intervallo, es. 8-10</small>
+              </article>
+
+              <article>
+                <span><small>RIR TARGET</small><strong>{exerciseDraft.rir}</strong></span>
+                <div className={styles.liveEditorStepper}>
+                  <button type="button" onClick={() => updateExerciseDraft('rir', Math.max(0, Number(exerciseDraft.rir) - 1))} disabled={Number(exerciseDraft.rir) <= 0} aria-label="Riduci RIR">−</button>
+                  <button type="button" onClick={() => updateExerciseDraft('rir', Math.min(10, Number(exerciseDraft.rir) + 1))} disabled={Number(exerciseDraft.rir) >= 10} aria-label="Aumenta RIR">+</button>
+                </div>
+                <small>Da 0 a 10</small>
+              </article>
+
+              <article>
+                <span><small>RECUPERO</small><strong>{formatClock(exerciseDraft.recovery)}</strong></span>
+                <div className={styles.liveEditorStepper}>
+                  <button type="button" onClick={() => updateExerciseDraft('recovery', Math.max(0, Number(exerciseDraft.recovery) - 30))} disabled={Number(exerciseDraft.recovery) <= 0} aria-label="Riduci recupero di 30 secondi">−30</button>
+                  <button type="button" onClick={() => updateExerciseDraft('recovery', Math.min(900, Number(exerciseDraft.recovery) + 30))} disabled={Number(exerciseDraft.recovery) >= 900} aria-label="Aumenta recupero di 30 secondi">+30</button>
+                </div>
+                <small>Modifica anche il timer attivo</small>
+              </article>
+            </div>
+
+            <p className={styles.liveEditorNote}>Le modifiche valgono solo per questo allenamento. La scheda originale rimane invariata.</p>
+            <button type="button" className={styles.liveEditorApply} onClick={applyExerciseDraft}>Applica alla sessione</button>
+          </section>
+        </div>,
+        document.body
       ) : null}
+
+      {undoAction ? createPortal(
+        <aside className={styles.undoToast} aria-live="polite">
+          <div><small>SERIE REGISTRATA</small><strong>{undoAction.exerciseName} · serie {undoAction.setNumber}</strong></div>
+          <button type="button" onClick={() => undoLastSet()}><Undo2 size={17} aria-hidden="true" /> Annulla</button>
+        </aside>,
+        document.body
+      ) : null}
+
+      {session.completedAt && !session.selfRating && !selfRatingDismissed ? createPortal(
+        <aside className={styles.selfRatingDock} aria-labelledby="workout-self-rating-title">
+          <div className={styles.selfRatingHeading}>
+            <span><small>AUTOVALUTAZIONE</small><strong id="workout-self-rating-title">Com’è andato l’allenamento?</strong></span>
+            <button type="button" onClick={() => setSelfRatingDismissed(true)}>Più tardi</button>
+          </div>
+          <div className={styles.selfRatingStars} role="group" aria-label="Valuta il tuo allenamento da una a cinque stelle">
+            {['Molto difficile', 'Difficile', 'Nella media', 'Ottimo', 'Eccellente'].map((label, index) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => rateCompletedWorkout(index + 1)}
+                aria-label={`${index + 1} stelle: ${label}`}
+                title={label}
+              ><Star aria-hidden="true" /></button>
+            ))}
+          </div>
+        </aside>,
+        document.body
+      ) : null}
+
     </section>
   );
 }

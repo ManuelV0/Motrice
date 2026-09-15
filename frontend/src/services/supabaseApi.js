@@ -230,6 +230,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       organizers: new Map(),
       joinRequests: new Map(),
       workoutPlans: new Map(),
+      moneyHolds: new Map(),
       moneySettlements: new Map(),
       moneyDisputes: new Map()
     };
@@ -242,6 +243,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       organizers: new Map(),
       joinRequests: new Map(),
       workoutPlans: new Map(),
+      moneyHolds: new Map(),
       moneySettlements: new Map(),
       moneyDisputes: new Map()
     };
@@ -253,6 +255,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
     organizersResult,
     joinRequestsResult,
     workoutPlansResult,
+    moneyHoldsResult,
     moneySettlementsResult,
     moneyDisputesResult
   ] = await Promise.all([
@@ -285,6 +288,11 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
           .in('id', workoutPlanIds)
       : Promise.resolve({ data: [], error: null }),
     client
+      .from('event_money_holds')
+      .select('event_id,user_id,status,amount_cents,funding_source')
+      .eq('user_id', authUserId)
+      .in('event_id', eventIds),
+    client
       .from('event_money_settlements')
       .select('id,event_id,status,attendee_count,no_show_count,returned_cents,platform_cents,redistributed_cents,release_at,created_at,released_at')
       .in('event_id', eventIds),
@@ -301,6 +309,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
   throwIfError(organizersResult.error);
   throwIfError(joinRequestsResult.error);
   throwIfError(workoutPlansResult.error);
+  throwIfError(moneyHoldsResult.error);
   throwIfError(moneySettlementsResult.error);
   throwIfError(moneyDisputesResult.error);
 
@@ -320,6 +329,9 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
     organizers: new Map(organizerRows.map((profile) => [String(profile.id), profile])),
     joinRequests: new Map(
       (joinRequestsResult.data || []).map((request) => [String(request.event_id), request])
+    ),
+    moneyHolds: new Map(
+      (moneyHoldsResult.data || []).map((hold) => [String(hold.event_id), hold])
     ),
     moneySettlements: new Map(
       (moneySettlementsResult.data || []).map((settlement) => [String(settlement.event_id), settlement])
@@ -360,7 +372,29 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const concludedParticipants = eventParticipants.filter((participant) =>
     ['completed', 'no_show'].includes(resolveParticipantOutcome(participant).id)
   );
-  const ownOutcome = resolveParticipantOutcome(ownParticipation);
+  const moneySettlement = context.moneySettlements.get(String(rawEvent.id)) || null;
+  const ownMoneyHold = context.moneyHolds.get(String(rawEvent.id)) || null;
+  const settlementPresentCount = Number(moneySettlement?.attendee_count);
+  const settlementNoShowCount = Number(moneySettlement?.no_show_count);
+  const hasSettlementCounts = Number.isFinite(settlementPresentCount) &&
+    settlementPresentCount >= 0 &&
+    Number.isFinite(settlementNoShowCount) &&
+    settlementNoShowCount >= 0;
+  const normalizedPresentCount = hasSettlementCounts
+    ? Math.trunc(settlementPresentCount)
+    : presentParticipants.length;
+  const participantTotalCount = concludedParticipants.length || participants.length;
+  const normalizedNoShowCount = hasSettlementCounts
+    ? Math.trunc(settlementNoShowCount)
+    : Math.max(0, participantTotalCount - normalizedPresentCount);
+  const normalizedTotalCount = hasSettlementCounts
+    ? normalizedPresentCount + normalizedNoShowCount
+    : participantTotalCount;
+  const ownOutcome = resolveParticipantOutcome({
+    user_rsvp: ownParticipation,
+    money_hold: ownMoneyHold,
+    money_settlement: moneySettlement
+  });
   const refundableParticipants = eventParticipants.filter((participant) =>
     ['going', 'completed'].includes(String(participant.status || '')) &&
     Number(participant.stake_cents || 0) > 0 &&
@@ -395,11 +429,13 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     duration_minutes: durationMinutes,
     participants_count: participants.length || 1,
     participants_checked_in_count: checkedInParticipants.length,
-    participants_present_count: presentParticipants.length,
-    participants_total_count: concludedParticipants.length || participants.length,
+    participants_present_count: normalizedPresentCount,
+    participants_no_show_count: normalizedNoShowCount,
+    participants_total_count: normalizedTotalCount,
     participant_stats: {
-      present: presentParticipants.length,
-      total: concludedParticipants.length || participants.length
+      present: normalizedPresentCount,
+      no_show: normalizedNoShowCount,
+      total: normalizedTotalCount
     },
     popularity: Math.max(20, participants.length * 14),
     description: rawEvent.description,
@@ -435,7 +471,8 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     ends_at: rawEvent.ends_at || null,
     archived_at: rawEvent.archived_at || null,
     completed_at: rawEvent.completed_at || null,
-    money_settlement: context.moneySettlements.get(String(rawEvent.id)) || null,
+    money_hold: ownMoneyHold,
+    money_settlement: moneySettlement,
     money_dispute: context.moneyDisputes.get(String(rawEvent.id)) || null,
     completion_xp: Number(rawEvent.completion_xp ?? 50),
     review_bonus_xp: Number(rawEvent.review_bonus_xp ?? 25),
@@ -1109,6 +1146,54 @@ function createRemoteMethods(localApi) {
       await assertProfileVerified('avviare l allenamento.');
       const { data, error } = await client.rpc('start_event_workout', {
         target_event_id: String(eventId)
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async listWorkoutExerciseHistory() {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('list_my_workout_exercise_history');
+      throwIfError(error);
+      return (data || []).map((entry) => ({
+        id: `${entry.event_id}:${entry.exercise_id}:${entry.set_number}`,
+        eventId: entry.event_id,
+        exerciseId: entry.exercise_id,
+        exerciseKey: entry.exercise_key,
+        exerciseName: entry.exercise_name,
+        setNumber: entry.set_number,
+        weightKg: Number(entry.weight_kg || 0),
+        reps: Number(entry.reps || 0),
+        rir: Number(entry.rir || 0),
+        equipment: entry.equipment || '',
+        completedAt: entry.completed_at
+      }));
+    },
+
+    async recordWorkoutExerciseSet(entry) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('upsert_my_workout_exercise_set', {
+        target_event_id: String(entry?.eventId || ''),
+        exercise_id_value: String(entry?.exerciseId || ''),
+        exercise_key_value: String(entry?.exerciseKey || ''),
+        exercise_name_value: String(entry?.exerciseName || 'Esercizio'),
+        set_number_value: Math.max(1, Number(entry?.setNumber) || 1),
+        weight_kg_value: Math.max(0, Number(entry?.weightKg) || 0),
+        reps_value: Math.max(0, Number(entry?.reps) || 0),
+        rir_value: Math.max(0, Math.min(10, Number(entry?.rir) || 0)),
+        equipment_value: String(entry?.equipment || ''),
+        completed_at_value: entry?.completedAt || new Date().toISOString()
+      });
+      throwIfError(error);
+      return data;
+    },
+
+    async removeWorkoutExerciseSet({ eventId, exerciseId, setNumber }) {
+      const client = requireSupabase();
+      const { data, error } = await client.rpc('delete_my_workout_exercise_set', {
+        target_event_id: String(eventId),
+        exercise_id_value: String(exerciseId),
+        set_number_value: Math.max(1, Number(setNumber) || 1)
       });
       throwIfError(error);
       return data;

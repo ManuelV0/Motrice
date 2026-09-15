@@ -13,9 +13,11 @@ function LandingHero({
     <section className={styles.hero} aria-labelledby="landing-hero-title">
       <div className={styles.bgImage} aria-hidden="true">
         <img
-          src="/images/landing-hero.png"
+          src="/images/landing-hero.webp"
           alt=""
           loading="eager"
+          decoding="async"
+          fetchPriority="high"
           width="1280"
           height="720"
         />
@@ -53,9 +55,10 @@ function LandingHero({
         <aside className={styles.previewCard} aria-label="Anteprima app Motrice">
           <div className={styles.previewImageWrap}>
             <img
-              src="/images/landing-gym-qr.png"
+              src="/images/landing-gym-qr.webp"
               alt="Validazione QR in palestra"
               loading="lazy"
+              decoding="async"
               width="420"
               height="315"
             />

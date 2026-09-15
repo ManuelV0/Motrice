@@ -91,15 +91,37 @@ L'APK debug viene creato in:
 mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Il workflow GitHub Actions `Android Capacitor Build` esegue gli stessi passaggi
-su ogni pull request e push verso `main`. L'APK risultante si scarica dagli
-artifact del workflow. Se sono configurati i quattro secret Android indicati
-nel workflow, viene prodotto anche un AAB release firmato:
+Il workflow GitHub Actions `Android release gate` controlla ogni pull request e
+push verso `main`, ma usa la chiave di caricamento soltanto quando la release
+viene avviata manualmente. Prima di creare l'AAB verifica test, dipendenze,
+versione, configurazione production, firma e impronta del certificato:
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
+
+Prima di una nuova pubblicazione:
+
+1. incrementa `releaseVersionCode` e `releaseVersionName` in
+   `mobile/android/app/build.gradle`;
+2. aggiorna `lastPublishedVersionCode` in `mobile/release-policy.json` con la
+   versione gia presente su Google Play;
+3. avvia manualmente il workflow e digita la stessa `releaseVersionName` come
+   conferma;
+4. carica in Play Console soltanto l'AAB accompagnato dal checksum generato.
+
+Per un controllo locale che non usa la chiave:
+
+```bash
+npm run release:check
+```
+
+La build locale firmata usa le quattro proprieta `RELEASE_*` da
+`~/.gradle/gradle.properties` o da `.env.release.local`; entrambi devono restare
+fuori da Git. Il comando `npm run release:android` si ferma se trova modifiche
+non salvate, una versione gia pubblicata, una chiave errata o un segreto nel
+bundle web.
 
 ## Supabase beta
 

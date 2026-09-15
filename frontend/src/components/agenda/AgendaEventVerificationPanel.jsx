@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserQRCodeReader } from '@zxing/browser';
-import QRCode from 'qrcode';
 import {
   ArrowRight,
   Camera,
@@ -28,6 +26,7 @@ import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
 import { startEventLocationTracking } from '../../services/eventLocationTracking';
 import { validateEventLocationProof } from '../../utils/eventLocationProof';
 import { isOutdoorTrackedEvent } from '../../utils/outdoorActivity';
+import { createQrDataUrl, loadQrScannerRuntime } from '../../services/qrRuntime';
 
 function requireEventLocationProof(location, event) {
   const proof = validateEventLocationProof({
@@ -216,7 +215,7 @@ function AgendaEventVerificationPanel({
       return undefined;
     }
 
-    QRCode.toDataURL(JSON.stringify(progress.qr_payload), {
+    createQrDataUrl(JSON.stringify(progress.qr_payload), {
       width: 360,
       margin: 2,
       color: { dark: '#0b0d0f', light: '#ffffff' },
@@ -303,20 +302,25 @@ function AgendaEventVerificationPanel({
 
   useEffect(() => {
     if (!scannerOpen || !videoRef.current || scanFeedback) return undefined;
-    const reader = new BrowserQRCodeReader(undefined, {
-      delayBetweenScanAttempts: 350,
-      delayBetweenScanSuccess: 1000
-    });
+    let reader = null;
     let cancelled = false;
 
-    reader
-      .decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
-        if (controls) scannerControlsRef.current = controls;
-        if (cancelled || !result || scanBusyRef.current) return;
-        controls?.stop();
-        submitScan(result.getText());
+    loadQrScannerRuntime()
+      .then((BrowserQRCodeReader) => {
+        if (cancelled) return null;
+        reader = new BrowserQRCodeReader(undefined, {
+          delayBetweenScanAttempts: 350,
+          delayBetweenScanSuccess: 1000
+        });
+        return reader.decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
+          if (controls) scannerControlsRef.current = controls;
+          if (cancelled || !result || scanBusyRef.current) return;
+          controls?.stop();
+          submitScan(result.getText());
+        });
       })
       .then((controls) => {
+        if (!controls) return;
         if (cancelled) controls.stop();
         else scannerControlsRef.current = controls;
       })
@@ -333,7 +337,7 @@ function AgendaEventVerificationPanel({
       cancelled = true;
       scannerControlsRef.current?.stop?.();
       scannerControlsRef.current = null;
-      reader.reset?.();
+      reader?.reset?.();
     };
   }, [scanFeedback, scannerCycle, scannerOpen, submitScan]);
 

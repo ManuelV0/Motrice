@@ -8,12 +8,49 @@ function normalized(value) {
 }
 
 export function resolveParticipantOutcome(source) {
-  const participant = source?.user_rsvp || source?.my_participant || source || {};
+  const nestedParticipant = source?.user_rsvp || source?.my_participant || null;
+  const looksLikeEvent = Boolean(
+    source && (
+      'event_datetime' in source ||
+      'starts_at' in source ||
+      'participants_count' in source ||
+      'organizer' in source
+    )
+  );
+  const participant = nestedParticipant || (looksLikeEvent ? {} : source) || {};
+  const hasParticipantRecord = Boolean(
+    nestedParticipant ||
+    participant.user_id ||
+    participant.status ||
+    participant.lifecycle_state ||
+    source?.participant_status ||
+    source?.participant_lifecycle_state
+  );
+  const moneyHoldStatus = normalized(source?.money_hold?.status || participant.money_hold_status);
+  const settlementAttendees = Number(source?.money_settlement?.attendee_count);
+  const settlementNoShows = Number(source?.money_settlement?.no_show_count);
+  const hasSingletonSettlement = hasParticipantRecord &&
+    Number.isFinite(settlementAttendees) &&
+    Number.isFinite(settlementNoShows) &&
+    settlementAttendees + settlementNoShows === 1;
   const lifecycleState = normalized(
     participant.lifecycle_state || source?.participant_lifecycle_state
   );
   const status = normalized(participant.status || source?.participant_status);
   const attendance = normalized(participant.attendance);
+
+  // The money hold and a single-person settlement are produced by the same
+  // verified-presence rule that moves real balances. They repair stale legacy
+  // participant rows without guessing which member attended a group event.
+  if (moneyHoldStatus === 'forfeited' || (hasSingletonSettlement && settlementNoShows === 1)) {
+    return { id: 'no_show', lifecycleState, status, attendance: 'no_show', isPresent: false };
+  }
+  if (
+    ['pending_return', 'released'].includes(moneyHoldStatus) ||
+    (hasSingletonSettlement && settlementAttendees === 1)
+  ) {
+    return { id: 'completed', lifecycleState, status, attendance: 'attended', isPresent: true };
+  }
 
   // Terminal server states always win over check-in timestamps and legacy
   // cashback values. A check-in alone is not a completed presence.

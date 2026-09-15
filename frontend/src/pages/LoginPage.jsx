@@ -267,7 +267,7 @@ function LoginPage({ startup = false, resetPasswordMode = false }) {
     <section className={`${styles.page} ${startup ? styles.startupPage : ''}`}>
       <div className={styles.heroImage} aria-hidden="true">
         <img
-          src="/images/startup-auth.jpeg"
+          src="/images/startup-auth.webp"
           alt=""
           loading="eager"
           width="1122"

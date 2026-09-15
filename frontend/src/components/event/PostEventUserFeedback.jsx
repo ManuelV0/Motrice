@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Check,
@@ -6,7 +8,9 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
-  UserRound
+  UserRound,
+  UsersRound,
+  X
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -63,7 +67,20 @@ function RatingRow({ field, value, onChange }) {
   );
 }
 
-function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onCompleted }) {
+function getTargetKey(target) {
+  return String(target?.auth_user_id || target?.user_id || '');
+}
+
+function PostEventUserFeedback({
+  eventId,
+  enabled = true,
+  bonusXp = 25,
+  onCompleted,
+  onTargetsChange,
+  presentation = 'full',
+  promptVisible = true
+}) {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(Boolean(enabled));
@@ -74,6 +91,9 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
   const [reportNote, setReportNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [awardedXp, setAwardedXp] = useState(0);
+  const [compactOpen, setCompactOpen] = useState(false);
+  const [selectedTargetKey, setSelectedTargetKey] = useState('');
+  const compactMode = presentation === 'completionDock';
 
   useEffect(() => {
     if (!enabled || !eventId) {
@@ -86,10 +106,13 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
     api.listEventReviewTargets(eventId)
       .then((result) => {
         if (!active) return;
-        setTargets(Array.isArray(result) ? result : []);
+        const nextTargets = Array.isArray(result) ? result : [];
+        setTargets(nextTargets);
+        onTargetsChange?.(nextTargets);
       })
       .catch((error) => {
         if (!active) return;
+        onTargetsChange?.([]);
         setLoadError(error?.message || 'Valutazioni momentaneamente non disponibili');
       })
       .finally(() => {
@@ -102,7 +125,9 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
     () => targets.filter((target) => !target.reviewed),
     [targets]
   );
-  const currentTarget = pendingTargets[0] || null;
+  const currentTarget = pendingTargets.find((target) => getTargetKey(target) === selectedTargetKey)
+    || pendingTargets[0]
+    || null;
   const completedCount = targets.length - pendingTargets.length;
   const progress = targets.length ? Math.round((completedCount / targets.length) * 100) : 0;
   const fields = currentTarget?.role_key === 'organizer'
@@ -141,11 +166,15 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
       const bonus = Number(result?.bonus_xp || 0);
       if (bonus > 0) setAwardedXp(bonus);
       setTargets((current) => current.map((target) => (
-        String(target.user_id) === String(currentTarget.user_id)
+        getTargetKey(target) === getTargetKey(currentTarget)
           ? { ...target, reviewed: true }
           : target
       )));
       resetForm();
+      if (compactMode) {
+        setCompactOpen(false);
+        setSelectedTargetKey('');
+      }
       if (result?.all_completed) {
         showToast(bonus > 0 ? `Valutazioni completate · +${bonus} XP` : 'Valutazioni completate', 'success');
         onCompleted?.(result);
@@ -160,12 +189,15 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
   }
 
   if (!enabled || loading) {
-    return enabled ? <section className={styles.loading} aria-label="Caricamento valutazioni"><span /></section> : null;
+    return enabled && !compactMode
+      ? <section className={styles.loading} aria-label="Caricamento valutazioni"><span /></section>
+      : null;
   }
   if (loadError) return null;
   if (!targets.length) return null;
 
   if (!currentTarget) {
+    if (compactMode) return null;
     return (
       <section className={styles.completed} aria-live="polite">
         <span className={styles.completedIcon}><Check size={24} aria-hidden="true" /></span>
@@ -179,9 +211,66 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
     );
   }
 
+  if (compactMode && !promptVisible) return null;
+
+  if (compactMode && !compactOpen) {
+    const manyParticipants = targets.length > 5;
+    if (manyParticipants) {
+      return createPortal(
+        <aside className={styles.compactActionDock}>
+          <button type="button" onClick={() => navigate(`/events/${eventId}/feedback`)}>
+            <span aria-hidden="true"><UsersRound size={19} /></span>
+            <strong>Valuta i partecipanti</strong>
+            <small>+{bonusXp} XP</small>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </aside>,
+        document.body
+      );
+    }
+    return createPortal(
+      <aside className={styles.compactDock} aria-labelledby="post-workout-feedback-title">
+        <div className={styles.compactDockHeading}>
+          <span aria-hidden="true"><UsersRound size={18} /></span>
+          <div>
+            <strong id="post-workout-feedback-title">Valuta chi si è allenato con te</strong>
+            <small>Feedback verificato · +{bonusXp} XP complessivi</small>
+          </div>
+        </div>
+        <div
+          className={styles.compactPeople}
+          style={{ gridTemplateColumns: `repeat(${Math.max(1, Math.min(5, pendingTargets.length))}, minmax(0, 1fr))` }}
+          aria-label="Persone disponibili per la valutazione"
+        >
+          {pendingTargets.map((target) => {
+            const initial = String(target.display_name || 'U').trim().slice(0, 1).toUpperCase();
+            return (
+              <button
+                key={getTargetKey(target)}
+                type="button"
+                onClick={() => {
+                  setSelectedTargetKey(getTargetKey(target));
+                  setCompactOpen(true);
+                }}
+              >
+                <span>
+                  {target.avatar_url
+                    ? <img src={target.avatar_url} alt="" />
+                    : initial}
+                </span>
+                <strong>{target.display_name || 'Utente Motrice'}</strong>
+              </button>
+            );
+          })}
+        </div>
+      </aside>,
+      document.body
+    );
+  }
+
   const initial = String(currentTarget.display_name || 'U').trim().slice(0, 1).toUpperCase();
 
-  return (
+  const feedbackPanel = (
     <section className={styles.panel} aria-labelledby="post-event-feedback-title">
       <header className={styles.header}>
         <div>
@@ -276,6 +365,27 @@ function PostEventUserFeedback({ eventId, enabled = true, bonusXp = 25, onComple
       {!formComplete ? <p className={styles.formHint}>Seleziona da 1 a 5 stelle per ogni parametro.</p> : null}
     </section>
   );
+
+  if (compactMode) {
+    return createPortal(
+      <div className={styles.feedbackSheetBackdrop} onPointerDown={() => setCompactOpen(false)}>
+        <div className={styles.feedbackSheet} onPointerDown={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            className={styles.feedbackSheetClose}
+            onClick={() => setCompactOpen(false)}
+            aria-label="Chiudi valutazione"
+          >
+            <X size={21} aria-hidden="true" />
+          </button>
+          {feedbackPanel}
+        </div>
+      </div>,
+      document.body
+    );
+  }
+
+  return feedbackPanel;
 }
 
 export default PostEventUserFeedback;

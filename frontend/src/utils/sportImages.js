@@ -9,12 +9,12 @@ const SPORT_IMAGE_MAP = {
 };
 
 const SPORT_HERO_IMAGE_MAP = [
-  { pattern: /palestra|fitness|forza|functional|workout|hiit/i, image: '/images/hero-palestra-v2.jpg' },
-  { pattern: /padel|tennis|racchetta/i, image: '/images/hero-padel-v2.jpg' },
-  { pattern: /calcio|calcetto|football|futsal/i, image: '/images/hero-calcio-v2.jpg' },
-  { pattern: /running|corsa|jogging/i, image: '/images/hero-running-v2.jpg' },
-  { pattern: /bici|bike|cycling|ciclismo|mtb/i, image: '/images/hero-bici-v2.jpg' },
-  { pattern: /trekking|trail|hiking|camminata/i, image: '/images/hero-trekking-v2.jpg' }
+  { pattern: /palestra|fitness|forza|functional|workout|hiit/i, image: '/images/hero-palestra-v2.webp' },
+  { pattern: /padel|tennis|racchetta/i, image: '/images/hero-padel-v2.webp' },
+  { pattern: /calcio|calcetto|football|futsal/i, image: '/images/hero-calcio-v2.webp' },
+  { pattern: /running|corsa|jogging/i, image: '/images/hero-running-v2.webp' },
+  { pattern: /bici|bike|cycling|ciclismo|mtb/i, image: '/images/hero-bici-v2.webp' },
+  { pattern: /trekking|trail|hiking|camminata/i, image: '/images/hero-trekking-v2.webp' }
 ];
 
 function normalizeSport(value = '') {
@@ -34,6 +34,6 @@ export function getSportHeroImage(sportName, title = '') {
   const source = `${normalizeSport(sportName)} ${normalizeSport(title)}`;
   return (
     SPORT_HERO_IMAGE_MAP.find((item) => item.pattern.test(source))?.image ||
-    '/images/hero-sport-default-v2.jpg'
+    '/images/hero-sport-default-v2.webp'
   );
 }

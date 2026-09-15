@@ -5,9 +5,30 @@ def releaseStorePassword = project.findProperty("RELEASE_STORE_PASSWORD")
 def releaseKeyAlias = project.findProperty("RELEASE_KEY_ALIAS")
 def releaseKeyPassword = project.findProperty("RELEASE_KEY_PASSWORD")
 def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("release")
+}
 // Keep Play Store releases explicit and reproducible even when the CI run counter advances.
-def releaseVersionCode = 115
-def releaseVersionName = "1.0.115"
+def releaseVersionCode = 116
+def releaseVersionName = "1.0.116"
+
+if (releaseTaskRequested && !hasReleaseSigning) {
+    throw new GradleException(
+        "Release Android bloccata: configura RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, " +
+        "RELEASE_KEY_ALIAS e RELEASE_KEY_PASSWORD. Non e consentita una release non firmata."
+    )
+}
+
+if (releaseTaskRequested && hasReleaseSigning) {
+    def configuredStore = rootProject.file(releaseStoreFile)
+    def unsafeStoreName = configuredStore.name.toLowerCase()
+    if (!configuredStore.isFile()) {
+        throw new GradleException("Release Android bloccata: il keystore configurato non esiste.")
+    }
+    if (unsafeStoreName == "debug.keystore" || unsafeStoreName.contains("testkey")) {
+        throw new GradleException("Release Android bloccata: non usare una chiave debug o di test.")
+    }
+}
 
 android {
     namespace = "com.motrice.app"
@@ -40,8 +61,9 @@ android {
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.release
             }
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }

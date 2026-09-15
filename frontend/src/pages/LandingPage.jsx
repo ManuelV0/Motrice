@@ -196,7 +196,7 @@ function LandingPage() {
             <LandingSection id="come-funziona" kicker="Come funziona" title="3 passaggi. Zero frizione." description="Dal primo tap alla validazione in palestra: tutto lineare e immediato.">
               <div className={styles.stepsVisual}>
                 <div className={styles.stepsImageWrap}>
-                  <img src="/images/landing-steps.png" alt="Flusso in 3 passaggi: trova, scansiona, valida" loading="lazy" width="640" height="360" />
+                  <img src="/images/landing-steps.webp" alt="Flusso in 3 passaggi: trova, scansiona, valida" loading="lazy" width="640" height="360" />
                 </div>
                 <div className={styles.stepsGrid}>
                   {howItWorks.map((step) => {
@@ -220,7 +220,7 @@ function LandingPage() {
             <LandingSection id="reputazione" kicker="Sistema reputazione" title="Ogni presenza conta" description="Utenti e partner costruiscono reputazione con interazioni reali e validate.">
               <div className={styles.reputationVisual}>
                 <div className={styles.reputationImageWrap}>
-                  <img src="/images/landing-reputation.png" alt="Sistema badge e trofei" loading="lazy" width="480" height="360" />
+                  <img src="/images/landing-reputation.webp" alt="Sistema badge e trofei" loading="lazy" width="480" height="360" />
                 </div>
                 <div className={styles.reputationCards}>
                   <article className={styles.reputationCard}><h3><Trophy size={16} aria-hidden="true" /> Badge utente</h3><p>La costanza nelle presenze migliora livello e affidabilita nel tempo.</p></article>

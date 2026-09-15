@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';

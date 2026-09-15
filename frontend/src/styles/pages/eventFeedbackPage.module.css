@@ -1,0 +1,152 @@
+.page {
+  min-height: 100dvh;
+  padding-bottom: calc(48px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 90% 0%, rgba(204, 255, 0, 0.08), transparent 28rem),
+    #101010;
+  color: #fff;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: calc(11px + env(safe-area-inset-top)) 14px 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 16, 16, 0.92);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.header > button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #353535;
+  border-radius: 12px;
+  background: #1b1b1b;
+  color: #fff;
+}
+
+.header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.header small {
+  color: #8d956d;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+.header strong {
+  overflow: hidden;
+  font-size: 0.95rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header > span {
+  min-height: 34px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(204, 255, 0, 0.32);
+  border-radius: 999px;
+  background: rgba(204, 255, 0, 0.08);
+  color: #ccff00;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.content {
+  width: min(calc(100% - 24px), 680px);
+  margin: 0 auto;
+  padding-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.intro {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(204, 255, 0, 0.22);
+  border-radius: 15px;
+  background: rgba(204, 255, 0, 0.05);
+}
+
+.intro > span {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #ccff00;
+  color: #0a0a0a;
+}
+
+.intro strong {
+  font-size: 0.84rem;
+}
+
+.intro p {
+  margin: 3px 0 0;
+  color: #9b9b9b;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.emptyState {
+  min-height: 190px;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid #303030;
+  border-radius: 18px;
+  background: #191919;
+  text-align: center;
+}
+
+.emptyState > svg {
+  color: #7f895a;
+}
+
+.emptyState strong {
+  font-size: 0.92rem;
+}
+
+.emptyState p {
+  max-width: 390px;
+  margin: 0;
+  color: #8f8f8f;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.emptyState button {
+  min-height: 40px;
+  margin-top: 4px;
+  padding: 0 14px;
+  border: 1px solid #3a3a3a;
+  border-radius: 11px;
+  background: #111;
+  color: #d8d8d8;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 850;
+}

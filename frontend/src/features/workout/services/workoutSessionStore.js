@@ -51,7 +51,38 @@ export function loadWorkoutExerciseHistory() {
   }
 }
 
-export function recordWorkoutSet({ eventId, exercise, setNumber, weightKg, reps }) {
+export function mergeWorkoutExerciseHistory(remoteHistory = []) {
+  const previous = loadWorkoutExerciseHistory();
+  const merged = new Map(previous.map((entry) => [String(entry?.id || ''), entry]));
+  (Array.isArray(remoteHistory) ? remoteHistory : []).forEach((entry) => {
+    const eventId = String(entry?.eventId || entry?.event_id || '');
+    const exerciseId = String(entry?.exerciseId || entry?.exercise_id || entry?.exerciseKey || entry?.exercise_key || 'exercise');
+    const setNumber = Math.max(1, Number(entry?.setNumber || entry?.set_number) || 1);
+    if (!eventId) return;
+    const id = String(entry?.id || `${eventId}:${exerciseId}:${setNumber}`);
+    merged.set(id, {
+      id,
+      eventId,
+      exerciseId,
+      exerciseKey: String(entry?.exerciseKey || entry?.exercise_key || exerciseId),
+      exerciseName: String(entry?.exerciseName || entry?.exercise_name || 'Esercizio'),
+      setNumber,
+      weightKg: normalizeLoad(entry?.weightKg ?? entry?.weight_kg),
+      reps: normalizeReps(entry?.reps),
+      rir: Math.max(0, Math.min(10, Number(entry?.rir) || 0)),
+      equipment: String(entry?.equipment || '').trim(),
+      completedAt: entry?.completedAt || entry?.completed_at || new Date().toISOString()
+    });
+  });
+  const next = [...merged.values()]
+    .filter((entry) => entry?.id)
+    .sort((left, right) => Date.parse(left?.completedAt || 0) - Date.parse(right?.completedAt || 0))
+    .slice(-1500);
+  safeStorageSet(historyKey(), JSON.stringify(next));
+  return next;
+}
+
+export function recordWorkoutSet({ eventId, exercise, setNumber, weightKg, reps, rir }) {
   const exerciseName = String(exercise?.name || 'Esercizio').trim();
   const exerciseKey = exerciseName
     .normalize('NFD')
@@ -69,6 +100,8 @@ export function recordWorkoutSet({ eventId, exercise, setNumber, weightKg, reps 
     setNumber: Math.max(1, Number(setNumber) || 1),
     weightKg: normalizeLoad(weightKg),
     reps: normalizeReps(reps),
+    rir: Math.max(0, Math.min(10, Number(rir) || 0)),
+    equipment: String(exercise?.equipment || '').trim(),
     completedAt: new Date().toISOString()
   };
   const previous = loadWorkoutExerciseHistory();
@@ -81,6 +114,21 @@ export function recordWorkoutSet({ eventId, exercise, setNumber, weightKg, reps 
   safeStorageSet(historyKey(), JSON.stringify(next));
   window.dispatchEvent(new CustomEvent('motrice-workout-history-changed'));
   return nextEntry;
+}
+
+export function removeWorkoutSet({ eventId, exerciseId, setNumber }) {
+  const targetEventId = String(eventId);
+  const targetExerciseId = String(exerciseId);
+  const targetSetNumber = Math.max(1, Number(setNumber) || 1);
+  const previous = loadWorkoutExerciseHistory();
+  const next = previous.filter((entry) => !(
+    String(entry?.eventId || '') === targetEventId &&
+    String(entry?.exerciseId || '') === targetExerciseId &&
+    Number(entry?.setNumber || 0) === targetSetNumber
+  ));
+  safeStorageSet(historyKey(), JSON.stringify(next));
+  window.dispatchEvent(new CustomEvent('motrice-workout-history-changed'));
+  return next;
 }
 
 export function normalizeWorkoutExercises(exercises = []) {
@@ -109,11 +157,22 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
     exercise.id,
     normalizeLoad(previous?.exerciseLoads?.[exercise.id] ?? exercise.weight)
   ]));
+  const exerciseOverrides = Object.fromEntries(normalized.map((exercise) => {
+    const saved = previous?.exerciseOverrides?.[exercise.id] || {};
+    const completed = Math.max(0, Number(completedSets[exercise.id]) || 0);
+    return [exercise.id, {
+      sets: Math.max(1, completed, Math.round(Number(saved.sets) || exercise.sets)),
+      reps: String(saved.reps || exercise.reps).trim() || exercise.reps,
+      rir: Math.max(0, Math.min(10, Math.round(Number(saved.rir ?? exercise.rir) || 0))),
+      recovery: Math.max(0, Math.min(900, Math.round(Number(saved.recovery ?? exercise.recovery) || 0)))
+    }];
+  }));
   const completedSetLoads = Object.fromEntries(normalized.map((exercise) => {
     const savedLoads = Array.isArray(previous?.completedSetLoads?.[exercise.id])
       ? previous.completedSetLoads[exercise.id]
       : [];
-    return [exercise.id, savedLoads.slice(0, exercise.sets).map(normalizeLoad)];
+    const effectiveSets = exerciseOverrides[exercise.id]?.sets || exercise.sets;
+    return [exercise.id, savedLoads.slice(0, effectiveSets).map(normalizeLoad)];
   }));
 
   return saveWorkoutSession(eventId, {
@@ -123,9 +182,11 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
     completedSets,
     exerciseLoads,
     completedSetLoads,
+    exerciseOverrides,
     currentExerciseId: previous?.currentExerciseId || normalized[0]?.id || null,
     sixtyPercentAwarded: Boolean(previous?.sixtyPercentAwarded || remote?.mot_sixty_awarded),
     completionAwarded: Boolean(previous?.completionAwarded || remote?.xp_completion_awarded),
+    selfRating: Math.max(0, Math.min(5, Math.round(Number(previous?.selfRating) || 0))),
     reviewSubmitted: Boolean(previous?.reviewSubmitted || remote?.review_submitted)
   });
 }

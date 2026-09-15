@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
-  ArrowLeft,
   ArrowUp,
   Check,
   Clock3,
@@ -10,6 +9,9 @@ import {
   Copy,
   Dumbbell,
   Eye,
+  Filter,
+  GripVertical,
+  Layers3,
   Pencil,
   Plus,
   RefreshCw,
@@ -21,6 +23,7 @@ import {
 } from 'lucide-react';
 import Button from '../../../components/Button';
 import BrandLogo from '../../../components/BrandLogo';
+import Modal from '../../../components/Modal';
 import { usePageMeta } from '../../../hooks/usePageMeta';
 import { useToast } from '../../../context/ToastContext';
 import { safeStorageGet, safeStorageSet } from '../../../utils/safeStorage';
@@ -46,6 +49,7 @@ import {
 import styles from '../../../styles/pages/personalPlans.module.css';
 
 const DELETED_STORAGE_SUFFIX = ':deleted';
+const ALL_CATEGORIES = [{ id: 'all', label: 'Tutti' }, ...EXERCISE_CATEGORIES];
 
 function uniqueId(prefix = 'item') {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -125,6 +129,18 @@ function normalizeSearch(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function draftSnapshot(value) {
+  if (!value) return '';
+  const { createdAt, updatedAt, remoteId, ...editable } = value;
+  return JSON.stringify(editable);
+}
+
+function formatPlanDate(value) {
+  const date = new Date(value || 0);
+  if (Number.isNaN(date.getTime())) return 'Mai aggiornata';
+  return `Aggiornata ${new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'short' }).format(date)}`;
+}
+
 function MyPlansPage() {
   const { showToast } = useToast();
   const storageKey = useMemo(() => getPersonalWorkoutPlansStorageKey(), []);
@@ -136,13 +152,21 @@ function MyPlansPage() {
   const [step, setStep] = useState(initialPlans.length ? 1 : 3);
   const [draft, setDraft] = useState(createStarterDraft);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerCategory, setPickerCategory] = useState('petto');
+  const [pickerCategory, setPickerCategory] = useState('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [pendingExerciseIds, setPendingExerciseIds] = useState([]);
   const [editingExercise, setEditingExercise] = useState(null);
   const [draggedExerciseIndex, setDraggedExerciseIndex] = useState(null);
   const [syncState, setSyncState] = useState(remoteSyncEnabled ? 'syncing' : 'local');
+  const [libraryQuery, setLibraryQuery] = useState('');
+  const [librarySport, setLibrarySport] = useState('all');
+  const [planPendingDelete, setPlanPendingDelete] = useState(null);
+  const [editorClosePending, setEditorClosePending] = useState(false);
+  const [draftError, setDraftError] = useState('');
   const lastExerciseRef = useRef(null);
+  const exerciseEditorPanelRef = useRef(null);
+  const draftBaselineRef = useRef(draftSnapshot(draft));
+  const editorDismissedRef = useRef(false);
 
   usePageMeta({
     title: 'Schede personali | Motrice',
@@ -157,11 +181,54 @@ function MyPlansPage() {
   const filteredExercises = useMemo(() => {
     const query = normalizeSearch(pickerQuery);
     return PERSONAL_EXERCISE_LIBRARY.filter((exercise) => {
-      if (exercise.category !== pickerCategory) return false;
+      if (!query && pickerCategory !== 'all' && exercise.category !== pickerCategory) return false;
       if (!query) return true;
       return normalizeSearch(`${exercise.name} ${exercise.equipment} ${getCategoryLabel(exercise.category)}`).includes(query);
     });
   }, [pickerCategory, pickerQuery]);
+  const visiblePlans = useMemo(() => {
+    const query = normalizeSearch(libraryQuery);
+    return plans.filter((plan) => {
+      if (librarySport !== 'all' && plan.sportId !== librarySport) return false;
+      if (!query) return true;
+      const exercises = (plan.exercises || []).map((exercise) => exercise.name).join(' ');
+      return normalizeSearch(`${plan.title} ${plan.type} ${getSportById(plan.sportId).label} ${exercises}`).includes(query);
+    });
+  }, [libraryQuery, librarySport, plans]);
+  const availableSports = useMemo(() => (
+    WORKOUT_SPORTS.filter((sport) => plans.some((plan) => plan.sportId === sport.id))
+  ), [plans]);
+  const totalExercises = useMemo(() => (
+    plans.reduce((total, plan) => total + (Array.isArray(plan.exercises) ? plan.exercises.length : 0), 0)
+  ), [plans]);
+  const hasUnsavedChanges = screen === 'editor' && draftSnapshot(draft) !== draftBaselineRef.current;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return undefined;
+    const warnBeforeLeaving = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeaving);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!editingExercise) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      if (exerciseEditorPanelRef.current) exerciseEditorPanelRef.current.scrollTop = 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editingExercise?.instanceId]);
+
+  useEffect(() => {
+    if (!planPendingDelete) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setPlanPendingDelete(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [planPendingDelete]);
 
   useEffect(() => {
     if (!remoteSyncEnabled) return undefined;
@@ -193,14 +260,14 @@ function MyPlansPage() {
         setPlans(nextPlans);
         safeStorageSet(storageKey, JSON.stringify(nextPlans));
         setSyncState('synced');
-        if (!nextPlans.length && !initialPlans.length) {
+        if (!nextPlans.length && !initialPlans.length && !editorDismissedRef.current) {
           setScreen('editor');
           setStep(3);
         }
       } catch {
         if (!active) return;
         setSyncState('offline');
-        if (!initialPlans.length) {
+        if (!initialPlans.length && !editorDismissedRef.current) {
           setScreen('editor');
           setStep(3);
         }
@@ -221,22 +288,40 @@ function MyPlansPage() {
   }
 
   function startNewPlan() {
-    setDraft(createStarterDraft());
+    const nextDraft = createStarterDraft();
+    editorDismissedRef.current = false;
+    draftBaselineRef.current = draftSnapshot(nextDraft);
+    setDraft(nextDraft);
     setStep(1);
     setScreen('editor');
+    setDraftError('');
   }
 
   function openPlan(plan) {
-    setDraft(copyValue(plan));
+    const nextDraft = copyValue(plan);
+    editorDismissedRef.current = false;
+    draftBaselineRef.current = draftSnapshot(nextDraft);
+    setDraft(nextDraft);
     setStep(3);
     setScreen('editor');
+    setDraftError('');
   }
 
-  function closeEditor() {
+  function completeEditorClose() {
+    editorDismissedRef.current = true;
+    setEditorClosePending(false);
     setScreen('library');
     setStep(1);
     setPickerOpen(false);
     setEditingExercise(null);
+  }
+
+  function closeEditor() {
+    if (hasUnsavedChanges) {
+      setEditorClosePending(true);
+      return;
+    }
+    completeEditorClose();
   }
 
   function selectSport(sportId) {
@@ -269,13 +354,16 @@ function MyPlansPage() {
 
   function validateDraft() {
     if (String(draft.title || '').trim().length < 3) {
+      setDraftError('title');
       showToast('Inserisci un nome per la scheda', 'error');
       return false;
     }
     if (!draft.exercises.length) {
+      setDraftError('exercises');
       showToast('Aggiungi almeno un esercizio', 'error');
       return false;
     }
+    setDraftError('');
     return true;
   }
 
@@ -322,27 +410,13 @@ function MyPlansPage() {
       : [savedPlan, ...plans];
     persistPlans(nextPlans);
     setDraft(savedPlan);
+    draftBaselineRef.current = draftSnapshot(savedPlan);
     setScreen('library');
     setStep(1);
     await syncSavedPlan(savedPlan, existingIndex >= 0 ? 'Scheda aggiornata' : 'Scheda personale salvata');
   }
 
-  async function duplicatePlan(plan) {
-    const now = new Date().toISOString();
-    const duplicate = {
-      ...copyValue(plan),
-      id: uniqueId('plan'),
-      title: `${plan.title} - Copia`,
-      exercises: plan.exercises.map((exercise) => ({ ...exercise, instanceId: uniqueId('exercise') })),
-      createdAt: now,
-      updatedAt: now
-    };
-    persistPlans([duplicate, ...plans]);
-    await syncSavedPlan(duplicate, 'Scheda duplicata');
-  }
-
   async function deletePlan(planId) {
-    if (!window.confirm('Eliminare definitivamente questa scheda personale?')) return;
     persistPlans(plans.filter((plan) => plan.id !== planId));
     if (!remoteSyncEnabled) {
       showToast('Scheda eliminata', 'success');
@@ -365,6 +439,8 @@ function MyPlansPage() {
 
   function openExercisePicker() {
     setPendingExerciseIds([]);
+    setPickerQuery('');
+    setPickerCategory('all');
     setPickerOpen(true);
   }
 
@@ -394,6 +470,7 @@ function MyPlansPage() {
       ...current,
       exercises: [...current.exercises, ...selectedExercises.map(exerciseFromCatalog)]
     }));
+    setDraftError('');
     setPendingExerciseIds([]);
     setPickerOpen(false);
     showToast(
@@ -469,8 +546,8 @@ function MyPlansPage() {
     const progressSteps = [
       { id: 1, label: 'Sport' },
       { id: 2, label: 'Tipo' },
-      { id: 3, label: 'Scheda' },
-      { id: 4, label: 'Salva' }
+      { id: 3, label: 'Esercizi' },
+      { id: 4, label: 'Riepilogo' }
     ];
     return (
       <div className={styles.progress} aria-label={`Passaggio ${step} di 4`}>
@@ -505,6 +582,7 @@ function MyPlansPage() {
               type="button"
               className={`${styles.sportCard} ${draft.sportId === sport.id ? styles.sportCardActive : ''}`}
               onClick={() => selectSport(sport.id)}
+              aria-pressed={draft.sportId === sport.id}
             >
               <span className={styles.sportEmoji}>{sport.emoji}</span>
               <strong>{sport.label}</strong>
@@ -530,6 +608,7 @@ function MyPlansPage() {
               type="button"
               className={`${styles.typeCard} ${draft.type === type ? styles.typeCardActive : ''}`}
               onClick={() => selectType(type)}
+              aria-pressed={draft.type === type}
             >
               <Dumbbell size={22} aria-hidden="true" />
               <strong>{type}</strong>
@@ -539,7 +618,7 @@ function MyPlansPage() {
         </div>
         <div className={styles.twoActions}>
           <Button type="button" variant="secondary" onClick={() => setStep(1)}>Indietro</Button>
-          <Button type="button" onClick={() => setStep(3)}>Crea la scheda</Button>
+          <Button type="button" onClick={() => setStep(3)}>Continua agli esercizi</Button>
         </div>
       </div>
     );
@@ -561,6 +640,7 @@ function MyPlansPage() {
         }}
       >
         <div className={styles.exerciseOrder}>
+          <GripVertical size={15} aria-hidden="true" />
           <strong>{String(index + 1).padStart(2, '0')}</strong>
           <button type="button" onClick={() => moveExercise(index, index - 1)} disabled={index === 0} aria-label={`Sposta ${exercise.name} sopra`}>
             <ArrowUp size={14} aria-hidden="true" />
@@ -581,8 +661,8 @@ function MyPlansPage() {
             {Number(exercise.recovery) > 0 ? <span>Recupero {exercise.recovery} sec</span> : null}
           </p>
           <div className={styles.exerciseActions}>
-            <button type="button" onClick={() => openExerciseEditor(exercise, index)}><Pencil size={14} /> Mod</button>
-            <button type="button" onClick={() => duplicateExercise(index)}><Copy size={14} /> Dup</button>
+            <button type="button" onClick={() => openExerciseEditor(exercise, index)}><Pencil size={14} /> Modifica</button>
+            <button type="button" onClick={() => duplicateExercise(index)}><Copy size={14} /> Duplica</button>
             <button type="button" onClick={() => removeExercise(index)} aria-label={`Elimina ${exercise.name}`}><Trash2 size={14} /></button>
           </div>
         </div>
@@ -591,28 +671,38 @@ function MyPlansPage() {
   }
 
   function renderBuilderStep() {
+    const totalSets = draft.exercises.reduce((total, exercise) => total + Math.max(1, Number(exercise.sets) || 1), 0);
     return (
       <div className={styles.builderStep}>
         <div className={styles.builderTopbar}>
           <button type="button" className={styles.circleButton} onClick={() => setStep(2)} aria-label="Torna al tipo di allenamento">
-            <ArrowLeft size={20} aria-hidden="true" />
+            <span aria-hidden="true">←</span>
           </button>
-          <Button type="button" size="sm" variant="secondary" icon={Eye} onClick={previewDraft}>Anteprima</Button>
+          <span className={styles.builderSummary}>{draft.exercises.length} esercizi · {totalSets} serie</span>
         </div>
 
-        <h2>Crea la tua scheda</h2>
+        <div className={styles.builderHeading}>
+          <p className={styles.eyebrow}>{draft.id ? 'Modifica routine' : 'Nuova routine'}</p>
+          <h2>Componi la scheda</h2>
+        </div>
         <div className={styles.contextBadges}>
           <span>Sport: {currentSport.label}</span>
           <span>{draft.type}</span>
         </div>
 
-        <label className={styles.fieldLabel}>
+        <label className={`${styles.fieldLabel} ${draftError === 'title' ? styles.fieldLabelError : ''}`}>
           <span>Nome della scheda</span>
           <input
             value={draft.title}
-            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value.slice(0, 70) }))}
+            onChange={(event) => {
+              setDraft((current) => ({ ...current, title: event.target.value.slice(0, 70) }));
+              if (draftError === 'title') setDraftError('');
+            }}
             placeholder="Es. Push Day - Petto e Tricipiti"
+            aria-invalid={draftError === 'title'}
+            aria-describedby={draftError === 'title' ? 'plan-title-error' : undefined}
           />
+          {draftError === 'title' ? <small id="plan-title-error" className={styles.inlineError}>Inserisci almeno 3 caratteri.</small> : null}
         </label>
 
         <section className={styles.settingsSection}>
@@ -621,7 +711,7 @@ function MyPlansPage() {
             <span className={styles.settingName}><Clock3 size={18} /> Durata</span>
             <div className={styles.segmented}>
               {WORKOUT_DURATIONS.map((duration) => (
-                <button key={duration} type="button" className={draft.duration === duration ? styles.segmentActive : ''} onClick={() => setDraft((current) => ({ ...current, duration }))}>
+                <button key={duration} type="button" className={draft.duration === duration ? styles.segmentActive : ''} onClick={() => setDraft((current) => ({ ...current, duration }))} aria-pressed={draft.duration === duration}>
                   {duration}m
                 </button>
               ))}
@@ -631,7 +721,7 @@ function MyPlansPage() {
             <span className={styles.settingName}>Livello</span>
             <div className={styles.segmented}>
               {WORKOUT_LEVELS.map((level) => (
-                <button key={level.id} type="button" className={draft.level === level.id ? styles.segmentActive : ''} onClick={() => setDraft((current) => ({ ...current, level: level.id }))}>
+                <button key={level.id} type="button" className={draft.level === level.id ? styles.segmentActive : ''} onClick={() => setDraft((current) => ({ ...current, level: level.id }))} aria-pressed={draft.level === level.id}>
                   {level.label}
                 </button>
               ))}
@@ -641,7 +731,7 @@ function MyPlansPage() {
             <span className={styles.settingName}>Attrezzatura</span>
             <div className={styles.equipmentOptions}>
               {WORKOUT_EQUIPMENT.map((equipment) => (
-                <button key={equipment.id} type="button" className={draft.equipment.includes(equipment.id) ? styles.segmentActive : ''} onClick={() => toggleEquipment(equipment.id)}>
+                <button key={equipment.id} type="button" className={draft.equipment.includes(equipment.id) ? styles.segmentActive : ''} onClick={() => toggleEquipment(equipment.id)} aria-pressed={draft.equipment.includes(equipment.id)}>
                   {equipment.label}
                 </button>
               ))}
@@ -651,9 +741,17 @@ function MyPlansPage() {
 
         <div className={styles.exerciseSectionHead}>
           <h3>Esercizi — {draft.exercises.length}</h3>
-          <small>tieni premuto o usa le frecce per riordinare</small>
+          <small>Usa le frecce per cambiare ordine</small>
         </div>
-        <div className={styles.exerciseList}>{draft.exercises.map(renderExerciseCard)}</div>
+        {draft.exercises.length ? (
+          <div className={styles.exerciseList}>{draft.exercises.map(renderExerciseCard)}</div>
+        ) : (
+          <div className={styles.exerciseEmpty}>
+            <span><Dumbbell size={20} aria-hidden="true" /></span>
+            <div><strong>Nessun esercizio</strong><small>Apri la libreria e componi la tua routine.</small></div>
+          </div>
+        )}
+        {draftError === 'exercises' ? <p className={styles.exerciseError} role="alert">Aggiungi almeno un esercizio prima di salvare.</p> : null}
         <button type="button" className={styles.addExerciseButton} onClick={openExercisePicker}>
           <Plus size={19} aria-hidden="true" /> Aggiungi esercizio
         </button>
@@ -715,12 +813,43 @@ function MyPlansPage() {
     return (
       <section className={styles.page}>
         <header className={styles.libraryHero}>
-          <div><p className={styles.eyebrow}>Allenamento personale</p><h1>Schede personali</h1><p>Crea routine su misura, organizzale e portale sempre con te.</p></div>
-          <div className={styles.libraryActions}>
+          <div className={styles.libraryTitle}>
+            <p className={styles.eyebrow}>Allenamento personale</p>
+            <h1>Schede personali</h1>
+          </div>
+          <span className={styles.planCount}><strong>{plans.length}</strong><small>schede</small></span>
+          <div className={styles.libraryStatus}>
             {renderSyncBadge()}
-            <Button type="button" icon={Plus} onClick={startNewPlan}>Nuova scheda</Button>
+            <span><Layers3 size={14} /> {totalExercises} esercizi salvati</span>
           </div>
         </header>
+        <section className={styles.libraryTools} aria-label="Gestione schede">
+          <Button type="button" icon={Plus} onClick={startNewPlan}>Nuova scheda</Button>
+          {plans.length ? (
+            <label className={styles.librarySearch}>
+              <Search size={17} aria-hidden="true" />
+              <input
+                type="search"
+                value={libraryQuery}
+                onChange={(event) => setLibraryQuery(event.target.value)}
+                placeholder="Cerca scheda o esercizio"
+                aria-label="Cerca tra le schede personali"
+              />
+              {libraryQuery ? <button type="button" onClick={() => setLibraryQuery('')} aria-label="Cancella ricerca"><X size={15} /></button> : null}
+            </label>
+          ) : null}
+        </section>
+        {plans.length && availableSports.length > 1 ? (
+          <nav className={styles.sportFilters} aria-label="Filtra schede per sport">
+            <span><Filter size={14} /> Filtra</span>
+            <button type="button" className={librarySport === 'all' ? styles.sportFilterActive : ''} onClick={() => setLibrarySport('all')} aria-pressed={librarySport === 'all'}>Tutte</button>
+            {availableSports.map((sport) => (
+              <button key={sport.id} type="button" className={librarySport === sport.id ? styles.sportFilterActive : ''} onClick={() => setLibrarySport(sport.id)} aria-pressed={librarySport === sport.id}>
+                {sport.emoji} {sport.label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
         {plans.length === 0 ? (
           <div className={styles.emptyState}>
             <span><Dumbbell size={28} aria-hidden="true" /></span>
@@ -728,36 +857,87 @@ function MyPlansPage() {
             <p>Configura esercizi, serie, ripetizioni, carichi, RIR e recuperi.</p>
             <Button type="button" icon={Plus} onClick={startNewPlan}>Crea scheda personale</Button>
           </div>
-        ) : (
+        ) : visiblePlans.length ? (
+          <section className={styles.librarySection}>
+            <div className={styles.librarySectionHead}>
+              <div><small>LA TUA LIBRERIA</small><h2>Routine salvate</h2></div>
+              <span>{visiblePlans.length}</span>
+            </div>
           <div className={styles.savedGrid}>
-            {plans.map((plan) => {
+            {visiblePlans.map((plan) => {
               const sport = getSportById(plan.sportId);
               const level = WORKOUT_LEVELS.find((item) => item.id === plan.level)?.label || plan.level;
               return (
                 <article key={plan.id} className={styles.savedCard}>
                   <div className={styles.savedCardHead}>
                     <span>{sport.emoji}</span>
-                    <div><small>{sport.label} · {plan.type}</small><h2>{plan.title}</h2></div>
+                    <div><small>{sport.label} · {plan.type}</small><h2>{plan.title}</h2><p>{formatPlanDate(plan.updatedAt || plan.createdAt)}</p></div>
                   </div>
                   <div className={styles.savedStats}>
                     <span><Clock3 size={15} /> {plan.duration} min</span>
                     <span><Dumbbell size={15} /> {plan.exercises.length} esercizi</span>
                     <span>{level}</span>
                   </div>
-                  <ul>
-                    {plan.exercises.slice(0, 3).map((exercise) => <li key={exercise.instanceId}>{exercise.name}</li>)}
-                    {plan.exercises.length > 3 ? <li>+{plan.exercises.length - 3} altri</li> : null}
-                  </ul>
+                  <p className={styles.exercisePreview}>
+                    {plan.exercises.slice(0, 3).map((exercise) => exercise.name).join(' · ')}
+                    {plan.exercises.length > 3 ? ` · +${plan.exercises.length - 3}` : ''}
+                  </p>
                   <div className={styles.savedActions}>
-                    <Button type="button" size="sm" icon={Pencil} onClick={() => openPlan(plan)}>Modifica</Button>
-                    <button type="button" onClick={() => duplicatePlan(plan)} aria-label={`Duplica ${plan.title}`}><Copy size={17} /></button>
-                    <button type="button" onClick={() => deletePlan(plan.id)} aria-label={`Elimina ${plan.title}`}><Trash2 size={17} /></button>
+                    <Button type="button" size="sm" icon={Pencil} onClick={() => openPlan(plan)}>Apri e modifica</Button>
+                    <button type="button" className={styles.planDeleteButton} onClick={() => setPlanPendingDelete(plan)} aria-label={`Elimina la scheda ${plan.title}`}>
+                      <Trash2 size={17} aria-hidden="true" />
+                    </button>
                   </div>
                 </article>
               );
             })}
           </div>
+          </section>
+        ) : (
+          <div className={styles.filteredEmpty}>
+            <Search size={24} />
+            <h2>Nessuna scheda trovata</h2>
+            <p>Prova un altro nome oppure mostra tutte le discipline.</p>
+            <button type="button" onClick={() => { setLibraryQuery(''); setLibrarySport('all'); }}>Azzera filtri</button>
+          </div>
         )}
+        {planPendingDelete ? (
+          <div
+            className={styles.deleteConfirmOverlay}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-plan-title"
+            aria-describedby="delete-plan-description"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPlanPendingDelete(null);
+            }}
+          >
+            <div className={styles.deleteConfirmDialog}>
+              <span className={styles.deleteConfirmIcon}><Trash2 size={22} aria-hidden="true" /></span>
+              <div>
+                <p className={styles.eyebrow}>Elimina scheda</p>
+                <h2 id="delete-plan-title">Sei sicuro?</h2>
+                <p id="delete-plan-description">
+                  Vuoi eliminare “{planPendingDelete.title}”? L’operazione è definitiva e verrà sincronizzata sui tuoi dispositivi.
+                </p>
+              </div>
+              <div className={styles.deleteConfirmActions}>
+                <button type="button" className={styles.deleteCancelButton} onClick={() => setPlanPendingDelete(null)} autoFocus>Annulla</button>
+                <button
+                  type="button"
+                  className={styles.deleteConfirmButton}
+                  onClick={() => {
+                    const planId = planPendingDelete.id;
+                    setPlanPendingDelete(null);
+                    deletePlan(planId);
+                  }}
+                >
+                  <Trash2 size={16} aria-hidden="true" /> Elimina
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     );
   }
@@ -766,7 +946,10 @@ function MyPlansPage() {
     <section className={styles.editorPage}>
       <header className={styles.editorHeader}>
         <button type="button" className={styles.closeEditorButton} onClick={closeEditor} aria-label="Chiudi editor scheda"><X size={20} aria-hidden="true" /></button>
-        <div className={styles.editorBrand}><BrandLogo className={styles.editorBrandLogo} decorative /><strong>MOTRICE</strong></div>
+        <div className={styles.editorBrand}>
+          <BrandLogo className={styles.editorBrandLogo} decorative />
+          <div><strong>{draft.id ? 'MODIFICA SCHEDA' : 'NUOVA SCHEDA'}</strong><small>{hasUnsavedChanges ? 'Modifiche non salvate' : 'Tutto salvato'}</small></div>
+        </div>
       </header>
       {renderProgress()}
       <div className={styles.editorContent}>
@@ -779,11 +962,11 @@ function MyPlansPage() {
       {pickerOpen ? (
         <div className={styles.fullscreenOverlay} role="dialog" aria-modal="true" aria-label="Aggiungi esercizio">
           <div className={styles.fullscreenPanel}>
-            <header className={styles.modalHeader}><h2>Aggiungi esercizio</h2><button type="button" onClick={closeExercisePicker} aria-label="Annulla selezione esercizi"><X size={22} /></button></header>
-            <label className={styles.searchBox}><Search size={19} aria-hidden="true" /><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="Cerca esercizio..." autoFocus /></label>
+            <header className={styles.modalHeader}><div><p className={styles.eyebrow}>Libreria esercizi</p><h2>Aggiungi esercizi</h2></div><button type="button" className={styles.modalCloseText} onClick={closeExercisePicker}>Annulla</button></header>
+            <label className={styles.searchBox}><Search size={19} aria-hidden="true" /><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="Cerca in tutte le categorie" autoFocus />{pickerQuery ? <button type="button" onClick={() => setPickerQuery('')} aria-label="Cancella ricerca"><X size={16} /></button> : null}</label>
             <div className={styles.categoryScroller}>
-              {EXERCISE_CATEGORIES.map((category) => (
-                <button key={category.id} type="button" className={pickerCategory === category.id ? styles.categoryActive : ''} onClick={() => setPickerCategory(category.id)}>{category.label}</button>
+              {ALL_CATEGORIES.map((category) => (
+                <button key={category.id} type="button" className={pickerCategory === category.id ? styles.categoryActive : ''} onClick={() => setPickerCategory(category.id)} aria-pressed={pickerCategory === category.id}>{category.label}</button>
               ))}
             </div>
             <div className={styles.catalogList}>
@@ -791,19 +974,21 @@ function MyPlansPage() {
                 const added = addedExerciseIds.has(exercise.id);
                 const selected = pendingExerciseIds.includes(exercise.id);
                 return (
-                  <article key={exercise.id} data-selected={selected ? 'true' : 'false'}>
+                  <button
+                    key={exercise.id}
+                    type="button"
+                    className={styles.catalogChoice}
+                    data-selected={selected ? 'true' : 'false'}
+                    onClick={() => togglePickerExercise(exercise)}
+                    aria-label={added ? `${exercise.name} già presente` : selected ? `Rimuovi ${exercise.name} dalla selezione` : `Seleziona ${exercise.name}`}
+                    aria-pressed={selected}
+                    disabled={added}
+                  >
                     <div><strong>{exercise.shortName || exercise.name}</strong><small>{getCategoryLabel(exercise.category)} · {exercise.equipment}</small></div>
-                    <button
-                      type="button"
-                      className={added || selected ? styles.catalogAdded : ''}
-                      onClick={() => togglePickerExercise(exercise)}
-                      aria-label={added ? `${exercise.name} già presente` : selected ? `Rimuovi ${exercise.name} dalla selezione` : `Seleziona ${exercise.name}`}
-                      aria-pressed={selected}
-                      disabled={added}
-                    >
+                    <span className={added || selected ? styles.catalogAdded : ''}>
                       {added || selected ? <Check size={20} /> : <Plus size={20} />}
-                    </button>
-                  </article>
+                    </span>
+                  </button>
                 );
               }) : <p className={styles.noResults}>Nessun esercizio trovato</p>}
             </div>
@@ -828,20 +1013,43 @@ function MyPlansPage() {
 
       {editingExercise ? (
         <div className={styles.fullscreenOverlay} role="dialog" aria-modal="true" aria-label="Modifica esercizio">
-          <div className={`${styles.fullscreenPanel} ${styles.exerciseEditorPanel}`}>
-            <header className={styles.modalHeader}><div><p className={styles.eyebrow}>Esercizio {editingExercise.index + 1}</p><h2>Modifica esercizio</h2></div><button type="button" onClick={() => setEditingExercise(null)} aria-label="Chiudi modifica esercizio"><X size={22} /></button></header>
+          <div ref={exerciseEditorPanelRef} className={`${styles.fullscreenPanel} ${styles.exerciseEditorPanel}`}>
+            <header className={styles.modalHeader}><div><p className={styles.eyebrow}>Esercizio {editingExercise.index + 1}</p><h2>Modifica esercizio</h2></div><button type="button" onClick={() => setEditingExercise(null)} aria-label="Chiudi modifica esercizio" autoFocus><X size={22} /></button></header>
+            <div className={styles.editContext}>
+              <span>{getCategoryLabel(editingExercise.category)}</span>
+              <span>{editingExercise.equipment}</span>
+            </div>
             <label className={styles.fieldLabel}><span>Nome</span><input value={editingExercise.name} onChange={(event) => setEditingExercise((current) => ({ ...current, name: event.target.value }))} /></label>
             <div className={styles.editGrid}>
-              <label className={styles.fieldLabel}><span>Serie</span><input type="number" min="1" max="20" value={editingExercise.sets} onChange={(event) => setEditingExercise((current) => ({ ...current, sets: event.target.value }))} /></label>
-              <label className={styles.fieldLabel}><span>Ripetizioni</span><input value={editingExercise.reps} onChange={(event) => setEditingExercise((current) => ({ ...current, reps: event.target.value }))} /></label>
-              <label className={styles.fieldLabel}><span>Carico kg</span><input type="number" min="0" step="0.5" value={editingExercise.weight} onChange={(event) => setEditingExercise((current) => ({ ...current, weight: event.target.value }))} /></label>
-              <label className={styles.fieldLabel}><span>RIR</span><input type="number" min="0" max="5" value={editingExercise.rir} onChange={(event) => setEditingExercise((current) => ({ ...current, rir: event.target.value }))} /></label>
-              <label className={`${styles.fieldLabel} ${styles.fullField}`}><span>Recupero secondi</span><input type="number" min="0" step="15" value={editingExercise.recovery} onChange={(event) => setEditingExercise((current) => ({ ...current, recovery: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>Serie</span><input type="number" inputMode="numeric" min="1" max="20" value={editingExercise.sets} onChange={(event) => setEditingExercise((current) => ({ ...current, sets: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>Ripetizioni</span><input inputMode="numeric" value={editingExercise.reps} onChange={(event) => setEditingExercise((current) => ({ ...current, reps: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>Carico · kg</span><input type="number" inputMode="decimal" min="0" step="0.5" value={editingExercise.weight} onChange={(event) => setEditingExercise((current) => ({ ...current, weight: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>RIR · 0–5</span><input type="number" inputMode="numeric" min="0" max="5" value={editingExercise.rir} onChange={(event) => setEditingExercise((current) => ({ ...current, rir: event.target.value }))} /></label>
+              <label className={`${styles.fieldLabel} ${styles.fullField}`}><span>Recupero · secondi</span><input type="number" inputMode="numeric" min="0" step="15" value={editingExercise.recovery} onChange={(event) => setEditingExercise((current) => ({ ...current, recovery: event.target.value }))} /></label>
             </div>
+            <div className={styles.recoveryPresets} aria-label="Scelte rapide recupero">
+              {[45, 60, 90, 120].map((seconds) => (
+                <button key={seconds} type="button" className={Number(editingExercise.recovery) === seconds ? styles.recoveryPresetActive : ''} onClick={() => setEditingExercise((current) => ({ ...current, recovery: seconds }))} aria-pressed={Number(editingExercise.recovery) === seconds}>
+                  {seconds}s
+                </button>
+              ))}
+            </div>
+            <p className={styles.editHelper}><strong>RIR</strong> indica quante ripetizioni avresti ancora in riserva: 0 significa cedimento.</p>
             <Button type="button" fullWidth icon={Check} onClick={saveExerciseEditor}>Salva modifiche</Button>
           </div>
         </div>
       ) : null}
+
+      <Modal
+        open={editorClosePending}
+        title="Modifiche non salvate"
+        onClose={() => setEditorClosePending(false)}
+        onConfirm={completeEditorClose}
+        closeText="Continua a modificare"
+        confirmText="Esci senza salvare"
+      >
+        <p>Vuoi tornare alle tue schede senza salvare le modifiche?</p>
+      </Modal>
     </section>
   );
 }

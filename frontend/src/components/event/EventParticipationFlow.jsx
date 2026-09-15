@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserQRCodeReader } from '@zxing/browser';
-import QRCode from 'qrcode';
 import {
   AlertTriangle,
   Camera,
@@ -41,6 +39,7 @@ import {
 import { validateEventLocationProof } from '../../utils/eventLocationProof';
 import { GYM_ENTRY_OPTIONS } from '../../utils/eventVenueAccess';
 import { getParticipantRemovalPolicy } from '../../utils/eventManagementRules';
+import { createQrDataUrl, loadQrScannerRuntime } from '../../services/qrRuntime';
 
 const EMPTY_REVIEW = {
   partnerRating: 5,
@@ -346,7 +345,7 @@ function EventParticipationFlow({
       return undefined;
     }
 
-    QRCode.toDataURL(JSON.stringify(payload), {
+    createQrDataUrl(JSON.stringify(payload), {
       width: 360,
       margin: 2,
       color: {
@@ -376,7 +375,7 @@ function EventParticipationFlow({
       eventId: event?.id,
       organizerId: currentUser?.id || event?.organizerId || event?.organizer?.auth_user_id || ''
     };
-    QRCode.toDataURL(JSON.stringify(organizerPayload), {
+    createQrDataUrl(JSON.stringify(organizerPayload), {
       width: 360,
       margin: 2,
       color: { dark: '#0b0d0f', light: '#ffffff' },
@@ -527,20 +526,25 @@ function EventParticipationFlow({
   useEffect(() => {
     if (!scannerOpen || !videoRef.current || scanFeedback) return undefined;
 
-    const reader = new BrowserQRCodeReader(undefined, {
-      delayBetweenScanAttempts: 350,
-      delayBetweenScanSuccess: 1000
-    });
+    let reader = null;
     let cancelled = false;
 
-    reader
-      .decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
-        if (controls) scannerControlsRef.current = controls;
-        if (cancelled || !result || scanBusyRef.current) return;
-        controls?.stop();
-        submitScan(result.getText());
+    loadQrScannerRuntime()
+      .then((BrowserQRCodeReader) => {
+        if (cancelled) return null;
+        reader = new BrowserQRCodeReader(undefined, {
+          delayBetweenScanAttempts: 350,
+          delayBetweenScanSuccess: 1000
+        });
+        return reader.decodeFromVideoDevice(undefined, videoRef.current, (result, error, controls) => {
+          if (controls) scannerControlsRef.current = controls;
+          if (cancelled || !result || scanBusyRef.current) return;
+          controls?.stop();
+          submitScan(result.getText());
+        });
       })
       .then((controls) => {
+        if (!controls) return;
         if (cancelled) {
           controls.stop();
           return;
@@ -561,7 +565,7 @@ function EventParticipationFlow({
       cancelled = true;
       scannerControlsRef.current?.stop?.();
       scannerControlsRef.current = null;
-      reader.reset?.();
+      reader?.reset?.();
     };
   }, [scanFeedback, scannerCycle, scannerOpen, submitScan]);
 

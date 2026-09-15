@@ -64,6 +64,42 @@ test('completed and cancellation outcomes are exposed consistently', () => {
   assert.equal(completed.canCancel, false);
 });
 
+test('a completed event is not mistaken for a completed viewer participation', () => {
+  const event = {
+    id: 'closed-event',
+    status: 'completed',
+    event_datetime: '2026-09-06T08:00:00.000Z',
+    participants_count: 3,
+    user_rsvp: null
+  };
+
+  assert.equal(resolveParticipantOutcome(event).id, 'none');
+});
+
+test('the viewer money hold repairs a stale post-event participant row', () => {
+  const staleEvent = {
+    status: 'completed',
+    event_datetime: '2026-09-06T08:00:00.000Z',
+    participants_count: 4,
+    user_rsvp: { lifecycle_state: 'confirmed', status: 'going' }
+  };
+
+  assert.equal(resolveParticipantOutcome({
+    ...staleEvent,
+    money_hold: { status: 'forfeited' }
+  }).id, 'no_show');
+
+  assert.equal(resolveParticipantOutcome({
+    ...staleEvent,
+    money_hold: { status: 'pending_return' }
+  }).id, 'completed');
+
+  assert.equal(resolveParticipantOutcome({
+    ...staleEvent,
+    money_hold: { status: 'released' }
+  }).id, 'completed');
+});
+
 test('participant presence copy distinguishes approval from the check-in timeline', () => {
   const participant = { lifecycle_state: 'confirmed', status: 'going' };
   const checkInOpensAtMs = Date.parse('2026-09-13T15:00:00.000Z');

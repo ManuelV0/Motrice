@@ -9,6 +9,9 @@ backend/motrice_dev.db
 backend/.env
 *.jks
 *.keystore
+**/keystore.properties
+**/key.properties
+.env.release.local
 npm-debug.log*
 .DS_Store
 
@@ -17,6 +20,7 @@ backend/uploads/
 # build outputs
 partner-portal/dist/
 artifacts/
+releases/
 mobile/android/.gradle/
 mobile/android/build/
 mobile/android/app/build/

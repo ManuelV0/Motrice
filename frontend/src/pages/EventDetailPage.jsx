@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -45,7 +45,6 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import Card from '../components/Card';
 import Button from '../components/Button';
 import EventCard from '../components/EventCard';
-import EventMapPreview from '../components/EventMapPreview';
 import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { downloadEventIcs } from '../utils/ics';
@@ -85,8 +84,58 @@ import {
   resolveGymViewerAccess
 } from '../utils/eventVenueAccess';
 import { getAutomaticMinimumPresenceMinutes } from '../utils/eventCreationRules';
+import {
+  resolveEventPostSummary,
+  resolvePersonalVerificationProgress
+} from '../utils/eventPostSummary';
 import { getMyProfileVerification } from '../services/profileVerification';
 import styles from '../styles/pages/eventDetail.module.css';
+
+const LazyEventMapPreview = lazy(() => import('../components/EventMapPreview'));
+
+function DeferredEventMapPreview(props) {
+  const placeholderRef = useRef(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (shouldLoad) return undefined;
+    const placeholder = placeholderRef.current;
+    if (!placeholder || typeof IntersectionObserver === 'undefined') {
+      setShouldLoad(true);
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setShouldLoad(true);
+        observer.disconnect();
+      },
+      { rootMargin: '480px 0px', threshold: 0.01 }
+    );
+    observer.observe(placeholder);
+    return () => observer.disconnect();
+  }, [shouldLoad]);
+
+  const placeholder = (
+    <div
+      ref={placeholderRef}
+      className={`${props.className || ''} ${styles.mapDeferred}`}
+      role="status"
+      aria-label="Caricamento mappa evento"
+    >
+      <span>Preparo la mappa…</span>
+    </div>
+  );
+
+  if (!shouldLoad) return placeholder;
+
+  return (
+    <Suspense fallback={placeholder}>
+      <LazyEventMapPreview {...props} />
+    </Suspense>
+  );
+}
 
 const RSVP_SKILL_LEVELS = [
   { value: 'beginner', label: 'Principiante' },
@@ -104,32 +153,32 @@ const EVENT_LEVEL_OPTIONS = [
 const SPORT_DETAIL_VISUALS = [
   {
     pattern: /palestra|fitness|forza|functional|workout|hiit/i,
-    image: '/images/hero-palestra-v2.jpg',
+    image: '/images/hero-palestra-v2.webp',
     label: 'Forza'
   },
   {
     pattern: /padel|tennis|racchetta/i,
-    image: '/images/hero-padel-v2.jpg',
+    image: '/images/hero-padel-v2.webp',
     label: 'Racchetta'
   },
   {
     pattern: /calcio|calcetto|football|futsal/i,
-    image: '/images/hero-calcio-v2.jpg',
+    image: '/images/hero-calcio-v2.webp',
     label: 'Squadra'
   },
   {
     pattern: /running|corsa|jogging/i,
-    image: '/images/hero-running-v2.jpg',
+    image: '/images/hero-running-v2.webp',
     label: 'Running'
   },
   {
     pattern: /bici|bike|cycling|ciclismo|mtb/i,
-    image: '/images/hero-bici-v2.jpg',
+    image: '/images/hero-bici-v2.webp',
     label: 'Ciclismo'
   },
   {
     pattern: /trekking|trail|hiking|camminata/i,
-    image: '/images/hero-trekking-v2.jpg',
+    image: '/images/hero-trekking-v2.webp',
     label: 'Outdoor'
   }
 ];
@@ -151,7 +200,7 @@ function getSportDetailVisual(event) {
   const source = `${event?.sport_name || ''} ${event?.title || ''}`;
   return (
     SPORT_DETAIL_VISUALS.find((item) => item.pattern.test(source)) || {
-      image: '/images/hero-sport-default-v2.jpg',
+      image: '/images/hero-sport-default-v2.webp',
       label: String(event?.sport_name || 'Sport')
     }
   );
@@ -328,6 +377,7 @@ function EventDetailPage() {
   const [moneyDisputeSubmitting, setMoneyDisputeSubmitting] = useState(false);
   const [moneyDisputeReason, setMoneyDisputeReason] = useState('');
   const [checkInNowMs, setCheckInNowMs] = useState(() => Date.now());
+  const [reviewTargetCount, setReviewTargetCount] = useState(null);
   const [organizerIntro, setOrganizerIntro] = useState({ name: '', bio: '', avatar_url: '' });
   const [localProfile, setLocalProfile] = useState({
     display_name: '',
@@ -358,6 +408,7 @@ function EventDetailPage() {
     setPeopleOpen(false);
     setActionsOpen(false);
     setRulesOpen(false);
+    setReviewTargetCount(null);
     setMoneyDisputeOpen(false);
     setMoneyDisputeReason('');
     setOrganizerCancelOpen(false);
@@ -1290,7 +1341,15 @@ function EventDetailPage() {
       )
     : gymViewerAccess;
   const participantGymAccess = getGymAccessPresentation(event, participantGymAccessState);
-  const eventPrimaryAction = baseEventPrimaryAction;
+  const eventPrimaryAction = baseEventPrimaryAction.target === 'feedback' && !(reviewTargetCount > 0)
+    ? {
+        id: 'summary',
+        label: 'Vedi riepilogo',
+        target: 'event',
+        disabled: false,
+        tone: 'neutral'
+      }
+    : baseEventPrimaryAction;
   const EventPrimaryActionIcon = getPrimaryActionIcon(eventPrimaryAction);
   const canInviteFriendsFromGroupChat = Boolean(
     participantOutcome.id === 'completed'
@@ -1626,12 +1685,7 @@ function EventDetailPage() {
   const hasRouteElevation = Number.isFinite(routeElevation) && routeElevation > 0;
   const participantsCount = Number(event.participants_count || 0);
   const maxParticipants = Number(event.max_participants || 0);
-  const rewardProgressTotal = Math.max(1, maxParticipants || participantsCount || 1);
-  const rewardProgressCurrent = Math.min(
-    rewardProgressTotal,
-    Math.max(0, Number(event.participants_checked_in_count || 0))
-  );
-  const rewardProgressPercent = Math.min(100, (rewardProgressCurrent / rewardProgressTotal) * 100);
+  const rewardProgress = resolvePersonalVerificationProgress(event);
   const organizerReliability = Number(event.organizer?.reliability_score || 100);
   const organizerName = String(organizerIntro.name || event.organizer?.name || 'Organizer');
   const organizerInitial = organizerName.slice(0, 1).toUpperCase();
@@ -1739,6 +1793,7 @@ function EventDetailPage() {
   const refundableDepositCents = Math.max(0, Number(event.refundable_deposit_cents || 0));
   const participantWasPresent = participantOutcome.id === 'completed';
   const participantWasNoShow = participantOutcome.id === 'no_show';
+  const hasClosedViewerParticipation = Boolean(event.user_rsvp);
   const recordedPresenceMinutes = Number(
     event.user_rsvp?.elapsed_minutes ?? event.user_rsvp?.presence_minutes
   );
@@ -1748,26 +1803,26 @@ function EventDetailPage() {
       ? minimumPresenceMinutes
       : 0;
   const closedEarnedXp = Number(
-    event.user_rsvp?.xp_earned ??
+    event.user_rsvp?.earned_xp ??
+      event.user_rsvp?.xp_earned ??
       event.user_rsvp?.awarded_xp ??
       (participantWasPresent
-        ? completionXp + (event.user_rsvp?.review_submitted ? reviewBonusXp : 0)
+        ? completionXp + (event.user_rsvp?.review_bonus_awarded ? reviewBonusXp : 0)
         : 0)
   );
-  const closedPresentCount = Number(
-    event.participant_stats?.present ??
-      event.participants_present_count ??
-      0
-  );
-  const closedTotalCount = Math.max(
-    closedPresentCount,
-    Number(event.participant_stats?.total ?? event.participants_total_count ?? participantsCount ?? 0)
-  );
+  const postEventSummary = resolveEventPostSummary(event);
+  const closedPresentCount = postEventSummary.presentCount;
+  const closedNoShowCount = postEventSummary.noShowCount;
+  const closedTotalCount = postEventSummary.totalCount;
   const closedAttendanceLabel = participantWasPresent
     ? 'Presente'
     : participantWasNoShow
       ? 'No-show'
-      : 'Da verificare';
+      : participantOutcome.id === 'requested'
+        ? 'Richiesta non accettata'
+        : participantOutcome.id === 'none'
+          ? 'Non iscritto'
+          : 'Presenza non verificata';
   const reliabilityImpactLabel = participantWasPresent
     ? 'Positivo'
     : participantWasNoShow
@@ -1874,7 +1929,7 @@ function EventDetailPage() {
           <Card as="section" className={styles.locationCard}>
             <div className={styles.mapStage}>
               {(routePoints.length >= 2 || (event.lat != null && event.lng != null)) ? (
-                <EventMapPreview
+                <DeferredEventMapPreview
                   event={event}
                   routePoints={routePoints}
                   routeSummary={routeMapSummary}
@@ -2169,14 +2224,14 @@ function EventDetailPage() {
                   <p>{isArchivedEvent ? 'Evento archiviato' : 'Evento concluso'}</p>
                   <h2>{eventTiming.isPostEventReadOnly ? 'Riepilogo definitivo' : 'Riepilogo verificato'}</h2>
                 </div>
-                <strong>{closedPresentCount}/{closedTotalCount || participantsCount || 0} presenti</strong>
+                <strong>{closedPresentCount}/{closedTotalCount} presenti</strong>
               </div>
               <div className={styles.closedSummaryGrid}>
-                {isOrganizerForEvent ? (
+                {isOrganizerForEvent || !hasClosedViewerParticipation ? (
                   <>
                     <div><span>Stato</span><strong>Svolto</strong></div>
                     <div><span>Presenti</span><strong>{closedPresentCount}</strong></div>
-                    <div><span>Assenti</span><strong>{Math.max(0, closedTotalCount - closedPresentCount)}</strong></div>
+                    <div><span>Assenti</span><strong>{closedNoShowCount}</strong></div>
                     <div><span>Durata</span><strong>{durationMinutes} min</strong></div>
                   </>
                 ) : (
@@ -2228,7 +2283,11 @@ function EventDetailPage() {
                 (isOrganizerForEvent || participantWasPresent)
               )}
               bonusXp={reviewBonusXp || 25}
+              onTargetsChange={(targets) => {
+                setReviewTargetCount(targets.filter((target) => !target.reviewed).length);
+              }}
               onCompleted={() => {
+                setReviewTargetCount(0);
                 setEvent((current) => current ? {
                   ...current,
                   feedback_completed: true,
@@ -2370,11 +2429,11 @@ function EventDetailPage() {
                     ? `+${completionXp} PX completamento + ${reviewBonusXp} PX recensione.`
                     : `+${completionXp} PX al completamento della partecipazione.`}
               </p>
-              <div className={styles.rewardProgress} aria-label={`${rewardProgressCurrent} di ${rewardProgressTotal} check-in verificati`}>
+              <div className={styles.rewardProgress} aria-label={`${rewardProgress.current} di ${rewardProgress.total} check-in verificati`}>
                 <span className={styles.rewardProgressTrack}>
-                  <i style={{ width: `${rewardProgressPercent}%` }} aria-hidden="true" />
+                  <i style={{ width: `${rewardProgress.percent}%` }} aria-hidden="true" />
                 </span>
-                <strong>{rewardProgressCurrent} di {rewardProgressTotal} check-in</strong>
+                <strong>{rewardProgress.current} di {rewardProgress.total} check-in</strong>
                 <span>+{completionXp} completamento{reviewBonusXp > 0 ? ` · +${reviewBonusXp} verifica` : ''}</span>
               </div>
             </Card>

@@ -138,15 +138,15 @@ const AUDIENCE_OPTIONS = [
 const SPORT_VISUALS = {
   'palestra-outdoor': {
     emoji: '🌳',
-    cardImage: '/images/hero-palestra-outdoor-v2.png',
+    cardImage: '/images/hero-palestra-outdoor-v2.webp',
     subtitle: 'Corpo libero · Calisthenics'
   },
-  running: { emoji: '🏃', cardImage: '/images/hero-running-v2.jpg', subtitle: 'Gruppi corsa' },
-  padel: { emoji: '🎾', cardImage: '/images/hero-padel-v2.jpg', subtitle: 'Doppio · Singolo' },
-  calcio: { emoji: '⚽', cardImage: '/images/hero-calcio-v2.jpg', subtitle: '5vs5 · 11vs11' },
-  palestra: { emoji: '🏋️', cardImage: '/images/hero-palestra-v2.jpg', subtitle: 'Forza · Fitness' },
-  bici: { emoji: '🚴', cardImage: '/images/hero-bici-v2.jpg', subtitle: 'Strada · Gravel' },
-  trekking: { emoji: '🥾', cardImage: '/images/hero-trekking-v2.jpg', subtitle: 'Sentieri · Gruppi' }
+  running: { emoji: '🏃', cardImage: '/images/hero-running-v2.webp', subtitle: 'Gruppi corsa' },
+  padel: { emoji: '🎾', cardImage: '/images/hero-padel-v2.webp', subtitle: 'Doppio · Singolo' },
+  calcio: { emoji: '⚽', cardImage: '/images/hero-calcio-v2.webp', subtitle: '5vs5 · 11vs11' },
+  palestra: { emoji: '🏋️', cardImage: '/images/hero-palestra-v2.webp', subtitle: 'Forza · Fitness' },
+  bici: { emoji: '🚴', cardImage: '/images/hero-bici-v2.webp', subtitle: 'Strada · Gravel' },
+  trekking: { emoji: '🥾', cardImage: '/images/hero-trekking-v2.webp', subtitle: 'Sentieri · Gruppi' }
 };
 
 const CREATE_SPORT_ORDER = [
@@ -1661,7 +1661,13 @@ function CreateEventPage() {
                     >
                       {visual.cardImage ? (
                         <span className={styles.sportImageWrap} aria-hidden="true">
-                          <img className={styles.sportImage} src={visual.cardImage} alt="" />
+                          <img
+                            className={styles.sportImage}
+                            src={visual.cardImage}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                          />
                         </span>
                       ) : (
                         <span className={styles.sportEmoji} aria-hidden="true">{visual.emoji}</span>

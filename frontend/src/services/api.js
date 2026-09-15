@@ -219,7 +219,7 @@ function buildInitialAccountProfiles() {
       ...DEFAULT_ACCOUNT_PROFILE,
       display_name: 'Marco Organizzatore',
       bio: 'Organizzo allenamenti di prova ad Ascoli e seguo il gruppo con puntualità.',
-      avatar_url: '/images/motrice-logo.png',
+      avatar_url: '/images/motrice-logo.webp',
       sport_profiles: [
         { sport_name: 'Palestra', level: 'intermediate' },
         { sport_name: 'Running', level: 'intermediate' }
@@ -229,7 +229,7 @@ function buildInitialAccountProfiles() {
       ...DEFAULT_ACCOUNT_PROFILE,
       display_name: 'Sara Partecipante',
       bio: 'Partecipo agli eventi locali e rispetto sempre orari e regole del gruppo.',
-      avatar_url: '/images/motrice-logo.png',
+      avatar_url: '/images/motrice-logo.webp',
       sport_profiles: [
         { sport_name: 'Running', level: 'beginner' },
         { sport_name: 'Trekking', level: 'intermediate' }
@@ -692,8 +692,13 @@ function getLocalEventReviewTargets(store, event, reviewerUserId) {
   const eventKey = String(event?.id || '');
   const organizerUserId = resolveOrganizerUserIdForEvent(store, event);
   const candidates = new Map();
+  const organizerFlow = store.participationFlowsByEvent?.[eventKey] || {};
+  const organizerWasVerified = Boolean(
+    organizerFlow.organizer_present ||
+    organizerFlow.organizer_presence_at
+  );
 
-  if (organizerUserId && Number(organizerUserId) !== Number(reviewerUserId)) {
+  if (organizerUserId && Number(organizerUserId) !== Number(reviewerUserId) && organizerWasVerified) {
     const organizerProfile = store.accountProfiles?.[String(organizerUserId)] || {};
     candidates.set(String(organizerUserId), {
       user_id: Number(organizerUserId),
@@ -3249,6 +3254,18 @@ const localApi = {
     store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
     saveStore(store);
     return withDelay(clone(next));
+  },
+
+  async listWorkoutExerciseHistory() {
+    return withDelay([]);
+  },
+
+  async recordWorkoutExerciseSet(entry) {
+    return withDelay(clone(entry || {}));
+  },
+
+  async removeWorkoutExerciseSet() {
+    return withDelay({ success: true });
   },
 
   async recordEventWorkoutProgress(eventId, progressPercent) {

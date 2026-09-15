@@ -9,6 +9,7 @@
     "partner-portal"
   ],
   "scripts": {
+    "test": "node --test frontend/src/**/*.test.js",
     "build:web": "npm run build --workspace frontend",
     "mobile:sync": "npm run cap:sync --workspace mobile",
     "cap:sync": "npm run build:web && npm run mobile:sync",
@@ -16,6 +17,8 @@
     "cap:ios": "npm run cap:ios --workspace mobile",
     "android:apk": "npm run android:apk --workspace mobile",
     "android:aab": "npm run android:aab --workspace mobile",
+    "release:check": "node scripts/android-release.mjs --check",
+    "release:android": "node scripts/android-release.mjs --build",
     "dev:prepare-mobile": "npm run cap:sync",
     "dev": "concurrently --kill-others-on-fail \"npm run dev --workspace backend\" \"npm run dev --workspace frontend -- --host 0.0.0.0 --port 5173 --strictPort\"",
     "dev:all": "npm run dev:termux",
