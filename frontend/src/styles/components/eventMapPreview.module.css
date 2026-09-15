@@ -1,0 +1,535 @@
+.preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  overflow: hidden;
+  background: #0d100d;
+  touch-action: pan-x pan-y;
+  transition: border-radius 220ms ease, box-shadow 220ms ease;
+}
+
+.preview[data-expanded='true'] {
+  position: fixed;
+  z-index: 10000;
+  inset: max(0.45rem, env(safe-area-inset-top)) 0.45rem max(0.45rem, env(safe-area-inset-bottom));
+  width: auto;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 1rem;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.72), 0 1.4rem 4rem rgb(0 0 0 / 0.72);
+}
+
+.previewExpanded {
+  min-height: 0;
+}
+
+.previewPlaceholder {
+  pointer-events: none;
+}
+
+
+.preview .mapCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.preview[data-status='ready'] .mapCanvas {
+  opacity: 1;
+}
+
+.preview[data-status='error'] .mapCanvas {
+  opacity: 0.32;
+}
+
+.leafletMapCanvas {
+  z-index: 0;
+  background: #0d100d;
+}
+
+.preview[data-theme='dark'] .leafletMapCanvas :global(.leaflet-tile-pane) {
+  filter: invert(1) hue-rotate(180deg) brightness(0.72) contrast(1.08) saturate(0.62);
+}
+
+.preview[data-theme='light'] .leafletMapCanvas :global(.leaflet-tile-pane) {
+  filter: contrast(1.04) saturate(0.92);
+}
+
+.leafletEventIcon,
+.leafletEndpointIcon,
+.leafletLiveIcon {
+  border: 0;
+  background: transparent;
+}
+
+.leafletEventIcon .eventMarker,
+.leafletEndpointIcon .routeEndpoint,
+.leafletLiveIcon .livePosition {
+  position: absolute;
+  inset: 0;
+}
+
+.preview :global(.leaflet-control-attribution) {
+  padding: 0.08rem 0.24rem;
+  color: rgb(255 255 255 / 0.58);
+  background: rgb(7 9 7 / 0.62);
+  font-size: 0.46rem;
+}
+
+.preview :global(.leaflet-control-attribution a) {
+  color: inherit;
+}
+
+.preview :global(.leaflet-top.leaflet-right) {
+  top: 0.52rem;
+  right: 0.52rem;
+}
+
+.preview[data-expandable='true'] :global(.leaflet-top.leaflet-right) {
+  top: 3.35rem;
+}
+
+.preview :global(.leaflet-control-zoom) {
+  margin: 0;
+  border: 0;
+  background: rgb(12 15 11 / 0.78);
+  box-shadow: none;
+}
+
+.preview :global(.leaflet-control-zoom a),
+.preview :global(.leaflet-control-zoom a:hover) {
+  width: 2.45rem;
+  height: 2.45rem;
+  color: #fff;
+  border: 0;
+  background: transparent;
+  line-height: 2.45rem;
+}
+
+.routeOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.routeOverlay_shadow {
+  stroke: #050705;
+  stroke-width: 9;
+  opacity: 0.7;
+}
+
+.routeOverlay_glow {
+  stroke: #c6ff00;
+  stroke-width: 12;
+  opacity: 0.13;
+  filter: blur(2px);
+}
+
+.routeOverlay_main {
+  stroke: #c6ff00;
+  stroke-width: 5;
+  opacity: 0.9;
+}
+
+.preview :global(.maplibregl-marker) {
+  z-index: 3;
+}
+
+.eventMarker {
+  width: 3rem;
+  height: 3.5rem;
+  display: block;
+  filter: drop-shadow(0 0.5rem 0.65rem rgb(0 0 0 / 0.42));
+  pointer-events: none;
+}
+
+.eventMarker svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.routeEndpoint {
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.routeEndpoint {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  box-shadow: 0 0.45rem 0.9rem rgb(0 0 0 / 0.5);
+}
+
+.routeStart {
+  border: 3px solid #fff;
+  background: #111511;
+}
+
+.routeStartLabel {
+  color: #b7ff24;
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.routeFinish {
+  color: #10130f;
+  border: 2px solid #10130f;
+  background: #fff;
+}
+
+.routeFinishFlag,
+.routeFinishFlag svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  display: block;
+}
+
+.livePosition {
+  position: relative;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: grid;
+  place-items: center;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #a8f000;
+  box-shadow: 0 0.35rem 0.8rem rgb(0 0 0 / 0.5);
+  pointer-events: none;
+}
+
+.livePosition::before {
+  position: absolute;
+  inset: -0.5rem;
+  content: '';
+  border: 2px solid rgb(255 255 255 / 0.7);
+  border-radius: inherit;
+  animation: livePositionPulse 1.7s ease-out infinite;
+}
+
+.livePosition i {
+  width: 0.3rem;
+  height: 0.3rem;
+  border-radius: 50%;
+  background: #10130f;
+}
+
+.placeLabel {
+  position: absolute;
+  z-index: 5;
+  top: 0.58rem;
+  left: 0.58rem;
+  max-width: min(65%, 18rem);
+  min-width: 0;
+  padding: 0.42rem 0.58rem;
+  display: grid;
+  gap: 0.08rem;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 0.62rem;
+  color: #f3f6ef;
+  background: rgb(13 16 12 / 0.82);
+  box-shadow: 0 0.4rem 1.1rem rgb(0 0 0 / 0.26);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.placeLabel small {
+  color: #a8f000;
+  font-size: 0.52rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+}
+
+.placeLabel strong {
+  overflow: hidden;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routingNotice {
+  position: absolute;
+  z-index: 7;
+  left: 0.58rem;
+  bottom: 0.58rem;
+  min-height: 1.8rem;
+  padding: 0.3rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: rgb(244 247 239 / 0.78);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 0.52rem;
+  background: rgb(11 14 10 / 0.78);
+  box-shadow: 0 0.35rem 0.9rem rgb(0 0 0 / 0.24);
+  font-size: 0.57rem;
+  font-weight: 750;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.routingNotice span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border: 1.5px solid rgb(198 255 0 / 0.26);
+  border-top-color: #c6ff00;
+  border-radius: 50%;
+  animation: mapPreviewSpin 700ms linear infinite;
+}
+
+.routeSummary {
+  position: absolute;
+  z-index: 6;
+  top: 3.55rem;
+  left: 0.58rem;
+  max-width: calc(100% - 4.6rem);
+  display: flex;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.13);
+  border-radius: 0.62rem;
+  color: #f4f7ef;
+  background: rgb(11 14 10 / 0.78);
+  box-shadow: 0 0.4rem 1rem rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  pointer-events: none;
+}
+
+.routeSummary > span {
+  min-width: 0;
+  padding: 0.38rem 0.52rem;
+  display: grid;
+  gap: 0.04rem;
+}
+
+.routeSummary > span + span {
+  border-left: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.routeSummary small {
+  color: rgb(255 255 255 / 0.52);
+  font-size: 0.49rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.routeSummary strong {
+  overflow: hidden;
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expandButton {
+  position: absolute;
+  z-index: 8;
+  top: 0.55rem;
+  right: 0.52rem;
+  min-height: 2.35rem;
+  padding: 0 0.62rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  color: #f4f7ef;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 0.62rem;
+  background: rgb(12 15 11 / 0.82);
+  box-shadow: 0 0.45rem 1rem rgb(0 0 0 / 0.3);
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.expandButton:active {
+  transform: scale(0.96);
+}
+
+.loadingOverlay,
+.errorOverlay {
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.55rem;
+  color: rgb(242 247 238 / 0.76);
+  background:
+    linear-gradient(115deg, transparent 28%, rgb(255 255 255 / 0.045) 48%, transparent 68%),
+    #0d100d;
+  pointer-events: none;
+}
+
+.loadingOverlay > span {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 2px solid rgb(255 255 255 / 0.14);
+  border-top-color: #a8f000;
+  border-radius: 50%;
+  animation: mapPreviewSpin 800ms linear infinite;
+}
+
+.loadingOverlay small {
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.errorOverlay {
+  padding: 1.2rem;
+  align-content: center;
+  text-align: center;
+  background: rgb(9 11 9 / 0.86);
+}
+
+.errorOverlay strong {
+  color: #f3f6ef;
+  font-size: 0.82rem;
+}
+
+.errorOverlay span {
+  max-width: 18rem;
+  color: rgb(242 247 238 / 0.62);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.preview :global(.maplibregl-ctrl-top-right) {
+  top: 0.52rem;
+  right: 0.52rem;
+}
+
+.preview[data-expandable='true'] :global(.maplibregl-ctrl-top-right) {
+  top: 3.35rem;
+}
+
+.preview :global(.maplibregl-ctrl-group) {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.preview :global(.maplibregl-ctrl-group button) {
+  width: 2.45rem;
+  height: 2.45rem;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.preview :global(.maplibregl-ctrl-group button + button) {
+  border-top: 0 !important;
+}
+
+.preview :global(.maplibregl-ctrl-icon) {
+  filter: brightness(0) invert(1);
+  transform: scale(0.86);
+}
+
+.preview :global(.maplibregl-ctrl-group button:hover),
+.preview :global(.maplibregl-ctrl-group button:active),
+.preview :global(.maplibregl-ctrl-group button:focus),
+.preview :global(.maplibregl-ctrl-group button:focus-visible) {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: 0;
+}
+
+@keyframes mapPreviewSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes livePositionPulse {
+  0% {
+    opacity: 0.75;
+    transform: scale(0.55);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+@media (max-width: 24rem) {
+  .placeLabel {
+    max-width: calc(100% - 4rem);
+  }
+
+  .placeLabel strong {
+    font-size: 0.68rem;
+  }
+
+  .preview :global(.maplibregl-ctrl-group button) {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .routeSummary {
+    max-width: calc(100% - 3.9rem);
+  }
+
+  .routeSummary > span {
+    padding-inline: 0.42rem;
+  }
+
+  .expandButton {
+    width: 2.35rem;
+    padding: 0;
+  }
+
+  .expandButton span {
+    display: none;
+  }
+
+}
+
+@media (max-width: 47.99rem) {
+  .preview[data-expanded='true'] {
+    inset:
+      calc(var(--nav-h) + 0.35rem)
+      0.45rem
+      calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px) + 0.35rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview {
+    transition: none;
+  }
+  .mapCanvas {
+    transition: none;
+  }
+
+  .loadingOverlay > span {
+    animation: none;
+  }
+
+  .livePosition::before {
+    animation: none;
+  }
+}

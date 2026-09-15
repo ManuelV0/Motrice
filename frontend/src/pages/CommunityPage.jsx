@@ -1,7 +1,7 @@
 import { ChevronLeft, Globe2, List, Lock, Plus, Search, Shield, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import Button from '../components/Button';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';

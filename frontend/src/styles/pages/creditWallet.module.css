@@ -1,0 +1,592 @@
+.page {
+  width: 100%;
+  max-width: 34rem;
+  margin-inline: auto;
+  padding-bottom: calc(var(--bottom-nav-h) + 1.5rem);
+  display: grid;
+  gap: 0.9rem;
+  overflow-x: clip;
+}
+
+.page * {
+  min-width: 0;
+}
+
+.backRow {
+  display: flex;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pageHeader {
+  min-height: 3.7rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pageHeader > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.pageHeader > div > span,
+.sectionHeading > div > span,
+.depositIntro > div > span,
+.withdrawalCard > div > span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pageHeader h1 {
+  font-size: 1.45rem;
+}
+
+.backButton {
+  width: 2.65rem;
+  height: 2.65rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.85rem;
+  background: rgb(255 255 255 / 4%);
+  color: var(--text);
+  box-shadow: inset 0 1px rgb(255 255 255 / 4%);
+}
+
+.secureBadge {
+  min-height: 2rem;
+  padding: 0.35rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid rgb(198 255 0 / 20%);
+  border-radius: 999px;
+  background: rgb(198 255 0 / 7%);
+  color: var(--primary);
+  font-size: 0.67rem;
+  font-weight: 750;
+}
+
+.balanceHero,
+.balanceSection,
+.depositCard,
+.flowCard,
+.withdrawalCard,
+.historyCard {
+  border: 1px solid rgb(255 255 255 / 9%);
+  border-radius: 1.25rem;
+  background: linear-gradient(155deg, #191d18 0%, #111411 100%);
+  box-shadow:
+    0 0.8rem 2.2rem rgb(0 0 0 / 18%),
+    inset 0 1px rgb(255 255 255 / 4%);
+}
+
+.balanceHero {
+  position: relative;
+  overflow: hidden;
+  min-height: 15rem;
+  padding: 1.25rem;
+  display: grid;
+  align-content: start;
+  border-color: rgb(198 255 0 / 24%);
+  background:
+    radial-gradient(90% 110% at 100% 0%, rgb(198 255 0 / 22%) 0%, transparent 59%),
+    radial-gradient(70% 90% at 0% 100%, rgb(198 255 0 / 8%) 0%, transparent 70%),
+    linear-gradient(145deg, #20261a 0%, #111411 72%);
+}
+
+.balanceHero::after {
+  content: '';
+  position: absolute;
+  right: -4rem;
+  bottom: -6.5rem;
+  width: 15rem;
+  height: 15rem;
+  border: 2rem solid rgb(198 255 0 / 4%);
+  border-radius: 50%;
+}
+
+.balanceTopline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: color-mix(in srgb, var(--primary) 64%, var(--text));
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.walletGlyph {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(198 255 0 / 45%);
+  border-radius: 1rem;
+  background: var(--primary);
+  color: #090b08;
+  box-shadow: 0 0 1.5rem rgb(198 255 0 / 22%);
+}
+
+.balanceAmount {
+  position: relative;
+  z-index: 1;
+  margin-top: 0.35rem;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 12vw, 3.7rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.balanceHero > p {
+  position: relative;
+  z-index: 1;
+  max-width: 31ch;
+  margin-top: 0.55rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.balanceHighlights {
+  position: relative;
+  z-index: 1;
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.balanceHighlights > div {
+  min-height: 4rem;
+  padding: 0.65rem 0.75rem;
+  display: grid;
+  align-content: center;
+  gap: 0.08rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.85rem;
+  background: rgb(0 0 0 / 20%);
+  backdrop-filter: blur(9px);
+}
+
+.balanceHighlights span {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.balanceHighlights strong {
+  color: var(--primary);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.balanceSection,
+.depositCard,
+.flowCard,
+.historyCard {
+  padding: 1rem;
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.sectionHeading > div {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.sectionHeading h2,
+.depositIntro h2,
+.withdrawalCard h2 {
+  font-size: 1rem;
+}
+
+.sectionHeading > small,
+.sectionHeading > svg {
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+.balanceGrid {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.balanceCard {
+  min-height: 7rem;
+  padding: 0.75rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: start;
+  align-items: center;
+  gap: 0.2rem 0.45rem;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 0.9rem;
+  background: rgb(0 0 0 / 19%);
+}
+
+.balanceCard svg {
+  color: var(--muted);
+}
+
+.balanceCard > span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 720;
+}
+
+.balanceCard > strong,
+.balanceCard > small {
+  grid-column: 1 / -1;
+}
+
+.balanceCard > strong {
+  margin-top: 0.3rem;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.balanceCard > small {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.balanceCardActive {
+  border-color: rgb(198 255 0 / 23%);
+  background: rgb(198 255 0 / 6%);
+}
+
+.balanceCardActive svg,
+.balanceCardActive > strong {
+  color: var(--primary);
+}
+
+.depositCard {
+  border-color: rgb(198 255 0 / 25%);
+  background:
+    radial-gradient(95% 100% at 100% 0%, rgb(198 255 0 / 10%) 0%, transparent 62%),
+    linear-gradient(155deg, #1a1f17 0%, #111411 100%);
+}
+
+.depositIntro {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.depositIntro > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.depositIcon,
+.withdrawalIcon {
+  width: 2.8rem;
+  height: 2.8rem;
+  flex: 0 0 2.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.85rem;
+  background: rgb(198 255 0 / 12%);
+  color: var(--primary);
+}
+
+.depositDescription {
+  margin-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.depositChoice {
+  margin-top: 0.75rem;
+  min-height: 5.5rem;
+  padding: 0.85rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.12rem 0.6rem;
+  border: 1px solid rgb(198 255 0 / 34%);
+  border-radius: 1rem;
+  background: rgb(198 255 0 / 8%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 5%);
+}
+
+.depositChoice > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.depositChoice > strong {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.depositChoice > small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.providerNotice {
+  margin-top: 0.65rem;
+  padding: 0.72rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  border-radius: 0.8rem;
+  background: rgb(0 0 0 / 22%);
+  color: var(--muted);
+}
+
+.providerNotice svg {
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+  color: color-mix(in srgb, var(--primary) 64%, var(--muted));
+}
+
+.providerNotice p {
+  color: inherit;
+  font-size: 0.68rem;
+  line-height: 1.42;
+}
+
+.depositButton {
+  width: 100%;
+  min-height: 3.4rem;
+  margin-top: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 0.9rem;
+  font-size: 0.82rem;
+}
+
+.depositButton:disabled {
+  opacity: 0.48;
+  filter: saturate(0.5);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.disabledNote {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.42;
+  text-align: center;
+}
+
+.flowSteps {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.flowSteps > div {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  text-align: center;
+}
+
+.flowSteps > div > span {
+  width: 1.8rem;
+  height: 1.8rem;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(198 255 0 / 24%);
+  border-radius: 50%;
+  background: rgb(198 255 0 / 8%);
+  color: var(--primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.flowSteps p {
+  color: var(--muted);
+  font-size: 0.56rem;
+  line-height: 1.28;
+}
+
+.flowSteps p strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.59rem;
+}
+
+.flowSteps > svg {
+  color: rgb(198 255 0 / 42%);
+}
+
+.withdrawalCard {
+  padding: 0.95rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.withdrawalCard > div:last-child {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.withdrawalCard p {
+  color: var(--muted);
+  font-size: 0.67rem;
+  line-height: 1.38;
+}
+
+.historyList {
+  margin-top: 0.7rem;
+  display: grid;
+}
+
+.historyList article {
+  min-height: 3.65rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+}
+
+.historyList article:last-child {
+  border-bottom: 0;
+}
+
+.historyDot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border: 2px solid rgb(198 255 0 / 55%);
+  border-radius: 50%;
+  background: rgb(198 255 0 / 12%);
+}
+
+.historyList article > div {
+  display: grid;
+  gap: 0.06rem;
+}
+
+.historyList article strong {
+  color: var(--text);
+  font-size: 0.73rem;
+}
+
+.historyList article span {
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.historyList article > b {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.historyList article > .positiveImpact {
+  color: var(--primary);
+}
+
+.emptyHistory {
+  min-height: 7.5rem;
+  margin-top: 0.7rem;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.25rem;
+  border: 1px dashed rgb(255 255 255 / 10%);
+  border-radius: 0.9rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.emptyHistory svg {
+  margin-bottom: 0.2rem;
+  color: rgb(198 255 0 / 55%);
+}
+
+.emptyHistory strong {
+  color: var(--text);
+  font-size: 0.75rem;
+}
+
+.emptyHistory span {
+  font-size: 0.64rem;
+}
+
+@media (max-width: 420px) {
+  .page {
+    gap: 0.7rem;
+  }
+
+  .secureBadge {
+    width: 2.35rem;
+    padding-inline: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .balanceHero,
+  .balanceSection,
+  .depositCard,
+  .flowCard,
+  .historyCard {
+    border-radius: 1.05rem;
+  }
+
+  .flowSteps {
+    gap: 0.12rem;
+  }
+
+  .flowSteps > svg {
+    width: 0.7rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page * {
+    scroll-behavior: auto;
+  }
+}

@@ -160,7 +160,7 @@
 }
 
 .wordmark {
-  margin: 0 0 var(--s-1);
+  margin: 0;
   color: var(--footer-text);
   background: linear-gradient(92deg, color-mix(in srgb, var(--footer-text) 96%, white) 0%, color-mix(in srgb, var(--accent) 72%, #fff) 100%);
   display: inline-block;
@@ -170,6 +170,22 @@
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
   text-shadow: none;
+}
+
+.wordmarkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-1);
+}
+
+.footerLogo {
+  width: 2.6rem;
+  height: auto;
+  aspect-ratio: 320 / 230;
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
 }
 
 .navBlock h4 {

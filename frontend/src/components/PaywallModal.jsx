@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { Lock, PlayCircle, Sparkles } from 'lucide-react';
 import Button from './Button';
 import {
+  PREMIUM_FEATURES_FREE,
   REWARDED_COOLDOWN_MINUTES,
   REWARDED_DAILY_LIMIT,
   REWARDED_DAILY_UNLOCK_LIMIT,
@@ -18,6 +19,8 @@ function PaywallModal({ open, onClose, feature }) {
   const { showToast } = useToast();
   const [videoModalOpen, setVideoModalOpen] = useState(false);
   const useDemoVideoFlow = String(import.meta.env.VITE_REWARDED_REQUIRE_VIDEO || 'true').toLowerCase() !== 'false';
+
+  if (PREMIUM_FEATURES_FREE) return null;
 
   function onActivate() {
     activatePremium();
@@ -70,7 +73,7 @@ function PaywallModal({ open, onClose, feature }) {
       <ul>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Eventi illimitati</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Filtri avanzati</li>
-        <li className="row"><Sparkles size={14} aria-hidden="true" /> Agenda Settimana/Mese</li>
+        <li className="row"><Sparkles size={14} aria-hidden="true" /> Eventi Settimana/Mese</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Add to Calendar (ICS)</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Upgrade notifiche</li>
         <li className="row"><Sparkles size={14} aria-hidden="true" /> Chatta con il coach (solo Premium)</li>

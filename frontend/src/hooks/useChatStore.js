@@ -17,6 +17,7 @@ export function useChatStore(initialThreadId = null) {
   const [query, setQuery] = useState('');
   const [selectedThreadId, setSelectedThreadId] = useState(initialThreadId ? String(initialThreadId) : null);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [currentUserProfile, setCurrentUserProfile] = useState(null);
 
   const currentUserId = useMemo(() => resolveCurrentUserId(), []);
 
@@ -58,7 +59,7 @@ export function useChatStore(initialThreadId = null) {
       const list = Array.isArray(payload?.items) ? payload.items : [];
       setMessages(list);
       setHasMoreMessages(Boolean(payload?.hasMore));
-      await chatApi.markThreadRead(threadId);
+      await chatApi.markThreadRead(threadId, list[list.length - 1]?.ts || new Date().toISOString());
       const threadsNext = await chatApi.listThreads();
       setThreads(Array.isArray(threadsNext) ? threadsNext : []);
     } finally {
@@ -110,6 +111,8 @@ export function useChatStore(initialThreadId = null) {
         id: tempId,
         threadId: selectedThreadId,
         senderId: currentUserId,
+        senderName: currentUserProfile?.display_name || 'Tu',
+        senderAvatarUrl: currentUserProfile?.avatar_url || '',
         text: body,
         ts: new Date().toISOString(),
         status: 'sending'
@@ -149,12 +152,65 @@ export function useChatStore(initialThreadId = null) {
         setSending(false);
       }
     },
-    [currentUserId, selectedThreadId]
+    [currentUserId, currentUserProfile, selectedThreadId]
+  );
+
+  const deleteThread = useCallback(
+    async (threadId) => {
+      const safeId = String(threadId || '').trim();
+      if (!safeId) throw new Error('Chat non valida');
+      const snapshot = threads.find((thread) => String(thread.id) === safeId) || null;
+
+      await chatApi.deleteThread(safeId, snapshot);
+      setThreads((prev) => (Array.isArray(prev) ? prev : []).filter((thread) => String(thread.id) !== safeId));
+
+      if (String(selectedThreadId || '') === safeId) {
+        setSelectedThreadId(null);
+        setMessages([]);
+        setHasMoreMessages(false);
+      }
+
+      return { ok: true };
+    },
+    [selectedThreadId, threads]
   );
 
   useEffect(() => {
     loadThreads();
   }, [loadThreads]);
+
+  useEffect(() => {
+    let active = true;
+    chatApi
+      .getCurrentUserProfile()
+      .then((profile) => {
+        if (active) setCurrentUserProfile(profile);
+      })
+      .catch(() => {
+        if (active) setCurrentUserProfile(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let refreshTimer = null;
+    const unsubscribe = chatApi.subscribe(() => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        loadThreads();
+        if (selectedThreadId) {
+          loadMessages(selectedThreadId);
+        }
+      }, 180);
+    });
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+      unsubscribe();
+    };
+  }, [loadMessages, loadThreads, selectedThreadId]);
 
   useEffect(() => {
     if (!initialThreadId) return;
@@ -165,6 +221,7 @@ export function useChatStore(initialThreadId = null) {
 
   return {
     currentUserId,
+    currentUserProfile,
     threadsLoading,
     messagesLoading,
     sending,
@@ -179,6 +236,7 @@ export function useChatStore(initialThreadId = null) {
     loadThreads,
     selectThread,
     sendMessage,
+    deleteThread,
     loadOlderMessages
   };
 }

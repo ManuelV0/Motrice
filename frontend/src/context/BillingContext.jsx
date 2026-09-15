@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  applyServerEventEntitlement,
   activateFreeWithAdsDev,
   activateFreeOnlyDev,
   activatePremiumDev,
@@ -17,9 +18,21 @@ export function BillingProvider({ children }) {
     setSubscription(getSubscriptionWithEntitlements(loadSubscription()));
   }
 
+  async function refreshServerEntitlement() {
+    try {
+      const { api } = await import('../services/api');
+      const quota = await api.getEventCreationStats();
+      if (!quota?.plan) return;
+      setSubscription(applyServerEventEntitlement(quota));
+    } catch {
+      // Keep the last known state while auth/network startup is still settling.
+    }
+  }
+
   useEffect(() => {
     function onAuthChanged() {
       refresh();
+      refreshServerEntitlement();
     }
 
     function onStorage(event) {
@@ -30,6 +43,7 @@ export function BillingProvider({ children }) {
 
     window.addEventListener('motrice-auth-changed', onAuthChanged);
     window.addEventListener('storage', onStorage);
+    refreshServerEntitlement();
     return () => {
       window.removeEventListener('motrice-auth-changed', onAuthChanged);
       window.removeEventListener('storage', onStorage);

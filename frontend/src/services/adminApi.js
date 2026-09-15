@@ -31,6 +31,27 @@ export const adminApi = {
     });
   },
 
+  resetCredits(userId = null) {
+    return request('/api/admin/reset-credits', {
+      method: 'POST',
+      body: userId ? { user_id: userId } : {}
+    });
+  },
+
+  resetMot(userId = null) {
+    return request('/api/admin/reset-mot', {
+      method: 'POST',
+      body: userId ? { user_id: userId } : {}
+    });
+  },
+
+  resetXp(userId = null) {
+    return request('/api/admin/reset-xp', {
+      method: 'POST',
+      body: userId ? { user_id: userId } : {}
+    });
+  },
+
   async fetchCoachCertificationBlob(applicationId, mode = 'inline') {
     const response = await fetch(`${API_BASE}/api/admin/coach-applications/${applicationId}/certification?mode=${mode}`, {
       headers: authHeaders()

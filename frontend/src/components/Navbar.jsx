@@ -2,101 +2,356 @@ import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   CalendarDays,
-  Compass,
   Map,
   PlusCircle,
   Handshake,
   UserRound,
   MessageCircle,
-  Lock,
+  Bell,
+  LockKeyhole,
   Menu,
   Target,
-  LocateFixed
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  TrendingUp,
+  X
 } from 'lucide-react';
 import { useMobileMenu } from '../hooks/useMobileMenu';
-import { api } from '../services/api';
-import { useBilling } from '../context/BillingContext';
+import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
-import PaywallModal from './PaywallModal';
+import { getAuthSession, signOutFromSupabase } from '../services/authSession';
+import { isProfileVerificationAdmin } from '../services/profileVerification';
 import IconButton from './IconButton';
+import BrandLogo from './BrandLogo';
+import HeaderWallet from './HeaderWallet';
 import styles from '../styles/components/navbar.module.css';
 
+const DRAWER_OPEN_THRESHOLD = 0.34;
+const DRAWER_CLOSE_THRESHOLD = 0.66;
+const DRAWER_SWIPE_VELOCITY = 0.45;
+const DRAWER_GESTURE_SLOP = 8;
+const DRAWER_SETTLE_MS = 220;
+
+function clampDrawerProgress(value) {
+  return Math.min(1, Math.max(0, value));
+}
+
 const links = [
-  { to: '/explore', label: 'Esplora', icon: Compass },
-  { to: '/account', label: 'Account', icon: UserRound },
-  { to: '/coach', label: 'Coach', icon: Target },
+  { to: '/agenda', label: 'Eventi', icon: CalendarDays },
+  { to: '/map', label: 'Mappa', icon: Map },
+  { to: '/create', label: 'Crea', icon: PlusCircle, primary: true },
   { to: '/chat', label: 'Chat', icon: MessageCircle },
-  { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+  { to: '/account', label: 'Profilo', icon: UserRound }
 ];
 
 const drawerSections = [
   {
-    title: 'Scopri',
+    title: 'La tua attività',
     items: [
-      { to: '/explore', label: 'Esplora', icon: Compass },
-      { to: '/convenzioni', label: 'Convenzioni', icon: Handshake }
+      { to: '/dashboard/plans', label: 'Schede personali', icon: CalendarDays },
+      { to: '/dashboard/progress', label: 'Progressi esercizi', icon: TrendingUp }
     ]
   },
   {
-    title: 'Gestisci',
+    title: 'Altro',
     items: [
-      { to: '/create', label: 'Crea evento', icon: PlusCircle },
-      { to: '/agenda', label: 'Agenda', icon: CalendarDays },
-      { to: '/dashboard/plans', label: 'Le mie schede', icon: CalendarDays }
-    ]
-  },
-  {
-    title: 'Profilo',
-    items: [
-      { to: '/account', label: 'Account', icon: UserRound },
-      { to: '/coach', label: 'Coach', icon: Target },
-      { to: '/chat', label: 'Chat', icon: MessageCircle }
+      { to: '/coach', label: 'Coach', icon: Target, locked: true },
+      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake, locked: true },
+      { to: '/notifications', label: 'Notifiche', icon: Bell }
     ]
   }
-];
-
-const drawerQuickActions = [
-  { to: '/map', label: 'Mappa', icon: Map },
-  { to: '/create', label: 'Crea', icon: PlusCircle },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays }
 ];
 
 function Navbar({ forceMobile = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { isOpen, setIsOpen } = useMobileMenu();
-  const { entitlements } = useBilling();
+  const { showToast } = useToast();
 
   const [query, setQuery] = useState('');
   const [unread, setUnread] = useState(0);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const { hasLocation, requesting, requestLocation } = useUserLocation();
+  const [authSession, setAuthSession] = useState(() => getAuthSession());
+  const [authActionBusy, setAuthActionBusy] = useState(false);
+  const [walletOpen, setWalletOpen] = useState(false);
+  const visibleDrawerSections = isProfileVerificationAdmin(authSession)
+    ? [
+        ...drawerSections,
+        {
+          title: 'Amministrazione',
+          items: [{ to: '/admin', label: 'Centro operativo', icon: ShieldCheck }]
+        }
+      ]
+    : drawerSections;
+  const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
   const drawerRef = useRef(null);
+  const drawerPanelRef = useRef(null);
+  const drawerGestureSessionRef = useRef(null);
+  const drawerGestureStateRef = useRef(null);
+  const drawerSettleTimerRef = useRef(null);
+  const drawerMoveFrameRef = useRef(null);
+  const pendingDrawerGestureRef = useRef(null);
+  const suppressDrawerClickRef = useRef(false);
+  const [drawerGesture, setDrawerGesture] = useState(null);
+
+  function updateDrawerGesture(progress, settling = false) {
+    const nextGesture = { progress: clampDrawerProgress(progress), settling };
+    if (drawerMoveFrameRef.current) {
+      window.cancelAnimationFrame(drawerMoveFrameRef.current);
+      drawerMoveFrameRef.current = null;
+    }
+    pendingDrawerGestureRef.current = null;
+    drawerGestureStateRef.current = nextGesture;
+    setDrawerGesture(nextGesture);
+  }
+
+  function scheduleDrawerGesture(progress) {
+    const nextGesture = { progress: clampDrawerProgress(progress), settling: false };
+    drawerGestureStateRef.current = nextGesture;
+    pendingDrawerGestureRef.current = nextGesture;
+    if (drawerMoveFrameRef.current) return;
+
+    drawerMoveFrameRef.current = window.requestAnimationFrame(() => {
+      drawerMoveFrameRef.current = null;
+      const pendingGesture = pendingDrawerGestureRef.current;
+      pendingDrawerGestureRef.current = null;
+      if (pendingGesture) setDrawerGesture(pendingGesture);
+    });
+  }
+
+  function clearDrawerGesture() {
+    if (drawerMoveFrameRef.current) {
+      window.cancelAnimationFrame(drawerMoveFrameRef.current);
+      drawerMoveFrameRef.current = null;
+    }
+    pendingDrawerGestureRef.current = null;
+    drawerGestureSessionRef.current = null;
+    drawerGestureStateRef.current = null;
+    setDrawerGesture(null);
+  }
+
+  function getDrawerWidth() {
+    return drawerPanelRef.current?.getBoundingClientRect().width || Math.min(window.innerWidth * 0.88, 352);
+  }
+
+  function settleDrawerGesture(shouldOpen) {
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    drawerGestureSessionRef.current = null;
+    if (shouldOpen) setIsOpen(true);
+    updateDrawerGesture(shouldOpen ? 1 : 0, true);
+    drawerSettleTimerRef.current = window.setTimeout(() => {
+      if (!shouldOpen) setIsOpen(false);
+      clearDrawerGesture();
+      drawerSettleTimerRef.current = null;
+    }, DRAWER_SETTLE_MS);
+  }
+
+  function onEdgePointerDown(event) {
+    if (isOpen || drawerGestureStateRef.current || event.button !== 0) return;
+
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    setWalletOpen(false);
+    drawerGestureSessionRef.current = {
+      mode: 'opening',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      width: getDrawerWidth(),
+      recognized: false
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    updateDrawerGesture(0);
+  }
+
+  function onEdgePointerMove(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'opening' || session.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - session.startX;
+    const deltaY = event.clientY - session.startY;
+
+    if (!session.recognized) {
+      if (Math.abs(deltaX) < DRAWER_GESTURE_SLOP && Math.abs(deltaY) < DRAWER_GESTURE_SLOP) return;
+      if (deltaX <= 0 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.1) {
+        clearDrawerGesture();
+        return;
+      }
+      session.recognized = true;
+    }
+
+    event.preventDefault();
+    scheduleDrawerGesture(deltaX / session.width);
+  }
+
+  function onEdgePointerEnd(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'opening' || session.pointerId !== event.pointerId) return;
+
+    const progress = drawerGestureStateRef.current?.progress || 0;
+    const elapsed = Math.max(performance.now() - session.startedAt, 1);
+    const velocity = (event.clientX - session.startX) / elapsed;
+    settleDrawerGesture(session.recognized && (progress >= DRAWER_OPEN_THRESHOLD || velocity >= DRAWER_SWIPE_VELOCITY));
+  }
+
+  function onDrawerPointerDown(event) {
+    const currentGesture = drawerGestureStateRef.current;
+    const canInterruptOpenSettle = Boolean(
+      currentGesture?.settling && currentGesture.progress >= 0.98
+    );
+    if ((!isOpen && !canInterruptOpenSettle) || (currentGesture && !canInterruptOpenSettle) || event.button !== 0) return;
+
+    if (drawerSettleTimerRef.current) {
+      window.clearTimeout(drawerSettleTimerRef.current);
+      drawerSettleTimerRef.current = null;
+    }
+    if (canInterruptOpenSettle) {
+      setIsOpen(true);
+      updateDrawerGesture(1);
+    }
+
+    drawerGestureSessionRef.current = {
+      mode: 'closing',
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      width: getDrawerWidth(),
+      recognized: false
+    };
+  }
+
+  function onDrawerPointerMove(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'closing' || session.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - session.startX;
+    const deltaY = event.clientY - session.startY;
+
+    if (!session.recognized) {
+      if (Math.abs(deltaX) < DRAWER_GESTURE_SLOP && Math.abs(deltaY) < DRAWER_GESTURE_SLOP) return;
+      if (deltaX >= 0 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.1) {
+        drawerGestureSessionRef.current = null;
+        return;
+      }
+      session.recognized = true;
+      scheduleDrawerGesture(1);
+    }
+
+    event.preventDefault();
+    scheduleDrawerGesture(1 + deltaX / session.width);
+  }
+
+  function onDrawerPointerEnd(event) {
+    const session = drawerGestureSessionRef.current;
+    if (!session || session.mode !== 'closing' || session.pointerId !== event.pointerId) return;
+
+    if (!session.recognized) {
+      drawerGestureSessionRef.current = null;
+      return;
+    }
+
+    suppressDrawerClickRef.current = true;
+    window.setTimeout(() => {
+      suppressDrawerClickRef.current = false;
+    }, 350);
+
+    const progress = drawerGestureStateRef.current?.progress ?? 1;
+    const elapsed = Math.max(performance.now() - session.startedAt, 1);
+    const velocity = (event.clientX - session.startX) / elapsed;
+    const shouldRemainOpen = progress > DRAWER_CLOSE_THRESHOLD && velocity > -DRAWER_SWIPE_VELOCITY;
+    settleDrawerGesture(shouldRemainOpen);
+  }
+
+  function onDrawerPointerCancel() {
+    const session = drawerGestureSessionRef.current;
+    if (!session) return;
+    if (session.mode === 'opening') settleDrawerGesture(false);
+    else if (session.recognized) settleDrawerGesture(true);
+    else drawerGestureSessionRef.current = null;
+  }
+
+  useEffect(() => {
+    function onWindowPointerMove(event) {
+      const session = drawerGestureSessionRef.current;
+      if (!session) return;
+      if (session.mode === 'opening') onEdgePointerMove(event);
+      else onDrawerPointerMove(event);
+    }
+
+    function onWindowPointerUp(event) {
+      const session = drawerGestureSessionRef.current;
+      if (!session) return;
+      if (session.mode === 'opening') onEdgePointerEnd(event);
+      else onDrawerPointerEnd(event);
+    }
+
+    function onWindowPointerCancel() {
+      onDrawerPointerCancel();
+    }
+
+    window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerCancel);
+    window.addEventListener('blur', onWindowPointerCancel);
+
+    return () => {
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerCancel);
+      window.removeEventListener('blur', onWindowPointerCancel);
+    };
+  }, []);
+
+  useEffect(() => {
+    function refreshAuthSession() {
+      setAuthSession(getAuthSession());
+    }
+
+    window.addEventListener('motrice-auth-changed', refreshAuthSession);
+    window.addEventListener('storage', refreshAuthSession);
+    return () => {
+      window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+      window.removeEventListener('storage', refreshAuthSession);
+    };
+  }, []);
+
+  useEffect(() => {
+    setWalletOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => () => {
+    if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
+    if (drawerMoveFrameRef.current) window.cancelAnimationFrame(drawerMoveFrameRef.current);
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    if (!entitlements.canUseNotifications) {
-      setUnread(0);
-      return () => {
-        active = false;
-      };
+    function refreshUnread() {
+      import('../services/api')
+        .then(({ api }) => api.getUnreadCount())
+        .then((count) => {
+          if (!active) return;
+          setUnread(Number.isFinite(count) ? count : 0);
+        })
+        .catch(() => {
+          if (active) setUnread(0);
+        });
     }
 
-    api
-      .getUnreadCount()
-      .then((count) => {
-        if (!active) return;
-        setUnread(Number.isFinite(count) ? count : 0);
-      })
-      .catch(() => {
-        if (active) setUnread(0);
-      });
+    refreshUnread();
+    window.addEventListener('motrice:notifications-changed', refreshUnread);
 
     return () => {
       active = false;
+      window.removeEventListener('motrice:notifications-changed', refreshUnread);
     };
-  }, [location.pathname, entitlements.canUseNotifications]);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (locationError) showToast(locationError, 'error');
+  }, [locationError, showToast]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -157,8 +412,29 @@ function Navbar({ forceMobile = false }) {
 
   function onSearchSubmit(event) {
     event.preventDefault();
-    navigate(`/explore?q=${encodeURIComponent(query)}`);
+    navigate(`/map?q=${encodeURIComponent(query)}`);
     setIsOpen(false);
+  }
+
+  async function onAuthAction() {
+    if (!authSession.isAuthenticated) {
+      setIsOpen(false);
+      navigate('/login');
+      return;
+    }
+
+    setAuthActionBusy(true);
+    try {
+      await signOutFromSupabase();
+      setAuthSession(getAuthSession());
+      setIsOpen(false);
+      showToast('Sei uscito da Motrice', 'success');
+      navigate('/login');
+    } catch (error) {
+      showToast(error?.message || 'Impossibile uscire dall’app', 'error');
+    } finally {
+      setAuthActionBusy(false);
+    }
   }
 
   return (
@@ -167,7 +443,7 @@ function Navbar({ forceMobile = false }) {
         Vai al contenuto
       </a>
 
-      <div className={`${styles.inner} container`}>
+      <div className={`${styles.inner} ${walletOpen ? styles.walletExpanded : ''} container`}>
         <div className={styles.leftGroup}>
           <IconButton
             icon={Menu}
@@ -176,11 +452,15 @@ function Navbar({ forceMobile = false }) {
             iconSize={20}
             aria-expanded={isOpen}
             aria-controls="mobile-nav"
-            onClick={() => setIsOpen((prev) => !prev)}
+            onClick={() => {
+              setWalletOpen(false);
+              setIsOpen((prev) => !prev);
+            }}
           />
 
           <NavLink className={styles.brand} to="/">
-            Motrice
+            <BrandLogo className={styles.brandMark} decorative />
+            <span>MOTRICE</span>
           </NavLink>
         </div>
 
@@ -196,29 +476,31 @@ function Navbar({ forceMobile = false }) {
         </form>
 
         <div className={styles.rightGroup}>
-          <button
-            type="button"
-            className={`${styles.brandLocationIcon} ${hasLocation ? styles.brandLocationOn : styles.brandLocationOff}`}
+          <NavLink
+            to="/notifications"
+            className={({ isActive }) => `${styles.notificationButton} ${isActive ? styles.notificationButtonActive : ''}`}
+            aria-label={unread > 0 ? `Notifiche, ${unread} non lette` : 'Notifiche'}
+            title="Notifiche"
             onClick={() => {
-              if (!hasLocation) requestLocation();
+              setIsOpen(false);
+              setWalletOpen(false);
             }}
-            aria-label={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione posizione in corso' : 'Attiva posizione'}
-            title={hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Attiva posizione'}
           >
-            <LocateFixed size={15} aria-hidden="true" />
-          </button>
-
-          <button
-            type="button"
-            className={`${styles.locationPill} ${hasLocation ? styles.locationOn : styles.locationOff}`}
-            onClick={() => {
-              if (!hasLocation) requestLocation();
+            <Bell size={18} aria-hidden="true" />
+            {unread > 0 ? (
+              <span className={styles.notificationBadge} aria-hidden="true">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            ) : null}
+          </NavLink>
+          <HeaderWallet
+            open={walletOpen}
+            onOpenChange={(nextOpen) => {
+              setIsOpen(false);
+              setWalletOpen(nextOpen);
             }}
-            aria-live="polite"
-          >
-            <span className={styles.locationLabelFull}>{hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Posizione off'}</span>
-            <span className={styles.locationLabelCompact}>{hasLocation ? 'Posizione' : requesting ? 'Attiva...' : 'Off'}</span>
-          </button>
+            authenticated={authSession.isAuthenticated}
+          />
         </div>
 
         {!forceMobile ? (
@@ -230,16 +512,11 @@ function Navbar({ forceMobile = false }) {
                   key={link.to}
                   to={link.to}
                   className={({ isActive }) =>
-                    `${styles.link} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
+                    `${styles.link} ${link.primary ? styles.createLink : ''} ${link.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
                   }
                 >
                   <Icon size={18} aria-hidden="true" />
                   <span>{link.label}</span>
-                  {link.to === '/chat' && unread > 0 ? (
-                    <span className={styles.chatriceBadge} aria-label={`${unread} nuovi messaggi`}>
-                      {unread}
-                    </span>
-                  ) : null}
                 </NavLink>
               );
             })}
@@ -247,13 +524,57 @@ function Navbar({ forceMobile = false }) {
         ) : null}
       </div>
 
-      {isOpen && <button type="button" aria-label="Chiudi menu" className={styles.backdrop} onClick={() => setIsOpen(false)} />}
+      {!isOpen ? (
+        <div
+          className={styles.drawerEdgeGesture}
+          data-drawer-edge-gesture="true"
+          aria-hidden="true"
+          onPointerDown={onEdgePointerDown}
+        />
+      ) : null}
 
-      <div id="mobile-nav" className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`} aria-hidden={!isOpen}>
+      {isOpen || drawerGesture ? (
+        <button
+          type="button"
+          aria-label="Chiudi menu"
+          className={`${styles.backdrop} ${drawerGesture ? (drawerGesture.settling ? styles.backdropGestureSettling : styles.backdropGestureActive) : ''}`}
+          style={drawerGesture ? { opacity: drawerGesture.progress } : undefined}
+          onClick={() => {
+            if (!drawerGesture) setIsOpen(false);
+          }}
+        />
+      ) : null}
+
+      <div
+        id="mobile-nav"
+        ref={drawerPanelRef}
+        className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''} ${drawerGesture ? (drawerGesture.settling ? styles.drawerGestureSettling : styles.drawerGestureActive) : ''}`}
+        style={drawerGesture ? { transform: `translate3d(${(drawerGesture.progress - 1) * 102}%, 0, 0)` } : undefined}
+        aria-hidden={!isOpen}
+        onPointerDown={onDrawerPointerDown}
+        onClickCapture={(event) => {
+          if (!suppressDrawerClickRef.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+      >
         <nav ref={drawerRef} className={styles.mobileNav} aria-label="Navigazione mobile">
           <div className={styles.mobileHeader}>
-            <p className={styles.mobileKicker}>Navigazione</p>
-            <h2 className={styles.mobileTitle}>Vai dove ti serve</h2>
+            <div className={styles.mobileHeaderCopy}>
+              <div className={styles.mobileBrandRow}>
+                <BrandLogo className={styles.mobileBrandLogo} decorative />
+                <p className={styles.mobileKicker}>MOTRICE</p>
+              </div>
+              <h2 className={styles.mobileTitle}>Tutto il resto, qui.</h2>
+            </div>
+            <button
+              type="button"
+              className={styles.drawerClose}
+              onClick={() => setIsOpen(false)}
+              aria-label="Chiudi menu"
+            >
+              <X size={22} strokeWidth={2.2} aria-hidden="true" />
+            </button>
           </div>
 
           <form className={styles.search} onSubmit={onSearchSubmit}>
@@ -267,30 +588,29 @@ function Navbar({ forceMobile = false }) {
             />
           </form>
 
-          <div className={styles.quickActions} role="list" aria-label="Azioni rapide">
-            {drawerQuickActions.map((action) => {
-              const Icon = action.icon;
-              return (
-                <NavLink
-                  key={action.to}
-                  to={action.to}
-                  role="listitem"
-                  className={({ isActive }) => `${styles.quickAction} ${isActive ? styles.quickActionActive : ''}`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  <span>{action.label}</span>
-                </NavLink>
-              );
-            })}
-          </div>
-
-          {drawerSections.map((section) => (
+          {visibleDrawerSections.map((section) => (
             <section key={section.title} className={styles.mobileSection} aria-label={section.title}>
               <p className={styles.mobileSectionTitle}>{section.title}</p>
               <div className={styles.mobileSectionList}>
                 {section.items.map((item) => {
                   const Icon = item.icon;
+                  if (item.locked) {
+                    return (
+                      <button
+                        key={item.to}
+                        type="button"
+                        className={`${styles.link} ${styles.drawerLink} ${styles.drawerLocked}`}
+                        disabled
+                        aria-label={`${item.label}, sezione temporaneamente bloccata`}
+                      >
+                        <Icon size={18} aria-hidden="true" />
+                        <span>{item.label}</span>
+                        <span className={styles.drawerLockBadge} aria-hidden="true">
+                          <LockKeyhole size={15} strokeWidth={2.3} />
+                        </span>
+                      </button>
+                    );
+                  }
                   return (
                     <NavLink
                       key={item.to}
@@ -301,10 +621,36 @@ function Navbar({ forceMobile = false }) {
                       onClick={() => setIsOpen(false)}
                     >
                       <Icon size={18} aria-hidden="true" />
-                      <span>{item.label}{item.to === '/chat' && unread > 0 ? ` (${unread})` : ''}</span>
+                      <span>{item.label}</span>
+                      {item.to === '/notifications' && unread > 0 ? (
+                        <span className={styles.drawerNotificationCount} aria-label={`${unread} notifiche non lette`}>
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      ) : null}
                     </NavLink>
                   );
                 })}
+                {section.title === 'Altro' ? (
+                  <button
+                    type="button"
+                    className={`${styles.link} ${styles.drawerLink} ${styles.authLink}`}
+                    onClick={onAuthAction}
+                    disabled={authActionBusy}
+                  >
+                    {authSession.isAuthenticated ? (
+                      <LogOut size={18} aria-hidden="true" />
+                    ) : (
+                      <LogIn size={18} aria-hidden="true" />
+                    )}
+                    <span>
+                      {authActionBusy
+                        ? 'Uscita in corso…'
+                        : authSession.isAuthenticated
+                          ? 'Esci dall’app'
+                          : 'Accedi all’app'}
+                    </span>
+                  </button>
+                ) : null}
               </div>
             </section>
           ))}
@@ -321,7 +667,6 @@ function Navbar({ forceMobile = false }) {
         </nav>
       </div>
 
-      <PaywallModal open={paywallOpen} onClose={() => setPaywallOpen(false)} feature="Upgrade" />
     </header>
   );
 }

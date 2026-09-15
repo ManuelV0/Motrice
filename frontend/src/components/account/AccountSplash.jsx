@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import BrandLogo from '../BrandLogo';
 import styles from '../../styles/components/accountSplash.module.css';
 
 function AccountSplash({ onFinish }) {
@@ -16,7 +17,7 @@ function AccountSplash({ onFinish }) {
 
   return (
     <div className={`${styles.splash} ${hidden ? styles.hidden : ''}`} aria-live="polite" role="status">
-      <p className={styles.logoText}>Motrice</p>
+      <BrandLogo className={styles.logoImage} />
       <div className={styles.ring} aria-hidden="true" />
       <p className={styles.tagline}>Caricamento account...</p>
     </div>

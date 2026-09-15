@@ -31,7 +31,7 @@ export function buildGroupOrganizerWelcome({
   const feeAmountText = feeCents > 0 ? `${(feeCents / 100).toFixed(0)} EUR` : '5 o 10 EUR';
   const quotaLine = feeStatus === 'waived_premium'
     ? '✅ Quota partecipazione: esente con Premium attivo.'
-    : `📍 Quota partecipazione (${feeAmountText}) congelata: usa "Sblocca quota (posizione)" in Agenda. Se sei al punto raduno torna disponibile, altrimenti resta congelata fino alla prossima partecipazione.`;
+    : `📍 Quota partecipazione (${feeAmountText}) congelata: usa "Sblocca quota (posizione)" in Eventi. Se sei al punto raduno torna disponibile, altrimenti resta congelata fino alla prossima partecipazione.`;
   return [
     '👋 Benvenuti in Motrice!',
     `🏁 Organizzatore del gruppo: ${name}`,

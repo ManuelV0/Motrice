@@ -11,7 +11,7 @@ function ExploreHowItWorks({ compact = false }) {
         </li>
         <li>
           <strong>Prenota o salva</strong>
-          <p>Blocca il posto nel gruppo o salva in agenda.</p>
+          <p>Blocca il posto nel gruppo o salva nei tuoi eventi.</p>
         </li>
         <li>
           <strong>Partecipa e conferma</strong>
