@@ -1259,7 +1259,7 @@
 
 .locationMapWrap .routeMap {
   height: clamp(18rem, 68vw, 25rem);
-  filter: saturate(0.72) brightness(0.82) contrast(1.08);
+  filter: saturate(0.8) brightness(0.94) contrast(1.22);
 }
 
 .locationMapWrap :global(.leaflet-top.leaflet-left) {

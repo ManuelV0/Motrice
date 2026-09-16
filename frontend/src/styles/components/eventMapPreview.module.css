@@ -54,11 +54,19 @@
 }
 
 .preview[data-theme='dark'] .leafletMapCanvas :global(.leaflet-tile-pane) {
-  filter: invert(100%) hue-rotate(180deg) brightness(0.72) saturate(0.72) contrast(1.08);
+  filter: invert(100%) hue-rotate(180deg) brightness(0.86) saturate(0.7) contrast(1.28);
 }
 
 .preview[data-theme='light'] .leafletMapCanvas :global(.leaflet-tile-pane) {
-  filter: none;
+  filter: contrast(1.08) saturate(1.02);
+}
+
+.preview[data-theme='dark'] :global(.maplibregl-canvas) {
+  filter: brightness(1.18) contrast(1.24) saturate(0.9);
+}
+
+.preview[data-theme='light'] :global(.maplibregl-canvas) {
+  filter: contrast(1.08) saturate(1.02);
 }
 
 .leafletEventIcon,
