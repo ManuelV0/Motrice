@@ -156,6 +156,10 @@ public class EventLocationTrackingPlugin extends Plugin {
                 MAX_POSITION_TIMEOUT_MS
         );
         long maximumAgeMs = Math.max(0L, call.getDouble("maximumAge", 0.0).longValue());
+        float desiredAccuracyM = (float) Math.max(
+                10.0,
+                Math.min(1000.0, call.getDouble("desiredAccuracyM", (double) HIGH_ACCURACY_TARGET_M))
+        );
         try {
             List<String> enabledProviders = getEnabledProviders(manager, highAccuracy, hasFine);
             if (enabledProviders.isEmpty()) {
@@ -168,6 +172,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                     manager,
                     enabledProviders,
                     highAccuracy,
+                    desiredAccuracyM,
                     maximumAgeMs,
                     timeoutMs
             );
@@ -257,6 +262,7 @@ public class EventLocationTrackingPlugin extends Plugin {
         private final LocationManager manager;
         private final List<String> providers;
         private final boolean highAccuracy;
+        private final float desiredAccuracyM;
         private final long maximumAgeMs;
         private final long timeoutMs;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -275,6 +281,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                 LocationManager manager,
                 List<String> providers,
                 boolean highAccuracy,
+                float desiredAccuracyM,
                 long maximumAgeMs,
                 long timeoutMs
         ) {
@@ -282,6 +289,7 @@ public class EventLocationTrackingPlugin extends Plugin {
             this.manager = manager;
             this.providers = providers;
             this.highAccuracy = highAccuracy;
+            this.desiredAccuracyM = desiredAccuracyM;
             this.maximumAgeMs = maximumAgeMs;
             this.timeoutMs = timeoutMs;
         }
@@ -346,7 +354,7 @@ public class EventLocationTrackingPlugin extends Plugin {
         private boolean isAcceptable(Location location) {
             if (location == null) return false;
             if (!highAccuracy) return true;
-            return location.hasAccuracy() && location.getAccuracy() <= HIGH_ACCURACY_TARGET_M;
+            return location.hasAccuracy() && location.getAccuracy() <= desiredAccuracyM;
         }
 
         @Override

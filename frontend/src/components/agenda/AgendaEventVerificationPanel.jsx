@@ -24,7 +24,10 @@ import {
 } from '../../utils/eventLifecycle';
 import { resolveParticipantOutcome } from '../../utils/eventParticipationState';
 import { startEventLocationTracking } from '../../services/eventLocationTracking';
-import { validateEventLocationProof } from '../../utils/eventLocationProof';
+import {
+  getEventLocationAccuracyLimit,
+  validateEventLocationProof
+} from '../../utils/eventLocationProof';
 import { isOutdoorTrackedEvent } from '../../utils/outdoorActivity';
 import { createQrDataUrl, loadQrScannerRuntime } from '../../services/qrRuntime';
 
@@ -37,6 +40,14 @@ function requireEventLocationProof(location, event) {
   });
   if (!proof.valid) throw new Error(proof.message);
   return proof;
+}
+
+function requestEventLocationOptions(event) {
+  return {
+    requireFresh: true,
+    maxAgeMs: 30000,
+    maxAccuracyM: getEventLocationAccuracyLimit(event?.geofence_radius_m)
+  };
 }
 
 function decodeQrPayload(rawValue) {
@@ -259,7 +270,7 @@ function AgendaEventVerificationPanel({
 
     try {
       const location = usesGeo
-        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        ? await requestLocation(requestEventLocationOptions(event))
         : null;
       if (usesGeo && !location) throw new Error('Attiva la posizione per validare la scansione.');
       if (usesGeo) requireEventLocationProof(location, event);
@@ -356,7 +367,7 @@ function AgendaEventVerificationPanel({
     try {
       // La verifica deve usare una rilevazione nuova: la posizione in cache serve
       // alla mappa, ma non e sufficiente per certificare la presenza all evento.
-      const location = await requestLocation({ requireFresh: true, maxAgeMs: 30000 });
+      const location = await requestLocation(requestEventLocationOptions(event));
       if (!location) {
         throw new Error(locationError || 'Attiva la posizione del telefono, autorizza Motrice e riprova.');
       }

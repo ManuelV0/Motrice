@@ -36,7 +36,10 @@ import {
   startEventLocationTracking,
   stopEventLocationTracking
 } from '../../services/eventLocationTracking';
-import { validateEventLocationProof } from '../../utils/eventLocationProof';
+import {
+  getEventLocationAccuracyLimit,
+  validateEventLocationProof
+} from '../../utils/eventLocationProof';
 import { GYM_ENTRY_OPTIONS } from '../../utils/eventVenueAccess';
 import { getParticipantRemovalPolicy } from '../../utils/eventManagementRules';
 import { createQrDataUrl, loadQrScannerRuntime } from '../../services/qrRuntime';
@@ -183,6 +186,14 @@ function requireEventLocationProof(location, event) {
   });
   if (!proof.valid) throw new Error(proof.message);
   return proof;
+}
+
+function requestEventLocationOptions(event) {
+  return {
+    requireFresh: true,
+    maxAgeMs: 30000,
+    maxAccuracyM: getEventLocationAccuracyLimit(event?.geofence_radius_m)
+  };
 }
 
 function ratingField(label, value, onChange) {
@@ -424,7 +435,7 @@ function EventParticipationFlow({
     scannerControlsRef.current?.stop?.();
     try {
       const location = usesGeo
-        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        ? await requestLocation(requestEventLocationOptions(event))
         : null;
       if (!location && usesGeo) {
         throw new Error(locationError || 'Attiva la posizione per validare la scansione');
@@ -579,7 +590,7 @@ function EventParticipationFlow({
       const startsGpsCheckIn = !isOrganizer && usesGeo && !progress?.checked_in_at;
       const needsFreshProof = usesGeo && (interactive || startsGpsCheckIn || isOrganizer);
       const location = needsFreshProof
-        ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
+        ? await requestLocation(requestEventLocationOptions(event))
         : coords;
       if (!location && usesGeo) {
         if (interactive) throw new Error(locationError || 'Posizione non disponibile');
@@ -1001,7 +1012,7 @@ function EventParticipationFlow({
                   icon={LocateFixed}
                   onClick={async () => {
                     try {
-                      const location = await requestLocation({ requireFresh: true, maxAgeMs: 30000 });
+                      const location = await requestLocation(requestEventLocationOptions(event));
                       if (!location) return;
                       requireEventLocationProof(location, event);
                       await startEventLocationTracking({

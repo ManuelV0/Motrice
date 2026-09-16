@@ -1,9 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateEventLocationProof } from './eventLocationProof.js';
+import {
+  getEventLocationAccuracyLimit,
+  validateEventLocationProof
+} from './eventLocationProof.js';
 
 const NOW = 1789032000000;
 const EVENT = { eventLat: 42.8596487, eventLng: 13.5702482, radiusM: 250, nowMs: NOW };
+
+test('adatta la precisione richiesta al raggio senza superare cento metri', () => {
+  assert.equal(getEventLocationAccuracyLimit(50), 35);
+  assert.equal(getEventLocationAccuracyLimit(120), 60);
+  assert.equal(getEventLocationAccuracyLimit(250), 100);
+  assert.equal(getEventLocationAccuracyLimit(1000), 100);
+});
 
 test('accetta una posizione fresca e precisa dentro l area evento', () => {
   const result = validateEventLocationProof({

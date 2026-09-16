@@ -182,10 +182,13 @@ function useUserLocation() {
 
       for (const options of attempts) {
         try {
+          const providerOptions = isNative && Number.isFinite(Number(maxAccuracyM))
+            ? { ...options, desiredAccuracyM: Number(maxAccuracyM) }
+            : options;
           const position = isNative
-            ? await NativeEventLocation.getCurrentPosition(options)
+            ? await NativeEventLocation.getCurrentPosition(providerOptions)
             : await new Promise((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, options);
+              navigator.geolocation.getCurrentPosition(resolve, reject, providerOptions);
             });
           const nextCoords = commitPosition(position, { requireFresh, maxAgeMs, maxAccuracyM });
           setPermission(precisePermission ? 'granted' : 'approximate');

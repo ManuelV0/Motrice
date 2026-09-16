@@ -16,6 +16,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
@@ -59,6 +60,8 @@ public class EventLocationService extends Service implements LocationListener {
     private static final Object QUEUE_LOCK = new Object();
 
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable expirationTask = this::finishExpiredTracking;
     private LocationManager locationManager;
     private volatile boolean finishing = false;
 
@@ -217,6 +220,7 @@ public class EventLocationService extends Service implements LocationListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            mainHandler.removeCallbacks(expirationTask);
             markStopped(this, false);
             stopLocationUpdates();
             stopForeground(STOP_FOREGROUND_REMOVE);
@@ -236,6 +240,7 @@ public class EventLocationService extends Service implements LocationListener {
             finishExpiredTracking();
             return START_NOT_STICKY;
         }
+        scheduleExpiration(expectedEndAt);
         startLocationUpdates();
         uploadExecutor.execute(this::uploadPendingPings);
         return START_STICKY;
@@ -312,6 +317,12 @@ public class EventLocationService extends Service implements LocationListener {
         } catch (SecurityException ignored) {
             // No-op: il permesso potrebbe essere stato revocato durante il servizio.
         }
+    }
+
+    private void scheduleExpiration(long expectedEndAtMs) {
+        mainHandler.removeCallbacks(expirationTask);
+        long delayMs = Math.max(1L, expectedEndAtMs - System.currentTimeMillis());
+        mainHandler.postDelayed(expirationTask, delayMs);
     }
 
     @Override
@@ -549,6 +560,7 @@ public class EventLocationService extends Service implements LocationListener {
     private void finishExpiredTracking() {
         if (finishing) return;
         finishing = true;
+        mainHandler.removeCallbacks(expirationTask);
         stopLocationUpdates();
         uploadExecutor.execute(() -> {
             uploadPendingPings();
@@ -603,6 +615,7 @@ public class EventLocationService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
+        mainHandler.removeCallbacks(expirationTask);
         stopLocationUpdates();
         uploadExecutor.shutdown();
         super.onDestroy();

@@ -43,6 +43,11 @@ export function distanceBetweenCoordinatesM(latA, lngA, latB, lngB) {
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(haversine)));
 }
 
+export function getEventLocationAccuracyLimit(radiusM = 250) {
+  const normalizedRadiusM = Math.max(50, finiteNumber(radiusM) ?? 250);
+  return Math.min(100, Math.max(35, normalizedRadiusM / 2));
+}
+
 export function validateEventLocationProof({
   location,
   eventLat,
@@ -83,7 +88,7 @@ export function validateEventLocationProof({
     };
   }
 
-  const maximumAccuracyM = Math.min(100, Math.max(35, normalizedRadiusM / 2));
+  const maximumAccuracyM = getEventLocationAccuracyLimit(normalizedRadiusM);
   if (!Number.isFinite(accuracyM) || accuracyM < 0 || accuracyM > maximumAccuracyM) {
     return {
       valid: false,
