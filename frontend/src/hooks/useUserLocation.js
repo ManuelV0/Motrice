@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { NativeEventLocation } from '../services/nativeEventLocation';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
@@ -6,12 +6,15 @@ import {
   getLocationAttempts,
   hasAnyLocationPermission,
   hasPreciseLocationPermission,
+  normalizeLocationSample,
   normalizeLocationError,
-  resolveLocationPermission
+  resolveLocationPermission,
+  validateLocationSample
 } from '../utils/locationAcquisition';
 
 const STORAGE_KEY = 'motrice_user_location_v1';
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const INITIAL_CACHE_PREVIEW_MS = 30000;
 
 function readCachedLocation() {
   try {
@@ -51,17 +54,33 @@ function writeCachedLocation(coords) {
 
 function useUserLocation() {
   const isNative = Capacitor.isNativePlatform();
-  const cached = readCachedLocation();
-  const [coords, setCoords] = useState(cached ? {
-    lat: cached.lat,
-    lng: cached.lng,
-    accuracy: cached.accuracy,
-    capturedAt: cached.capturedAt
-  } : null);
-  const [permission, setPermission] = useState(cached ? 'granted' : 'prompt');
+  const initialCachedRef = useRef(undefined);
+  if (initialCachedRef.current === undefined) initialCachedRef.current = readCachedLocation();
+  const [coords, setCoords] = useState(() => {
+    const cached = initialCachedRef.current;
+    if (!cached || Date.now() - Number(cached.capturedAt || 0) > INITIAL_CACHE_PREVIEW_MS) return null;
+    return {
+      lat: cached.lat,
+      lng: cached.lng,
+      accuracy: cached.accuracy,
+      capturedAt: cached.capturedAt,
+      source: 'cache'
+    };
+  });
+  const [permission, setPermission] = useState('prompt');
   const [error, setError] = useState('');
   const [errorCode, setErrorCode] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const [watching, setWatching] = useState(false);
+  const watchSessionRef = useRef(null);
+
+  const commitPosition = useCallback((position, validation = {}) => {
+    const nextCoords = validateLocationSample(normalizeLocationSample(position), validation);
+    const liveCoords = { ...nextCoords, source: 'live' };
+    setCoords(liveCoords);
+    writeCachedLocation(liveCoords);
+    return liveCoords;
+  }, []);
 
   useEffect(() => {
     if (isNative) {
@@ -99,7 +118,7 @@ function useUserLocation() {
       .then((status) => {
         if (!active) return;
         statusRef = status;
-        setPermission((prev) => (prev === 'granted' ? prev : status.state || 'prompt'));
+        setPermission(status.state || 'prompt');
         status.onchange = () => {
           if (!active) return;
           setPermission(status.state || 'prompt');
@@ -115,7 +134,11 @@ function useUserLocation() {
     };
   }, [isNative]);
 
-  const requestLocation = useCallback(async ({ requireFresh = false, maxAgeMs = 30000 } = {}) => {
+  const requestLocation = useCallback(async ({
+    requireFresh = false,
+    maxAgeMs = 30000,
+    maxAccuracyM = null
+  } = {}) => {
     if (!isNative && !navigator?.geolocation) {
       setPermission('unavailable');
       setError('Geolocalizzazione non supportata su questo browser.');
@@ -164,33 +187,8 @@ function useUserLocation() {
             : await new Promise((resolve, reject) => {
               navigator.geolocation.getCurrentPosition(resolve, reject, options);
             });
-          const capturedAt = Number.isFinite(Number(position.timestamp))
-            ? Number(position.timestamp)
-            : Date.now();
-          if (requireFresh && Math.max(0, Date.now() - capturedAt) > maxAgeMs) {
-            const staleError = new Error('Posizione GPS non aggiornata');
-            staleError.code = 'MOTRICE_STALE_LOCATION';
-            throw staleError;
-          }
-
-          const nextCoords = {
-            lat: Number(position.coords.latitude),
-            lng: Number(position.coords.longitude),
-            accuracy: Number.isFinite(Number(position.coords.accuracy))
-              ? Number(position.coords.accuracy)
-              : null,
-            capturedAt
-          };
-
-          if (!Number.isFinite(nextCoords.lat) || !Number.isFinite(nextCoords.lng)) {
-            const invalidError = new Error('Il telefono ha restituito coordinate non valide');
-            invalidError.code = 'OS-PLUG-GLOC-0002';
-            throw invalidError;
-          }
-
-          setCoords(nextCoords);
+          const nextCoords = commitPosition(position, { requireFresh, maxAgeMs, maxAccuracyM });
           setPermission(precisePermission ? 'granted' : 'approximate');
-          writeCachedLocation(nextCoords);
           return nextCoords;
         } catch (attemptError) {
           lastError = attemptError;
@@ -206,7 +204,110 @@ function useUserLocation() {
     } finally {
       setRequesting(false);
     }
-  }, [isNative]);
+  }, [commitPosition, isNative]);
+
+  const clearWatchSession = useCallback(async (session) => {
+    if (!session) return;
+    session.stopped = true;
+    if (session.native) {
+      if (session.id != null) {
+        await NativeEventLocation.clearWatch({ id: session.id }).catch(() => undefined);
+      }
+      return;
+    }
+    if (session.id != null && typeof navigator !== 'undefined') {
+      navigator.geolocation?.clearWatch?.(session.id);
+    }
+  }, []);
+
+  const stopLocationWatch = useCallback(async () => {
+    const session = watchSessionRef.current;
+    watchSessionRef.current = null;
+    setWatching(false);
+    await clearWatchSession(session);
+  }, [clearWatchSession]);
+
+  const startLocationWatch = useCallback(async ({
+    maxAgeMs = 15000,
+    maxAccuracyM = 150,
+    minimumUpdateInterval = 3000
+  } = {}) => {
+    await stopLocationWatch();
+    const initialCoords = await requestLocation({
+      requireFresh: true,
+      maxAgeMs,
+      maxAccuracyM
+    });
+    if (!initialCoords) return null;
+
+    const session = { native: isNative, id: null, stopped: false };
+    watchSessionRef.current = session;
+    setWatching(true);
+
+    const onPosition = (position, watchError = null) => {
+      if (session.stopped) return;
+      if (watchError || !position) {
+        const normalized = normalizeLocationError(watchError);
+        setPermission(normalized.permission);
+        setError(normalized.message);
+        setErrorCode(normalized.code);
+        return;
+      }
+      try {
+        commitPosition(position, {
+          requireFresh: true,
+          maxAgeMs: Math.max(maxAgeMs, 60000),
+          maxAccuracyM
+        });
+        setPermission('granted');
+        setError('');
+        setErrorCode('');
+      } catch (sampleError) {
+        const normalized = normalizeLocationError(sampleError);
+        setError(normalized.message);
+        setErrorCode(normalized.code);
+      }
+    };
+
+    try {
+      if (isNative) {
+        const watchId = await NativeEventLocation.watchPosition({
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 25000,
+          minimumUpdateInterval
+        }, onPosition);
+        session.id = watchId;
+        if (session.stopped) await clearWatchSession(session);
+      } else {
+        session.id = navigator.geolocation.watchPosition(
+          (position) => onPosition(position),
+          (watchError) => onPosition(null, watchError),
+          {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 25000
+          }
+        );
+      }
+      return initialCoords;
+    } catch (watchError) {
+      const normalized = normalizeLocationError(watchError);
+      if (watchSessionRef.current === session) watchSessionRef.current = null;
+      session.stopped = true;
+      setWatching(false);
+      setPermission(normalized.permission);
+      setError(normalized.message);
+      setErrorCode(normalized.code);
+      return null;
+    }
+  }, [clearWatchSession, commitPosition, isNative, requestLocation, stopLocationWatch]);
+
+  useEffect(() => () => {
+    const session = watchSessionRef.current;
+    watchSessionRef.current = null;
+    void clearWatchSession(session);
+  }, [clearWatchSession]);
 
   const originParams = useMemo(() => {
     if (!coords) return {};
@@ -220,7 +321,10 @@ function useUserLocation() {
     error,
     errorCode,
     requesting,
+    watching,
     requestLocation,
+    startLocationWatch,
+    stopLocationWatch,
     originParams
   };
 }

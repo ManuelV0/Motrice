@@ -61,6 +61,7 @@ public class EventLocationTrackingPlugin extends Plugin {
     private static final long MAX_POSITION_TIMEOUT_MS = 60000L;
     private static final long MIN_WATCH_INTERVAL_MS = 1000L;
     private static final long MAX_WATCH_INTERVAL_MS = 60000L;
+    private static final float HIGH_ACCURACY_TARGET_M = 100f;
     private final Set<SingleLocationRequest> activeLocationRequests =
             Collections.synchronizedSet(new HashSet<>());
     private final Map<String, ContinuousLocationRequest> activeLocationWatches =
@@ -166,6 +167,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                     call,
                     manager,
                     enabledProviders,
+                    highAccuracy,
                     maximumAgeMs,
                     timeoutMs
             );
@@ -254,6 +256,7 @@ public class EventLocationTrackingPlugin extends Plugin {
         private final PluginCall call;
         private final LocationManager manager;
         private final List<String> providers;
+        private final boolean highAccuracy;
         private final long maximumAgeMs;
         private final long timeoutMs;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -271,12 +274,14 @@ public class EventLocationTrackingPlugin extends Plugin {
                 PluginCall call,
                 LocationManager manager,
                 List<String> providers,
+                boolean highAccuracy,
                 long maximumAgeMs,
                 long timeoutMs
         ) {
             this.call = call;
             this.manager = manager;
             this.providers = providers;
+            this.highAccuracy = highAccuracy;
             this.maximumAgeMs = maximumAgeMs;
             this.timeoutMs = timeoutMs;
         }
@@ -302,7 +307,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                             // Continue with the remaining providers.
                         }
                     }
-                    if (bestLocation != null) {
+                    if (isAcceptable(bestLocation)) {
                         resolve(bestLocation);
                         return;
                     }
@@ -335,7 +340,13 @@ public class EventLocationTrackingPlugin extends Plugin {
         @Override
         public void onLocationChanged(Location location) {
             if (isBetterLocation(location, bestLocation)) bestLocation = location;
-            if (location != null) resolve(location);
+            if (isAcceptable(location)) resolve(location);
+        }
+
+        private boolean isAcceptable(Location location) {
+            if (location == null) return false;
+            if (!highAccuracy) return true;
+            return location.hasAccuracy() && location.getAccuracy() <= HIGH_ACCURACY_TARGET_M;
         }
 
         @Override

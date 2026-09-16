@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   getLocationAttempts,
   hasAnyLocationPermission,
+  normalizeLocationSample,
   normalizeLocationError,
-  resolveLocationPermission
+  resolveLocationPermission,
+  validateLocationSample
 } from './locationAcquisition.js';
 
 test('riconosce il permesso approssimativo senza confonderlo con un diniego', () => {
@@ -31,4 +33,35 @@ test('traduce gli errori del provider Motrice', () => {
   assert.equal(normalizeLocationError({ code: 'MOTRICE_LOCATION_DISABLED' }).permission, 'unavailable');
   assert.equal(normalizeLocationError({ code: 'MOTRICE_LOCATION_TIMEOUT' }).permission, 'timeout');
   assert.equal(normalizeLocationError({ code: 'MOTRICE_POSITION_UNAVAILABLE' }).permission, 'unavailable');
+  assert.match(normalizeLocationError({ code: 'MOTRICE_LOCATION_INACCURATE' }).message, /approssimativa/);
+});
+
+test('normalizza un campione GPS e conserva precisione e istante', () => {
+  const sample = normalizeLocationSample({
+    timestamp: 1234,
+    coords: { latitude: 42.85, longitude: 13.58, accuracy: 18 }
+  }, 9999);
+  assert.deepEqual(sample, {
+    lat: 42.85,
+    lng: 13.58,
+    accuracy: 18,
+    capturedAt: 1234
+  });
+});
+
+test('rifiuta una posizione vecchia o troppo approssimativa', () => {
+  assert.throws(
+    () => validateLocationSample(
+      { lat: 42.85, lng: 13.58, accuracy: 20, capturedAt: 1000 },
+      { requireFresh: true, maxAgeMs: 5000, now: 7001 }
+    ),
+    (error) => error.code === 'MOTRICE_STALE_LOCATION'
+  );
+  assert.throws(
+    () => validateLocationSample(
+      { lat: 42.85, lng: 13.58, accuracy: 450, capturedAt: 7000 },
+      { maxAccuracyM: 150, now: 7001 }
+    ),
+    (error) => error.code === 'MOTRICE_LOCATION_INACCURATE'
+  );
 });

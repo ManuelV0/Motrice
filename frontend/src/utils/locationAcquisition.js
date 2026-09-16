@@ -94,6 +94,14 @@ export function normalizeLocationError(error) {
     };
   }
 
+  if (code === 'MOTRICE_LOCATION_INACCURATE') {
+    return {
+      permission: 'granted',
+      code,
+      message: 'La posizione ricevuta è troppo approssimativa. Attendi qualche secondo all’aperto e riprova.'
+    };
+  }
+
   if (
     rawCode === 2 ||
     code === '2' ||
@@ -116,6 +124,52 @@ export function normalizeLocationError(error) {
       ? `GPS non disponibile: ${originalMessage}`
       : 'Errore GPS non riconosciuto. Chiudi e riapri Motrice, poi riprova.'
   };
+}
+
+export function normalizeLocationSample(position, now = Date.now()) {
+  const capturedAt = Number.isFinite(Number(position?.timestamp))
+    ? Number(position.timestamp)
+    : now;
+  const sample = {
+    lat: Number(position?.coords?.latitude),
+    lng: Number(position?.coords?.longitude),
+    accuracy: Number.isFinite(Number(position?.coords?.accuracy))
+      ? Number(position.coords.accuracy)
+      : null,
+    capturedAt
+  };
+
+  if (!Number.isFinite(sample.lat) || !Number.isFinite(sample.lng)) {
+    const invalidError = new Error('Il dispositivo ha restituito coordinate non valide');
+    invalidError.code = 'MOTRICE_POSITION_UNAVAILABLE';
+    throw invalidError;
+  }
+  return sample;
+}
+
+export function validateLocationSample(
+  sample,
+  { requireFresh = false, maxAgeMs = 30000, maxAccuracyM = null, now = Date.now() } = {}
+) {
+  if (requireFresh && Math.max(0, now - Number(sample?.capturedAt || 0)) > maxAgeMs) {
+    const staleError = new Error('Posizione GPS non aggiornata');
+    staleError.code = 'MOTRICE_STALE_LOCATION';
+    throw staleError;
+  }
+
+  const accuracyLimit = Number(maxAccuracyM);
+  if (
+    Number.isFinite(accuracyLimit)
+    && accuracyLimit > 0
+    && (!Number.isFinite(Number(sample?.accuracy)) || Number(sample.accuracy) > accuracyLimit)
+  ) {
+    const inaccurateError = new Error('Posizione GPS troppo approssimativa');
+    inaccurateError.code = 'MOTRICE_LOCATION_INACCURATE';
+    inaccurateError.accuracy = sample?.accuracy ?? null;
+    throw inaccurateError;
+  }
+
+  return sample;
 }
 
 export function getLocationAttempts({ requireFresh = false, precise = false, native = false } = {}) {

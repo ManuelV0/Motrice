@@ -1221,7 +1221,10 @@ function MapPage({ active = true }) {
     error: locationError,
     errorCode: locationErrorCode,
     requesting,
+    watching,
     requestLocation,
+    startLocationWatch,
+    stopLocationWatch,
     originParams
   } = useUserLocation();
 
@@ -1492,22 +1495,33 @@ function MapPage({ active = true }) {
   }
 
   async function handleGpsAction() {
-    let nextCoords = coords;
-    if (!nextCoords) nextCoords = await requestLocation();
-    if (!nextCoords) {
-      showToast(locationError || 'Posizione non disponibile. Controlla il permesso e riprova.', 'info');
-      return;
-    }
-
-    if (followUser) {
+    if (followUser || watching) {
+      await stopLocationWatch();
       setFollowUser(false);
       showToast('Segui posizione disattivato', 'info');
       return;
     }
 
     shouldRecenterRef.current = true;
+    const nextCoords = await startLocationWatch({
+      maxAgeMs: 15000,
+      maxAccuracyM: 150,
+      minimumUpdateInterval: 3000
+    });
+    if (!nextCoords) {
+      shouldRecenterRef.current = false;
+      showToast(locationError || 'Non ho ottenuto una posizione precisa. Attendi il segnale GPS e riprova.', 'info');
+      return;
+    }
+
     setFollowUser(true);
-    showToast('Posizione centrata e aggiornamento attivo', 'success');
+    const accuracy = Number(nextCoords.accuracy);
+    showToast(
+      Number.isFinite(accuracy)
+        ? `Posizione aggiornata · precisione ${Math.round(accuracy)} m`
+        : 'Posizione aggiornata · inseguimento attivo',
+      'success'
+    );
   }
 
   function getSheetSnapHeights() {
@@ -1635,6 +1649,7 @@ function MapPage({ active = true }) {
     if (!active) {
       wasActiveRef.current = false;
       setFollowUser(false);
+      void stopLocationWatch();
       map?.stop();
       return undefined;
     }
@@ -1656,7 +1671,7 @@ function MapPage({ active = true }) {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [active, mapRenderer, syncViewport]);
+  }, [active, mapRenderer, stopLocationWatch, syncViewport]);
 
   useEffect(() => {
     if (mapRenderer !== 'maplibre') return undefined;
