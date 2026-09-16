@@ -247,7 +247,10 @@ try {
   run('npm', ['run', 'cap:sync']);
   scanBuiltClient();
   if (!printResult(result.version)) process.exit(1);
-  run('./gradlew', ['bundleRelease', '--no-daemon'], {
+  // A clean build is mandatory here: Android's bundle manifest task can be
+  // considered up-to-date after only the version constants change, producing
+  // an AAB whose embedded version does not match build.gradle.
+  run('./gradlew', ['clean', 'bundleRelease', '--no-daemon'], {
     cwd: androidRoot,
     env: {
       ORG_GRADLE_PROJECT_RELEASE_STORE_FILE: result.signing.storeFile,
