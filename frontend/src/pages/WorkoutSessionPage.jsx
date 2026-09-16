@@ -30,6 +30,7 @@ import {
 } from '../features/workout/services/workoutSessionStore';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
+import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
 import styles from '../styles/pages/workoutSession.module.css';
 
 function formatClock(totalSeconds) {
@@ -82,6 +83,7 @@ function WorkoutSessionPage() {
   const previousRestRemainingRef = useRef(0);
   const metricPressTimerRef = useRef(null);
   const auth = useMemo(() => getAuthSession(), []);
+  const locationOptional = canAccessWorkoutWithoutLocation(auth);
 
   usePageMeta({ title: 'Allenamento live · Motrice', description: 'Sessione allenamento Motrice' });
 
@@ -108,7 +110,7 @@ function WorkoutSessionPage() {
           progress?.checked_in_at ||
           Number(progress?.cashback_percent || eventResult?.user_rsvp?.cashback_percent || 0) >= 60
         );
-        if (!participantVerified && !(organizer && (checkedParticipants > 0 || organizerLocationVerified))) {
+        if (!locationOptional && !participantVerified && !(organizer && (checkedParticipants > 0 || organizerLocationVerified))) {
           throw new Error(organizer
             ? 'Scannerizza il QR di un partecipante oppure conferma la geolocalizzazione.'
             : 'Verifica prima la presenza con QR Code o posizione.');
@@ -127,7 +129,7 @@ function WorkoutSessionPage() {
     }
     load();
     return () => { active = false; };
-  }, [auth, id]);
+  }, [auth, id, locationOptional]);
 
   const exercises = useMemo(
     () => normalizeWorkoutExercises(event?.workout_plan?.exercises),

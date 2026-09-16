@@ -89,6 +89,7 @@ import {
   resolvePersonalVerificationProgress
 } from '../utils/eventPostSummary';
 import { getMyProfileVerification } from '../services/profileVerification';
+import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
 import styles from '../styles/pages/eventDetail.module.css';
 
 const LazyEventMapPreview = lazy(() => import('../components/EventMapPreview'));
@@ -398,6 +399,7 @@ function EventDetailPage() {
     coords,
     requesting,
     requestLocation,
+    error: locationError,
     originParams
   } = useUserLocation();
   const aiEnabled = getAiSettings().enableLocalAI;
@@ -1326,6 +1328,11 @@ function EventDetailPage() {
   const eventHasEnded = eventTiming.hasEnded;
   const participantOutcome = resolveParticipantOutcome(event);
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
+  const canBypassWorkoutPresence = canAccessWorkoutWithoutLocation(authSession) && Boolean(
+    event?.is_personal ||
+    isOrganizerForEvent ||
+    participantOutcome.id === 'confirmed'
+  );
   const baseEventPrimaryAction = resolveEventPrimaryAction({
     event,
     isOrganizer: isOrganizerForEvent,
@@ -2165,6 +2172,7 @@ function EventDetailPage() {
                         coords={coords}
                         requestingLocation={requesting}
                         requestLocation={requestLocation}
+                        locationError={locationError}
                         showToast={showToast}
                         onEventRefresh={reload}
                         onOpenParticipantProfile={openJoinRequestProfile}
@@ -2377,7 +2385,7 @@ function EventDetailPage() {
                           : 'Salva nelle mie schede'}
                     </Button>
                   ) : null}
-                  {(event.is_personal || ['checked_in', 'completed'].includes(participantOutcome.id) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
+                  {(canBypassWorkoutPresence || event.is_personal || ['checked_in', 'completed'].includes(participantOutcome.id) || (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)) ? (
                     <Button
                       type="button"
                       fullWidth
@@ -2393,6 +2401,7 @@ function EventDetailPage() {
           ) : null}
 
           {hasOutdoorTracking && (
+            canBypassWorkoutPresence ||
             event.is_personal ||
             ['checked_in', 'completed'].includes(participantOutcome.id) ||
             (isOrganizerForEvent && Number(event?.participants_checked_in_count || 0) > 0)

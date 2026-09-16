@@ -48,6 +48,7 @@ import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import EventMapPreview from '../components/EventMapPreview';
+import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -81,6 +82,7 @@ function OutdoorActivitySessionPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const auth = useMemo(() => getAuthSession(), []);
+  const locationOptional = canAccessWorkoutWithoutLocation(auth);
   const [event, setEvent] = useState(null);
   const [participation, setParticipation] = useState(null);
   const [session, setSession] = useState(null);
@@ -123,7 +125,7 @@ function OutdoorActivitySessionPage() {
         const organizerVerified = Boolean(
           Number(eventResult?.participants_checked_in_count || 0) > 0 || progress?.organizer_present
         );
-        if (!participantVerified && !(organizer && organizerVerified)) {
+        if (!locationOptional && !participantVerified && !(organizer && organizerVerified)) {
           throw new Error(organizer
             ? 'Scannerizza un QR oppure conferma prima la geolocalizzazione.'
             : 'Verifica prima la presenza con QR Code o posizione.');
@@ -156,7 +158,7 @@ function OutdoorActivitySessionPage() {
     }
     load();
     return () => { active = false; };
-  }, [auth, id]);
+  }, [auth, id, locationOptional]);
 
   const kind = getOutdoorActivityKind(event);
   const isPaused = Boolean(session?.pausedAt);

@@ -207,6 +207,7 @@ function EventParticipationFlow({
   coords,
   requestingLocation,
   requestLocation,
+  locationError = '',
   showToast,
   onEventRefresh,
   onOpenParticipantProfile,
@@ -426,7 +427,7 @@ function EventParticipationFlow({
         ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
         : null;
       if (!location && usesGeo) {
-        throw new Error('Attiva la posizione per validare la scansione');
+        throw new Error(locationError || 'Attiva la posizione per validare la scansione');
       }
       if (usesGeo) requireEventLocationProof(location, event);
       const result = await api.scanEventParticipantQr({
@@ -477,6 +478,7 @@ function EventParticipationFlow({
   }, [
     event,
     loadFlow,
+    locationError,
     onEventRefresh,
     requestLocation,
     showToast,
@@ -580,7 +582,7 @@ function EventParticipationFlow({
         ? await requestLocation({ requireFresh: true, maxAgeMs: 30000 })
         : coords;
       if (!location && usesGeo) {
-        if (interactive) throw new Error('Posizione non disponibile');
+        if (interactive) throw new Error(locationError || 'Posizione non disponibile');
         return;
       }
       if (needsFreshProof) requireEventLocationProof(location, event);
@@ -630,6 +632,7 @@ function EventParticipationFlow({
     loadFlow,
     onEventRefresh,
     requestLocation,
+    locationError,
     showToast,
     usesGeo,
     progress?.checked_in_at

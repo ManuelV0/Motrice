@@ -2,6 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
+import {
+  getLocationAttempts,
+  hasAnyLocationPermission,
+  hasPreciseLocationPermission,
+  normalizeLocationError,
+  resolveLocationPermission
+} from '../utils/locationAcquisition';
 
 const STORAGE_KEY = 'motrice_user_location_v1';
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
@@ -42,36 +49,6 @@ function writeCachedLocation(coords) {
   }
 }
 
-function normalizeError(error) {
-  if (!error) return { permission: 'error', message: 'Posizione non disponibile.' };
-  const code = String(error.code || '');
-  if (error.code === 1 || code === 'OS-PLUG-GLOC-0003') {
-    return { permission: 'denied', message: 'Permesso posizione negato. Abilitalo nelle impostazioni dell app.' };
-  }
-  if (code === 'OS-PLUG-GLOC-0007' || code === 'OS-PLUG-GLOC-0009' || code === 'OS-PLUG-GLOC-0017') {
-    return { permission: 'unavailable', message: 'Attiva la posizione del telefono e riprova.' };
-  }
-  if (
-    error.code === 2 ||
-    code === 'OS-PLUG-GLOC-0002' ||
-    code === 'OS-PLUG-GLOC-0014' ||
-    code === 'OS-PLUG-GLOC-0015' ||
-    code === 'OS-PLUG-GLOC-0016'
-  ) {
-    return { permission: 'unavailable', message: 'Posizione non disponibile sul dispositivo.' };
-  }
-  if (error.code === 3 || code === 'OS-PLUG-GLOC-0010') {
-    return { permission: 'timeout', message: 'Timeout geolocalizzazione. Riprova.' };
-  }
-  if (code === 'OS-PLUG-GLOC-0018') {
-    return { permission: 'error', message: 'Permesso posizione non configurato nell app.' };
-  }
-  if (code === 'MOTRICE_STALE_LOCATION') {
-    return { permission: 'granted', message: 'La posizione ricevuta non è aggiornata. Attendi il nuovo segnale GPS e riprova.' };
-  }
-  return { permission: 'error', message: 'Errore durante il recupero della posizione.' };
-}
-
 function useUserLocation() {
   const isNative = Capacitor.isNativePlatform();
   const cached = readCachedLocation();
@@ -83,6 +60,7 @@ function useUserLocation() {
   } : null);
   const [permission, setPermission] = useState(cached ? 'granted' : 'prompt');
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
@@ -91,14 +69,21 @@ function useUserLocation() {
       Geolocation.checkPermissions()
         .then((status) => {
           if (!active) return;
-          const nativePermission = status.location || status.coarseLocation || 'prompt';
+          const nativePermission = resolveLocationPermission(status);
           setPermission(nativePermission);
-          if (nativePermission !== 'granted') {
+          if (!hasAnyLocationPermission(status)) {
             setCoords(null);
+          } else {
+            setError('');
+            setErrorCode('');
           }
         })
-        .catch(() => {
-          // Il servizio potrebbe essere spento: il messaggio verra mostrato al tap.
+        .catch((permissionError) => {
+          if (!active) return;
+          const normalized = normalizeLocationError(permissionError);
+          setPermission(normalized.permission);
+          setError(normalized.message);
+          setErrorCode(normalized.code);
         });
       return () => {
         active = false;
@@ -139,68 +124,86 @@ function useUserLocation() {
 
     setRequesting(true);
     setError('');
+    setErrorCode('');
 
     try {
-      let position;
+      let precisePermission = !isNative;
 
       if (isNative) {
-        const currentPermission = await Geolocation.checkPermissions();
-        const currentState = currentPermission.location || currentPermission.coarseLocation;
+        let currentPermission = await Geolocation.checkPermissions();
 
-        if (currentPermission.location !== 'granted') {
-          const requestedPermission = await Geolocation.requestPermissions({
-            permissions: ['location', 'coarseLocation']
+        if (!hasAnyLocationPermission(currentPermission)) {
+          currentPermission = await Geolocation.requestPermissions({
+            permissions: ['location']
           });
-          const requestedState = requestedPermission.location || requestedPermission.coarseLocation;
-          if (requestedState !== 'granted') {
+          if (!hasAnyLocationPermission(currentPermission)) {
             const deniedError = new Error('Permesso posizione negato');
             deniedError.code = 'OS-PLUG-GLOC-0003';
             throw deniedError;
           }
         }
 
-        position = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-          enableLocationFallback: !requireFresh
-        });
-      } else {
-        position = await new Promise((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
-          });
-        });
+        precisePermission = hasPreciseLocationPermission(currentPermission);
+        setPermission(resolveLocationPermission(currentPermission));
+        if (requireFresh && !precisePermission) {
+          const preciseError = new Error('Posizione precisa necessaria');
+          preciseError.code = 'MOTRICE_PRECISE_LOCATION_REQUIRED';
+          throw preciseError;
+        }
       }
 
-      const capturedAt = Number.isFinite(Number(position.timestamp))
-        ? Number(position.timestamp)
-        : Date.now();
-      if (requireFresh && Math.max(0, Date.now() - capturedAt) > maxAgeMs) {
-        const staleError = new Error('Posizione GPS non aggiornata');
-        staleError.code = 'MOTRICE_STALE_LOCATION';
-        throw staleError;
+      const attempts = getLocationAttempts({
+        requireFresh,
+        precise: precisePermission,
+        native: isNative
+      });
+      let lastError = null;
+
+      for (const options of attempts) {
+        try {
+          const position = isNative
+            ? await Geolocation.getCurrentPosition(options)
+            : await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, options);
+            });
+          const capturedAt = Number.isFinite(Number(position.timestamp))
+            ? Number(position.timestamp)
+            : Date.now();
+          if (requireFresh && Math.max(0, Date.now() - capturedAt) > maxAgeMs) {
+            const staleError = new Error('Posizione GPS non aggiornata');
+            staleError.code = 'MOTRICE_STALE_LOCATION';
+            throw staleError;
+          }
+
+          const nextCoords = {
+            lat: Number(position.coords.latitude),
+            lng: Number(position.coords.longitude),
+            accuracy: Number.isFinite(Number(position.coords.accuracy))
+              ? Number(position.coords.accuracy)
+              : null,
+            capturedAt
+          };
+
+          if (!Number.isFinite(nextCoords.lat) || !Number.isFinite(nextCoords.lng)) {
+            const invalidError = new Error('Il telefono ha restituito coordinate non valide');
+            invalidError.code = 'OS-PLUG-GLOC-0002';
+            throw invalidError;
+          }
+
+          setCoords(nextCoords);
+          setPermission(precisePermission ? 'granted' : 'approximate');
+          writeCachedLocation(nextCoords);
+          return nextCoords;
+        } catch (attemptError) {
+          lastError = attemptError;
+        }
       }
-
-      const nextCoords = {
-        lat: Number(position.coords.latitude),
-        lng: Number(position.coords.longitude),
-        accuracy: Number.isFinite(Number(position.coords.accuracy))
-          ? Number(position.coords.accuracy)
-          : null,
-        capturedAt
-      };
-
-      setCoords(nextCoords);
-      setPermission('granted');
-      writeCachedLocation(nextCoords);
-      return nextCoords;
+      throw lastError || new Error('Posizione non disponibile');
     } catch (geoError) {
-      const normalized = normalizeError(geoError);
+      const normalized = normalizeLocationError(geoError);
       setPermission(normalized.permission);
       setError(normalized.message);
+      setErrorCode(normalized.code);
       return null;
     } finally {
       setRequesting(false);
@@ -217,6 +220,7 @@ function useUserLocation() {
     hasLocation: Boolean(coords),
     permission,
     error,
+    errorCode,
     requesting,
     requestLocation,
     originParams

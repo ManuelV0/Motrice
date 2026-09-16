@@ -692,6 +692,14 @@ function getMapAreaLabel(events, hasLocation, selectedRadiusKm) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
+function getLocationNoticeTitle(permission, errorCode) {
+  if (permission === 'denied') return 'Permesso posizione necessario';
+  if (permission === 'approximate' || errorCode === 'MOTRICE_PRECISE_LOCATION_REQUIRED') return 'Posizione precisa richiesta';
+  if (permission === 'timeout') return 'Ricerca GPS scaduta';
+  if (permission === 'unavailable') return 'Posizione non disponibile';
+  return 'GPS da riprovare';
+}
+
 function applyUserRadiusOverlay(map, lat, lng, radiusKm, mapTheme) {
   const data = buildRadiusPolygon(lat, lng, radiusKm);
   const fillColor = mapTheme === 'light' ? 'rgba(139,207,0,0.18)' : 'rgba(168,240,0,0.18)';
@@ -1206,7 +1214,16 @@ function MapPage({ active = true }) {
   const [draftMapTheme, setDraftMapTheme] = useState(mapTheme);
   const [lifecycleTick, setLifecycleTick] = useState(() => Date.now());
 
-  const { coords, hasLocation, permission, error: locationError, requesting, requestLocation, originParams } = useUserLocation();
+  const {
+    coords,
+    hasLocation,
+    permission,
+    error: locationError,
+    errorCode: locationErrorCode,
+    requesting,
+    requestLocation,
+    originParams
+  } = useUserLocation();
 
   usePageMeta({
     title: active ? 'Mappa Eventi | Motrice' : '',
@@ -1478,7 +1495,7 @@ function MapPage({ active = true }) {
     let nextCoords = coords;
     if (!nextCoords) nextCoords = await requestLocation();
     if (!nextCoords) {
-      showToast('Posizione non disponibile. Controlla il permesso e riprova.', 'info');
+      showToast(locationError || 'Posizione non disponibile. Controlla il permesso e riprova.', 'info');
       return;
     }
 
@@ -2046,7 +2063,7 @@ function MapPage({ active = true }) {
                 >
                   <LocateFixed size={18} aria-hidden="true" />
                   <span>
-                    <strong>Posizione disattivata</strong>
+                    <strong>{getLocationNoticeTitle(permission, locationErrorCode)}</strong>
                     <small>{permission === 'denied' ? 'Abilita il permesso e riprova' : locationError}</small>
                   </span>
                   <b>{requesting ? 'Attendo…' : 'Riprova'}</b>
