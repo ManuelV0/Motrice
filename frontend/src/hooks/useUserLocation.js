@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { Geolocation } from '@capacitor/geolocation';
 import { NativeEventLocation } from '../services/nativeEventLocation';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import {
@@ -67,7 +66,7 @@ function useUserLocation() {
   useEffect(() => {
     if (isNative) {
       let active = true;
-      Geolocation.checkPermissions()
+      NativeEventLocation.checkLocationPermissions()
         .then((status) => {
           if (!active) return;
           const nativePermission = resolveLocationPermission(status);
@@ -131,12 +130,10 @@ function useUserLocation() {
       let precisePermission = !isNative;
 
       if (isNative) {
-        let currentPermission = await Geolocation.checkPermissions();
+        let currentPermission = await NativeEventLocation.checkLocationPermissions();
 
         if (!hasAnyLocationPermission(currentPermission)) {
-          currentPermission = await Geolocation.requestPermissions({
-            permissions: ['location']
-          });
+          currentPermission = await NativeEventLocation.requestLocationPermissions();
           if (!hasAnyLocationPermission(currentPermission)) {
             const deniedError = new Error('Permesso posizione negato');
             deniedError.code = 'OS-PLUG-GLOC-0003';

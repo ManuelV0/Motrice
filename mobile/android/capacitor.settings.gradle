@@ -11,9 +11,6 @@ project(':capacitor-browser').projectDir = new File('../../node_modules/@capacit
 include ':capacitor-camera'
 project(':capacitor-camera').projectDir = new File('../../node_modules/@capacitor/camera/android')
 
-include ':capacitor-geolocation'
-project(':capacitor-geolocation').projectDir = new File('../../node_modules/@capacitor/geolocation/android')
-
 include ':capacitor-local-notifications'
 project(':capacitor-local-notifications').projectDir = new File('../../node_modules/@capacitor/local-notifications/android')
 

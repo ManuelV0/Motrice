@@ -16,10 +16,13 @@ import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,16 +32,95 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@CapacitorPlugin(name = "EventLocationTracking")
+@CapacitorPlugin(
+        name = "EventLocationTracking",
+        permissions = {
+                @Permission(
+                        alias = EventLocationTrackingPlugin.LOCATION_ALIAS,
+                        strings = {
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                Manifest.permission.ACCESS_FINE_LOCATION
+                        }
+                ),
+                @Permission(
+                        alias = EventLocationTrackingPlugin.COARSE_LOCATION_ALIAS,
+                        strings = {Manifest.permission.ACCESS_COARSE_LOCATION}
+                )
+        }
+)
 public class EventLocationTrackingPlugin extends Plugin {
 
+    static final String LOCATION_ALIAS = "location";
+    static final String COARSE_LOCATION_ALIAS = "coarseLocation";
     private static final long MIN_POSITION_TIMEOUT_MS = 1000L;
     private static final long MAX_POSITION_TIMEOUT_MS = 60000L;
+    private static final long MIN_WATCH_INTERVAL_MS = 1000L;
+    private static final long MAX_WATCH_INTERVAL_MS = 60000L;
     private final Set<SingleLocationRequest> activeLocationRequests =
             Collections.synchronizedSet(new HashSet<>());
+    private final Map<String, ContinuousLocationRequest> activeLocationWatches =
+            new ConcurrentHashMap<>();
+
+    @PluginMethod
+    public void checkLocationPermissions(PluginCall call) {
+        call.resolve(locationPermissionResult());
+    }
+
+    @PluginMethod
+    public void requestLocationPermissions(PluginCall call) {
+        if (hasAnyLocationPermission()) {
+            call.resolve(locationPermissionResult());
+            return;
+        }
+        requestPermissionForAlias(LOCATION_ALIAS, call, "locationPermissionsCallback");
+    }
+
+    @PermissionCallback
+    private void locationPermissionsCallback(PluginCall call) {
+        call.resolve(locationPermissionResult());
+    }
+
+    private boolean hasFineLocationPermission() {
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasCoarseLocationPermission() {
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasAnyLocationPermission() {
+        return hasFineLocationPermission() || hasCoarseLocationPermission();
+    }
+
+    private boolean areLocationServicesEnabled() {
+        LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+        if (manager == null) return false;
+        try {
+            return manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                    || manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private JSObject locationPermissionResult() {
+        boolean hasFine = hasFineLocationPermission();
+        boolean hasCoarse = hasCoarseLocationPermission();
+        PermissionState fineState = getPermissionState(LOCATION_ALIAS);
+        PermissionState coarseState = getPermissionState(COARSE_LOCATION_ALIAS);
+        JSObject result = new JSObject();
+        result.put("location", hasFine ? PermissionState.GRANTED.toString() : fineState.toString());
+        result.put("coarseLocation", hasCoarse ? PermissionState.GRANTED.toString() : coarseState.toString());
+        result.put("servicesEnabled", areLocationServicesEnabled());
+        return result;
+    }
 
     /**
      * Safe foreground location acquisition for Android.
@@ -50,10 +132,8 @@ public class EventLocationTrackingPlugin extends Plugin {
      */
     @PluginMethod
     public void getCurrentPosition(PluginCall call) {
-        boolean hasFine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-        boolean hasCoarse = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
+        boolean hasFine = hasFineLocationPermission();
+        boolean hasCoarse = hasCoarseLocationPermission();
         if (!hasFine && !hasCoarse) {
             call.reject(
                     "Permesso posizione non concesso",
@@ -75,39 +155,45 @@ public class EventLocationTrackingPlugin extends Plugin {
                 MAX_POSITION_TIMEOUT_MS
         );
         long maximumAgeMs = Math.max(0L, call.getDouble("maximumAge", 0.0).longValue());
-        List<String> enabledProviders = new ArrayList<>();
-
         try {
-            if (highAccuracy && hasFine && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                enabledProviders.add(LocationManager.GPS_PROVIDER);
+            List<String> enabledProviders = getEnabledProviders(manager, highAccuracy, hasFine);
+            if (enabledProviders.isEmpty()) {
+                call.reject("Posizione del telefono disattivata", "MOTRICE_LOCATION_DISABLED");
+                return;
             }
-            if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                enabledProviders.add(LocationManager.NETWORK_PROVIDER);
-            }
-            if (hasFine
-                    && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-                    && !enabledProviders.contains(LocationManager.GPS_PROVIDER)) {
-                enabledProviders.add(LocationManager.GPS_PROVIDER);
-            }
+
+            SingleLocationRequest request = new SingleLocationRequest(
+                    call,
+                    manager,
+                    enabledProviders,
+                    maximumAgeMs,
+                    timeoutMs
+            );
+            activeLocationRequests.add(request);
+            request.start();
         } catch (RuntimeException error) {
             call.reject("Impossibile leggere lo stato della posizione", "MOTRICE_POSITION_UNAVAILABLE");
-            return;
         }
+    }
 
-        if (enabledProviders.isEmpty()) {
-            call.reject("Posizione del telefono disattivata", "MOTRICE_LOCATION_DISABLED");
-            return;
+    private static List<String> getEnabledProviders(
+            LocationManager manager,
+            boolean highAccuracy,
+            boolean hasFine
+    ) {
+        List<String> enabledProviders = new ArrayList<>();
+        if (highAccuracy && hasFine && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            enabledProviders.add(LocationManager.GPS_PROVIDER);
         }
-
-        SingleLocationRequest request = new SingleLocationRequest(
-                call,
-                manager,
-                enabledProviders,
-                maximumAgeMs,
-                timeoutMs
-        );
-        activeLocationRequests.add(request);
-        request.start();
+        if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            enabledProviders.add(LocationManager.NETWORK_PROVIDER);
+        }
+        if (hasFine
+                && manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+                && !enabledProviders.contains(LocationManager.GPS_PROVIDER)) {
+            enabledProviders.add(LocationManager.GPS_PROVIDER);
+        }
+        return enabledProviders;
     }
 
     private static long clampLong(long value, long minimum, long maximum) {
@@ -157,6 +243,10 @@ public class EventLocationTrackingPlugin extends Plugin {
         for (SingleLocationRequest request : requests) {
             request.cancel();
         }
+        for (ContinuousLocationRequest request : new ArrayList<>(activeLocationWatches.values())) {
+            request.cancel();
+        }
+        activeLocationWatches.clear();
         super.handleOnDestroy();
     }
 
@@ -220,6 +310,7 @@ public class EventLocationTrackingPlugin extends Plugin {
 
                 boolean listening = false;
                 for (String provider : providers) {
+                    if (finished.get()) break;
                     try {
                         manager.requestSingleUpdate(provider, this, Looper.getMainLooper());
                         listening = true;
@@ -237,7 +328,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                     reject("Nessun provider di posizione disponibile", "MOTRICE_POSITION_UNAVAILABLE");
                     return;
                 }
-                mainHandler.postDelayed(timeoutAction, timeoutMs);
+                if (!finished.get()) mainHandler.postDelayed(timeoutAction, timeoutMs);
             });
         }
 
@@ -265,7 +356,11 @@ public class EventLocationTrackingPlugin extends Plugin {
         void resolve(Location location) {
             if (!finished.compareAndSet(false, true)) return;
             cleanup();
-            call.resolve(positionResult(location));
+            try {
+                call.resolve(positionResult(location));
+            } catch (RuntimeException ignored) {
+                // A stale bridge callback must never close the host activity.
+            }
         }
 
         void reject(String message, String code) {
@@ -287,6 +382,190 @@ public class EventLocationTrackingPlugin extends Plugin {
                 // Cleanup must never crash the host activity.
             }
             activeLocationRequests.remove(this);
+        }
+    }
+
+    @PluginMethod(returnType = PluginMethod.RETURN_CALLBACK)
+    public void watchPosition(PluginCall call) {
+        boolean hasFine = hasFineLocationPermission();
+        boolean hasCoarse = hasCoarseLocationPermission();
+        if (!hasFine && !hasCoarse) {
+            call.reject("Permesso posizione non concesso", "MOTRICE_LOCATION_PERMISSION_REQUIRED");
+            return;
+        }
+
+        LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
+        if (manager == null) {
+            call.reject("Servizio posizione non disponibile", "MOTRICE_POSITION_UNAVAILABLE");
+            return;
+        }
+
+        boolean highAccuracy = Boolean.TRUE.equals(call.getBoolean("enableHighAccuracy", false));
+        long intervalMs = clampLong(
+                call.getDouble("minimumUpdateInterval", 3000.0).longValue(),
+                MIN_WATCH_INTERVAL_MS,
+                MAX_WATCH_INTERVAL_MS
+        );
+        long timeoutMs = clampLong(
+                call.getDouble("timeout", 20000.0).longValue(),
+                MIN_POSITION_TIMEOUT_MS,
+                MAX_POSITION_TIMEOUT_MS
+        );
+
+        try {
+            List<String> providers = getEnabledProviders(manager, highAccuracy, hasFine);
+            if (providers.isEmpty()) {
+                call.reject("Posizione del telefono disattivata", "MOTRICE_LOCATION_DISABLED");
+                return;
+            }
+
+            String callbackId = call.getCallbackId();
+            ContinuousLocationRequest previous = activeLocationWatches.remove(callbackId);
+            if (previous != null) previous.cancel();
+
+            call.setKeepAlive(true);
+            ContinuousLocationRequest request = new ContinuousLocationRequest(
+                    callbackId,
+                    call,
+                    manager,
+                    providers,
+                    intervalMs,
+                    timeoutMs
+            );
+            activeLocationWatches.put(callbackId, request);
+            request.start();
+        } catch (RuntimeException error) {
+            call.setKeepAlive(false);
+            call.reject("Impossibile avviare il monitoraggio GPS", "MOTRICE_POSITION_UNAVAILABLE");
+        }
+    }
+
+    @PluginMethod
+    public void clearWatch(PluginCall call) {
+        String callbackId = call.getString("id", "");
+        if (callbackId.isEmpty()) {
+            call.reject("Identificativo monitoraggio mancante", "MOTRICE_WATCH_ID_REQUIRED");
+            return;
+        }
+        ContinuousLocationRequest request = activeLocationWatches.remove(callbackId);
+        if (request != null) request.cancel();
+        call.resolve();
+    }
+
+    private final class ContinuousLocationRequest implements LocationListener {
+        private final String callbackId;
+        private final PluginCall call;
+        private final LocationManager manager;
+        private final List<String> providers;
+        private final long intervalMs;
+        private final long timeoutMs;
+        private final Handler mainHandler = new Handler(Looper.getMainLooper());
+        private final AtomicBoolean finished = new AtomicBoolean(false);
+        private final AtomicBoolean deliveredFirstLocation = new AtomicBoolean(false);
+        private final Runnable firstLocationTimeout = () -> reject(
+                "Tempo scaduto durante il recupero della posizione",
+                "MOTRICE_LOCATION_TIMEOUT"
+        );
+
+        ContinuousLocationRequest(
+                String callbackId,
+                PluginCall call,
+                LocationManager manager,
+                List<String> providers,
+                long intervalMs,
+                long timeoutMs
+        ) {
+            this.callbackId = callbackId;
+            this.call = call;
+            this.manager = manager;
+            this.providers = providers;
+            this.intervalMs = intervalMs;
+            this.timeoutMs = timeoutMs;
+        }
+
+        void start() {
+            mainHandler.post(() -> {
+                if (finished.get()) return;
+                boolean listening = false;
+                for (String provider : providers) {
+                    if (finished.get()) break;
+                    try {
+                        manager.requestLocationUpdates(provider, intervalMs, 0f, this, Looper.getMainLooper());
+                        listening = true;
+                    } catch (SecurityException ignored) {
+                        reject("Permesso posizione non concesso", "MOTRICE_LOCATION_PERMISSION_REQUIRED");
+                        return;
+                    } catch (IllegalArgumentException ignored) {
+                        // Provider disappeared between discovery and subscription.
+                    } catch (RuntimeException ignored) {
+                        // Continue with any remaining provider.
+                    }
+                }
+                if (!listening) {
+                    reject("Nessun provider di posizione disponibile", "MOTRICE_POSITION_UNAVAILABLE");
+                    return;
+                }
+                mainHandler.postDelayed(firstLocationTimeout, timeoutMs);
+            });
+        }
+
+        @Override
+        public void onLocationChanged(Location location) {
+            if (location == null || finished.get()) return;
+            if (deliveredFirstLocation.compareAndSet(false, true)) {
+                mainHandler.removeCallbacks(firstLocationTimeout);
+            }
+            try {
+                call.resolve(positionResult(location));
+            } catch (RuntimeException ignored) {
+                cancel();
+            }
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+            // Another provider can continue the watch.
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+            // No action required.
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            // Deprecated on newer Android versions, retained for older devices.
+        }
+
+        void reject(String message, String code) {
+            if (!finished.compareAndSet(false, true)) return;
+            cleanup();
+            try {
+                call.setKeepAlive(false);
+                call.reject(message, code);
+            } catch (RuntimeException ignored) {
+                // A stale bridge callback must never close the host activity.
+            }
+        }
+
+        void cancel() {
+            if (!finished.compareAndSet(false, true)) return;
+            cleanup();
+            try {
+                call.release(getBridge());
+            } catch (RuntimeException ignored) {
+                // The activity may already be shutting down.
+            }
+        }
+
+        void cleanup() {
+            mainHandler.removeCallbacks(firstLocationTimeout);
+            try {
+                manager.removeUpdates(this);
+            } catch (RuntimeException ignored) {
+                // Cleanup must never crash the host activity.
+            }
+            activeLocationWatches.remove(callbackId, this);
         }
     }
 

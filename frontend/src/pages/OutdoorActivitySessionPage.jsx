@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Geolocation } from '@capacitor/geolocation';
 import {
   ArrowLeft,
   Check,
@@ -49,6 +48,7 @@ import ContextInfoButton from '../components/ContextInfoButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import EventMapPreview from '../components/EventMapPreview';
 import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
+import { NativeEventLocation } from '../services/nativeEventLocation';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -169,7 +169,7 @@ function OutdoorActivitySessionPage() {
     let disposed = false;
     let watchId = null;
 
-    Geolocation.watchPosition({
+    NativeEventLocation.watchPosition({
       enableHighAccuracy: true,
       maximumAge: 3000,
       timeout: 20000,
@@ -194,7 +194,7 @@ function OutdoorActivitySessionPage() {
       });
     })
       .then((idValue) => {
-        if (disposed) Geolocation.clearWatch({ id: idValue }).catch(() => undefined);
+        if (disposed) NativeEventLocation.clearWatch({ id: idValue }).catch(() => undefined);
         else watchId = idValue;
       })
       .catch((watchError) => {
@@ -203,7 +203,7 @@ function OutdoorActivitySessionPage() {
 
     return () => {
       disposed = true;
-      if (watchId != null) Geolocation.clearWatch({ id: watchId }).catch(() => undefined);
+      if (watchId != null) NativeEventLocation.clearWatch({ id: watchId }).catch(() => undefined);
     };
   }, [id, isCompleted, isPaused, kind, session?.startedAt]);
 
