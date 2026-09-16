@@ -18,9 +18,17 @@ test('traduce gli errori Android conservando una causa utile', () => {
   assert.match(normalizeLocationError({ code: 'CUSTOM', message: 'Provider failed' }).message, /Provider failed/);
 });
 
-test('mantiene il fallback Android e usa un secondo tentativo', () => {
+test('usa il provider Motrice sicuro e mantiene un secondo tentativo', () => {
   const attempts = getLocationAttempts({ requireFresh: true, precise: true, native: true });
   assert.equal(attempts.length, 2);
-  assert.equal(attempts.every((attempt) => attempt.enableLocationFallback === true), true);
+  assert.equal(attempts.every((attempt) => attempt.nativeProvider === 'motrice'), true);
+  assert.equal(attempts.some((attempt) => 'enableLocationFallback' in attempt), false);
   assert.equal(attempts[1].timeout, 40000);
+});
+
+test('traduce gli errori del provider Motrice', () => {
+  assert.equal(normalizeLocationError({ code: 'MOTRICE_LOCATION_PERMISSION_REQUIRED' }).permission, 'denied');
+  assert.equal(normalizeLocationError({ code: 'MOTRICE_LOCATION_DISABLED' }).permission, 'unavailable');
+  assert.equal(normalizeLocationError({ code: 'MOTRICE_LOCATION_TIMEOUT' }).permission, 'timeout');
+  assert.equal(normalizeLocationError({ code: 'MOTRICE_POSITION_UNAVAILABLE' }).permission, 'unavailable');
 });

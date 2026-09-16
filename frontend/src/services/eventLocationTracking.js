@@ -1,5 +1,6 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor } from '@capacitor/core';
 import { supabase, supabasePublishableKey, supabaseUrl } from './supabaseClient';
+import { NativeEventLocation as NativeTracking } from './nativeEventLocation';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { getOutdoorActivityKind } from '../utils/outdoorActivity';
@@ -8,10 +9,6 @@ const ACTIVE_TRACKING_KEY = 'motrice_active_event_tracking_v1';
 const WEB_QUEUE_KEY = 'motrice_event_tracking_queue_v1';
 const STATUS_EVENT = 'motrice:event-tracking-status';
 const MAX_QUEUE_SIZE = 720;
-const NATIVE_PLUGIN_KEY = '__motriceEventLocationTrackingPlugin';
-const NativeTracking = globalThis[NATIVE_PLUGIN_KEY] || registerPlugin('EventLocationTracking');
-globalThis[NATIVE_PLUGIN_KEY] = NativeTracking;
-
 let browserWatchId = null;
 let syncPromise = null;
 let appStateListenerPromise = null;

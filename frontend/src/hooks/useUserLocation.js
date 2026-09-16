@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
+import { NativeEventLocation } from '../services/nativeEventLocation';
 import { safeStorageGet, safeStorageSet } from '../utils/safeStorage';
 import {
   getLocationAttempts,
@@ -162,7 +163,7 @@ function useUserLocation() {
       for (const options of attempts) {
         try {
           const position = isNative
-            ? await Geolocation.getCurrentPosition(options)
+            ? await NativeEventLocation.getCurrentPosition(options)
             : await new Promise((resolve, reject) => {
               navigator.geolocation.getCurrentPosition(resolve, reject, options);
             });

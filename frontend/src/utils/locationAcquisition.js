@@ -38,6 +38,7 @@ export function normalizeLocationError(error) {
     rawCode === 1 ||
     code === '1' ||
     code === 'OS-PLUG-GLOC-0003' ||
+    code === 'MOTRICE_LOCATION_PERMISSION_REQUIRED' ||
     normalizedMessage.includes('permission') && normalizedMessage.includes('denied')
   ) {
     return {
@@ -59,6 +60,7 @@ export function normalizeLocationError(error) {
     code === 'OS-PLUG-GLOC-0007' ||
     code === 'OS-PLUG-GLOC-0009' ||
     code === 'OS-PLUG-GLOC-0017' ||
+    code === 'MOTRICE_LOCATION_DISABLED' ||
     normalizedMessage.includes('location services are not enabled') ||
     normalizedMessage.includes('location turned off')
   ) {
@@ -73,6 +75,7 @@ export function normalizeLocationError(error) {
     rawCode === 3 ||
     code === '3' ||
     code === 'OS-PLUG-GLOC-0010' ||
+    code === 'MOTRICE_LOCATION_TIMEOUT' ||
     normalizedMessage.includes('timeout') ||
     normalizedMessage.includes('obtain location in time')
   ) {
@@ -94,6 +97,7 @@ export function normalizeLocationError(error) {
   if (
     rawCode === 2 ||
     code === '2' ||
+    code === 'MOTRICE_POSITION_UNAVAILABLE' ||
     ['OS-PLUG-GLOC-0002', 'OS-PLUG-GLOC-0014', 'OS-PLUG-GLOC-0015', 'OS-PLUG-GLOC-0016'].includes(code)
   ) {
     return {
@@ -121,13 +125,13 @@ export function getLocationAttempts({ requireFresh = false, precise = false, nat
         enableHighAccuracy: true,
         timeout: 25000,
         maximumAge: 5000,
-        ...(native ? { enableLocationFallback: true } : {})
+        ...(native ? { nativeProvider: 'motrice' } : {})
       },
       {
         enableHighAccuracy: true,
         timeout: 40000,
         maximumAge: 0,
-        ...(native ? { enableLocationFallback: true } : {})
+        ...(native ? { nativeProvider: 'motrice' } : {})
       }
     ];
   }
@@ -137,13 +141,13 @@ export function getLocationAttempts({ requireFresh = false, precise = false, nat
       enableHighAccuracy: false,
       timeout: 12000,
       maximumAge: 60000,
-      ...(native ? { enableLocationFallback: true } : {})
+      ...(native ? { nativeProvider: 'motrice' } : {})
     },
     {
       enableHighAccuracy: Boolean(precise),
       timeout: 30000,
       maximumAge: 15000,
-      ...(native ? { enableLocationFallback: true } : {})
+      ...(native ? { nativeProvider: 'motrice' } : {})
     }
   ];
 }
