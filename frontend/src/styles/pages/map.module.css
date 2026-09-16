@@ -344,7 +344,7 @@
 }
 
 .themeDark .rasterMapCanvas :global(.leaflet-tile-pane) {
-  filter: none;
+  filter: invert(100%) hue-rotate(180deg) brightness(0.72) saturate(0.72) contrast(1.08);
 }
 
 .themeLight .rasterMapCanvas :global(.leaflet-tile-pane) {

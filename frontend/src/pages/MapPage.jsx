@@ -32,6 +32,7 @@ import {
 } from '../utils/eventParticipationState';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import {
+  canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
   getHighDefinitionRasterTiles,
   MAPLIBRE_STYLES
@@ -60,16 +61,6 @@ const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
 const EVENT_PINS_LAYER = 'motrice-event-pins';
 const EVENT_CLUSTERS_LAYER = 'motrice-event-clusters';
 const EVENT_SELECTED_LABEL_LAYER = 'motrice-event-selected-label';
-
-function canUseMapLibreRenderer() {
-  if (typeof document === 'undefined') return false;
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2'));
-  } catch {
-    return false;
-  }
-}
 
 function getPrimaryActionIcon(action) {
   if (action?.target === 'verify') return ShieldCheck;
@@ -1185,7 +1176,7 @@ function MapPage({ active = true }) {
   const wasActiveRef = useRef(active);
   const [mapReady, setMapReady] = useState(false);
   const [markersReady, setMarkersReady] = useState(false);
-  const [mapRenderer, setMapRenderer] = useState(() => (canUseMapLibreRenderer() ? 'maplibre' : 'raster'));
+  const [mapRenderer, setMapRenderer] = useState(() => (canUseAcceleratedMapRenderer() ? 'maplibre' : 'raster'));
 
   const [filters, setFilters] = useState(() => readFiltersFromSearch(searchParams, baseFilters));
   const [searchInput, setSearchInput] = useState(() => filters.q || '');
@@ -1703,17 +1694,22 @@ function MapPage({ active = true }) {
     }
 
     let hasLoaded = false;
+    let mapErrorCount = 0;
     const fallbackTimer = window.setTimeout(() => {
       if (!hasLoaded && mapRef.current === map) setMapRenderer('raster');
     }, 4500);
 
     const handleMapLoad = () => {
       hasLoaded = true;
+      mapErrorCount = 0;
       window.clearTimeout(fallbackTimer);
       setMapReady(true);
       syncViewport();
     };
-    const handleStyleLoad = () => setMapReady(true);
+    const handleStyleLoad = () => {
+      mapErrorCount = 0;
+      setMapReady(true);
+    };
     const handleMoveEnd = () => {
       // The visible bounds are the source of truth: after every pan, pinch or
       // zoom the event list updates automatically without an extra CTA.
@@ -1768,7 +1764,11 @@ function MapPage({ active = true }) {
     };
     const handleMapError = (event) => {
       const message = String(event?.error?.message || event?.error || '');
-      if (/webgl|context|worker|offscreencanvas/i.test(message)) setMapRenderer('raster');
+      mapErrorCount += 1;
+      if (/webgl|context|worker|offscreencanvas/i.test(message)
+          || mapErrorCount >= (hasLoaded ? 12 : 3)) {
+        setMapRenderer('raster');
+      }
     };
     const handleContextLost = () => setMapRenderer('raster');
 

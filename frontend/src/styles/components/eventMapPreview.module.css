@@ -54,7 +54,7 @@
 }
 
 .preview[data-theme='dark'] .leafletMapCanvas :global(.leaflet-tile-pane) {
-  filter: none;
+  filter: invert(100%) hue-rotate(180deg) brightness(0.72) saturate(0.72) contrast(1.08);
 }
 
 .preview[data-theme='light'] .leafletMapCanvas :global(.leaflet-tile-pane) {

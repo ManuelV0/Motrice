@@ -48,6 +48,7 @@ import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 public class EventLocationService extends Service implements LocationListener {
     public static final String ACTION_START = "com.motrice.app.START_EVENT_LOCATION";
@@ -214,7 +215,11 @@ public class EventLocationService extends Service implements LocationListener {
     public void onCreate() {
         super.onCreate();
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        createNotificationChannel();
+        try {
+            createNotificationChannel();
+        } catch (RuntimeException error) {
+            setError("Notifica di monitoraggio non disponibile");
+        }
     }
 
     @Override
@@ -223,26 +228,35 @@ public class EventLocationService extends Service implements LocationListener {
             mainHandler.removeCallbacks(expirationTask);
             markStopped(this, false);
             stopLocationUpdates();
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            stopForegroundAndSelfSafely();
             return START_NOT_STICKY;
         }
 
         SharedPreferences values = prefs(this);
         long expectedEndAt = values.getLong("expectedEndAtMs", 0L);
         if (!values.getBoolean("active", false)) {
-            stopSelf();
+            stopForegroundAndSelfSafely();
             return START_NOT_STICKY;
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification(values.getString("eventTitle", "Evento Motrice")));
+        try {
+            startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification(values.getString("eventTitle", "Evento Motrice"))
+            );
+        } catch (RuntimeException error) {
+            setError("Monitoraggio GPS non disponibile su questo dispositivo");
+            markStopped(this, false);
+            stopForegroundAndSelfSafely();
+            return START_NOT_STICKY;
+        }
         if (expectedEndAt <= System.currentTimeMillis()) {
             finishExpiredTracking();
             return START_NOT_STICKY;
         }
         scheduleExpiration(expectedEndAt);
         startLocationUpdates();
-        uploadExecutor.execute(this::uploadPendingPings);
+        executeUploadSafely(this::uploadPendingPings);
         return START_STICKY;
     }
 
@@ -258,7 +272,7 @@ public class EventLocationService extends Service implements LocationListener {
         channel.enableVibration(false);
         channel.setLightColor(Color.parseColor("#C6FF00"));
         NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.createNotificationChannel(channel);
+        if (manager != null) manager.createNotificationChannel(channel);
     }
 
     private Notification buildNotification(String eventTitle) {
@@ -289,6 +303,14 @@ public class EventLocationService extends Service implements LocationListener {
                 == PackageManager.PERMISSION_GRANTED;
         if (!hasFine && !hasCoarse) {
             setError("Permesso posizione revocato");
+            markStopped(this, false);
+            stopForegroundAndSelfSafely();
+            return;
+        }
+        if (locationManager == null) {
+            setError("Servizio posizione non disponibile");
+            markStopped(this, false);
+            stopForegroundAndSelfSafely();
             return;
         }
 
@@ -314,7 +336,7 @@ public class EventLocationService extends Service implements LocationListener {
         if (locationManager == null) return;
         try {
             locationManager.removeUpdates(this);
-        } catch (SecurityException ignored) {
+        } catch (RuntimeException ignored) {
             // No-op: il permesso potrebbe essere stato revocato durante il servizio.
         }
     }
@@ -347,7 +369,7 @@ public class EventLocationService extends Service implements LocationListener {
             ping.put("source", "background");
             appendPing(this, ping);
             values.edit().putString("lastPingAt", ping.getString("recordedAt")).putString("lastError", "").apply();
-            uploadExecutor.execute(this::uploadPendingPings);
+            executeUploadSafely(this::uploadPendingPings);
         } catch (JSONException error) {
             setError("Campione posizione non valido");
         }
@@ -557,12 +579,44 @@ public class EventLocationService extends Service implements LocationListener {
         prefs(this).edit().putString("lastError", message == null ? "" : message).apply();
     }
 
+    private boolean executeUploadSafely(Runnable task) {
+        if (task == null || uploadExecutor.isShutdown() || uploadExecutor.isTerminated()) return false;
+        try {
+            uploadExecutor.execute(() -> {
+                try {
+                    task.run();
+                } catch (RuntimeException error) {
+                    setError("Sincronizzazione in attesa");
+                }
+            });
+            return true;
+        } catch (RejectedExecutionException ignored) {
+            return false;
+        } catch (RuntimeException error) {
+            setError("Sincronizzazione in attesa");
+            return false;
+        }
+    }
+
+    private void stopForegroundAndSelfSafely() {
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } catch (RuntimeException ignored) {
+            // Vendor-specific Android builds can reject foreground cleanup during shutdown.
+        }
+        try {
+            stopSelf();
+        } catch (RuntimeException ignored) {
+            // Service cleanup must never terminate the application process.
+        }
+    }
+
     private void finishExpiredTracking() {
         if (finishing) return;
         finishing = true;
         mainHandler.removeCallbacks(expirationTask);
         stopLocationUpdates();
-        uploadExecutor.execute(() -> {
+        boolean scheduled = executeUploadSafely(() -> {
             uploadPendingPings();
             try {
                 stopRemoteTracking();
@@ -578,9 +632,12 @@ public class EventLocationService extends Service implements LocationListener {
                 // Il client completera la sincronizzazione alla prossima apertura.
             }
             markStopped(this, false);
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            mainHandler.post(this::stopForegroundAndSelfSafely);
         });
+        if (!scheduled) {
+            markStopped(this, false);
+            stopForegroundAndSelfSafely();
+        }
     }
 
     private void stopRemoteTracking() throws Exception {
@@ -617,7 +674,11 @@ public class EventLocationService extends Service implements LocationListener {
     public void onDestroy() {
         mainHandler.removeCallbacks(expirationTask);
         stopLocationUpdates();
-        uploadExecutor.shutdown();
+        try {
+            uploadExecutor.shutdown();
+        } catch (RuntimeException ignored) {
+            // Executor teardown must not crash older Android vendor implementations.
+        }
         super.onDestroy();
     }
 

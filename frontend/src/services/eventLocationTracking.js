@@ -4,15 +4,21 @@ import { NativeEventLocation as NativeTracking } from './nativeEventLocation';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { getEventTiming } from '../utils/eventLifecycle';
 import { getOutdoorActivityKind } from '../utils/outdoorActivity';
+import {
+  normalizeTrackingError,
+  validateActiveTrackingRecord
+} from './eventLocationTrackingState';
 
 const ACTIVE_TRACKING_KEY = 'motrice_active_event_tracking_v1';
 const WEB_QUEUE_KEY = 'motrice_event_tracking_queue_v1';
 const STATUS_EVENT = 'motrice:event-tracking-status';
 const MAX_QUEUE_SIZE = 720;
+const NATIVE_RESUME_COOLDOWN_MS = 5 * 60 * 1000;
 let browserWatchId = null;
 let syncPromise = null;
 let appStateListenerPromise = null;
 let apiPromise = null;
+let nativeResumeBlockedUntil = 0;
 
 function loadApi() {
   if (!apiPromise) apiPromise = import('./api').then((module) => module.api);
@@ -140,7 +146,10 @@ function startBrowserWatch(active) {
 
 export function getActiveEventLocationTracking() {
   const value = safeJsonRead(ACTIVE_TRACKING_KEY, null);
-  return value && value.eventId ? value : null;
+  const validation = validateActiveTrackingRecord(value);
+  if (validation.valid) return validation.record;
+  if (value) safeStorageRemove(ACTIVE_TRACKING_KEY);
+  return null;
 }
 
 export async function startEventLocationTracking({
@@ -156,6 +165,14 @@ export async function startEventLocationTracking({
 
   const timing = getEventTiming(event);
   if (!timing.endsAtMs || timing.endsAtMs <= Date.now()) return null;
+  const eventLat = Number(event.lat);
+  const eventLng = Number(event.lng);
+  const eventRadiusM = Math.max(50, Number(event.geofence_radius_m || 250));
+  if (!Number.isFinite(eventLat) || eventLat < -90 || eventLat > 90
+      || !Number.isFinite(eventLng) || eventLng < -180 || eventLng > 180
+      || !Number.isFinite(eventRadiusM)) {
+    throw new Error('Posizione evento non valida: aggiorna il punto di incontro');
+  }
 
   const existing = getActiveEventLocationTracking();
   if (existing && String(existing.eventId) !== String(event.id)) {
@@ -174,9 +191,9 @@ export async function startEventLocationTracking({
     eventTitle: event.title || event.sport_name || 'Evento Motrice',
     role: role === 'organizer' ? 'organizer' : 'participant',
     verificationSource,
-    lat: Number(event.lat),
-    lng: Number(event.lng),
-    radiusM: Math.max(50, Number(event.geofence_radius_m || 250)),
+    lat: eventLat,
+    lng: eventLng,
+    radiusM: eventRadiusM,
     expectedEndAt: remote?.expected_end_at || new Date(timing.endsAtMs).toISOString(),
     startedAt: remote?.started_at || existing?.startedAt || new Date().toISOString(),
     status: 'active',
@@ -220,7 +237,7 @@ export async function startEventLocationTracking({
       reason: 'avvio_servizio_fallito'
     }).catch(() => undefined);
     writeActiveTracking(null);
-    throw error;
+    throw new Error(normalizeTrackingError(error));
   }
 
   if (initialCoords) {
@@ -308,7 +325,15 @@ export async function syncEventLocationTracking() {
 
 export async function resumeEventLocationTracking() {
   const active = getActiveEventLocationTracking();
-  if (!active) return null;
+  if (!active) {
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+      const orphanStatus = await NativeTracking.getStatus().catch(() => null);
+      if (orphanStatus?.active) {
+        await NativeTracking.stopTracking({ clearCredentials: false }).catch(() => undefined);
+      }
+    }
+    return null;
+  }
   if (Date.now() >= Date.parse(active.expectedEndAt || 0)) {
     await stopEventLocationTracking({ status: 'completed', reason: 'fine_evento' });
     return null;
@@ -318,23 +343,38 @@ export async function resumeEventLocationTracking() {
     const status = await NativeTracking.getStatus().catch(() => null);
     await adoptNativeSession(status).catch(() => undefined);
     if (!status?.active) {
+      if (Date.now() < nativeResumeBlockedUntil) {
+        return updateActiveFromResult({}, {
+          status: 'interrupted',
+          lastError: active.lastError || 'Monitoraggio GPS in pausa: riapri l evento per riprovare.'
+        });
+      }
       const { data } = await supabase.auth.getSession();
       const session = data?.session;
       if (session?.access_token && session?.refresh_token) {
-        await NativeTracking.startTracking({
-          eventId: active.eventId,
-          eventTitle: active.eventTitle,
-          latitude: active.lat,
-          longitude: active.lng,
-          radiusM: active.radiusM,
-          expectedEndAtMs: Date.parse(active.expectedEndAt),
-          serverUrl: supabaseUrl,
-          anonKey: supabasePublishableKey,
-          accessToken: session.access_token,
-          refreshToken: session.refresh_token,
-          intervalMs: active.activityKind ? 5000 : 60000,
-          activityKind: active.activityKind || ''
-        });
+        try {
+          await NativeTracking.startTracking({
+            eventId: active.eventId,
+            eventTitle: active.eventTitle,
+            latitude: active.lat,
+            longitude: active.lng,
+            radiusM: active.radiusM,
+            expectedEndAtMs: Date.parse(active.expectedEndAt),
+            serverUrl: supabaseUrl,
+            anonKey: supabasePublishableKey,
+            accessToken: session.access_token,
+            refreshToken: session.refresh_token,
+            intervalMs: active.activityKind ? 5000 : 60000,
+            activityKind: active.activityKind || ''
+          });
+          nativeResumeBlockedUntil = 0;
+        } catch (error) {
+          nativeResumeBlockedUntil = Date.now() + NATIVE_RESUME_COOLDOWN_MS;
+          return updateActiveFromResult({}, {
+            status: 'interrupted',
+            lastError: normalizeTrackingError(error)
+          });
+        }
       }
     }
   } else {
@@ -345,6 +385,7 @@ export async function resumeEventLocationTracking() {
 
 export async function stopEventLocationTracking({ status = 'interrupted', reason = null } = {}) {
   const active = getActiveEventLocationTracking();
+  nativeResumeBlockedUntil = 0;
   stopBrowserWatch();
   if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
     const nativeStatus = await NativeTracking.getStatus().catch(() => null);

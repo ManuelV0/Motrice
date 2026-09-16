@@ -595,45 +595,71 @@ public class EventLocationTrackingPlugin extends Plugin {
         boolean hasCoarse = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
         if (!hasFine && !hasCoarse) {
-            call.reject("Permesso posizione non concesso");
+            call.reject("Permesso posizione non concesso", "MOTRICE_LOCATION_PERMISSION_REQUIRED");
             return;
         }
 
         requestNotificationPermissionIfNeeded();
 
-        String eventId = call.getString("eventId", "");
+        String eventId = call.getString("eventId", "").trim();
         Double latitude = call.getDouble("latitude");
         Double longitude = call.getDouble("longitude");
         Double expectedEndAt = call.getDouble("expectedEndAtMs");
-        if (eventId.isEmpty() || latitude == null || longitude == null || expectedEndAt == null) {
-            call.reject("Configurazione monitoraggio incompleta");
+        Double radiusM = call.getDouble("radiusM", 250.0);
+        if (eventId.isEmpty()
+                || !isFiniteNumber(latitude)
+                || !isFiniteNumber(longitude)
+                || !isFiniteNumber(expectedEndAt)
+                || !isFiniteNumber(radiusM)) {
+            call.reject("Configurazione monitoraggio incompleta", "MOTRICE_TRACKING_INVALID_CONFIGURATION");
+            return;
+        }
+        if (latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0) {
+            call.reject("Coordinate evento non valide", "MOTRICE_TRACKING_INVALID_COORDINATES");
+            return;
+        }
+        if (expectedEndAt.longValue() <= System.currentTimeMillis()) {
+            EventLocationService.markStopped(getContext(), false);
+            call.reject("L'evento e gia terminato", "MOTRICE_TRACKING_EXPIRED");
             return;
         }
 
-        EventLocationService.saveConfiguration(
-                getContext(),
-                eventId,
-                call.getString("eventTitle", "Evento Motrice"),
-                latitude,
-                longitude,
-                call.getDouble("radiusM", 250.0),
-                expectedEndAt.longValue(),
-                call.getString("serverUrl", ""),
-                call.getString("anonKey", ""),
-                call.getString("accessToken", ""),
-                call.getString("refreshToken", ""),
-                Math.max(5000L, call.getDouble("intervalMs", 60000.0).longValue()),
-                call.getString("activityKind", "")
-        );
+        try {
+            EventLocationService.saveConfiguration(
+                    getContext(),
+                    eventId,
+                    call.getString("eventTitle", "Evento Motrice"),
+                    latitude,
+                    longitude,
+                    Math.max(25.0, Math.min(5000.0, radiusM)),
+                    expectedEndAt.longValue(),
+                    call.getString("serverUrl", ""),
+                    call.getString("anonKey", ""),
+                    call.getString("accessToken", ""),
+                    call.getString("refreshToken", ""),
+                    Math.max(5000L, call.getDouble("intervalMs", 60000.0).longValue()),
+                    call.getString("activityKind", "")
+            );
 
-        Intent intent = new Intent(getContext(), EventLocationService.class);
-        intent.setAction(EventLocationService.ACTION_START);
-        ContextCompat.startForegroundService(getContext(), intent);
+            Intent intent = new Intent(getContext(), EventLocationService.class);
+            intent.setAction(EventLocationService.ACTION_START);
+            ContextCompat.startForegroundService(getContext(), intent);
 
-        JSObject result = new JSObject();
-        result.put("active", true);
-        result.put("eventId", eventId);
-        call.resolve(result);
+            JSObject result = new JSObject();
+            result.put("active", true);
+            result.put("eventId", eventId);
+            call.resolve(result);
+        } catch (RuntimeException error) {
+            EventLocationService.markStopped(getContext(), false);
+            call.reject(
+                    "Il monitoraggio GPS non puo essere avviato su questo dispositivo",
+                    "MOTRICE_TRACKING_START_FAILED"
+            );
+        }
+    }
+
+    private static boolean isFiniteNumber(Double value) {
+        return value != null && !value.isNaN() && !value.isInfinite();
     }
 
     private void requestNotificationPermissionIfNeeded() {
@@ -648,20 +674,39 @@ public class EventLocationTrackingPlugin extends Plugin {
                 .edit()
                 .putBoolean("notificationAsked", true)
                 .apply();
-        getActivity().runOnUiThread(() -> ActivityCompat.requestPermissions(
-                getActivity(),
-                new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                6210
-        ));
+        try {
+            getActivity().runOnUiThread(() -> {
+                try {
+                    if (getActivity() == null || getActivity().isFinishing()) return;
+                    ActivityCompat.requestPermissions(
+                            getActivity(),
+                            new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                            6210
+                    );
+                } catch (RuntimeException ignored) {
+                    // The foreground service can still run if notification permission is unavailable.
+                }
+            });
+        } catch (RuntimeException ignored) {
+            // A permission prompt must never close the host activity.
+        }
     }
 
     @PluginMethod
     public void stopTracking(PluginCall call) {
-        EventLocationService.markStopped(getContext(), Boolean.TRUE.equals(call.getBoolean("clearCredentials", false)));
-        Intent intent = new Intent(getContext(), EventLocationService.class);
-        intent.setAction(EventLocationService.ACTION_STOP);
-        getContext().startService(intent);
-        call.resolve(EventLocationService.readStatus(getContext()));
+        try {
+            EventLocationService.markStopped(
+                    getContext(),
+                    Boolean.TRUE.equals(call.getBoolean("clearCredentials", false))
+            );
+            // Do not start a background service just to stop it. Android 8+ can reject that
+            // operation while the app is backgrounded and older vendor ROMs may terminate it.
+            getContext().stopService(new Intent(getContext(), EventLocationService.class));
+            call.resolve(EventLocationService.readStatus(getContext()));
+        } catch (RuntimeException error) {
+            EventLocationService.markStopped(getContext(), false);
+            call.resolve(EventLocationService.readStatus(getContext()));
+        }
     }
 
     @PluginMethod

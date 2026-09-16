@@ -17,7 +17,22 @@
 .mapCanvas {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: color-mix(in srgb, var(--surface-2) 88%, var(--surface));
+}
+
+.mapCanvas[data-renderer='raster'] :global(.leaflet-tile-pane) {
+  filter: invert(100%) hue-rotate(180deg) brightness(0.72) saturate(0.72) contrast(1.08);
+}
+
+.mapCanvas :global(.leaflet-control-attribution) {
+  color: rgb(255 255 255 / 58%);
+  background: rgb(7 9 7 / 62%);
+  font-size: 0.48rem;
+}
+
+.mapCanvas :global(.leaflet-control-attribution a) {
+  color: inherit;
 }
 
 .mapMarker {
@@ -251,6 +266,7 @@
 
 .bottomSheet {
   position: absolute;
+  z-index: var(--z-overlay-mid);
   left: var(--s-3);
   right: var(--s-3);
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--s-2));

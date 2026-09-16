@@ -7,6 +7,7 @@ import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
 import { requestPedestrianRoute } from '../services/routeGeometry';
 import {
+  canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
   getHighDefinitionRasterTiles,
   MAPLIBRE_STYLES
@@ -49,16 +50,6 @@ function validPoint(point) {
     && point.length >= 2
     && Number.isFinite(Number(point[0]))
     && Number.isFinite(Number(point[1]));
-}
-
-function canUseMapLibreRenderer() {
-  if (typeof document === 'undefined') return false;
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2'));
-  } catch {
-    return false;
-  }
 }
 
 function createMarkerElement(svgMarkup) {
@@ -305,7 +296,7 @@ export default function EventMapPreview({
   const mapRef = useRef(null);
   const liveMarkerRef = useRef(null);
   const [status, setStatus] = useState('loading');
-  const [renderer, setRenderer] = useState(() => canUseMapLibreRenderer() ? 'maplibre' : 'raster');
+  const [renderer, setRenderer] = useState(() => canUseAcceleratedMapRenderer() ? 'maplibre' : 'raster');
   const [isExpanded, setIsExpanded] = useState(false);
   const [routedRoute, setRoutedRoute] = useState([]);
   const [routingStatus, setRoutingStatus] = useState('idle');
@@ -396,6 +387,7 @@ export default function EventMapPreview({
     if (renderer !== 'maplibre' || !containerRef.current || !center) return undefined;
 
     let mapLoaded = false;
+    let mapErrorCount = 0;
     let routeOverlay = null;
     let updateRouteOverlay = null;
     setStatus('loading');
@@ -454,6 +446,7 @@ export default function EventMapPreview({
 
     const onLoad = () => {
       mapLoaded = true;
+      mapErrorCount = 0;
       window.clearTimeout(loadingTimeout);
       map.resize();
 
@@ -585,7 +578,11 @@ export default function EventMapPreview({
 
     const onMapError = (event) => {
       const message = String(event?.error?.message || event?.error || '');
-      if (/webgl|context|worker|offscreencanvas/i.test(message)) setRenderer('raster');
+      mapErrorCount += 1;
+      if (/webgl|context|worker|offscreencanvas/i.test(message)
+          || mapErrorCount >= (mapLoaded ? 12 : 3)) {
+        setRenderer('raster');
+      }
     };
     const onContextLost = () => setRenderer('raster');
     map.on('error', onMapError);
