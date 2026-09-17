@@ -89,12 +89,13 @@ test('derives the dark palette from the light layers without recoloring Motrice 
   assert.equal(applyDerivedDarkMapStyle(null), 0);
 });
 
-test('routes legacy and low-memory Android devices to the compatible renderer', () => {
+test('routes every Android WebView and low-memory device to the compatible renderer', () => {
   assert.equal(getAndroidMajorVersion('Mozilla/5.0 (Linux; Android 9; SM-G950F)'), 9);
   assert.equal(getAndroidMajorVersion('Mozilla/5.0 (Linux; Android 14; SM-S921B)'), 14);
   assert.equal(shouldUseCompatibleMapRenderer({ userAgent: 'Android 9', deviceMemory: 8 }), true);
   assert.equal(shouldUseCompatibleMapRenderer({ userAgent: 'Android 14', deviceMemory: 2 }), true);
-  assert.equal(shouldUseCompatibleMapRenderer({ userAgent: 'Android 14', deviceMemory: 8 }), false);
+  assert.equal(shouldUseCompatibleMapRenderer({ userAgent: 'Android 14', deviceMemory: 8 }), true);
+  assert.equal(shouldUseCompatibleMapRenderer({ userAgent: 'Mozilla/5.0 (Macintosh)', deviceMemory: 8 }), false);
 });
 
 test('checks WebGL safely before enabling the accelerated renderer', () => {
@@ -117,11 +118,12 @@ test('checks WebGL safely before enabling the accelerated renderer', () => {
     documentRef,
     userAgent: 'Mozilla/5.0 (Linux; Android 14)',
     deviceMemory: 8
-  }), true);
-  assert.deepEqual(loseContextCalls, ['lost']);
+  }), false);
+  assert.deepEqual(loseContextCalls, []);
   assert.equal(canUseAcceleratedMapRenderer({
     documentRef,
-    userAgent: 'Mozilla/5.0 (Linux; Android 9)',
+    userAgent: 'Mozilla/5.0 (Macintosh)',
     deviceMemory: 8
-  }), false);
+  }), true);
+  assert.deepEqual(loseContextCalls, ['lost']);
 });

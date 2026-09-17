@@ -220,7 +220,11 @@ export function shouldUseCompatibleMapRenderer({
   deviceMemory = typeof navigator === 'undefined' ? null : navigator.deviceMemory
 } = {}) {
   const androidMajor = getAndroidMajorVersion(userAgent);
-  if (androidMajor != null && androidMajor <= 10) return true;
+  // Android WebView can draw raster sources correctly while leaving a vector
+  // style with only its background visible. Prefer the compatible raster path
+  // on every Android version so theme changes can never expose a blank map.
+  // Desktop browsers keep the accelerated vector renderer.
+  if (androidMajor != null) return true;
   return Number.isFinite(Number(deviceMemory)) && Number(deviceMemory) > 0 && Number(deviceMemory) <= 3;
 }
 
