@@ -16,7 +16,6 @@ import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
-import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -100,6 +99,10 @@ public class EventLocationTrackingPlugin extends Plugin {
         return hasFineLocationPermission() || hasCoarseLocationPermission();
     }
 
+    static String permissionStatus(boolean granted) {
+        return granted ? "granted" : "denied";
+    }
+
     private boolean areLocationServicesEnabled() {
         LocationManager manager = (LocationManager) getContext().getSystemService(android.content.Context.LOCATION_SERVICE);
         if (manager == null) return false;
@@ -114,11 +117,13 @@ public class EventLocationTrackingPlugin extends Plugin {
     private JSObject locationPermissionResult() {
         boolean hasFine = hasFineLocationPermission();
         boolean hasCoarse = hasCoarseLocationPermission();
-        PermissionState fineState = getPermissionState(LOCATION_ALIAS);
-        PermissionState coarseState = getPermissionState(COARSE_LOCATION_ALIAS);
         JSObject result = new JSObject();
-        result.put("location", hasFine ? PermissionState.GRANTED.toString() : fineState.toString());
-        result.put("coarseLocation", hasCoarse ? PermissionState.GRANTED.toString() : coarseState.toString());
+        // Read Android's permission result directly. Capacitor can return a null
+        // PermissionState when aliases share ACCESS_COARSE_LOCATION, especially
+        // while restoring permissions after an app update. Calling toString()
+        // on that state used to crash the whole app during startup.
+        result.put("location", permissionStatus(hasFine));
+        result.put("coarseLocation", permissionStatus(hasCoarse));
         result.put("servicesEnabled", areLocationServicesEnabled());
         return result;
     }

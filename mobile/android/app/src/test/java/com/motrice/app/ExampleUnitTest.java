@@ -27,4 +27,10 @@ public class ExampleUnitTest {
         assertEquals(Double.valueOf(250.5d), EventLocationTrackingPlugin.coerceNumericValue(250.5d));
         assertNull(EventLocationTrackingPlugin.coerceNumericValue("1789663200000"));
     }
+
+    @Test
+    public void locationPermissionStatusIsSafeWhenPermissionIsMissing() {
+        assertEquals("granted", EventLocationTrackingPlugin.permissionStatus(true));
+        assertEquals("denied", EventLocationTrackingPlugin.permissionStatus(false));
+    }
 }
