@@ -9,11 +9,9 @@ import {
   CheckCheck,
   CheckCircle2,
   ChevronRight,
-  LockKeyhole,
   MessageCircle,
   MoreHorizontal,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Star,
   Trash2,
@@ -22,12 +20,10 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import { usePageMeta } from '../hooks/usePageMeta';
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '../utils/notificationRules';
 import { withTimeout } from '../utils/asyncTimeout';
 import styles from '../styles/pages/notifications.module.css';
 
 const NOTIFICATIONS_LOAD_TIMEOUT_MS = 8000;
-const SECONDARY_LOAD_TIMEOUT_MS = 4500;
 const SWIPE_COMMIT_DISTANCE = 84;
 const SWIPE_FAST_MIN_DISTANCE = 56;
 const SWIPE_FAST_VELOCITY = 0.9;
@@ -69,27 +65,6 @@ const typeIcons = {
   convention_application_approved: CheckCircle2,
   convention_application_rejected: BellOff
 };
-
-const preferenceRows = [
-  {
-    key: 'chat_social',
-    icon: MessageCircle,
-    title: 'Chat e social',
-    description: 'Messaggi, inviti, richieste e recensioni.'
-  },
-  {
-    key: 'wallet_account',
-    icon: WalletCards,
-    title: 'Wallet e account',
-    description: 'Depositi, rimborsi, prelievi e verifica del profilo.'
-  },
-  {
-    key: 'promotions',
-    icon: Sparkles,
-    title: 'Suggerimenti',
-    description: 'Eventi consigliati, novità e promozioni.'
-  }
-];
 
 const notificationFilters = [
   { key: 'all', label: 'Tutte' },
@@ -428,9 +403,6 @@ function NotificationsPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
-  const [preferences, setPreferences] = useState({ ...DEFAULT_NOTIFICATION_PREFERENCES });
-  const [savingPreference, setSavingPreference] = useState('');
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -465,11 +437,6 @@ function NotificationsPage() {
     if (showLoading) setLoading(true);
     setLoadError('');
 
-    const preferencesRequest = withTimeout(
-      api.getNotificationPreferences(),
-      SECONDARY_LOAD_TIMEOUT_MS,
-      'Preferenze non disponibili'
-    ).catch(() => DEFAULT_NOTIFICATION_PREFERENCES);
     try {
       const items = await withTimeout(
         api.listNotifications(),
@@ -487,10 +454,6 @@ function NotificationsPage() {
       if (loadRequestRef.current === requestId) setLoading(false);
     }
 
-    const nextPreferences = await preferencesRequest;
-    if (loadRequestRef.current === requestId) {
-      setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...nextPreferences });
-    }
   }
 
   useEffect(() => {
@@ -500,26 +463,14 @@ function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    if (!preferencesOpen && !actionsOpen) return undefined;
+    if (!actionsOpen) return undefined;
     function handleEscape(event) {
       if (event.key !== 'Escape') return;
-      setPreferencesOpen(false);
       setActionsOpen(false);
     }
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [preferencesOpen, actionsOpen]);
-
-  async function togglePreference(key) {
-    if (key === 'event_security') return;
-    setSavingPreference(key);
-    try {
-      const next = await api.updateNotificationPreferences({ [key]: !preferences[key] });
-      setPreferences({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...next });
-    } finally {
-      setSavingPreference('');
-    }
-  }
+  }, [actionsOpen]);
 
   async function markAsRead(item) {
     const memberIds = item?.memberIds || [item?.id || item];
@@ -554,7 +505,6 @@ function NotificationsPage() {
   }
 
   const unreadCount = notifications.filter((item) => !item.read).length;
-  const activePreferenceCount = 1 + preferenceRows.filter(({ key }) => preferences[key]).length;
   const preparedNotifications = useMemo(() => aggregateNotifications(notifications), [notifications]);
   const actionableCount = preparedNotifications.filter(isNotificationActionable).length;
   const filteredNotifications = useMemo(() => preparedNotifications.filter((item) => {
@@ -589,22 +539,10 @@ function NotificationsPage() {
           </div>
 
           <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.headerButton}
-              onClick={() => {
-                setActionsOpen(false);
-                setPreferencesOpen(true);
-              }}
-              aria-label="Apri preferenze notifiche"
-              title="Preferenze"
-            >
-              <SlidersHorizontal size={18} aria-hidden="true" />
-            </button>
             <div className={styles.actionMenuShell}>
               <button
                 type="button"
-                className={styles.headerButton}
+                className={`${styles.headerButton} ${styles.bareHeaderButton}`}
                 onClick={() => setActionsOpen((current) => !current)}
                 aria-expanded={actionsOpen}
                 aria-haspopup="menu"
@@ -627,7 +565,7 @@ function NotificationsPage() {
             </div>
             <button
               type="button"
-              className={`${styles.headerButton} ${styles.closeButton}`}
+              className={`${styles.headerButton} ${styles.bareHeaderButton} ${styles.closeButton}`}
               onClick={closeNotifications}
               aria-label="Chiudi notifiche"
               title="Chiudi"
@@ -712,58 +650,6 @@ function NotificationsPage() {
       </section>
 
       {actionsOpen ? <button type="button" className={styles.menuScrim} aria-label="Chiudi menu" onClick={() => setActionsOpen(false)} /> : null}
-
-      {preferencesOpen ? (
-        <div className={styles.sheetBackdrop} onMouseDown={(event) => {
-          if (event.target === event.currentTarget) setPreferencesOpen(false);
-        }}>
-          <section className={styles.preferencesSheet} role="dialog" aria-modal="true" aria-labelledby="notification-preferences-title">
-            <div className={styles.sheetHandle} aria-hidden="true" />
-            <header className={styles.sheetHeader}>
-              <div>
-                <p>PERSONALIZZA</p>
-                <h2 id="notification-preferences-title">Preferenze notifiche</h2>
-                <span>{activePreferenceCount}/4 attive · sicurezza sempre attiva</span>
-              </div>
-              <button type="button" onClick={() => setPreferencesOpen(false)} aria-label="Chiudi preferenze">
-                <X size={19} aria-hidden="true" />
-              </button>
-            </header>
-
-            <div className={styles.preferenceList}>
-              <div className={`${styles.preferenceRow} ${styles.preferenceRowLocked}`}>
-                <span className={styles.preferenceIcon}><ShieldCheck size={18} aria-hidden="true" /></span>
-                <span className={styles.preferenceCopy}>
-                  <strong>Eventi e sicurezza</strong>
-                  <small>Check-in, variazioni, annullamenti e no-show.</small>
-                </span>
-                <span className={styles.lockedBadge}><LockKeyhole size={13} aria-hidden="true" /> Sempre attiva</span>
-              </div>
-
-              {preferenceRows.map(({ key, icon: Icon, title, description }) => (
-                <label className={styles.preferenceRow} key={key}>
-                  <span className={styles.preferenceIcon}><Icon size={18} aria-hidden="true" /></span>
-                  <span className={styles.preferenceCopy}>
-                    <strong>{title}</strong>
-                    <small>{description}</small>
-                  </span>
-                  <span className={styles.switch}>
-                    <input
-                      type="checkbox"
-                      checked={preferences[key]}
-                      disabled={savingPreference === key}
-                      onChange={() => togglePreference(key)}
-                      aria-label={`${title}: ${preferences[key] ? 'attive' : 'disattivate'}`}
-                    />
-                    <span className={styles.switchTrack} aria-hidden="true" />
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className={styles.sheetNote}>Gli avvisi essenziali restano attivi per proteggere eventi, presenze e credito.</p>
-          </section>
-        </div>
-      ) : null}
     </>
   );
 }
