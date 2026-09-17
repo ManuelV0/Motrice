@@ -98,6 +98,17 @@
   opacity: 0.36;
 }
 
+.closeButton {
+  color: #f2f5ef;
+}
+
+.closeButton:hover:not(:disabled),
+.closeButton:active:not(:disabled) {
+  border-color: rgb(168 240 0 / 48%);
+  background: rgb(168 240 0 / 10%);
+  color: var(--primary);
+}
+
 .actionMenuShell {
   position: relative;
 }

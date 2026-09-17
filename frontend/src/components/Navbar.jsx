@@ -93,6 +93,23 @@ function Navbar({ forceMobile = false }) {
   const pendingDrawerGestureRef = useRef(null);
   const suppressDrawerClickRef = useRef(false);
   const [drawerGesture, setDrawerGesture] = useState(null);
+  const notificationReturnTo = `${location.pathname}${location.search}${location.hash}`;
+
+  function closeNotifications() {
+    const returnTo = location.state?.notificationReturnTo;
+    const hasSafeReturnPath =
+      typeof returnTo === 'string' &&
+      returnTo.startsWith('/') &&
+      !returnTo.startsWith('//') &&
+      !returnTo.startsWith('/notifications');
+
+    if (hasSafeReturnPath) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/map', { replace: true });
+  }
 
   function updateDrawerGesture(progress, settling = false) {
     const nextGesture = { progress: clampDrawerProgress(progress), settling };
@@ -478,12 +495,17 @@ function Navbar({ forceMobile = false }) {
         <div className={styles.rightGroup}>
           <NavLink
             to="/notifications"
+            state={location.pathname === '/notifications' ? undefined : { notificationReturnTo }}
             className={({ isActive }) => `${styles.notificationButton} ${isActive ? styles.notificationButtonActive : ''}`}
             aria-label={unread > 0 ? `Notifiche, ${unread} non lette` : 'Notifiche'}
             title="Notifiche"
-            onClick={() => {
+            onClick={(event) => {
               setIsOpen(false);
               setWalletOpen(false);
+              if (location.pathname === '/notifications') {
+                event.preventDefault();
+                closeNotifications();
+              }
             }}
           >
             <Bell size={18} aria-hidden="true" />
@@ -615,10 +637,17 @@ function Navbar({ forceMobile = false }) {
                     <NavLink
                       key={item.to}
                       to={item.to}
+                      state={item.to === '/notifications' && location.pathname !== '/notifications' ? { notificationReturnTo } : undefined}
                       className={({ isActive }) =>
                         `${styles.link} ${styles.drawerLink} ${item.to === '/chat' ? styles.chatriceLink : ''} ${isActive ? styles.active : ''}`
                       }
-                      onClick={() => setIsOpen(false)}
+                      onClick={(event) => {
+                        setIsOpen(false);
+                        if (item.to === '/notifications' && location.pathname === '/notifications') {
+                          event.preventDefault();
+                          closeNotifications();
+                        }
+                      }}
                     >
                       <Icon size={18} aria-hidden="true" />
                       <span>{item.label}</span>

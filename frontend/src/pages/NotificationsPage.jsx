@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Bell,
   BellOff,
@@ -425,6 +425,7 @@ function SwipeableNotificationRow({ item, onRead, onDelete }) {
 }
 
 function NotificationsPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [preferences, setPreferences] = useState({ ...DEFAULT_NOTIFICATION_PREFERENCES });
@@ -435,6 +436,22 @@ function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const loadRequestRef = useRef(0);
+
+  function closeNotifications() {
+    const returnTo = location.state?.notificationReturnTo;
+    const hasSafeReturnPath =
+      typeof returnTo === 'string' &&
+      returnTo.startsWith('/') &&
+      !returnTo.startsWith('//') &&
+      !returnTo.startsWith('/notifications');
+
+    if (hasSafeReturnPath) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/map', { replace: true });
+  }
 
   usePageMeta({
     title: 'Notifiche | Motrice',
@@ -608,6 +625,15 @@ function NotificationsPage() {
                 </div>
               ) : null}
             </div>
+            <button
+              type="button"
+              className={`${styles.headerButton} ${styles.closeButton}`}
+              onClick={closeNotifications}
+              aria-label="Chiudi notifiche"
+              title="Chiudi"
+            >
+              <X size={20} strokeWidth={2.35} aria-hidden="true" />
+            </button>
           </div>
         </header>
 
