@@ -238,13 +238,22 @@ function MyPlansPage() {
       setSyncState('syncing');
       try {
         const pendingDeletions = loadPendingDeletions(storageKey);
+        const failedDeletions = [];
+        let remainingDeletions = [...pendingDeletions];
         for (const planId of pendingDeletions) {
-          await deletePersonalWorkoutPlan(planId);
+          try {
+            await deletePersonalWorkoutPlan(planId);
+            remainingDeletions = remainingDeletions.filter((id) => id !== planId);
+            savePendingDeletions(storageKey, remainingDeletions);
+          } catch {
+            failedDeletions.push(planId);
+          }
         }
-        if (pendingDeletions.length) savePendingDeletions(storageKey, []);
 
         const localPlans = listCachedPersonalWorkoutPlans();
-        const remotePlans = await listPersonalWorkoutPlans();
+        const pendingDeletionIds = new Set(failedDeletions);
+        const remotePlans = (await listPersonalWorkoutPlans())
+          .filter((plan) => !pendingDeletionIds.has(String(plan.id)));
         const mergedById = new Map(remotePlans.map((plan) => [String(plan.id), plan]));
 
         for (const localPlan of localPlans) {
@@ -259,7 +268,7 @@ function MyPlansPage() {
         if (!active) return;
         setPlans(nextPlans);
         safeStorageSet(storageKey, JSON.stringify(nextPlans));
-        setSyncState('synced');
+        setSyncState(failedDeletions.length ? 'offline' : 'synced');
         if (!nextPlans.length && !initialPlans.length && !editorDismissedRef.current) {
           setScreen('editor');
           setStep(3);

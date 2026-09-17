@@ -73,6 +73,23 @@ function requireRemoteUserId() {
   return userId;
 }
 
+async function requireRemoteContext() {
+  const client = requireSupabase();
+  const userId = requireRemoteUserId();
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+
+  const sessionUserId = String(data?.session?.user?.id || '').trim();
+  if (!sessionUserId) {
+    throw new Error('Sessione scaduta. Riapri l’app per sincronizzare le schede.');
+  }
+  if (sessionUserId !== userId) {
+    throw new Error('La sessione cloud non corrisponde al profilo attivo.');
+  }
+
+  return { client, userId };
+}
+
 function throwIfError(error) {
   if (error) throw error;
 }
@@ -83,12 +100,12 @@ export function canSyncPersonalWorkoutPlans() {
 }
 
 export async function listPersonalWorkoutPlans() {
-  const client = requireSupabase();
-  const userId = requireRemoteUserId();
+  const { client, userId } = await requireRemoteContext();
   const { data, error } = await client
     .from('personal_workout_plans')
     .select('id,client_id,title,sport_id,workout_type,duration_minutes,level,equipment,exercises,created_at,updated_at')
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .order('updated_at', { ascending: false });
   throwIfError(error);
   return (data || []).map(normalizeRemotePlan).filter((plan) => plan.id && plan.title);
@@ -152,9 +169,9 @@ export async function saveSharedWorkoutPlanToLibrary(plan) {
 }
 
 export async function upsertPersonalWorkoutPlan(plan) {
-  const client = requireSupabase();
-  const userId = requireRemoteUserId();
+  const { client, userId } = await requireRemoteContext();
   const payload = toRemotePlan(plan, userId);
+  payload.deleted_at = null;
   if (!payload.client_id) throw new Error('Identificativo scheda non valido.');
   const { data, error } = await client
     .from('personal_workout_plans')
@@ -166,13 +183,12 @@ export async function upsertPersonalWorkoutPlan(plan) {
 }
 
 export async function deletePersonalWorkoutPlan(planId) {
-  const client = requireSupabase();
-  const userId = requireRemoteUserId();
+  const { client, userId } = await requireRemoteContext();
   const clientId = validPlanId(planId);
   if (!clientId) return;
   const { error } = await client
     .from('personal_workout_plans')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('client_id', clientId);
   throwIfError(error);
