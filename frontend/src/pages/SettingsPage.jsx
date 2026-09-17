@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import {
   Bell,
   BellRing,
+  ChevronDown,
   ChevronRight,
   CircleHelp,
   Dumbbell,
@@ -61,6 +62,32 @@ function SettingRow({ icon: Icon, title, description, action }) {
   );
 }
 
+function SettingsAccordion({ id, icon: Icon, title, summary, open, onToggle, children }) {
+  return (
+    <section className={`${styles.accordion} ${open ? styles.accordionOpen : ''}`}>
+      <button
+        type="button"
+        className={styles.accordionTrigger}
+        aria-expanded={open}
+        aria-controls={`${id}-panel`}
+        onClick={onToggle}
+      >
+        <span className={styles.accordionIcon}><Icon size={19} aria-hidden="true" /></span>
+        <span className={styles.accordionCopy}>
+          <strong>{title}</strong>
+          <small>{summary}</small>
+        </span>
+        <ChevronDown className={styles.accordionChevron} size={19} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div id={`${id}-panel`} className={styles.accordionPanel} role="region">
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SettingsPage() {
   const { showToast } = useToast();
   const location = useUserLocation();
@@ -69,6 +96,7 @@ function SettingsPage() {
   const [notificationPermission, setNotificationPermission] = useState(null);
   const [notificationBusy, setNotificationBusy] = useState('');
   const [appVersion, setAppVersion] = useState('Beta web');
+  const [openSection, setOpenSection] = useState(null);
 
   usePageMeta({
     title: 'Impostazioni | Motrice',
@@ -163,143 +191,163 @@ function SettingsPage() {
     ? location.permission === 'approximate' ? 'Posizione approssimativa' : 'Posizione disponibile'
     : location.permission === 'denied' ? 'Autorizzazione negata' : 'Da verificare';
 
+  const activeNotificationCategories = 1
+    + Number(Boolean(notificationPreferences.chat_social))
+    + Number(Boolean(notificationPreferences.wallet_account))
+    + Number(Boolean(notificationPreferences.promotions));
+  const mapThemeLabel = MAP_THEME_OPTIONS.find((option) => option.value === appSettings.mapTheme)?.label || 'Satellite';
+  const workoutSummary = [
+    appSettings.workoutCountdownSound ? 'Suono' : '',
+    appSettings.workoutVibration ? 'Vibrazione' : '',
+    appSettings.keepWorkoutScreenAwake ? 'Schermo attivo' : ''
+  ].filter(Boolean).join(' · ') || 'Feedback disattivato';
+
+  function toggleSection(section) {
+    setOpenSection((current) => current === section ? null : section);
+  }
+
   return (
     <section className={styles.page}>
-      <header className={styles.hero}>
-        <span className={styles.heroIcon}><Sparkles size={20} aria-hidden="true" /></span>
-        <div>
-          <p>Controlli beta</p>
-          <h1>Impostazioni</h1>
-          <span>Personalizza Motrice senza modificare il tuo profilo.</span>
-        </div>
+      <header className={styles.pageHeader}>
+        <h1>Impostazioni</h1>
+        <p>Scegli una sezione per personalizzare Motrice.</p>
       </header>
 
-      <section className={styles.settingsSection} aria-labelledby="settings-notifications">
-        <div className={styles.sectionHeading}>
-          <span><BellRing size={18} aria-hidden="true" /></span>
-          <div><h2 id="settings-notifications">Notifiche</h2><p>{notificationStatusLabel}</p></div>
-          <button
-            type="button"
-            className={styles.compactAction}
-            onClick={manageNotificationPermission}
-            disabled={notificationPermission?.receive === 'unsupported'}
-          >
-            {notificationPermission?.receive === 'granted'
-              ? 'Gestisci'
-              : notificationPermission?.receive === 'unsupported' ? 'Solo app' : 'Attiva'}
-          </button>
-        </div>
-        <div className={styles.rows}>
-          <SettingRow
-            icon={ShieldCheck}
-            title="Eventi e sicurezza"
-            description="Check-in, modifiche e avvisi indispensabili"
-            action={<SettingSwitch checked disabled label="Eventi e sicurezza sempre attivi" onChange={() => {}} />}
-          />
-          <SettingRow
-            icon={Bell}
-            title="Chat e social"
-            description="Messaggi, inviti e valutazioni"
-            action={<SettingSwitch checked={notificationPreferences.chat_social} disabled={notificationBusy === 'chat_social'} label="Chat e social" onChange={(value) => patchNotificationPreference('chat_social', value)} />}
-          />
-          <SettingRow
-            icon={Info}
-            title="Wallet e account"
-            description="Credito, rimborsi, XP e verifica profilo"
-            action={<SettingSwitch checked={notificationPreferences.wallet_account} disabled={notificationBusy === 'wallet_account'} label="Wallet e account" onChange={(value) => patchNotificationPreference('wallet_account', value)} />}
-          />
-          <SettingRow
-            icon={Sparkles}
-            title="Suggerimenti"
-            description="Novità facoltative sull’app"
-            action={<SettingSwitch checked={notificationPreferences.promotions} disabled={notificationBusy === 'promotions'} label="Suggerimenti" onChange={(value) => patchNotificationPreference('promotions', value)} />}
-          />
-        </div>
-      </section>
-
-      <section className={styles.settingsSection} aria-labelledby="settings-location">
-        <div className={styles.sectionHeading}>
-          <span><MapPinned size={18} aria-hidden="true" /></span>
-          <div><h2 id="settings-location">Posizione e mappe</h2><p>{locationStatusLabel}</p></div>
-        </div>
-        <div className={styles.locationCard}>
-          <LocateFixed size={20} aria-hidden="true" />
-          <div><strong>Controllo posizione</strong><small>Usata in tempo reale soltanto quando serve per mappa, check-in o evento attivo.</small></div>
-          <button type="button" onClick={location.permission === 'denied' ? openSystemSettings : verifyLocation} disabled={location.requesting}>
-            {location.requesting ? 'Verifico…' : location.permission === 'denied' ? 'Autorizza' : 'Verifica'}
-          </button>
-        </div>
-        <div className={styles.mapThemeBlock}>
-          <div><Map size={18} aria-hidden="true" /><span><strong>Stile della mappa</strong><small>La scelta vale anche nei dettagli evento.</small></span></div>
-          <div className={styles.segmented} aria-label="Stile della mappa">
-            {MAP_THEME_OPTIONS.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                className={appSettings.mapTheme === option.value ? styles.segmentActive : ''}
-                aria-pressed={appSettings.mapTheme === option.value}
-                onClick={() => patchAppSettings({ mapTheme: option.value })}
-              >
-                {option.label}
-              </button>
-            ))}
+      <div className={styles.accordionList}>
+        <SettingsAccordion
+          id="settings-notifications"
+          icon={BellRing}
+          title="Notifiche"
+          summary={`${activeNotificationCategories}/4 attive · ${notificationStatusLabel}`}
+          open={openSection === 'notifications'}
+          onToggle={() => toggleSection('notifications')}
+        >
+          <div className={styles.permissionStrip}>
+            <span><strong>Notifiche sul dispositivo</strong><small>{notificationStatusLabel}</small></span>
+            <button
+              type="button"
+              className={styles.compactAction}
+              onClick={manageNotificationPermission}
+              disabled={notificationPermission?.receive === 'unsupported'}
+            >
+              {notificationPermission?.receive === 'granted'
+                ? 'Gestisci'
+                : notificationPermission?.receive === 'unsupported' ? 'Solo app' : 'Attiva'}
+            </button>
           </div>
-        </div>
-      </section>
+          <div className={styles.rows}>
+            <SettingRow
+              icon={ShieldCheck}
+              title="Eventi e sicurezza"
+              description="Check-in, modifiche e avvisi indispensabili"
+              action={<SettingSwitch checked disabled label="Eventi e sicurezza sempre attivi" onChange={() => {}} />}
+            />
+            <SettingRow
+              icon={Bell}
+              title="Chat e social"
+              description="Messaggi, inviti e valutazioni"
+              action={<SettingSwitch checked={notificationPreferences.chat_social} disabled={notificationBusy === 'chat_social'} label="Chat e social" onChange={(value) => patchNotificationPreference('chat_social', value)} />}
+            />
+            <SettingRow
+              icon={Info}
+              title="Wallet e account"
+              description="Credito, rimborsi, XP e verifica profilo"
+              action={<SettingSwitch checked={notificationPreferences.wallet_account} disabled={notificationBusy === 'wallet_account'} label="Wallet e account" onChange={(value) => patchNotificationPreference('wallet_account', value)} />}
+            />
+            <SettingRow
+              icon={Sparkles}
+              title="Suggerimenti"
+              description="Novità facoltative sull’app"
+              action={<SettingSwitch checked={notificationPreferences.promotions} disabled={notificationBusy === 'promotions'} label="Suggerimenti" onChange={(value) => patchNotificationPreference('promotions', value)} />}
+            />
+          </div>
+        </SettingsAccordion>
 
-      <section className={styles.settingsSection} aria-labelledby="settings-workout">
-        <div className={styles.sectionHeading}>
-          <span><Dumbbell size={18} aria-hidden="true" /></span>
-          <div><h2 id="settings-workout">Allenamento live</h2><p>Timer e feedback durante la sessione</p></div>
-        </div>
-        <div className={styles.rows}>
-          <SettingRow
-            icon={Volume2}
-            title="Suono ultimi 5 secondi"
-            description="Segnale nelle cuffie durante il recupero"
-            action={<SettingSwitch checked={appSettings.workoutCountdownSound} label="Suono timer" onChange={(value) => patchAppSettings({ workoutCountdownSound: value })} />}
-          />
-          <SettingRow
-            icon={Vibrate}
-            title="Vibrazione"
-            description="Feedback per serie, timer e modifiche"
-            action={<SettingSwitch checked={appSettings.workoutVibration} label="Vibrazione allenamento" onChange={(value) => patchAppSettings({ workoutVibration: value })} />}
-          />
-          <SettingRow
-            icon={Smartphone}
-            title="Schermo sempre attivo"
-            description="Evita lo spegnimento durante la scheda live"
-            action={<SettingSwitch checked={appSettings.keepWorkoutScreenAwake} label="Schermo sempre attivo" onChange={(value) => patchAppSettings({ keepWorkoutScreenAwake: value })} />}
-          />
-        </div>
-      </section>
+        <SettingsAccordion
+          id="settings-location"
+          icon={MapPinned}
+          title="Posizione e mappe"
+          summary={`${locationStatusLabel} · Mappa ${mapThemeLabel.toLowerCase()}`}
+          open={openSection === 'location'}
+          onToggle={() => toggleSection('location')}
+        >
+          <div className={styles.locationCard}>
+            <LocateFixed size={20} aria-hidden="true" />
+            <div><strong>Controllo posizione</strong><small>Usata in tempo reale soltanto quando serve per mappa, check-in o evento attivo.</small></div>
+            <button type="button" onClick={location.permission === 'denied' ? openSystemSettings : verifyLocation} disabled={location.requesting}>
+              {location.requesting ? 'Verifico…' : location.permission === 'denied' ? 'Autorizza' : 'Verifica'}
+            </button>
+          </div>
+          <div className={styles.mapThemeBlock}>
+            <div><Map size={18} aria-hidden="true" /><span><strong>Stile della mappa</strong><small>La scelta vale anche nei dettagli evento.</small></span></div>
+            <div className={styles.segmented} aria-label="Stile della mappa">
+              {MAP_THEME_OPTIONS.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className={appSettings.mapTheme === option.value ? styles.segmentActive : ''}
+                  aria-pressed={appSettings.mapTheme === option.value}
+                  onClick={() => patchAppSettings({ mapTheme: option.value })}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </SettingsAccordion>
 
-      <section className={styles.settingsSection} aria-labelledby="settings-privacy">
-        <div className={styles.sectionHeading}>
-          <span><FileLock2 size={18} aria-hidden="true" /></span>
-          <div><h2 id="settings-privacy">Privacy e autorizzazioni</h2><p>Controlli trasparenti, senza modificare statistiche o affidabilità</p></div>
-        </div>
-        <div className={styles.linkRows}>
-          <a href="/privacy/" className={styles.linkRow}>
-            <span><FileLock2 size={18} aria-hidden="true" /><strong>Informativa privacy</strong></span><ChevronRight size={18} aria-hidden="true" />
-          </a>
-          <button type="button" className={styles.linkRow} onClick={openSystemSettings}>
-            <span><ShieldCheck size={18} aria-hidden="true" /><strong>Autorizzazioni del telefono</strong></span><ChevronRight size={18} aria-hidden="true" />
-          </button>
-        </div>
-      </section>
+        <SettingsAccordion
+          id="settings-workout"
+          icon={Dumbbell}
+          title="Allenamento live"
+          summary={workoutSummary}
+          open={openSection === 'workout'}
+          onToggle={() => toggleSection('workout')}
+        >
+          <div className={styles.rows}>
+            <SettingRow
+              icon={Volume2}
+              title="Suono ultimi 5 secondi"
+              description="Segnale nelle cuffie durante il recupero"
+              action={<SettingSwitch checked={appSettings.workoutCountdownSound} label="Suono timer" onChange={(value) => patchAppSettings({ workoutCountdownSound: value })} />}
+            />
+            <SettingRow
+              icon={Vibrate}
+              title="Vibrazione"
+              description="Feedback per serie, timer e modifiche"
+              action={<SettingSwitch checked={appSettings.workoutVibration} label="Vibrazione allenamento" onChange={(value) => patchAppSettings({ workoutVibration: value })} />}
+            />
+            <SettingRow
+              icon={Smartphone}
+              title="Schermo sempre attivo"
+              description="Evita lo spegnimento durante la scheda live"
+              action={<SettingSwitch checked={appSettings.keepWorkoutScreenAwake} label="Schermo sempre attivo" onChange={(value) => patchAppSettings({ keepWorkoutScreenAwake: value })} />}
+            />
+          </div>
+        </SettingsAccordion>
 
-      <section className={styles.settingsSection} aria-labelledby="settings-help">
-        <div className={styles.sectionHeading}>
-          <span><CircleHelp size={18} aria-hidden="true" /></span>
-          <div><h2 id="settings-help">Assistenza</h2><p>Guide e informazioni tecniche</p></div>
-        </div>
-        <div className={styles.linkRows}>
-          <Link to="/tutorial" className={styles.linkRow}><span><Sparkles size={18} aria-hidden="true" /><strong>Guida rapida</strong></span><ChevronRight size={18} aria-hidden="true" /></Link>
-          <Link to="/faq" className={styles.linkRow}><span><CircleHelp size={18} aria-hidden="true" /><strong>Domande frequenti</strong></span><ChevronRight size={18} aria-hidden="true" /></Link>
-        </div>
-        <div className={styles.versionRow}><span>Versione Motrice</span><strong>{appVersion}</strong></div>
-      </section>
+        <SettingsAccordion
+          id="settings-privacy"
+          icon={FileLock2}
+          title="Privacy e assistenza"
+          summary="Autorizzazioni, guida e domande frequenti"
+          open={openSection === 'privacy'}
+          onToggle={() => toggleSection('privacy')}
+        >
+          <div className={styles.linkRows}>
+            <a href="/privacy/" className={styles.linkRow}>
+              <span><FileLock2 size={18} aria-hidden="true" /><strong>Informativa privacy</strong></span><ChevronRight size={18} aria-hidden="true" />
+            </a>
+            <button type="button" className={styles.linkRow} onClick={openSystemSettings}>
+              <span><ShieldCheck size={18} aria-hidden="true" /><strong>Autorizzazioni del telefono</strong></span><ChevronRight size={18} aria-hidden="true" />
+            </button>
+            <Link to="/tutorial" className={styles.linkRow}><span><Sparkles size={18} aria-hidden="true" /><strong>Guida rapida</strong></span><ChevronRight size={18} aria-hidden="true" /></Link>
+            <Link to="/faq" className={styles.linkRow}><span><CircleHelp size={18} aria-hidden="true" /><strong>Domande frequenti</strong></span><ChevronRight size={18} aria-hidden="true" /></Link>
+          </div>
+        </SettingsAccordion>
+      </div>
+
+      <footer className={styles.versionRow}><span>Versione Motrice</span><strong>{appVersion}</strong></footer>
     </section>
   );
 }
