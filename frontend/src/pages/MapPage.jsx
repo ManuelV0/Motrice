@@ -25,6 +25,7 @@ import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
+import { getUserFocusZoom } from '../utils/mapViewport';
 import EventCard from '../components/EventCard';
 import {
   getEventPrimaryActionPath,
@@ -443,6 +444,7 @@ function RasterMapFallback({
   controllerRef,
   onEventSelect,
   onViewportChange,
+  onUserMove,
   onReady,
   onMarkersReady
 }) {
@@ -455,6 +457,7 @@ function RasterMapFallback({
   const userLayerRef = useRef(null);
   const eventSelectRef = useRef(onEventSelect);
   const viewportChangeRef = useRef(onViewportChange);
+  const userMoveRef = useRef(onUserMove);
   const readyRef = useRef(onReady);
   const markersReadyRef = useRef(onMarkersReady);
   const initialCenterRef = useRef(coords ? [coords.lat, coords.lng] : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
@@ -462,9 +465,10 @@ function RasterMapFallback({
   useEffect(() => {
     eventSelectRef.current = onEventSelect;
     viewportChangeRef.current = onViewportChange;
+    userMoveRef.current = onUserMove;
     readyRef.current = onReady;
     markersReadyRef.current = onMarkersReady;
-  }, [onEventSelect, onMarkersReady, onReady, onViewportChange]);
+  }, [onEventSelect, onMarkersReady, onReady, onUserMove, onViewportChange]);
 
   useEffect(() => {
     if (!nodeRef.current || leafletMapRef.current) return undefined;
@@ -491,8 +495,10 @@ function RasterMapFallback({
         west: bounds.getWest()
       });
     };
+    const handleUserMove = () => userMoveRef.current?.();
 
     map.on('moveend zoomend', syncBounds);
+    map.on('dragstart', handleUserMove);
     controllerRef.current = {
       zoomIn: () => map.zoomIn(1, { animate: true }),
       zoomOut: () => map.zoomOut(1, { animate: true }),
@@ -512,7 +518,16 @@ function RasterMapFallback({
         const bounds = L.latLngBounds(nextEvents.map((event) => [event.lat, event.lng]));
         map.fitBounds(bounds, { paddingTopLeft: [42, 92], paddingBottomRight: [42, 170], maxZoom: 13, animate: true });
       },
-      focusUser: (position, focusRadius) => {
+      focusUser: (position, focusRadius, { targetZoom = null, preserveZoom = false } = {}) => {
+        if (Number.isFinite(targetZoom) || preserveZoom) {
+          const currentZoom = map.getZoom();
+          map.flyTo(
+            [position.lat, position.lng],
+            Number.isFinite(targetZoom) ? targetZoom : currentZoom,
+            { animate: true, duration: Number.isFinite(targetZoom) ? 0.48 : 0.24 }
+          );
+          return;
+        }
         const rawBounds = computeBounds(position.lat, position.lng, focusRadius);
         map.fitBounds(
           L.latLngBounds([
@@ -532,6 +547,7 @@ function RasterMapFallback({
 
     return () => {
       map.off('moveend zoomend', syncBounds);
+      map.off('dragstart', handleUserMove);
       map.remove();
       leafletMapRef.current = null;
       markerLayerRef.current = null;
@@ -818,7 +834,7 @@ function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
           className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
           onClick={onGps.onAction}
           disabled={onGps.requesting}
-          aria-label={onGps.active ? 'Disattiva Segui posizione' : 'Attiva Segui posizione'}
+          aria-label={onGps.active ? 'Ricentra sulla posizione' : 'Centra e segui la posizione'}
           aria-pressed={onGps.active}
         >
           <LocateFixed size={18} aria-hidden="true" />
@@ -1192,6 +1208,7 @@ function MapPage({ active = true }) {
   const mapStyleThemeRef = useRef(null);
   const hasLoadedEventsRef = useRef(false);
   const wasActiveRef = useRef(active);
+  const followUserRef = useRef(false);
   const [mapReady, setMapReady] = useState(false);
   const [markersReady, setMarkersReady] = useState(false);
   const [mapRenderer, setMapRenderer] = useState(() => (canUseAcceleratedMapRenderer() ? 'maplibre' : 'raster'));
@@ -1230,12 +1247,22 @@ function MapPage({ active = true }) {
     error: locationError,
     errorCode: locationErrorCode,
     requesting,
-    watching,
     requestLocation,
     startLocationWatch,
     stopLocationWatch,
     originParams
   } = useUserLocation();
+
+  useEffect(() => {
+    followUserRef.current = followUser;
+  }, [followUser]);
+
+  const stopFollowingFromGesture = useCallback(() => {
+    if (!followUserRef.current) return;
+    followUserRef.current = false;
+    setFollowUser(false);
+    void stopLocationWatch();
+  }, [stopLocationWatch]);
 
   usePageMeta({
     title: active ? 'Mappa Eventi | Motrice' : '',
@@ -1516,10 +1543,24 @@ function MapPage({ active = true }) {
   }
 
   async function handleGpsAction() {
-    if (followUser || watching) {
-      await stopLocationWatch();
-      setFollowUser(false);
-      showToast('Segui posizione disattivato', 'info');
+    if (followUser && coords) {
+      const targetZoom = getUserFocusZoom(coords.accuracy);
+      if (mapRenderer === 'raster') {
+        rasterMapControllerRef.current?.focusUser(
+          coords,
+          selectedRadiusKm || USER_VIEW_RADIUS_KM,
+          { targetZoom }
+        );
+      } else {
+        mapRef.current?.flyTo({
+          center: [coords.lng, coords.lat],
+          zoom: targetZoom,
+          duration: 360,
+          curve: 1.15,
+          essential: true
+        });
+      }
+      showToast('Posizione ricentrata', 'success');
       return;
     }
 
@@ -1535,6 +1576,7 @@ function MapPage({ active = true }) {
       return;
     }
 
+    followUserRef.current = true;
     setFollowUser(true);
     const accuracy = Number(nextCoords.accuracy);
     showToast(
@@ -1751,7 +1793,9 @@ function MapPage({ active = true }) {
       syncViewport();
     };
     const handleMoveStart = (event) => {
-      if (!event.originalEvent || window.matchMedia('(min-width: 768px)').matches) return;
+      if (!event.originalEvent) return;
+      stopFollowingFromGesture();
+      if (window.matchMedia('(min-width: 768px)').matches) return;
       setSelectedEventId(null);
       setSheetSnap('compact');
     };
@@ -1869,7 +1913,7 @@ function MapPage({ active = true }) {
       mapRef.current = null;
       setMapReady(false);
     };
-  }, [mapRenderer, syncViewport]);
+  }, [mapRenderer, stopFollowingFromGesture, syncViewport]);
 
   useEffect(() => {
     if (mapRenderer !== 'maplibre') return;
@@ -1974,7 +2018,11 @@ function MapPage({ active = true }) {
       if (!active || !coords) return;
       const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
       if (shouldRecenterRef.current || followUser) {
-        rasterMapControllerRef.current?.focusUser(coords, focusRadius);
+        const close = shouldRecenterRef.current;
+        rasterMapControllerRef.current?.focusUser(coords, focusRadius, {
+          targetZoom: close ? getUserFocusZoom(coords.accuracy) : null,
+          preserveZoom: followUser && !close
+        });
         if (shouldRecenterRef.current) shouldRecenterRef.current = false;
       }
       return;
@@ -2001,10 +2049,13 @@ function MapPage({ active = true }) {
       }
       const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
       if (shouldRecenterRef.current || followUser) {
-        map.fitBounds(computeBounds(coords.lat, coords.lng, focusRadius), {
-          padding: getMapFitPadding(map, resultsSheetRef.current, 48),
-          duration: followUser ? 220 : 340,
-          maxZoom: 13
+        const close = shouldRecenterRef.current;
+        map.flyTo({
+          center: [coords.lng, coords.lat],
+          zoom: close ? getUserFocusZoom(coords.accuracy) : map.getZoom(),
+          duration: close ? 420 : 220,
+          curve: close ? 1.2 : 1,
+          essential: true
         });
         if (shouldRecenterRef.current) shouldRecenterRef.current = false;
       }
@@ -2017,19 +2068,19 @@ function MapPage({ active = true }) {
 
   useEffect(() => {
     if (mapRenderer === 'raster') {
-      if (!active || !coords || !selectedRadiusKm) return;
+      if (!active || !coords || !selectedRadiusKm || followUser) return;
       rasterMapControllerRef.current?.focusUser(coords, selectedRadiusKm);
       return;
     }
     const map = mapRef.current;
-    if (!active || !map || !coords || !selectedRadiusKm) return;
+    if (!active || !map || !coords || !selectedRadiusKm || followUser) return;
     map.fitBounds(computeBounds(coords.lat, coords.lng, selectedRadiusKm), {
       padding: getMapFitPadding(map, resultsSheetRef.current, 48),
       duration: 280,
       maxZoom: 13
     });
     syncViewport();
-  }, [active, coords, mapRenderer, selectedRadiusKm, syncViewport]);
+  }, [active, coords, followUser, mapRenderer, selectedRadiusKm, syncViewport]);
 
   async function toggleSaveEvent(event) {
     const eventId = event.id;
@@ -2089,6 +2140,7 @@ function MapPage({ active = true }) {
                 controllerRef={rasterMapControllerRef}
                 onEventSelect={focusEvent}
                 onViewportChange={setViewportBounds}
+                onUserMove={stopFollowingFromGesture}
                 onReady={setMapReady}
                 onMarkersReady={setMarkersReady}
               />
