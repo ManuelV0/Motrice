@@ -235,6 +235,46 @@
   color: var(--primary);
 }
 
+.pushPermissionNotice {
+  min-height: 2.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.42rem 0.58rem;
+  border: 1px solid rgb(255 193 90 / 20%);
+  border-radius: var(--r-md);
+  background: rgb(255 183 64 / 7%);
+  color: #d9d2c4;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.pushPermissionNotice svg {
+  flex: 0 0 auto;
+  color: #ffc15a;
+}
+
+.pushPermissionNotice span {
+  min-width: 0;
+  flex: 1;
+}
+
+.pushPermissionNotice button {
+  min-height: 1.7rem;
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 8%);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.pushPermissionNotice button:disabled {
+  opacity: 0.5;
+}
+
 .inlineError {
   min-height: 2.65rem;
   display: flex;

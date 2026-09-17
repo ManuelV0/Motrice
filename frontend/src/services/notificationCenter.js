@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api } from './api';
 import {
@@ -12,6 +12,7 @@ import {
 import { withTimeout } from '../utils/asyncTimeout';
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
+const PERMISSION_PROMPTED_KEY = 'motrice_notification_permission_prompted_v1';
 const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
 // Native releases enable remote push by default. Developers can still disable
 // it explicitly with VITE_PUSH_NOTIFICATIONS_ENABLED=false in local builds.
@@ -19,8 +20,14 @@ const REMOTE_PUSH_ENABLED = String(
   import.meta.env.VITE_PUSH_NOTIFICATIONS_ENABLED ?? 'true'
 ).toLowerCase() !== 'false';
 const NATIVE_PERMISSION_TIMEOUT_MS = 4000;
+const PUSH_REGISTRATION_TIMEOUT_MS = 8000;
+
+const NotificationSettings = registerPlugin('NotificationSettings');
 
 let pushNotificationsPromise;
+let pushRegistrationPromise;
+let lastRegisteredPushToken = '';
+const pushTokenRequests = new Map();
 
 async function getPushNotifications() {
   if (!REMOTE_PUSH_ENABLED) return null;
@@ -71,6 +78,89 @@ const CHANNELS = [
 
 function isNativeDevice() {
   return Capacitor.isNativePlatform() && ['android', 'ios'].includes(Capacitor.getPlatform());
+}
+
+function readLocalFlag(key) {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(key) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeLocalFlag(key) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, 'true');
+  } catch {
+    // Il permesso di sistema puo comunque essere richiesto senza persistenza locale.
+  }
+}
+
+async function persistPushToken(value) {
+  const token = String(value || '').trim();
+  if (!token) return false;
+  if (lastRegisteredPushToken === token) return true;
+  if (pushTokenRequests.has(token)) return pushTokenRequests.get(token);
+
+  const request = api.registerPushDevice({
+    token,
+    platform: Capacitor.getPlatform(),
+    deviceLabel: typeof navigator !== 'undefined' ? navigator.userAgent || 'Motrice mobile' : 'Motrice mobile'
+  })
+    .then(() => {
+      lastRegisteredPushToken = token;
+      return true;
+    })
+    .catch(() => false)
+    .finally(() => pushTokenRequests.delete(token));
+
+  pushTokenRequests.set(token, request);
+  return request;
+}
+
+export async function registerCurrentDeviceForPush(pushNotificationsInstance) {
+  if (!isNativeDevice()) return false;
+  if (pushRegistrationPromise) return pushRegistrationPromise;
+
+  const pushNotifications = pushNotificationsInstance || await getPushNotifications();
+  if (!pushNotifications) return false;
+
+  pushRegistrationPromise = new Promise(async (resolve) => {
+    let settled = false;
+    let timeoutId;
+    let registrationHandle;
+    let errorHandle;
+
+    const finish = async (registered, token = '') => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      await registrationHandle?.remove?.();
+      await errorHandle?.remove?.();
+      resolve(token ? await persistPushToken(token) : registered);
+    };
+
+    try {
+      registrationHandle = await pushNotifications.addListener('registration', ({ value }) => {
+        finish(true, value).catch(() => resolve(false));
+      });
+      errorHandle = await pushNotifications.addListener('registrationError', () => {
+        finish(false).catch(() => resolve(false));
+      });
+      timeoutId = window.setTimeout(() => {
+        finish(false).catch(() => resolve(false));
+      }, PUSH_REGISTRATION_TIMEOUT_MS);
+      await pushNotifications.register();
+    } catch {
+      await finish(false);
+    }
+  }).finally(() => {
+    pushRegistrationPromise = null;
+  });
+
+  return pushRegistrationPromise;
 }
 
 function channelFor(type) {
@@ -187,12 +277,34 @@ export async function scheduleEventReminders() {
 
 export async function requestNotificationPermission() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
+  writeLocalFlag(PERMISSION_PROMPTED_KEY);
   const local = await LocalNotifications.requestPermissions().catch(() => ({ display: 'denied' }));
   const pushNotifications = await getPushNotifications();
   const push = pushNotifications
     ? await pushNotifications.requestPermissions().catch(() => ({ receive: 'denied' }))
     : { receive: 'disabled' };
-  return { display: local.display, receive: push.receive };
+  const registered = push.receive === 'granted'
+    ? await registerCurrentDeviceForPush(pushNotifications)
+    : false;
+  if (local.display === 'granted') {
+    await scheduleEventReminders().catch(() => undefined);
+  }
+  return { display: local.display, receive: push.receive, registered };
+}
+
+export function shouldAutoRequestNotificationPermission(status) {
+  if (!isNativeDevice() || readLocalFlag(PERMISSION_PROMPTED_KEY)) return false;
+  return status === 'prompt' || status === 'prompt-with-rationale';
+}
+
+export async function openNotificationSettings() {
+  if (!isNativeDevice() || Capacitor.getPlatform() !== 'android') return false;
+  try {
+    const result = await NotificationSettings.openAppSettings();
+    return result?.opened !== false;
+  } catch {
+    return false;
+  }
 }
 
 export async function getNotificationPermissionStatus() {
@@ -241,11 +353,7 @@ export async function initializeNotificationCenter({ onOpen } = {}) {
         showPushWhileOpen(notification).catch(() => undefined);
       }).catch(() => null),
       pushNotifications.addListener('registration', ({ value }) => {
-        api.registerPushDevice({
-          token: value,
-          platform: Capacitor.getPlatform(),
-          deviceLabel: navigator.userAgent || 'Motrice mobile'
-        }).catch(() => undefined);
+        persistPushToken(value).catch(() => undefined);
       }).catch(() => null),
       pushNotifications.addListener('registrationError', () => {
         // I promemoria locali restano operativi anche senza configurazione FCM/APNs.
@@ -258,7 +366,7 @@ export async function initializeNotificationCenter({ onOpen } = {}) {
   // Non mostrare richieste di sistema durante l'accesso: l'utente le attiva
   // volontariamente dalla pagina Notifiche. Questo mantiene il bootstrap sicuro.
   if (pushNotifications && currentPermissions.receive === 'granted') {
-    await pushNotifications.register().catch(() => undefined);
+    await registerCurrentDeviceForPush(pushNotifications).catch(() => false);
   }
   if (currentPermissions.display === 'granted') {
     await scheduleEventReminders().catch(() => undefined);

@@ -407,6 +407,8 @@ function NotificationsPage() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [pushPermission, setPushPermission] = useState(null);
+  const [pushPermissionBusy, setPushPermissionBusy] = useState(false);
   const loadRequestRef = useRef(0);
 
   function closeNotifications() {
@@ -463,6 +465,29 @@ function NotificationsPage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    async function refreshPermission({ autoRequest = false } = {}) {
+      const notificationCenter = await import('../services/notificationCenter');
+      let status = await notificationCenter.getNotificationPermissionStatus();
+      if (autoRequest && notificationCenter.shouldAutoRequestNotificationPermission(status.receive)) {
+        status = await notificationCenter.requestNotificationPermission();
+      }
+      if (active) setPushPermission(status);
+    }
+
+    refreshPermission({ autoRequest: true }).catch(() => undefined);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refreshPermission().catch(() => undefined);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!actionsOpen) return undefined;
     function handleEscape(event) {
       if (event.key !== 'Escape') return;
@@ -502,6 +527,22 @@ function NotificationsPage() {
     await api.clearNotifications();
     setNotifications([]);
     window.dispatchEvent(new Event('motrice:notifications-changed'));
+  }
+
+  async function enablePushNotifications() {
+    setPushPermissionBusy(true);
+    try {
+      const notificationCenter = await import('../services/notificationCenter');
+      const status = await notificationCenter.requestNotificationPermission();
+      setPushPermission(status);
+    } finally {
+      setPushPermissionBusy(false);
+    }
+  }
+
+  async function openPushSettings() {
+    const notificationCenter = await import('../services/notificationCenter');
+    await notificationCenter.openNotificationSettings();
   }
 
   const unreadCount = notifications.filter((item) => !item.read).length;
@@ -589,6 +630,20 @@ function NotificationsPage() {
             </button>
           ))}
         </nav>
+
+        {pushPermission && !['granted', 'unsupported', 'disabled'].includes(pushPermission.receive) ? (
+          <div className={styles.pushPermissionNotice} role="status">
+            <BellOff size={16} aria-hidden="true" />
+            <span>Avvisi sul telefono disattivati</span>
+            {pushPermission.receive === 'denied' ? (
+              <button type="button" onClick={openPushSettings}>Impostazioni</button>
+            ) : (
+              <button type="button" onClick={enablePushNotifications} disabled={pushPermissionBusy}>
+                {pushPermissionBusy ? 'Attendo…' : 'Attiva'}
+              </button>
+            )}
+          </div>
+        ) : null}
 
         {loadError && notifications.length > 0 ? (
           <div className={styles.inlineError} role="status">

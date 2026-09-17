@@ -9,8 +9,8 @@ def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.toLowerCase().contains("release")
 }
 // Keep Play Store releases explicit and reproducible even when the CI run counter advances.
-def releaseVersionCode = 124
-def releaseVersionName = "1.0.124"
+def releaseVersionCode = 125
+def releaseVersionName = "1.0.125"
 
 if (releaseTaskRequested && !hasReleaseSigning) {
     throw new GradleException(
