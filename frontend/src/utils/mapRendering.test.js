@@ -39,6 +39,7 @@ test('prefers Italian and local map labels without touching non-name symbols', (
 test('uses an API-key-free raster source for compatible maps', () => {
   const light = getHighDefinitionRasterTiles('light');
   const dark = getHighDefinitionRasterTiles('dark');
+  const satellite = getHighDefinitionRasterTiles('satellite');
 
   assert.equal(light.url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
   assert.equal(dark.url, light.url);
@@ -47,12 +48,18 @@ test('uses an API-key-free raster source for compatible maps', () => {
   assert.equal(light.options.maxNativeZoom, 19);
   assert.equal(light.options.detectRetina, true);
   assert.match(light.options.attribution, /OpenStreetMap/);
+  assert.match(satellite.url, /World_Imagery/);
+  assert.match(satellite.overlayUrl, /World_Boundaries_and_Places/);
+  assert.match(satellite.options.attribution, /Esri/);
+  assert.equal(satellite.overlayOptions.detectRetina, true);
 });
 
 test('keeps vector styles aligned with the selected map theme', () => {
   assert.match(MAPLIBRE_STYLES.light, /positron/);
   assert.match(MAPLIBRE_STYLES.dark, /\/dark$/);
   assert.match(MAPLIBRE_STYLES.light, /openfreemap/);
+  assert.equal(MAPLIBRE_STYLES.satellite.version, 8);
+  assert.equal(MAPLIBRE_STYLES.satellite.layers.at(-1).source, 'motrice-satellite-labels');
   assert.equal(getHighDefinitionPixelRatio(), 1.5);
 });
 

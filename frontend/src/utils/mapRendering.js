@@ -1,9 +1,51 @@
+const OPENSTREETMAP_RASTER_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const SATELLITE_RASTER_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+export const SATELLITE_TILE_ATTRIBUTION = 'Tiles &copy; Esri — Sources: Esri, Vantor, Earthstar Geographics, and the GIS User Community';
+
 export const MAPLIBRE_STYLES = {
   dark: 'https://tiles.openfreemap.org/styles/dark',
-  light: 'https://tiles.openfreemap.org/styles/positron'
+  light: 'https://tiles.openfreemap.org/styles/positron',
+  satellite: {
+    version: 8,
+    name: 'Motrice Satellite Hybrid',
+    sources: {
+      'motrice-satellite': {
+        type: 'raster',
+        tiles: [SATELLITE_RASTER_URL],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: SATELLITE_TILE_ATTRIBUTION
+      },
+      'motrice-satellite-labels': {
+        type: 'raster',
+        tiles: [SATELLITE_LABELS_URL],
+        tileSize: 256,
+        maxzoom: 19
+      }
+    },
+    layers: [
+      {
+        id: 'motrice-satellite-background',
+        type: 'background',
+        paint: { 'background-color': '#101510' }
+      },
+      {
+        id: 'motrice-satellite-imagery',
+        type: 'raster',
+        source: 'motrice-satellite',
+        paint: { 'raster-opacity': 1, 'raster-resampling': 'linear' }
+      },
+      {
+        id: 'motrice-satellite-reference',
+        type: 'raster',
+        source: 'motrice-satellite-labels',
+        paint: { 'raster-opacity': 0.96, 'raster-resampling': 'linear' }
+      }
+    ]
+  }
 };
-
-const OPENSTREETMAP_RASTER_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export const RASTER_TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
 
@@ -90,19 +132,31 @@ export function getHighDefinitionPixelRatio() {
   return Math.min(safeMaximum, Math.max(1.25, ratio));
 }
 
-export function getHighDefinitionRasterTiles() {
+export function getHighDefinitionRasterTiles(theme = 'light') {
+  const sharedOptions = {
+    maxZoom: 20,
+    maxNativeZoom: 19,
+    tileSize: 256,
+    crossOrigin: true,
+    detectRetina: true,
+    updateWhenIdle: true,
+    updateWhenZooming: false,
+    keepBuffer: 2
+  };
+
+  if (theme === 'satellite') {
+    return {
+      url: SATELLITE_RASTER_URL,
+      overlayUrl: SATELLITE_LABELS_URL,
+      options: { ...sharedOptions, attribution: SATELLITE_TILE_ATTRIBUTION },
+      overlayOptions: { ...sharedOptions, attribution: '' }
+    };
+  }
+
   return {
     url: OPENSTREETMAP_RASTER_URL,
-    options: {
-      attribution: RASTER_TILE_ATTRIBUTION,
-      maxZoom: 20,
-      maxNativeZoom: 19,
-      tileSize: 256,
-      crossOrigin: true,
-      detectRetina: true,
-      updateWhenIdle: true,
-      updateWhenZooming: false,
-      keepBuffer: 2
-    }
+    overlayUrl: null,
+    options: { ...sharedOptions, attribution: RASTER_TILE_ATTRIBUTION },
+    overlayOptions: null
   };
 }

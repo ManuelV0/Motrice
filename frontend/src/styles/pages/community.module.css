@@ -22,11 +22,11 @@
 }
 
 .mapCanvas[data-renderer='raster'] :global(.leaflet-tile-pane) {
-  filter: invert(100%) hue-rotate(180deg) brightness(0.86) saturate(0.7) contrast(1.28);
+  filter: brightness(1.06) contrast(1.12) saturate(1.08);
 }
 
 .mapCanvas[data-renderer='maplibre'] :global(.maplibregl-canvas) {
-  filter: brightness(1.18) contrast(1.24) saturate(0.9);
+  filter: brightness(1.06) contrast(1.12) saturate(1.08);
 }
 
 .mapCanvas :global(.leaflet-control-attribution) {
@@ -36,6 +36,53 @@
 }
 
 .mapCanvas :global(.leaflet-control-attribution a) {
+  color: inherit;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-bottom-left) {
+  bottom: 0.35rem;
+  left: 0.4rem;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib) {
+  width: 1.5rem;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0 !important;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 999px !important;
+  background: rgb(7 9 7 / 76%) !important;
+  color: rgb(255 255 255 / 72%) !important;
+  font-size: 0.48rem;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib-inner) {
+  display: none !important;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib-button) {
+  display: block !important;
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 1.5rem !important;
+  height: 1.5rem !important;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib:hover),
+.mapCanvas :global(.maplibregl-ctrl-attrib:focus-within) {
+  width: min(18rem, calc(100vw - 4rem));
+  padding: 0.26rem 1.75rem 0.26rem 0.5rem !important;
+  border-radius: 0.7rem !important;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner),
+.mapCanvas :global(.maplibregl-ctrl-attrib:focus-within .maplibregl-ctrl-attrib-inner) {
+  display: block !important;
+}
+
+.mapCanvas :global(.maplibregl-ctrl-attrib a) {
   color: inherit;
 }
 

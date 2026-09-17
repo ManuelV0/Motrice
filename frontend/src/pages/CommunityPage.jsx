@@ -123,23 +123,26 @@ function CommunityPage() {
       }).setView([41.9028, 12.4964], 5.6);
       map.attributionControl.setPrefix(false);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
-      const tileDefinition = getHighDefinitionRasterTiles('dark');
+      const tileDefinition = getHighDefinitionRasterTiles('satellite');
       L.tileLayer(tileDefinition.url, tileDefinition.options)
         .once('load', () => setMapReady(true))
         .addTo(map);
+      if (tileDefinition.overlayUrl) {
+        L.tileLayer(tileDefinition.overlayUrl, tileDefinition.overlayOptions).addTo(map);
+      }
       readyTimer = window.setTimeout(() => setMapReady(true), 4000);
     } else {
       try {
         map = new maplibregl.Map({
           container: mapNodeRef.current,
-          style: MAPLIBRE_STYLES.dark,
+          style: MAPLIBRE_STYLES.satellite,
           center: [12.4964, 41.9028],
           zoom: 5.6,
           pitch: 0,
           bearing: 0,
           pixelRatio: getHighDefinitionPixelRatio(),
           antialias: true,
-          attributionControl: true,
+          attributionControl: false,
           dragRotate: false,
           pitchWithRotate: false,
           touchPitch: false
@@ -149,6 +152,7 @@ function CommunityPage() {
         return undefined;
       }
       let loaded = false;
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
       map.on('load', () => {
         loaded = true;

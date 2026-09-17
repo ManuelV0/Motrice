@@ -52,7 +52,7 @@ const baseFilters = {
 };
 
 const DEFAULT_CENTER = { lat: 42.6, lng: 12.5 };
-const MAP_THEME_KEY = 'motrice.map.theme';
+const MAP_THEME_KEY = 'motrice.map.theme.v2';
 const USER_RADIUS_SOURCE = 'user-radius-src';
 const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
@@ -448,6 +448,7 @@ function RasterMapFallback({
   const nodeRef = useRef(null);
   const leafletMapRef = useRef(null);
   const tileLayerRef = useRef(null);
+  const labelLayerRef = useRef(null);
   const markerLayerRef = useRef(null);
   const radiusLayerRef = useRef(null);
   const userLayerRef = useRef(null);
@@ -534,6 +535,7 @@ function RasterMapFallback({
       leafletMapRef.current = null;
       markerLayerRef.current = null;
       tileLayerRef.current = null;
+      labelLayerRef.current = null;
       radiusLayerRef.current = null;
       userLayerRef.current = null;
       controllerRef.current = null;
@@ -545,9 +547,13 @@ function RasterMapFallback({
     const map = leafletMapRef.current;
     if (!map) return;
     tileLayerRef.current?.remove();
+    labelLayerRef.current?.remove();
     const tileDefinition = getHighDefinitionRasterTiles(theme);
     tileLayerRef.current = L.tileLayer(tileDefinition.url, tileDefinition.options).addTo(map);
     tileLayerRef.current.bringToBack();
+    labelLayerRef.current = tileDefinition.overlayUrl
+      ? L.tileLayer(tileDefinition.overlayUrl, tileDefinition.overlayOptions).addTo(map)
+      : null;
   }, [theme]);
 
   useEffect(() => {
@@ -1118,6 +1124,14 @@ function MapFiltersDrawer({
               <div className={styles.mapThemeSwitch}>
                 <button
                   type="button"
+                  className={mapTheme === 'satellite' ? styles.mapThemeActive : ''}
+                  aria-pressed={mapTheme === 'satellite'}
+                  onClick={() => onMapThemeChange('satellite')}
+                >
+                  Satellite
+                </button>
+                <button
+                  type="button"
                   className={mapTheme === 'dark' ? styles.mapThemeActive : ''}
                   aria-pressed={mapTheme === 'dark'}
                   onClick={() => onMapThemeChange('dark')}
@@ -1195,12 +1209,12 @@ function MapPage({ active = true }) {
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
   const [mapTheme, setMapTheme] = useState(() => {
-    if (typeof window === 'undefined') return 'dark';
+    if (typeof window === 'undefined') return 'satellite';
     try {
       const persisted = window.localStorage.getItem(MAP_THEME_KEY);
-      return persisted === 'light' ? 'light' : 'dark';
+      return ['satellite', 'dark', 'light'].includes(persisted) ? persisted : 'satellite';
     } catch {
-      return 'dark';
+      return 'satellite';
     }
   });
   const [filtersDrawerOpen, setFiltersDrawerOpen] = useState(false);
@@ -1688,7 +1702,7 @@ function MapPage({ active = true }) {
     try {
       map = new maplibregl.Map({
         container: mapNodeRef.current,
-        style: mapTheme === 'light' ? MAPLIBRE_STYLES.light : MAPLIBRE_STYLES.dark,
+        style: MAPLIBRE_STYLES[mapTheme] || MAPLIBRE_STYLES.satellite,
         center: startCenter,
         zoom: coords ? 10.4 : 6.1,
         pixelRatio: getHighDefinitionPixelRatio(),
@@ -1702,6 +1716,7 @@ function MapPage({ active = true }) {
         touchPitch: false,
         attributionControl: false
       });
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     } catch (error) {
       console.warn('MapLibre non disponibile, attivo la mappa compatibile.', error);
       setMapRenderer('raster');
@@ -1862,7 +1877,7 @@ function MapPage({ active = true }) {
     mapStyleThemeRef.current = mapTheme;
     setMapReady(false);
     setMarkersReady(false);
-    map.setStyle(mapTheme === 'light' ? MAPLIBRE_STYLES.light : MAPLIBRE_STYLES.dark);
+    map.setStyle(MAPLIBRE_STYLES[mapTheme] || MAPLIBRE_STYLES.satellite);
   }, [mapRenderer, mapTheme]);
 
   useEffect(() => {
@@ -2055,6 +2070,7 @@ function MapPage({ active = true }) {
           data-map-ready={mapReady ? 'true' : 'false'}
           data-markers-ready={markersReady ? 'true' : 'false'}
           data-map-renderer={mapRenderer}
+          data-map-theme={mapTheme}
         >
           <div className={styles.mapViewport}>
             {mapRenderer === 'maplibre' ? (

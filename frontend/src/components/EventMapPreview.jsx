@@ -16,7 +16,7 @@ import {
 import styles from '../styles/components/eventMapPreview.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const MAP_THEME_KEY = 'motrice.map.theme';
+const MAP_THEME_KEY = 'motrice.map.theme.v2';
 const ROUTE_SOURCE = 'event-detail-route';
 const ROUTE_SHADOW_LAYER = 'event-detail-route-shadow';
 const ROUTE_GLOW_LAYER = 'event-detail-route-glow';
@@ -38,11 +38,12 @@ function createRouteGeoJson(points) {
 }
 
 function getSavedMapTheme() {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'satellite';
   try {
-    return window.localStorage.getItem(MAP_THEME_KEY) === 'light' ? 'light' : 'dark';
+    const persisted = window.localStorage.getItem(MAP_THEME_KEY);
+    return ['satellite', 'dark', 'light'].includes(persisted) ? persisted : 'satellite';
   } catch {
-    return 'dark';
+    return 'satellite';
   }
 }
 
@@ -157,6 +158,9 @@ function LeafletEventMap({
         onStatusChange('ready');
       })
       .addTo(map);
+    const labelTiles = tileDefinition.overlayUrl
+      ? L.tileLayer(tileDefinition.overlayUrl, tileDefinition.overlayOptions).addTo(map)
+      : null;
 
     const routeLatLngs = displayRoute.map(([lng, lat]) => [lat, lng]);
     const liveLatLngs = usableLiveRoute.map(([lng, lat]) => [lat, lng]);
@@ -270,6 +274,7 @@ function LeafletEventMap({
       window.cancelAnimationFrame(resizeFrame);
       resizeObserver?.disconnect();
       tiles.off();
+      labelTiles?.off();
       layers.forEach((layer) => layer.remove());
       map.remove();
     };
@@ -415,6 +420,7 @@ export default function EventMapPreview({
     mapRef.current = map;
     map.scrollZoom.disable();
     map.touchZoomRotate.disableRotation();
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.addControl(new maplibregl.NavigationControl({
       showCompass: false,
       visualizePitch: false
