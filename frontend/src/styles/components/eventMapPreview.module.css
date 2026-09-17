@@ -66,7 +66,7 @@
 }
 
 .preview[data-theme='dark'] :global(.maplibregl-canvas) {
-  filter: brightness(1.18) contrast(1.24) saturate(0.9);
+  filter: brightness(1.04) contrast(1.08) saturate(0.94);
 }
 
 .preview[data-theme='light'] :global(.maplibregl-canvas) {

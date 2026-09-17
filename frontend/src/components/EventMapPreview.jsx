@@ -7,6 +7,7 @@ import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
 import { requestPedestrianRoute } from '../services/routeGeometry';
 import {
+  applyDerivedDarkMapStyle,
   applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
@@ -456,6 +457,7 @@ export default function EventMapPreview({
       mapErrorCount = 0;
       window.clearTimeout(loadingTimeout);
       applyLocalizedMapLabels(map);
+      if (theme === 'dark') applyDerivedDarkMapStyle(map);
       map.resize();
 
       if (usableRoute.length >= 2) {

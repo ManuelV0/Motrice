@@ -32,6 +32,7 @@ import {
 } from '../utils/eventParticipationState';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import {
+  applyDerivedDarkMapStyle,
   applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
@@ -1734,12 +1735,14 @@ function MapPage({ active = true }) {
       mapErrorCount = 0;
       window.clearTimeout(fallbackTimer);
       applyLocalizedMapLabels(map);
+      if (mapStyleThemeRef.current === 'dark') applyDerivedDarkMapStyle(map);
       setMapReady(true);
       syncViewport();
     };
     const handleStyleLoad = () => {
       mapErrorCount = 0;
       applyLocalizedMapLabels(map);
+      if (mapStyleThemeRef.current === 'dark') applyDerivedDarkMapStyle(map);
       setMapReady(true);
     };
     const handleMoveEnd = () => {

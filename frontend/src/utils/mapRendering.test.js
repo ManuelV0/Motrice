@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  applyDerivedDarkMapStyle,
   applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getAndroidMajorVersion,
@@ -56,11 +57,36 @@ test('uses an API-key-free raster source for compatible maps', () => {
 
 test('keeps vector styles aligned with the selected map theme', () => {
   assert.match(MAPLIBRE_STYLES.light, /positron/);
-  assert.match(MAPLIBRE_STYLES.dark, /\/dark$/);
+  assert.equal(MAPLIBRE_STYLES.dark, MAPLIBRE_STYLES.light);
   assert.match(MAPLIBRE_STYLES.light, /openfreemap/);
   assert.equal(MAPLIBRE_STYLES.satellite.version, 8);
   assert.equal(MAPLIBRE_STYLES.satellite.layers.at(-1).source, 'motrice-satellite-labels');
   assert.equal(getHighDefinitionPixelRatio(), 1.5);
+});
+
+test('derives the dark palette from the light layers without recoloring Motrice overlays', () => {
+  const updates = [];
+  const map = {
+    getStyle() {
+      return {
+        layers: [
+          { id: 'background', type: 'background' },
+          { id: 'highway_minor', type: 'line', source: 'openmaptiles', 'source-layer': 'transportation' },
+          { id: 'label_city', type: 'symbol', source: 'openmaptiles', 'source-layer': 'place' },
+          { id: 'motrice-event-pins', type: 'symbol', source: 'motrice-event-markers' }
+        ]
+      };
+    },
+    setPaintProperty(...args) {
+      updates.push(args);
+    }
+  };
+
+  assert.equal(applyDerivedDarkMapStyle(map), 3);
+  assert.ok(updates.some(([id, property, value]) => id === 'highway_minor' && property === 'line-color' && value === '#55615a'));
+  assert.ok(updates.some(([id, property, value]) => id === 'label_city' && property === 'text-color' && value === '#edf2ed'));
+  assert.equal(updates.some(([id]) => id === 'motrice-event-pins'), false);
+  assert.equal(applyDerivedDarkMapStyle(null), 0);
 });
 
 test('routes legacy and low-memory Android devices to the compatible renderer', () => {

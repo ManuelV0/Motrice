@@ -5,7 +5,10 @@ const SATELLITE_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/servic
 export const SATELLITE_TILE_ATTRIBUTION = 'Tiles &copy; Esri — Sources: Esri, Vantor, Earthstar Geographics, and the GIS User Community';
 
 export const MAPLIBRE_STYLES = {
-  dark: 'https://tiles.openfreemap.org/styles/dark',
+  // Dark deliberately starts from the same cartographic document as light.
+  // We recolor its layers after load so streets, labels and detail levels stay
+  // perfectly aligned instead of drifting between two independent styles.
+  dark: 'https://tiles.openfreemap.org/styles/positron',
   light: 'https://tiles.openfreemap.org/styles/positron',
   satellite: {
     version: 8,
@@ -48,6 +51,126 @@ export const MAPLIBRE_STYLES = {
 };
 
 export const RASTER_TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
+
+const DARK_BASE_LAYER_COLORS = {
+  background: '#101612',
+  land: '#171d19',
+  residential: '#1d231f',
+  park: '#1b2a20',
+  wood: '#18271e',
+  ice: '#354143',
+  water: '#16333d',
+  building: '#282f2b',
+  buildingOutline: '#36403a',
+  aeroway: '#303833',
+  roadArea: '#272e29',
+  path: '#3d4741',
+  minorRoad: '#55615a',
+  majorRoad: '#87948b',
+  motorway: '#a0ad95',
+  roadCasing: '#2b322e',
+  railway: '#626c66',
+  railwayDash: '#a0a9a3',
+  boundary: '#7b877f',
+  waterway: '#3f7180',
+  label: '#edf2ed',
+  secondaryLabel: '#c8d1ca',
+  waterLabel: '#98c8d5',
+  labelHalo: '#0c120e'
+};
+
+function getDerivedDarkPaint(layer) {
+  const id = String(layer?.id || '').toLowerCase();
+  const sourceLayer = String(layer?.['source-layer'] || '').toLowerCase();
+  const colors = DARK_BASE_LAYER_COLORS;
+
+  if (layer?.type === 'background') {
+    return { 'background-color': colors.background };
+  }
+
+  if (layer?.type === 'fill') {
+    if (sourceLayer === 'water' || id.includes('water')) return { 'fill-color': colors.water };
+    if (sourceLayer === 'park' || id.includes('park')) return { 'fill-color': colors.park };
+    if (id.includes('wood')) return { 'fill-color': colors.wood };
+    if (id.includes('ice') || id.includes('glacier')) return { 'fill-color': colors.ice };
+    if (id.includes('residential')) return { 'fill-color': colors.residential };
+    if (sourceLayer === 'building' || id.includes('building')) {
+      return {
+        'fill-color': colors.building,
+        'fill-outline-color': colors.buildingOutline
+      };
+    }
+    if (sourceLayer === 'aeroway' || id.includes('aeroway')) return { 'fill-color': colors.aeroway };
+    if (id.includes('road') || id.includes('pier')) return { 'fill-color': colors.roadArea };
+    return { 'fill-color': colors.land };
+  }
+
+  if (layer?.type === 'line') {
+    if (sourceLayer === 'waterway' || id.includes('waterway')) return { 'line-color': colors.waterway };
+    if (sourceLayer === 'boundary' || id.includes('boundary')) return { 'line-color': colors.boundary };
+    if (sourceLayer === 'aeroway' || id.includes('aeroway')) return { 'line-color': colors.railway };
+    if (id.includes('railway')) {
+      return { 'line-color': id.includes('dash') ? colors.railwayDash : colors.railway };
+    }
+    if (id.includes('motorway')) {
+      return { 'line-color': id.includes('casing') ? colors.roadCasing : colors.motorway };
+    }
+    if (id.includes('major')) {
+      return { 'line-color': id.includes('casing') ? colors.roadCasing : colors.majorRoad };
+    }
+    if (id.includes('minor')) return { 'line-color': colors.minorRoad };
+    if (id.includes('path')) return { 'line-color': colors.path };
+    if (id.includes('road') || sourceLayer === 'transportation') return { 'line-color': colors.minorRoad };
+    return { 'line-color': colors.secondaryLabel };
+  }
+
+  if (layer?.type === 'symbol') {
+    const isWater = sourceLayer.includes('water') || id.includes('water');
+    const isRoad = sourceLayer.includes('transportation') || id.includes('highway') || id.includes('road');
+    return {
+      'text-color': isWater ? colors.waterLabel : isRoad ? colors.secondaryLabel : colors.label,
+      'text-halo-color': colors.labelHalo,
+      'text-halo-width': isRoad ? 1.15 : 1.45,
+      'text-halo-blur': 0.35
+    };
+  }
+
+  return null;
+}
+
+export function applyDerivedDarkMapStyle(map) {
+  if (!map?.getStyle || !map?.setPaintProperty) return 0;
+
+  let layers;
+  try {
+    layers = map.getStyle()?.layers;
+  } catch {
+    return 0;
+  }
+  if (!Array.isArray(layers)) return 0;
+
+  let updatedLayers = 0;
+  layers.forEach((layer) => {
+    // Only the shared OpenFreeMap base is recolored. Motrice pins, routes,
+    // geofences and live GPS overlays retain their semantic colors.
+    if (layer?.type !== 'background' && layer?.source !== 'openmaptiles') return;
+    const paint = getDerivedDarkPaint(layer);
+    if (!paint) return;
+
+    let changed = false;
+    Object.entries(paint).forEach(([property, value]) => {
+      try {
+        map.setPaintProperty(layer.id, property, value);
+        changed = true;
+      } catch {
+        // Third-party styles can expose transient or unsupported properties.
+      }
+    });
+    if (changed) updatedLayers += 1;
+  });
+
+  return updatedLayers;
+}
 
 export function applyLocalizedMapLabels(map, { language = 'it' } = {}) {
   if (!map?.getStyle || !map?.setLayoutProperty) return 0;
