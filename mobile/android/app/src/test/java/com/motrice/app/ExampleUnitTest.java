@@ -15,4 +15,16 @@ public class ExampleUnitTest {
     public void addition_isCorrect() throws Exception {
         assertEquals(4, 2 + 2);
     }
+
+    @Test
+    public void trackingTimestampAcceptsJavascriptLongValues() {
+        long javascriptTimestamp = 1_789_663_200_000L;
+
+        assertEquals(
+            Double.valueOf((double) javascriptTimestamp),
+            EventLocationTrackingPlugin.coerceNumericValue(javascriptTimestamp)
+        );
+        assertEquals(Double.valueOf(250.5d), EventLocationTrackingPlugin.coerceNumericValue(250.5d));
+        assertNull(EventLocationTrackingPlugin.coerceNumericValue("1789663200000"));
+    }
 }

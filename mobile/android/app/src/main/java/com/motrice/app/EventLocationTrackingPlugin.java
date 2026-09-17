@@ -604,7 +604,7 @@ public class EventLocationTrackingPlugin extends Plugin {
         String eventId = call.getString("eventId", "").trim();
         Double latitude = call.getDouble("latitude");
         Double longitude = call.getDouble("longitude");
-        Double expectedEndAt = call.getDouble("expectedEndAtMs");
+        Double expectedEndAt = numericDouble(call, "expectedEndAtMs");
         Double radiusM = call.getDouble("radiusM", 250.0);
         if (eventId.isEmpty()
                 || !isFiniteNumber(latitude)
@@ -660,6 +660,14 @@ public class EventLocationTrackingPlugin extends Plugin {
 
     private static boolean isFiniteNumber(Double value) {
         return value != null && !value.isNaN() && !value.isInfinite();
+    }
+
+    private static Double numericDouble(PluginCall call, String key) {
+        return coerceNumericValue(call.getData().opt(key));
+    }
+
+    static Double coerceNumericValue(Object value) {
+        return value instanceof Number ? ((Number) value).doubleValue() : null;
     }
 
     private void requestNotificationPermissionIfNeeded() {

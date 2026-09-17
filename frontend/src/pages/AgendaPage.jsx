@@ -35,12 +35,14 @@ import {
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import { resolveEventPostSummary } from '../utils/eventPostSummary';
 import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
+import { getEventSessionTimeline } from '../utils/sessionTimeline';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
 function isHistoricalEvent(event, referenceTime = Date.now()) {
   if (event?.status === 'cancelled') return true;
-  return getEventTiming(event, referenceTime).hasEnded;
+  const timing = getEventTiming(event, referenceTime);
+  return getEventSessionTimeline(event, timing, referenceTime).hasEnded;
 }
 
 function getPendingRequestsCount(events) {
@@ -121,7 +123,9 @@ function formatEventTime(value) {
 }
 
 function allowDirectWorkoutAccess(event, action, locationOptional, referenceTime) {
-  if (!locationOptional || !event || getEventTiming(event, referenceTime).hasEnded) return action;
+  if (!locationOptional || !event) return action;
+  const timing = getEventTiming(event, referenceTime);
+  if (getEventSessionTimeline(event, timing, referenceTime).hasEnded) return action;
   const outcome = resolveParticipantOutcome(event);
   const hasAccessRole = Boolean(
     event.is_personal ||
@@ -235,29 +239,6 @@ function getVerificationCta(event, { isOrganizer = false } = {}) {
   };
 }
 
-function getSessionTimeline(timing, referenceTime = Date.now()) {
-  const nowMs = referenceTime instanceof Date ? referenceTime.getTime() : Number(referenceTime);
-  const startsAtMs = Number(timing?.startsAtMs);
-  const endsAtMs = Number(timing?.endsAtMs);
-
-  if (!Number.isFinite(startsAtMs) || !Number.isFinite(endsAtMs) || endsAtMs <= startsAtMs) {
-    return { progress: 0, label: 'Orario evento' };
-  }
-  if (nowMs < startsAtMs) {
-    return { progress: 0, label: `Inizia alle ${formatEventTime(startsAtMs)}` };
-  }
-  if (nowMs >= endsAtMs) {
-    return { progress: 100, label: 'Sessione conclusa' };
-  }
-
-  const durationMinutes = Math.max(1, Math.round((endsAtMs - startsAtMs) / 60000));
-  const elapsedMinutes = Math.max(0, Math.floor((nowMs - startsAtMs) / 60000));
-  return {
-    progress: Math.max(1, Math.min(99, Math.round(((nowMs - startsAtMs) / (endsAtMs - startsAtMs)) * 100))),
-    label: `${elapsedMinutes} di ${durationMinutes} min`
-  };
-}
-
 function getPrimaryActionIcon(action) {
   if (action?.target === 'verify') return ShieldCheck;
   if (action?.target === 'workout' || action?.target === 'outdoor') return Play;
@@ -269,7 +250,7 @@ function getPrimaryActionIcon(action) {
 function getTodaySessionState(event, referenceTime = Date.now()) {
   const isOrganizer = event?.created_by === 'me' && !event?.is_personal;
   const timing = getEventTiming(event, referenceTime);
-  const timeline = getSessionTimeline(timing, referenceTime);
+  const timeline = getEventSessionTimeline(event, timing, referenceTime);
   const hasWorkout = Boolean(event?.workout_plan);
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
   const participantOutcome = resolveParticipantOutcome(event);
@@ -317,7 +298,7 @@ function getTodaySessionState(event, referenceTime = Date.now()) {
     };
   }
 
-  if (timing.hasEnded) {
+  if (timeline.hasEnded) {
     return {
       key: isOrganizer ? 'completed' : 'closed',
       eyebrow: 'SESSIONE CONCLUSA',
@@ -550,9 +531,8 @@ function AgendaPage() {
       })
       .filter(({ event, state }) => {
         if (state.key === 'completed') return true;
-        const startsAt = Date.parse(event?.event_datetime || '');
-        const endsAt = startsAt + Math.max(0, Number(event?.duration_minutes || 0)) * 60 * 1000;
-        return !Number.isFinite(endsAt) || endsAt >= now.getTime();
+        const timing = getEventTiming(event, nowMs);
+        return !getEventSessionTimeline(event, timing, nowMs).hasEnded;
       })
       .sort((a, b) => {
         const priority = { ready: 0, active: 0, organizer: 1, locked: 2, scheduled: 3, closed: 4, completed: 5 };
@@ -562,7 +542,7 @@ function AgendaPage() {
       });
 
     return candidates[0] || null;
-  }, [calendarEvents, locationOptional, now, nowMs, todayKey]);
+  }, [calendarEvents, locationOptional, nowMs, todayKey]);
 
   const requestedEventId = String(searchParams.get('verifyEvent') || '');
   const requestedAgendaEvent = useMemo(
@@ -1033,10 +1013,10 @@ function AgendaPage() {
             const isToday = dateKey === todayKey;
             const isSelected = Boolean(selectedRange && (dateKey === selectedRange.start || dateKey === selectedRange.end));
             const isInRange = Boolean(selectedRange && dateKey >= selectedRange.start && dateKey <= selectedRange.end);
-            const dayTimings = dayEvents.map((event) => getEventTiming(event, nowMs));
-            const allPast = hasEvents && dayTimings.every((timing) => timing.hasEnded);
-            const hasPast = dayTimings.some((timing) => timing.hasEnded);
-            const hasFuture = dayTimings.some((timing) => !timing.hasEnded);
+            const dayHistory = dayEvents.map((event) => isHistoricalEvent(event, nowMs));
+            const allPast = hasEvents && dayHistory.every(Boolean);
+            const hasPast = dayHistory.some(Boolean);
+            const hasFuture = dayHistory.some((isPast) => !isPast);
             const allCancelled = hasEvents && dayEvents.every((event) => event.status === 'cancelled');
             const timingLabel = allPast
               ? 'svolto'
@@ -1152,7 +1132,7 @@ function AgendaPage() {
             <div className={styles.calendarEventList}>
               {selectedEvents.map((event) => {
                 const timing = getEventTiming(event, nowMs);
-                const isPast = timing.hasEnded;
+                const isPast = isHistoricalEvent(event, nowMs);
                 const isArchived = timing.lifecycleState === 'archived';
                 const isCancelled = event.status === 'cancelled';
                 const participants = Math.max(0, Number(event.participants_count || 0));

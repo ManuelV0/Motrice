@@ -1289,6 +1289,23 @@ function enrichEvent(event, store, origin) {
     )
   };
   const groupChatUnreadCount = getEventGroupUnreadCount(store, event.id, currentUserId);
+  const ownCheckInRecord = store.checkinRecordsByEvent?.[String(event.id)]?.[String(currentUserId)] || null;
+  const activeRsvp = ['going', 'completed'].includes(String(rsvp?.status || '')) ? rsvp : null;
+  const participantCheckInMs = Date.parse(activeRsvp?.checked_in_at || ownCheckInRecord?.ts || ownCheckInRecord?.checked_in_at || '');
+  const firstGroupCheckInMs = listEventRsvps(store, event.id)
+    .filter((participant) => ['going', 'completed'].includes(String(participant?.status || '')))
+    .map((participant) => Date.parse(participant?.checked_in_at || ''))
+    .concat(
+      Object.values(store.checkinRecordsByEvent?.[String(event.id)] || {})
+        .map((record) => Date.parse(record?.ts || record?.checked_in_at || ''))
+    )
+    .filter(Number.isFinite)
+    .reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY);
+  const sessionStartedAt = Number.isFinite(participantCheckInMs)
+    ? new Date(participantCheckInMs).toISOString()
+    : isCurrentUserOrganizer && Number.isFinite(firstGroupCheckInMs)
+      ? new Date(firstGroupCheckInMs).toISOString()
+      : null;
 
   return {
     ...event,
@@ -1306,6 +1323,7 @@ function enrichEvent(event, store, origin) {
     lifecycle_updated_at: event.lifecycle_updated_at || null,
     checkin_opens_at: event.checkin_opens_at || null,
     checkin_closes_at: event.checkin_closes_at || null,
+    session_started_at: sessionStartedAt,
     ends_at: event.ends_at || null,
     archived_at: event.archived_at || null,
     completed_at: event.completed_at || null,
@@ -2774,15 +2792,25 @@ const localApi = {
 
     let attendanceConfirmed = false;
     const currentRsvp = getEventRsvp(store, event.id, currentUserId) || rsvp;
+    const checkedInAt = currentRsvp.checked_in_at
+      || recordsByEvent[String(currentUserId)]?.ts
+      || nowIso();
     if (String(currentRsvp.attendance || '') !== 'attended') {
       store.localUser.attended += 1;
       setEventRsvp(store, event.id, currentUserId, {
         ...currentRsvp,
         attendance: 'attended',
+        checked_in_at: checkedInAt,
         updated_at: nowIso()
       });
       updateProfileReliability(store);
       attendanceConfirmed = true;
+    } else if (!currentRsvp.checked_in_at) {
+      setEventRsvp(store, event.id, currentUserId, {
+        ...currentRsvp,
+        checked_in_at: checkedInAt,
+        updated_at: nowIso()
+      });
     }
 
     const participantXp = awardXp(
@@ -2846,7 +2874,7 @@ const localApi = {
       [eventKey]: {
         ...recordsByEvent,
         [String(currentUserId)]: {
-          ts: nowIso(),
+          ts: checkedInAt,
           source: 'qr'
         }
       }
@@ -3170,8 +3198,27 @@ const localApi = {
     const eventKey = String(event.id);
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
     const flow = store.participationFlowsByEvent?.[eventKey] || {};
-    if (!isOrganizer && !flow.checked_in_at) throw new Error('Verifica prima la presenza');
-    const timing = getEventTiming(event);
+    const ownCheckInRecord = store.checkinRecordsByEvent?.[eventKey]?.[String(currentUserId)] || null;
+    const currentRsvp = getEventRsvp(store, event.id, currentUserId);
+    const participantCheckInMs = Date.parse(
+      flow.checked_in_at || currentRsvp?.checked_in_at || ownCheckInRecord?.ts || ownCheckInRecord?.checked_in_at || ''
+    );
+    if (!isOrganizer && !Number.isFinite(participantCheckInMs)) throw new Error('Verifica prima la presenza');
+    const firstGroupCheckInMs = listEventRsvps(store, event.id)
+      .filter((participant) => ['going', 'completed'].includes(String(participant?.status || '')))
+      .map((participant) => Date.parse(participant?.checked_in_at || ''))
+      .concat(
+        Object.values(store.checkinRecordsByEvent?.[eventKey] || {})
+          .map((record) => Date.parse(record?.ts || record?.checked_in_at || ''))
+      )
+      .filter(Number.isFinite)
+      .reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY);
+    const sessionStartMs = Number.isFinite(participantCheckInMs)
+      ? participantCheckInMs
+      : Number.isFinite(firstGroupCheckInMs)
+        ? firstGroupCheckInMs
+        : Date.now();
+    const expectedEndAtMs = sessionStartMs + Math.max(1, Number(event.duration_minutes || 120)) * 60 * 1000;
     const next = {
       event_id: eventKey,
       user_id: currentUserId,
@@ -3179,7 +3226,7 @@ const localApi = {
       status: 'active',
       verification_method: verificationMethod === 'qr_gps' ? 'qr_gps' : 'gps',
       device_platform: devicePlatform,
-      expected_end_at: timing.endsAtMs ? new Date(timing.endsAtMs).toISOString() : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+      expected_end_at: new Date(expectedEndAtMs).toISOString(),
       started_at: store.eventTrackingSessions?.[eventKey]?.started_at || nowIso(),
       last_ping_at: store.eventTrackingSessions?.[eventKey]?.last_ping_at || null,
       valid_ping_count: Number(store.eventTrackingSessions?.[eventKey]?.valid_ping_count || 0),

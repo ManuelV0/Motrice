@@ -1,5 +1,6 @@
 import { getEventTiming } from './eventLifecycle.js';
 import { isOutdoorTrackedEvent } from './outdoorActivity.js';
+import { getEventSessionTimeline } from './sessionTimeline.js';
 
 const CONFIRMED_PARTICIPATION_STATUSES = new Set(['going', 'completed']);
 
@@ -393,10 +394,11 @@ export function resolveEventPrimaryAction({
   referenceTime = Date.now()
 }) {
   const timing = getEventTiming(event || {}, referenceTime);
+  const sessionTimeline = getEventSessionTimeline(event, timing, referenceTime);
   const outcome = resolveParticipantOutcome(event);
   const approvalRequired = normalized(event?.join_policy) === 'approval';
   const cancelled = timing.phase === 'cancelled' || normalized(event?.status) === 'cancelled';
-  const completed = timing.hasEnded || timing.phase === 'completed' || normalized(event?.status) === 'completed';
+  const completed = sessionTimeline.hasEnded || normalized(event?.status) === 'completed';
   const feedbackEligible = Boolean(
     timing.isPostEventWindow && (isOrganizer || outcome.id === 'completed')
   );
@@ -444,6 +446,9 @@ export function resolveEventPrimaryAction({
   }
 
   if (isOrganizer) {
+    if (sessionTimeline.hasStarted && !sessionTimeline.hasEnded) {
+      return sessionAction(event);
+    }
     if (timing.isCheckInOpen || timing.phase === 'checkin_open' || timing.phase === 'live_checkin') {
       return {
         id: 'organizer_checkin',
@@ -478,8 +483,7 @@ export function resolveEventPrimaryAction({
   }
 
   if (outcome.id === 'checked_in') {
-    const beforeStart = Number.isFinite(timing.startsAtMs) && Number(referenceTime) < timing.startsAtMs;
-    return sessionAction(event, { waiting: beforeStart });
+    return sessionAction(event, { waiting: !sessionTimeline.hasStarted });
   }
 
   if (outcome.id === 'confirmed' || hasConfirmedEventParticipation(event)) {

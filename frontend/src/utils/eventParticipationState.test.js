@@ -156,7 +156,7 @@ test('the primary action follows the participant through join, check-in and sess
   assert.equal(checkInAction.id, 'participant_checkin');
   assert.equal(checkInAction.label, 'Verifica presenza');
 
-  const waitingAction = resolveEventPrimaryAction({
+  const checkedInAction = resolveEventPrimaryAction({
     event: {
       ...confirmedEvent,
       user_rsvp: {
@@ -167,8 +167,8 @@ test('the primary action follows the participant through join, check-in and sess
     },
     referenceTime: startsAt - 5 * 60 * 1000
   });
-  assert.equal(waitingAction.id, 'waiting_start');
-  assert.equal(waitingAction.disabled, true);
+  assert.equal(checkedInAction.id, 'open_event');
+  assert.equal(checkedInAction.disabled, false);
 
   const liveAction = resolveEventPrimaryAction({
     event: {

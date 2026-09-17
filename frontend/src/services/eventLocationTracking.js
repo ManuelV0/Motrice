@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import { supabase, supabasePublishableKey, supabaseUrl } from './supabaseClient';
 import { NativeEventLocation as NativeTracking } from './nativeEventLocation';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
-import { getEventTiming } from '../utils/eventLifecycle';
 import { getOutdoorActivityKind } from '../utils/outdoorActivity';
 import {
   normalizeTrackingError,
@@ -163,8 +162,11 @@ export async function startEventLocationTracking({
   const activityKind = getOutdoorActivityKind(event) || '';
   if (!['geo', 'gps', 'both'].includes(mode) && !activityKind) return null;
 
-  const timing = getEventTiming(event);
-  if (!timing.endsAtMs || timing.endsAtMs <= Date.now()) return null;
+  const verifiedStartAtMs = Date.parse(
+    event.session_started_at || event.user_rsvp?.checked_in_at || event.checked_in_at || ''
+  );
+  const fallbackEndAtMs = (Number.isFinite(verifiedStartAtMs) ? verifiedStartAtMs : Date.now())
+    + Math.max(1, Number(event.duration_minutes || 120)) * 60 * 1000;
   const eventLat = Number(event.lat);
   const eventLng = Number(event.lng);
   const eventRadiusM = Math.max(50, Number(event.geofence_radius_m || 250));
@@ -194,7 +196,7 @@ export async function startEventLocationTracking({
     lat: eventLat,
     lng: eventLng,
     radiusM: eventRadiusM,
-    expectedEndAt: remote?.expected_end_at || new Date(timing.endsAtMs).toISOString(),
+    expectedEndAt: remote?.expected_end_at || new Date(fallbackEndAtMs).toISOString(),
     startedAt: remote?.started_at || existing?.startedAt || new Date().toISOString(),
     status: 'active',
     lastPingAt: remote?.last_ping_at || existing?.lastPingAt || null,

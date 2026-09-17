@@ -361,11 +361,23 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const participants = eventParticipants.filter((participant) =>
     ['going', 'completed'].includes(String(participant.status || ''))
   );
-  const checkedInParticipants = eventParticipants.filter((participant) =>
+  const checkedInParticipants = participants.filter((participant) =>
     Boolean(participant.checked_in_at)
   );
   const ownParticipation =
     eventParticipants.find((participant) => String(participant.user_id) === authUserId) || null;
+  const firstGroupCheckInMs = checkedInParticipants
+    .map((participant) => Date.parse(participant.checked_in_at || ''))
+    .filter(Number.isFinite)
+    .reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY);
+  const ownActiveCheckInAt = ['going', 'completed'].includes(String(ownParticipation?.status || ''))
+    ? ownParticipation?.checked_in_at
+    : null;
+  const sessionStartedAt = ownActiveCheckInAt || (
+    String(rawEvent.creator_id) === authUserId && Number.isFinite(firstGroupCheckInMs)
+      ? new Date(firstGroupCheckInMs).toISOString()
+      : null
+  );
   const presentParticipants = eventParticipants.filter(
     (participant) => resolveParticipantOutcome(participant).id === 'completed'
   );
@@ -468,6 +480,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     lifecycle_updated_at: rawEvent.lifecycle_updated_at || null,
     checkin_opens_at: rawEvent.checkin_opens_at || null,
     checkin_closes_at: rawEvent.checkin_closes_at || null,
+    session_started_at: sessionStartedAt,
     ends_at: rawEvent.ends_at || null,
     archived_at: rawEvent.archived_at || null,
     completed_at: rawEvent.completed_at || null,
