@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getAndroidMajorVersion,
   getHighDefinitionPixelRatio,
@@ -8,6 +9,32 @@ import {
   MAPLIBRE_STYLES,
   shouldUseCompatibleMapRenderer
 } from './mapRendering.js';
+
+test('prefers Italian and local map labels without touching non-name symbols', () => {
+  const updates = [];
+  const map = {
+    getStyle() {
+      return {
+        layers: [
+          { id: 'place_city', type: 'symbol', layout: { 'text-field': ['coalesce', ['get', 'name_en'], ['get', 'name']] } },
+          { id: 'motorway_ref', type: 'symbol', layout: { 'text-field': ['get', 'ref'] } },
+          { id: 'roads', type: 'line', layout: {} }
+        ]
+      };
+    },
+    setLayoutProperty(...args) {
+      updates.push(args);
+    }
+  };
+
+  assert.equal(applyLocalizedMapLabels(map), 1);
+  assert.deepEqual(updates, [[
+    'place_city',
+    'text-field',
+    ['coalesce', ['get', 'name_it'], ['get', 'name:it'], ['get', 'name'], ['get', 'name_en'], ['get', 'name:latin']]
+  ]]);
+  assert.equal(applyLocalizedMapLabels(null), 0);
+});
 
 test('uses an API-key-free raster source for compatible maps', () => {
   const light = getHighDefinitionRasterTiles('light');

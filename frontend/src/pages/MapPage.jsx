@@ -32,6 +32,7 @@ import {
 } from '../utils/eventParticipationState';
 import { isGymEvent } from '../utils/eventVenueAccess';
 import {
+  applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
   getHighDefinitionRasterTiles,
@@ -672,7 +673,7 @@ function getMapAreaLabel(events, hasLocation, selectedRadiusKm) {
     .filter(Boolean)
     .map((location) => location.split(',').at(-1)?.trim() || location);
 
-  if (!locations.length) return 'ASCOLI PICENO';
+  if (!locations.length) return 'AREA VISIBILE';
 
   const counts = locations.reduce((result, location) => {
     const key = location.toLocaleUpperCase('it-IT');
@@ -783,7 +784,7 @@ function ActiveFilterPills({ items, onRemove }) {
 
 function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
   return (
-    <div className={styles.fabStack} aria-label="Controlli mappa">
+    <div className={styles.fabStack} role="group" aria-label="Controlli mappa">
       <div className={styles.zoomControlGroup}>
         <button
           type="button"
@@ -803,6 +804,8 @@ function MapFloatingControls({ onZoomIn, onZoomOut, onGps }) {
           <Minus size={18} aria-hidden="true" />
           <span>Zoom indietro</span>
         </button>
+      </div>
+      <div className={styles.locationControlGroup}>
         <button
           type="button"
           className={`${styles.fab} ${styles.fabNeutral} ${onGps.active ? styles.fabPrimary : ''}`}
@@ -1413,6 +1416,18 @@ function MapPage({ active = true }) {
   // bounds exist, an empty viewport must stay empty instead of showing events
   // from a different area as a fallback.
   const sheetEvents = viewportBounds ? visibleEvents : eventsInRadius;
+  const legendItems = [
+    sheetEvents.some((event) => !isGymEvent(event))
+      ? { key: 'event', label: 'Evento', className: styles.legendEvent }
+      : null,
+    sheetEvents.some((event) => isGymEvent(event))
+      ? { key: 'gym', label: 'Palestra', className: styles.legendGym }
+      : null,
+    sheetEvents.some((event) => Boolean(event.is_saved))
+      ? { key: 'saved', label: 'Salvato', className: styles.legendSaved }
+      : null,
+    coords ? { key: 'user', label: 'Tu', className: styles.legendUser } : null
+  ].filter(Boolean);
 
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
@@ -1703,11 +1718,13 @@ function MapPage({ active = true }) {
       hasLoaded = true;
       mapErrorCount = 0;
       window.clearTimeout(fallbackTimer);
+      applyLocalizedMapLabels(map);
       setMapReady(true);
       syncViewport();
     };
     const handleStyleLoad = () => {
       mapErrorCount = 0;
+      applyLocalizedMapLabels(map);
       setMapReady(true);
     };
     const handleMoveEnd = () => {
@@ -2094,10 +2111,13 @@ function MapPage({ active = true }) {
               onGps={{ onAction: handleGpsAction, active: followUser, requesting }}
             />
 
-            <div className={styles.mapLegend} aria-label="Legenda segnaposto">
-              <span><i className={`${styles.legendDot} ${styles.legendEvent}`} /> Evento</span>
-              <span><i className={`${styles.legendDot} ${styles.legendGym}`} /> Palestra</span>
-            </div>
+            {legendItems.length ? (
+              <div className={styles.mapLegend} aria-label="Legenda segnaposto">
+                {legendItems.map((item) => (
+                  <span key={item.key}><i className={`${styles.legendDot} ${item.className}`} /> {item.label}</span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <section
@@ -2121,14 +2141,21 @@ function MapPage({ active = true }) {
 
             <div className={styles.resultsSheetHeader}>
               <div>
-                <span className={styles.eyebrow}>VICINO A TE · {mapAreaLabel}</span>
+                <span className={styles.eyebrow}>{hasLocation ? 'VICINO A TE' : 'ESPLORA'} · {mapAreaLabel}</span>
                 <h2 id="map-events-title">
                   {loading && !hasLoadedEventsRef.current
                     ? 'Caricamento eventi…'
                     : `${sheetEvents.length} ${sheetEvents.length === 1 ? 'evento in questa zona' : 'eventi in questa zona'}`}
                 </h2>
               </div>
-              <span className={styles.sheetModeLabel}>LISTA</span>
+              <button
+                type="button"
+                className={styles.sheetModeLabel}
+                onClick={() => setSheetSnap((current) => (current === 'compact' ? 'medium' : 'compact'))}
+                aria-label={sheetSnap === 'compact' ? 'Apri lista eventi' : 'Torna alla mappa'}
+              >
+                {sheetSnap === 'compact' ? 'LISTA' : 'MAPPA'}
+              </button>
             </div>
 
             {loading ? (

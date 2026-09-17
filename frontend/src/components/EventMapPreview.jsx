@@ -7,6 +7,7 @@ import { isGymEvent } from '../utils/eventVenueAccess';
 import { createEventPinSvg, getEventActivityType } from '../utils/eventMapMarkers';
 import { requestPedestrianRoute } from '../services/routeGeometry';
 import {
+  applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
   getHighDefinitionRasterTiles,
@@ -448,6 +449,7 @@ export default function EventMapPreview({
       mapLoaded = true;
       mapErrorCount = 0;
       window.clearTimeout(loadingTimeout);
+      applyLocalizedMapLabels(map);
       map.resize();
 
       if (usableRoute.length >= 2) {

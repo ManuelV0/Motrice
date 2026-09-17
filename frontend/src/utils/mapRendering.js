@@ -7,6 +7,44 @@ const OPENSTREETMAP_RASTER_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png
 
 export const RASTER_TILE_ATTRIBUTION = '&copy; OpenStreetMap contributors';
 
+export function applyLocalizedMapLabels(map, { language = 'it' } = {}) {
+  if (!map?.getStyle || !map?.setLayoutProperty) return 0;
+
+  let layers;
+  try {
+    layers = map.getStyle()?.layers;
+  } catch {
+    return 0;
+  }
+  if (!Array.isArray(layers)) return 0;
+
+  const localizedTextField = [
+    'coalesce',
+    ['get', `name_${language}`],
+    ['get', `name:${language}`],
+    ['get', 'name'],
+    ['get', 'name_en'],
+    ['get', 'name:latin']
+  ];
+  let updatedLayers = 0;
+
+  layers.forEach((layer) => {
+    const textField = layer?.layout?.['text-field'];
+    if (layer?.type !== 'symbol' || textField == null) return;
+    const serializedTextField = JSON.stringify(textField);
+    if (!/name_en|name:nonlatin|name:latin/.test(serializedTextField)) return;
+    try {
+      map.setLayoutProperty(layer.id, 'text-field', localizedTextField);
+      updatedLayers += 1;
+    } catch {
+      // A third-party style can expose immutable or transient layers while it
+      // is loading. One label must never prevent the rest of the map opening.
+    }
+  });
+
+  return updatedLayers;
+}
+
 export function getAndroidMajorVersion(userAgent = '') {
   const match = String(userAgent).match(/Android\s+([0-9]+)/i);
   return match ? Number(match[1]) : null;

@@ -425,7 +425,7 @@
 }
 
 .legendSaved {
-  background: #fff;
+  background: #c7f75a;
 }
 
 .legendGym {
@@ -1641,15 +1641,13 @@
 .zoomControlGroup {
   top: auto;
   right: 0.8rem;
-  bottom: 7.15rem;
+  bottom: 10.65rem;
 }
 
 .locationControlGroup {
-  /* Mantiene lo stesso respiro tra il gruppo zoom e i controlli GPS,
-     evitando che "Centra posizione" si sovrapponga al pulsante meno. */
-  top: 13.72rem;
+  top: auto;
   right: 0.8rem;
-  bottom: auto;
+  bottom: 7.15rem;
 }
 
 .fabStack {
@@ -1686,15 +1684,15 @@
   border-top: 1px solid rgb(255 255 255 / 22%);
   border-radius: 1.65rem 1.65rem 0 0;
   background:
-    linear-gradient(145deg, rgb(24 29 24 / 28%), rgb(7 10 7 / 24%)),
-    rgb(13 16 13 / 8%);
+    linear-gradient(145deg, rgb(24 29 24 / 34%), rgb(7 10 7 / 28%)),
+    rgb(13 16 13 / 86%);
   color: #f5f7f2;
   box-shadow:
     0 -20px 52px rgb(0 0 0 / 36%),
     inset 0 1px 0 rgb(255 255 255 / 10%),
     inset 0 0 34px rgb(199 255 0 / 3%);
-  backdrop-filter: blur(9px) saturate(1.12) contrast(1.02);
-  -webkit-backdrop-filter: blur(9px) saturate(1.12) contrast(1.02);
+  backdrop-filter: blur(6px) saturate(1.06) contrast(1.02);
+  -webkit-backdrop-filter: blur(6px) saturate(1.06) contrast(1.02);
   transition: height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
   overscroll-behavior: contain;
   display: flex;
@@ -1709,13 +1707,22 @@
 .themeLight .resultsSheet {
   border-color: rgb(255 255 255 / 62%);
   background:
-    linear-gradient(145deg, rgb(255 255 255 / 34%), rgb(235 240 230 / 28%)),
-    rgb(248 250 244 / 10%);
+    linear-gradient(145deg, rgb(255 255 255 / 42%), rgb(235 240 230 / 32%)),
+    rgb(248 250 244 / 88%);
   color: #151913;
   box-shadow:
     0 -20px 52px rgb(19 24 17 / 20%),
     inset 0 1px 0 rgb(255 255 255 / 76%),
     inset 0 0 34px rgb(199 255 0 / 4%);
+}
+
+.mapStage[data-map-renderer='raster'] .mapTopOverlay .searchBar,
+.mapStage[data-map-renderer='raster'] .zoomControlGroup,
+.mapStage[data-map-renderer='raster'] .fab,
+.mapStage[data-map-renderer='raster'] .mapLegend,
+.mapStage[data-map-renderer='raster'] .resultsSheet {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .resultsSheetCompact {
@@ -1803,12 +1810,27 @@
   border-radius: 999px;
   background: rgb(255 255 255 / 4%);
   color: var(--map-neon);
+  box-shadow: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 0.62rem;
   font-weight: var(--weight-bold);
   letter-spacing: 0.08em;
+  transition:
+    border-color var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.sheetModeLabel:hover,
+.sheetModeLabel:focus-visible {
+  border-color: rgb(199 255 0 / 48%);
+  background: rgb(199 255 0 / 9%);
+}
+
+.sheetModeLabel:active {
+  transform: scale(0.96);
 }
 
 .themeLight .sheetModeLabel {

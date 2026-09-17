@@ -7,6 +7,7 @@ import Button from '../components/Button';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
 import {
+  applyLocalizedMapLabels,
   canUseAcceleratedMapRenderer,
   getHighDefinitionPixelRatio,
   getHighDefinitionRasterTiles,
@@ -151,6 +152,7 @@ function CommunityPage() {
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
       map.on('load', () => {
         loaded = true;
+        applyLocalizedMapLabels(map);
         setMapReady(true);
       });
       map.on('error', (event) => {
