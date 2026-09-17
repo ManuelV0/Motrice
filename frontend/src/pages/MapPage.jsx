@@ -1357,6 +1357,18 @@ function MapPage({ active = true }) {
   }, [mapTheme]);
 
   useEffect(() => {
+    function syncMapTheme(event) {
+      const nextTheme = event?.detail?.mapTheme;
+      if (!['satellite', 'dark', 'light'].includes(nextTheme)) return;
+      setMapTheme(nextTheme);
+      setDraftMapTheme(nextTheme);
+    }
+
+    window.addEventListener('motrice:app-settings-changed', syncMapTheme);
+    return () => window.removeEventListener('motrice:app-settings-changed', syncMapTheme);
+  }, []);
+
+  useEffect(() => {
     if (!active) return undefined;
     const missing = events.filter((event) => {
       if (hasValidCoordinates(event.lat, event.lng)) return false;

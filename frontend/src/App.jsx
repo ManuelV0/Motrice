@@ -19,6 +19,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const AgendaPage = lazy(() => import('./pages/AgendaPage'));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const CreditWalletPage = lazy(() => import('./pages/CreditWalletPage'));
@@ -94,6 +95,7 @@ function App() {
           <Route path="/create" element={<VerifiedProfileRoute><CreateEventPage /></VerifiedProfileRoute>} />
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/chat" element={<ChatInboxPage />} />
           <Route path="/chat/inbox" element={<Navigate to="/chat" replace />} />
           <Route path="/chat/search" element={<ChatSearchPage />} />

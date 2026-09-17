@@ -31,6 +31,7 @@ import {
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
 import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
+import { getAppSettings, updateAppSettings } from '../services/appSettings';
 import styles from '../styles/pages/workoutSession.module.css';
 
 function formatClock(totalSeconds) {
@@ -72,20 +73,38 @@ function WorkoutSessionPage() {
   const [exerciseDraft, setExerciseDraft] = useState(null);
   const [selfRatingDismissed, setSelfRatingDismissed] = useState(false);
   const [reviewTargetCount, setReviewTargetCount] = useState(0);
-  const [countdownSoundEnabled, setCountdownSoundEnabled] = useState(() => {
-    try {
-      return window.localStorage.getItem('motrice.workoutCountdownSound') !== 'off';
-    } catch {
-      return true;
-    }
-  });
+  const [countdownSoundEnabled, setCountdownSoundEnabled] = useState(() => getAppSettings().workoutCountdownSound);
+  const [workoutVibrationEnabled, setWorkoutVibrationEnabled] = useState(() => getAppSettings().workoutVibration);
+  const [keepWorkoutScreenAwake, setKeepWorkoutScreenAwake] = useState(() => getAppSettings().keepWorkoutScreenAwake);
   const audioContextRef = useRef(null);
+  const wakeLockRef = useRef(null);
   const previousRestRemainingRef = useRef(0);
   const metricPressTimerRef = useRef(null);
   const auth = useMemo(() => getAuthSession(), []);
   const locationOptional = canAccessWorkoutWithoutLocation(auth);
 
   usePageMeta({ title: 'Allenamento live · Motrice', description: 'Sessione allenamento Motrice' });
+
+  function vibrate(pattern) {
+    if (!workoutVibrationEnabled) return;
+    try {
+      navigator.vibrate?.(pattern);
+    } catch {
+      // La vibrazione e un feedback opzionale e non deve interrompere la sessione.
+    }
+  }
+
+  useEffect(() => {
+    function syncWorkoutSettings(event) {
+      const next = event?.detail || getAppSettings();
+      setCountdownSoundEnabled(next.workoutCountdownSound !== false);
+      setWorkoutVibrationEnabled(next.workoutVibration !== false);
+      setKeepWorkoutScreenAwake(next.keepWorkoutScreenAwake !== false);
+    }
+
+    window.addEventListener('motrice:app-settings-changed', syncWorkoutSettings);
+    return () => window.removeEventListener('motrice:app-settings-changed', syncWorkoutSettings);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -171,15 +190,15 @@ function WorkoutSessionPage() {
     const timer = window.setInterval(() => {
       setRestTimer((current) => {
         if (!current.running || current.remaining <= 1) {
-          if (current.remaining === 1 && navigator.vibrate) navigator.vibrate([80, 60, 80]);
+          if (current.remaining === 1) vibrate([80, 60, 80]);
           return { ...current, remaining: 0, running: false, finished: true };
         }
-        if (current.remaining === 10 && navigator.vibrate) navigator.vibrate(40);
+        if (current.remaining === 10) vibrate(40);
         return { ...current, remaining: current.remaining - 1 };
       });
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [restTimer.remaining, restTimer.running]);
+  }, [restTimer.remaining, restTimer.running, workoutVibrationEnabled]);
 
   useEffect(() => {
     if (!restTimer.finished) return undefined;
@@ -191,11 +210,45 @@ function WorkoutSessionPage() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('motrice.workoutCountdownSound', countdownSoundEnabled ? 'on' : 'off');
+      updateAppSettings({ workoutCountdownSound: countdownSoundEnabled });
     } catch {
       // Il timer resta utilizzabile anche quando lo storage del browser è indisponibile.
     }
   }, [countdownSoundEnabled]);
+
+  useEffect(() => {
+    if (!keepWorkoutScreenAwake || !session?.startedAt || session?.completedAt) return undefined;
+    let disposed = false;
+
+    async function acquireWakeLock() {
+      if (disposed || document.visibilityState !== 'visible' || !navigator?.wakeLock?.request) return;
+      try {
+        const lock = await navigator.wakeLock.request('screen');
+        wakeLockRef.current = lock;
+        lock.addEventListener?.('release', () => {
+          if (wakeLockRef.current === lock) wakeLockRef.current = null;
+        }, { once: true });
+      } catch {
+        wakeLockRef.current = null;
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        acquireWakeLock();
+      }
+    }
+
+    acquireWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      const lock = wakeLockRef.current;
+      wakeLockRef.current = null;
+      lock?.release?.().catch(() => undefined);
+    };
+  }, [keepWorkoutScreenAwake, session?.completedAt, session?.startedAt]);
 
   useEffect(() => () => {
     const context = audioContextRef.current;
@@ -331,7 +384,7 @@ function WorkoutSessionPage() {
       rir: exercise.rir,
       recovery: exercise.recovery
     });
-    if (navigator.vibrate) navigator.vibrate(35);
+    vibrate(35);
   }
 
   function startMetricPress(exercise) {
@@ -439,7 +492,7 @@ function WorkoutSessionPage() {
         finished: false
       });
     }
-    if (navigator.vibrate) navigator.vibrate(45);
+    vibrate(45);
   }
 
   function undoLastSet(action = undoAction) {
@@ -498,7 +551,7 @@ function WorkoutSessionPage() {
     const selfRating = Math.max(1, Math.min(5, Math.round(Number(rating) || 1)));
     const next = { ...session, selfRating };
     setSession(saveWorkoutSession(id, next));
-    if (navigator.vibrate) navigator.vibrate(35);
+    vibrate(35);
     showToast('Autovalutazione allenamento salvata', 'success');
   }
 

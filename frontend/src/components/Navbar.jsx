@@ -14,6 +14,7 @@ import {
   LogIn,
   LogOut,
   ShieldCheck,
+  Settings,
   TrendingUp,
   X
 } from 'lucide-react';
@@ -58,7 +59,8 @@ const drawerSections = [
     items: [
       { to: '/coach', label: 'Coach', icon: Target, locked: true },
       { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake, locked: true },
-      { to: '/notifications', label: 'Notifiche', icon: Bell }
+      { to: '/notifications', label: 'Notifiche', icon: Bell },
+      { to: '/settings', label: 'Impostazioni', icon: Settings }
     ]
   }
 ];
