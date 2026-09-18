@@ -69,6 +69,7 @@ function WorkoutSessionPage() {
   const [undoAction, setUndoAction] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [restTimer, setRestTimer] = useState({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+  const [loadDrafts, setLoadDrafts] = useState({});
   const [editingExerciseId, setEditingExerciseId] = useState('');
   const [exerciseDraft, setExerciseDraft] = useState(null);
   const [selfRatingDismissed, setSelfRatingDismissed] = useState(false);
@@ -316,7 +317,9 @@ function WorkoutSessionPage() {
 
   function updateExerciseLoad(exercise, value) {
     if (!session || session.completedAt) return;
-    const normalized = Math.max(0, Number(String(value).replace(',', '.')) || 0);
+    const parsed = Number(String(value).replace(',', '.'));
+    if (!Number.isFinite(parsed)) return;
+    const normalized = Math.max(0, Math.min(1000, parsed));
     const next = {
       ...session,
       exerciseLoads: {
@@ -325,10 +328,52 @@ function WorkoutSessionPage() {
       }
     };
     setSession(saveWorkoutSession(id, next));
+    setLoadDrafts((current) => {
+      if (!Object.prototype.hasOwnProperty.call(current, exercise.id)) return current;
+      const nextDrafts = { ...current };
+      delete nextDrafts[exercise.id];
+      return nextDrafts;
+    });
+  }
+
+  function updateExerciseLoadDraft(exercise, value) {
+    const nextValue = String(value || '').replace(',', '.');
+    if (!/^\d{0,4}(?:\.\d{0,2})?$/.test(nextValue)) return;
+    setLoadDrafts((current) => ({ ...current, [exercise.id]: nextValue }));
+  }
+
+  function commitExerciseLoadDraft(exercise) {
+    if (!Object.prototype.hasOwnProperty.call(loadDrafts, exercise.id)) return;
+    const draft = String(loadDrafts[exercise.id] || '').trim();
+    if (!draft) {
+      setLoadDrafts((current) => {
+        const nextDrafts = { ...current };
+        delete nextDrafts[exercise.id];
+        return nextDrafts;
+      });
+      return;
+    }
+    updateExerciseLoad(exercise, draft);
+  }
+
+  function getEditableExerciseLoad(exercise) {
+    if (Object.prototype.hasOwnProperty.call(loadDrafts, exercise.id)) {
+      return loadDrafts[exercise.id];
+    }
+    return String(getExerciseLoad(exercise));
+  }
+
+  function getLoadAdjustmentBase(exercise) {
+    const draft = loadDrafts[exercise.id];
+    if (draft !== undefined && String(draft).trim() !== '') {
+      const parsedDraft = Number(String(draft).replace(',', '.'));
+      if (Number.isFinite(parsedDraft)) return Math.max(0, Math.min(1000, parsedDraft));
+    }
+    return getExerciseLoad(exercise);
   }
 
   function adjustExerciseLoad(exercise, delta) {
-    updateExerciseLoad(exercise, Math.max(0, getExerciseLoad(exercise) + delta));
+    updateExerciseLoad(exercise, Math.max(0, getLoadAdjustmentBase(exercise) + delta));
   }
 
   function ensureCountdownAudio(force = false) {
@@ -653,12 +698,16 @@ function WorkoutSessionPage() {
               </button>
               <span className={styles.loadInput}>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.5"
+                  type="text"
                   inputMode="decimal"
-                  value={getExerciseLoad(exercise)}
-                  onChange={(eventChange) => updateExerciseLoad(exercise, eventChange.target.value)}
+                  value={getEditableExerciseLoad(exercise)}
+                  onFocus={(focusEvent) => focusEvent.currentTarget.select()}
+                  onClick={(clickEvent) => clickEvent.currentTarget.select()}
+                  onChange={(eventChange) => updateExerciseLoadDraft(exercise, eventChange.target.value)}
+                  onBlur={() => commitExerciseLoadDraft(exercise)}
+                  onKeyDown={(keyEvent) => {
+                    if (keyEvent.key === 'Enter') keyEvent.currentTarget.blur();
+                  }}
                   disabled={Boolean(session.completedAt) || isComplete}
                   aria-label={`Carico ${exercise.name} in chilogrammi`}
                 />

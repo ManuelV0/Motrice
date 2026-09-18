@@ -1173,7 +1173,7 @@
 .restDock {
   grid-column: 1 / -1;
   width: 100%;
-  min-height: 62px;
+  min-height: 88px;
   padding: 8px 9px 7px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1189,7 +1189,7 @@
 .restDockInfo {
   min-width: 0;
   display: grid;
-  gap: 1px;
+  gap: 2px;
 }
 
 .restDockControls {
@@ -1208,9 +1208,12 @@
 
 .restDock strong {
   color: #c6ff00;
-  font-size: 1.18rem;
+  font-size: clamp(3rem, 15vw, 4.25rem);
+  font-weight: 950;
   font-variant-numeric: tabular-nums;
-  line-height: 1.1;
+  letter-spacing: -0.055em;
+  line-height: 0.94;
+  text-shadow: 0 0 22px rgba(198, 255, 0, 0.12);
 }
 
 .restProgress {
@@ -1305,6 +1308,9 @@
 
 .restDockFinished strong {
   font-size: 0.88rem;
+  letter-spacing: normal;
+  line-height: 1.1;
+  text-shadow: none;
 }
 
 .visuallyHidden {
