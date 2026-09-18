@@ -116,8 +116,7 @@ function AgendaEventVerificationPanel({
   onStartWorkout,
   onStartOutdoor,
   onOpenEvent,
-  showToast,
-  locationOptional = false
+  showToast
 }) {
   const hasWorkout = Boolean(event?.workout_plan);
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
@@ -469,7 +468,7 @@ function AgendaEventVerificationPanel({
   }
 
   const progressOutcome = resolveParticipantOutcome(progress);
-  const panelVerified = locationOptional || verified || organizerLocationVerified || ['checked_in', 'completed'].includes(progressOutcome.id);
+  const panelVerified = verified || organizerLocationVerified || ['checked_in', 'completed'].includes(progressOutcome.id);
 
   return (
     <section className={`${styles.panel} ${panelVerified ? styles.panelVerified : ''}`} aria-label="Verifica presenza evento">
@@ -477,11 +476,9 @@ function AgendaEventVerificationPanel({
         <span className={styles.headerIcon} aria-hidden="true"><ShieldCheck size={20} /></span>
         <div>
           <small>{isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
-          <h3>{locationOptional ? 'Accesso allenamento abilitato' : panelVerified ? 'Presenza verificata' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
+          <h3>{panelVerified ? 'Presenza verificata' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
           <p>{panelVerified
-            ? locationOptional
-              ? 'Per questo account la posizione non è richiesta per aprire la sessione.'
-              : hasOutdoorTracking ? 'Il monitoraggio GPS dell’attività è ora sbloccato.' : hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
+            ? hasOutdoorTracking ? 'Il monitoraggio GPS dell’attività è ora sbloccato.' : hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
             : isOrganizer
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
               : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
@@ -538,7 +535,7 @@ function AgendaEventVerificationPanel({
           <span aria-hidden="true"><CheckCircle2 size={25} /></span>
           <div>
             <strong>{hasOutdoorTracking ? 'Attività live sbloccata' : hasWorkout ? 'Allenamento sbloccato' : 'Sessione attiva'}</strong>
-            <small>{locationOptional ? 'Accesso consentito senza verifica GPS; nessuna presenza o ricompensa viene assegnata automaticamente.' : hasOutdoorTracking ? 'Tempo, km, passo, dislivello e passi in tempo reale.' : hasWorkout ? 'Puoi iniziare la scheda preimpostata.' : 'Puoi seguire durata e stato dalla pagina evento.'}</small>
+            <small>{hasOutdoorTracking ? 'Tempo, km, passo, dislivello e passi in tempo reale.' : hasWorkout ? 'Puoi iniziare la scheda preimpostata.' : 'Puoi seguire durata e stato dalla pagina evento.'}</small>
           </div>
           <button type="button" onClick={hasOutdoorTracking ? onStartOutdoor : hasWorkout ? onStartWorkout : onOpenEvent}>
             {hasOutdoorTracking || hasWorkout ? <Play size={18} /> : <ArrowRight size={18} />}

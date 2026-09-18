@@ -20,7 +20,6 @@ import {
   XCircle
 } from 'lucide-react';
 import { api } from '../services/api';
-import { getAuthSession } from '../services/authSession';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
 import AgendaEventVerificationPanel from '../components/agenda/AgendaEventVerificationPanel';
@@ -34,7 +33,6 @@ import {
 } from '../utils/eventParticipationState';
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import { resolveEventPostSummary } from '../utils/eventPostSummary';
-import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
 import { getEventSessionTimeline } from '../utils/sessionTimeline';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
@@ -120,27 +118,6 @@ function formatEventTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '--:--';
   return new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' }).format(date);
-}
-
-function allowDirectWorkoutAccess(event, action, locationOptional, referenceTime) {
-  if (!locationOptional || !event) return action;
-  const timing = getEventTiming(event, referenceTime);
-  if (getEventSessionTimeline(event, timing, referenceTime).hasEnded) return action;
-  const outcome = resolveParticipantOutcome(event);
-  const hasAccessRole = Boolean(
-    event.is_personal ||
-    event.created_by === 'me' ||
-    event.is_going ||
-    ['confirmed', 'checked_in', 'completed'].includes(outcome.id)
-  );
-  if (!hasAccessRole) return action;
-  if (isOutdoorTrackedEvent(event)) {
-    return { ...action, label: 'Avvia attività', target: 'outdoor', disabled: false };
-  }
-  if (event.workout_plan) {
-    return { ...action, label: 'Avvia allenamento', target: 'workout', disabled: false };
-  }
-  return action;
 }
 
 function getAttendanceState(event) {
@@ -401,10 +378,6 @@ function AgendaPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showToast } = useToast();
-  const locationOptional = useMemo(
-    () => canAccessWorkoutWithoutLocation(getAuthSession()),
-    []
-  );
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -513,11 +486,11 @@ function AgendaPage() {
         return Boolean(isOrganizer || event?.is_personal || isParticipant);
       })
       .map((event) => {
-        const primaryAction = allowDirectWorkoutAccess(event, resolveEventPrimaryAction({
+        const primaryAction = resolveEventPrimaryAction({
           event,
           isOrganizer: event?.created_by === 'me' && !event?.is_personal,
           referenceTime: nowMs
-        }), locationOptional, nowMs);
+        });
         return {
           event,
           state: {
@@ -542,7 +515,7 @@ function AgendaPage() {
       });
 
     return candidates[0] || null;
-  }, [calendarEvents, locationOptional, nowMs, todayKey]);
+  }, [calendarEvents, nowMs, todayKey]);
 
   const requestedEventId = String(searchParams.get('verifyEvent') || '');
   const requestedAgendaEvent = useMemo(
@@ -553,11 +526,11 @@ function AgendaPage() {
   );
   const focusedSession = useMemo(() => {
     if (!requestedAgendaEvent) return todaySession;
-    const primaryAction = allowDirectWorkoutAccess(requestedAgendaEvent, resolveEventPrimaryAction({
+    const primaryAction = resolveEventPrimaryAction({
       event: requestedAgendaEvent,
       isOrganizer: requestedAgendaEvent?.created_by === 'me' && !requestedAgendaEvent?.is_personal,
       referenceTime: nowMs
-    }), locationOptional, nowMs);
+    });
     return {
       event: requestedAgendaEvent,
       state: {
@@ -568,7 +541,7 @@ function AgendaPage() {
         primaryAction
       }
     };
-  }, [locationOptional, nowMs, requestedAgendaEvent, todaySession]);
+  }, [nowMs, requestedAgendaEvent, todaySession]);
 
   useEffect(() => {
     if (!requestedEventId || !requestedAgendaEvent) return;
@@ -913,7 +886,6 @@ function AgendaPage() {
                 onStartWorkout={() => navigate(`/events/${event.id}/workout`)}
                 onStartOutdoor={() => navigate(`/events/${event.id}/activity`)}
                 onOpenEvent={() => navigate(`/events/${event.id}`)}
-                locationOptional={locationOptional}
               />
             ) : null}
           </section>

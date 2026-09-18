@@ -30,7 +30,6 @@ import {
   normalizeVenueType,
   resolveGymViewerAccess
 } from '../utils/eventVenueAccess';
-import { canAccessWorkoutWithoutLocation } from '../utils/workoutAccess';
 
 const STORAGE_KEY = 'motrice_operational_store_v2';
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
@@ -3287,7 +3286,6 @@ const localApi = {
   async startEventWorkout(eventId) {
     const store = loadStore();
     const currentUserId = resolveAuthUserId();
-    const locationOptional = canAccessWorkoutWithoutLocation(getAuthSession());
     const event = ensureEventExists(store, eventId);
     const eventKey = String(event.id);
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
@@ -3298,10 +3296,10 @@ const localApi = {
     if (!isOrganizer && !event.is_personal && !hasConfirmedParticipation) {
       throw new Error('Devi essere un partecipante accettato per aprire l allenamento');
     }
-    if (!locationOptional && isOrganizer && !event.is_personal && !flow.organizer_present && !hasParticipantCheckIn) {
+    if (isOrganizer && !event.is_personal && !flow.organizer_present && !hasParticipantCheckIn) {
       throw new Error('Scannerizza il QR di un partecipante oppure conferma la geolocalizzazione');
     }
-    if (!locationOptional && !isOrganizer && !event.is_personal && !flow.checked_in_at && Number(flow.cashback_percent || 0) < 60) {
+    if (!isOrganizer && !event.is_personal && !flow.checked_in_at && Number(flow.cashback_percent || 0) < 60) {
       throw new Error('Verifica prima la presenza');
     }
     const previous = store.workoutSessionsByEvent?.[eventKey] || {};
