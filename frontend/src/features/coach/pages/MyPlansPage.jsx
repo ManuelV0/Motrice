@@ -1263,7 +1263,7 @@ function MyPlansPage() {
               <label className={`${styles.fieldLabel} ${styles.fullField}`}><span>Recupero · secondi</span><input type="number" inputMode="numeric" min="0" step="15" value={editingExercise.recovery} onChange={(event) => setEditingExercise((current) => ({ ...current, recovery: event.target.value }))} /></label>
             </div>
             <div className={styles.recoveryPresets} aria-label="Scelte rapide recupero">
-              {[45, 60, 90, 120].map((seconds) => (
+              {[60, 90, 120, 180].map((seconds) => (
                 <button key={seconds} type="button" className={Number(editingExercise.recovery) === seconds ? styles.recoveryPresetActive : ''} onClick={() => setEditingExercise((current) => ({ ...current, recovery: seconds }))} aria-pressed={Number(editingExercise.recovery) === seconds}>
                   {seconds}s
                 </button>

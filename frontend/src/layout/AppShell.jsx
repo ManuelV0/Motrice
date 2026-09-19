@@ -4,6 +4,7 @@ import BottomNav from '../components/BottomNav';
 import SiteTourOverlay from '../components/SiteTourOverlay';
 import PullToRefresh from '../components/PullToRefresh';
 import ActiveEventLocationMonitor from '../components/ActiveEventLocationMonitor';
+import SmartArrivalMonitor from '../components/SmartArrivalMonitor';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useViewportInsets from '../hooks/useViewportInsets';
@@ -173,6 +174,7 @@ function AppShell({ children, persistentContent = null }) {
   return (
     <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
       <ActiveEventLocationMonitor enabled={authSession.isAuthenticated} />
+      <SmartArrivalMonitor enabled={authSession.isAuthenticated} />
       <PullToRefresh
         enabled={authSession.isAuthenticated && isRefreshableRoute && !isFullscreenEntryRoute && !isChatThreadRoute}
         edgeOnly={isMapSurfaceRoute}

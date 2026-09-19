@@ -111,6 +111,7 @@ function playFeedback(success) {
 function AgendaEventVerificationPanel({
   event,
   isOrganizer,
+  initialMethod = '',
   onClose,
   onVerified,
   onStartWorkout,
@@ -123,7 +124,11 @@ function AgendaEventVerificationPanel({
   const mode = String(event?.verification_mode || 'both').toLowerCase();
   const usesQr = mode === 'qr' || mode === 'both';
   const usesGeo = mode === 'geo' || mode === 'gps' || mode === 'both';
-  const [method, setMethod] = useState(mode === 'qr' ? 'qr' : usesQr && usesGeo ? '' : 'geo');
+  const [method, setMethod] = useState(() => {
+    if (initialMethod === 'qr' && usesQr) return 'qr';
+    if (initialMethod === 'geo' && usesGeo) return 'geo';
+    return mode === 'qr' ? 'qr' : usesQr && usesGeo ? '' : 'geo';
+  });
   const [progress, setProgress] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [loading, setLoading] = useState(!isOrganizer);
@@ -150,6 +155,11 @@ function AgendaEventVerificationPanel({
   const extensionOptions = [15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
+
+  useEffect(() => {
+    if (initialMethod === 'qr' && usesQr) setMethod('qr');
+    else if (initialMethod === 'geo' && usesGeo) setMethod('geo');
+  }, [event?.id, initialMethod, usesGeo, usesQr]);
 
   const activateLocationTracking = useCallback(async (location, source = 'gps') => {
     if (!usesGeo || !location || trackingStartedRef.current || !event?.id) return;

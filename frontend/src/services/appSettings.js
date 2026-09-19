@@ -6,6 +6,7 @@ export const WORKOUT_SOUND_STORAGE_KEY = 'motrice.workoutCountdownSound';
 
 export const DEFAULT_APP_SETTINGS = Object.freeze({
   mapTheme: 'satellite',
+  smartArrivalEnabled: true,
   workoutCountdownSound: true,
   workoutVibration: true,
   keepWorkoutScreenAwake: true
@@ -18,6 +19,7 @@ export function normalizeMapTheme(value) {
 export function normalizeAppSettings(value = {}) {
   return {
     mapTheme: normalizeMapTheme(value?.mapTheme),
+    smartArrivalEnabled: value?.smartArrivalEnabled !== false,
     workoutCountdownSound: value?.workoutCountdownSound !== false,
     workoutVibration: value?.workoutVibration !== false,
     keepWorkoutScreenAwake: value?.keepWorkoutScreenAwake !== false

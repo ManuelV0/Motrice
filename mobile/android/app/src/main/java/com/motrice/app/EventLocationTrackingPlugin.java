@@ -594,6 +594,91 @@ public class EventLocationTrackingPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void startArrivalMonitoring(PluginCall call) {
+        boolean hasFine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED;
+        if (!hasFine) {
+            call.reject("Posizione precisa non concessa", "MOTRICE_PRECISE_LOCATION_REQUIRED");
+            return;
+        }
+
+        requestNotificationPermissionIfNeeded();
+        String eventId = call.getString("eventId", "").trim();
+        Double latitude = call.getDouble("latitude");
+        Double longitude = call.getDouble("longitude");
+        Double expectedEndAt = numericDouble(call, "expectedEndAtMs");
+        Double radiusM = call.getDouble("radiusM", 250.0);
+        if (eventId.isEmpty()
+                || !isFiniteNumber(latitude)
+                || !isFiniteNumber(longitude)
+                || !isFiniteNumber(expectedEndAt)
+                || !isFiniteNumber(radiusM)) {
+            call.reject("Configurazione arrivo incompleta", "MOTRICE_ARRIVAL_INVALID_CONFIGURATION");
+            return;
+        }
+        if (latitude < -90.0 || latitude > 90.0 || longitude < -180.0 || longitude > 180.0) {
+            call.reject("Coordinate evento non valide", "MOTRICE_ARRIVAL_INVALID_COORDINATES");
+            return;
+        }
+        if (expectedEndAt.longValue() <= System.currentTimeMillis()) {
+            call.reject("La finestra di check-in e terminata", "MOTRICE_ARRIVAL_EXPIRED");
+            return;
+        }
+
+        JSObject current = EventLocationService.readStatus(getContext());
+        if (current.optBoolean("active", false)
+                && "presence".equals(current.optString("trackingMode", ""))) {
+            call.reject("E gia attivo il monitoraggio di un evento", "MOTRICE_TRACKING_ALREADY_ACTIVE");
+            return;
+        }
+
+        try {
+            EventLocationService.saveArrivalConfiguration(
+                    getContext(),
+                    eventId,
+                    call.getString("eventTitle", "Evento Motrice"),
+                    latitude,
+                    longitude,
+                    Math.max(50.0, Math.min(5000.0, radiusM)),
+                    expectedEndAt.longValue(),
+                    Math.max(5000L, call.getDouble("intervalMs", 15000.0).longValue())
+            );
+            Intent intent = new Intent(getContext(), EventLocationService.class);
+            intent.setAction(EventLocationService.ACTION_START);
+            ContextCompat.startForegroundService(getContext(), intent);
+            call.resolve(EventLocationService.readStatus(getContext()));
+        } catch (RuntimeException error) {
+            EventLocationService.stopArrivalMonitoring(getContext(), false);
+            call.reject(
+                    "L arrivo intelligente non puo essere avviato su questo dispositivo",
+                    "MOTRICE_ARRIVAL_START_FAILED"
+            );
+        }
+    }
+
+    @PluginMethod
+    public void stopArrivalMonitoring(PluginCall call) {
+        try {
+            EventLocationService.stopArrivalMonitoring(
+                    getContext(),
+                    Boolean.TRUE.equals(call.getBoolean("clearDetection", false))
+            );
+            JSObject status = EventLocationService.readStatus(getContext());
+            if ("arrival".equals(status.optString("trackingMode", ""))) {
+                getContext().stopService(new Intent(getContext(), EventLocationService.class));
+            }
+            call.resolve(status);
+        } catch (RuntimeException error) {
+            call.resolve(EventLocationService.readStatus(getContext()));
+        }
+    }
+
+    @PluginMethod
+    public void getArrivalStatus(PluginCall call) {
+        call.resolve(EventLocationService.readStatus(getContext()));
+    }
+
+    @PluginMethod
     public void startTracking(PluginCall call) {
         boolean hasFine = ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;

@@ -13,14 +13,15 @@ test('normalizeAppSettings keeps safe beta defaults', () => {
   assert.deepEqual(normalizeAppSettings({}), DEFAULT_APP_SETTINGS);
   assert.deepEqual(normalizeAppSettings({
     mapTheme: 'light',
+    smartArrivalEnabled: false,
     workoutCountdownSound: false,
     workoutVibration: false,
     keepWorkoutScreenAwake: false
   }), {
     mapTheme: 'light',
+    smartArrivalEnabled: false,
     workoutCountdownSound: false,
     workoutVibration: false,
     keepWorkoutScreenAwake: false
   });
 });
-

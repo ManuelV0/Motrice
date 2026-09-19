@@ -271,9 +271,17 @@ function SettingsPage() {
           open={openSection === 'location'}
           onToggle={() => toggleSection('location')}
         >
+          <div className={styles.rows}>
+            <SettingRow
+              icon={BellRing}
+              title="Arrivo intelligente"
+              description="Ti avvisa quando entri nell’area; il check-in resta sempre manuale"
+              action={<SettingSwitch checked={appSettings.smartArrivalEnabled} label="Arrivo intelligente" onChange={(value) => patchAppSettings({ smartArrivalEnabled: value })} />}
+            />
+          </div>
           <div className={styles.locationCard}>
             <LocateFixed size={20} aria-hidden="true" />
-            <div><strong>Controllo posizione</strong><small>Usata in tempo reale soltanto quando serve per mappa, check-in o evento attivo.</small></div>
+            <div><strong>Controllo posizione</strong><small>Usata soltanto per mappa, arrivo intelligente, check-in o evento attivo.</small></div>
             <button type="button" onClick={location.permission === 'denied' ? openSystemSettings : verifyLocation} disabled={location.requesting}>
               {location.requesting ? 'Verifico…' : location.permission === 'denied' ? 'Autorizza' : 'Verifica'}
             </button>

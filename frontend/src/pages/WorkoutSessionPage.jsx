@@ -11,6 +11,7 @@ import {
   MapPin,
   Pause,
   Play,
+  Save,
   Star,
   Undo2,
   Volume2,
@@ -31,6 +32,18 @@ import {
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
 import { getAppSettings, updateAppSettings } from '../services/appSettings';
+import {
+  cachePersonalWorkoutPlans,
+  canSyncPersonalWorkoutPlans,
+  listAvailablePersonalWorkoutPlans,
+  listCachedPersonalWorkoutPlans,
+  upsertPersonalWorkoutPlan
+} from '../features/coach/services/personalWorkoutPlansApi';
+import {
+  applyWorkoutPlanSessionUpdate,
+  buildWorkoutPlanUpdatePreview,
+  findOwnedLinkedWorkoutPlan
+} from '../utils/workoutPlanSessionUpdate';
 import styles from '../styles/pages/workoutSession.module.css';
 
 function formatClock(totalSeconds) {
@@ -53,6 +66,12 @@ function isOrganizerForEvent(event, auth) {
   );
 }
 
+function formatPlanChangeValue(field, value) {
+  if (field === 'weight') return Number(value) > 0 ? `${Number(value).toLocaleString('it-IT')} kg` : 'Corpo libero';
+  if (field === 'recovery') return formatClock(value);
+  return String(value);
+}
+
 function WorkoutSessionPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -73,6 +92,9 @@ function WorkoutSessionPage() {
   const [exerciseDraft, setExerciseDraft] = useState(null);
   const [selfRatingDismissed, setSelfRatingDismissed] = useState(false);
   const [reviewTargetCount, setReviewTargetCount] = useState(0);
+  const [linkedWorkoutPlan, setLinkedWorkoutPlan] = useState(null);
+  const [planUpdateOpen, setPlanUpdateOpen] = useState(false);
+  const [planUpdateBusy, setPlanUpdateBusy] = useState(false);
   const [countdownSoundEnabled, setCountdownSoundEnabled] = useState(() => getAppSettings().workoutCountdownSound);
   const [workoutVibrationEnabled, setWorkoutVibrationEnabled] = useState(() => getAppSettings().workoutVibration);
   const [keepWorkoutScreenAwake, setKeepWorkoutScreenAwake] = useState(() => getAppSettings().keepWorkoutScreenAwake);
@@ -149,6 +171,25 @@ function WorkoutSessionPage() {
     return () => { active = false; };
   }, [auth, id]);
 
+  useEffect(() => {
+    const linkedRemoteId = String(event?.scheda_id || event?.workout_plan?.remoteId || '').trim();
+    if (!linkedRemoteId) {
+      setLinkedWorkoutPlan(null);
+      return undefined;
+    }
+
+    let active = true;
+    listAvailablePersonalWorkoutPlans()
+      .then((plans) => {
+        if (!active) return;
+        setLinkedWorkoutPlan(findOwnedLinkedWorkoutPlan(plans, linkedRemoteId));
+      })
+      .catch(() => {
+        if (active) setLinkedWorkoutPlan(null);
+      });
+    return () => { active = false; };
+  }, [event?.scheda_id, event?.workout_plan?.remoteId]);
+
   const exercises = useMemo(
     () => normalizeWorkoutExercises(event?.workout_plan?.exercises),
     [event?.workout_plan?.exercises]
@@ -157,6 +198,11 @@ function WorkoutSessionPage() {
     ...exercise,
     ...(session?.exerciseOverrides?.[exercise.id] || {})
   })), [exercises, session?.exerciseOverrides]);
+  const planUpdatePreview = useMemo(() => buildWorkoutPlanUpdatePreview({
+    plan: linkedWorkoutPlan,
+    liveExercises,
+    exerciseLoads: session?.exerciseLoads
+  }), [linkedWorkoutPlan, liveExercises, session?.exerciseLoads]);
   const totals = useMemo(() => {
     const totalSets = liveExercises.reduce((sum, exercise) => sum + exercise.sets, 0);
     const completedSets = liveExercises.reduce(
@@ -290,6 +336,20 @@ function WorkoutSessionPage() {
       window.removeEventListener('keydown', closeOnEscape);
     };
   }, [editingExerciseId]);
+
+  useEffect(() => {
+    if (!planUpdateOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (keyboardEvent) => {
+      if (keyboardEvent.key === 'Escape' && !planUpdateBusy) setPlanUpdateOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [planUpdateBusy, planUpdateOpen]);
 
   useEffect(() => {
     if (!session || totals.percent < 60 || session.sixtyPercentAwarded) return;
@@ -596,6 +656,60 @@ function WorkoutSessionPage() {
     setSession(saveWorkoutSession(id, next));
     vibrate(35);
     showToast('Autovalutazione allenamento salvata', 'success');
+  }
+
+  function cacheUpdatedWorkoutPlan(nextPlan) {
+    const cachedPlans = listCachedPersonalWorkoutPlans();
+    const matchingIndex = cachedPlans.findIndex((plan) => String(plan?.id) === String(nextPlan?.id));
+    cachePersonalWorkoutPlans(
+      matchingIndex >= 0
+        ? cachedPlans.map((plan, index) => (index === matchingIndex ? nextPlan : plan))
+        : [nextPlan, ...cachedPlans]
+    );
+  }
+
+  async function applyLiveValuesToWorkoutPlan() {
+    if (!session?.completedAt || !linkedWorkoutPlan || !planUpdatePreview.length || planUpdateBusy) return;
+    setPlanUpdateBusy(true);
+    const appliedAt = new Date().toISOString();
+    const localPlan = applyWorkoutPlanSessionUpdate(linkedWorkoutPlan, planUpdatePreview, appliedAt);
+    let savedPlan = localPlan;
+    let synchronized = false;
+
+    cacheUpdatedWorkoutPlan(localPlan);
+    try {
+      if (canSyncPersonalWorkoutPlans()) {
+        savedPlan = await upsertPersonalWorkoutPlan(localPlan);
+        cacheUpdatedWorkoutPlan(savedPlan);
+        synchronized = true;
+      }
+      setLinkedWorkoutPlan(savedPlan);
+      const nextSession = {
+        ...session,
+        planUpdateAppliedAt: appliedAt,
+        planUpdatePlanId: savedPlan.id
+      };
+      setSession(saveWorkoutSession(id, nextSession));
+      setPlanUpdateOpen(false);
+      showToast(
+        synchronized
+          ? 'Scheda aggiornata e sincronizzata'
+          : 'Scheda aggiornata sul dispositivo',
+        'success'
+      );
+    } catch {
+      setLinkedWorkoutPlan(localPlan);
+      const nextSession = {
+        ...session,
+        planUpdateAppliedAt: appliedAt,
+        planUpdatePlanId: localPlan.id
+      };
+      setSession(saveWorkoutSession(id, nextSession));
+      setPlanUpdateOpen(false);
+      showToast('Scheda aggiornata sul dispositivo. La sincronizzazione verrà riprovata.', 'info');
+    } finally {
+      setPlanUpdateBusy(false);
+    }
   }
 
   if (loading) {
@@ -911,22 +1025,38 @@ function WorkoutSessionPage() {
         </section>
 
         {session.completedAt ? (
-          <section className={styles.completedCard}>
-            <span><Check size={30} /></span>
-            <div>
-              <small>SESSIONE COMPLETATA</small>
-              <h2>Ottimo allenamento</h2>
-              <p>
-                +25 XP accreditati.
-                {reviewTargetCount > 0 ? ' Puoi ottenere altri +25 XP valutando chi si è allenato con te.' : ''}
-              </p>
-              {session.selfRating ? (
-                <span className={styles.savedSelfRating} aria-label={`Autovalutazione ${session.selfRating} su 5`}>
-                  <Star size={14} fill="currentColor" aria-hidden="true" /> La tua valutazione: {session.selfRating}/5
-                </span>
-              ) : null}
-            </div>
-          </section>
+          <>
+            <section className={styles.completedCard}>
+              <span><Check size={30} /></span>
+              <div>
+                <small>SESSIONE COMPLETATA</small>
+                <h2>Ottimo allenamento</h2>
+                <p>
+                  +25 XP accreditati.
+                  {reviewTargetCount > 0 ? ' Puoi ottenere altri +25 XP valutando chi si è allenato con te.' : ''}
+                </p>
+                {session.selfRating ? (
+                  <span className={styles.savedSelfRating} aria-label={`Autovalutazione ${session.selfRating} su 5`}>
+                    <Star size={14} fill="currentColor" aria-hidden="true" /> La tua valutazione: {session.selfRating}/5
+                  </span>
+                ) : null}
+              </div>
+            </section>
+            {linkedWorkoutPlan && planUpdatePreview.length > 0 && !session.planUpdateAppliedAt ? (
+              <section className={styles.planUpdateCard}>
+                <span><Save size={21} aria-hidden="true" /></span>
+                <div>
+                  <small>SCHEDA PERSONALE</small>
+                  <strong>Aggiorna con i valori di oggi</strong>
+                  <p>{planUpdatePreview.length} {planUpdatePreview.length === 1 ? 'esercizio modificato' : 'esercizi modificati'} durante il live.</p>
+                </div>
+                <button type="button" onClick={() => setPlanUpdateOpen(true)}>Controlla</button>
+              </section>
+            ) : null}
+            {linkedWorkoutPlan && session.planUpdateAppliedAt ? (
+              <p className={styles.planUpdateDone}><CheckCircle2 size={17} aria-hidden="true" /> Scheda aggiornata con i valori di questo allenamento</p>
+            ) : null}
+          </>
         ) : (
           <button type="button" className={`${styles.finishButton} ${totals.percent >= 100 ? styles.finishButtonReady : ''}`} disabled={totals.percent < 100 || busy} onClick={finishWorkout}>
             <CheckCircle2 /> {totals.percent < 100 ? `Completa ancora ${totals.totalSets - totals.completedSets} serie` : busy ? 'Salvataggio…' : 'Termina allenamento · +25 XP'}
@@ -1020,6 +1150,56 @@ function WorkoutSessionPage() {
 
             <p className={styles.liveEditorNote}>Le modifiche valgono solo per questo allenamento. La scheda originale rimane invariata.</p>
             <button type="button" className={styles.liveEditorApply} onClick={applyExerciseDraft}>Applica alla sessione</button>
+          </section>
+        </div>,
+        document.body
+      ) : null}
+
+      {planUpdateOpen && linkedWorkoutPlan && planUpdatePreview.length > 0 ? createPortal(
+        <div
+          className={styles.liveEditorBackdrop}
+          onPointerDown={() => { if (!planUpdateBusy) setPlanUpdateOpen(false); }}
+        >
+          <section
+            className={`${styles.liveEditorSheet} ${styles.planUpdateSheet}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="plan-update-title"
+            onPointerDown={(pointerEvent) => pointerEvent.stopPropagation()}
+          >
+            <span className={styles.liveEditorHandle} aria-hidden="true" />
+            <header className={styles.liveEditorHeader}>
+              <div>
+                <small>CONFERMA AGGIORNAMENTO</small>
+                <h2 id="plan-update-title">{linkedWorkoutPlan.title}</h2>
+              </div>
+              <button type="button" onClick={() => setPlanUpdateOpen(false)} disabled={planUpdateBusy}>Annulla</button>
+            </header>
+            <p className={styles.planUpdateIntro}>Controlla le differenze. Nulla viene cambiato finché non confermi.</p>
+            <div className={styles.planUpdateList}>
+              {planUpdatePreview.map((exercise) => (
+                <article key={`${exercise.planExerciseIndex}-${exercise.exerciseId}`}>
+                  <strong>{exercise.name}</strong>
+                  <div>
+                    {exercise.changes.map((change) => (
+                      <span key={change.field}>
+                        <small>{change.label}</small>
+                        <del>{formatPlanChangeValue(change.field, change.before)}</del>
+                        <b aria-hidden="true">→</b>
+                        <ins>{formatPlanChangeValue(change.field, change.after)}</ins>
+                      </span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+            <p className={styles.liveEditorNote}>L’aggiornamento riguarda solo la tua scheda personale. Lo storico dell’allenamento rimane invariato.</p>
+            <button
+              type="button"
+              className={styles.liveEditorApply}
+              onClick={applyLiveValuesToWorkoutPlan}
+              disabled={planUpdateBusy}
+            >{planUpdateBusy ? 'Aggiornamento…' : 'Aggiorna la scheda'}</button>
           </section>
         </div>,
         document.body

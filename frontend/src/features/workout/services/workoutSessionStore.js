@@ -187,6 +187,8 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
     sixtyPercentAwarded: Boolean(previous?.sixtyPercentAwarded || remote?.mot_sixty_awarded),
     completionAwarded: Boolean(previous?.completionAwarded || remote?.xp_completion_awarded),
     selfRating: Math.max(0, Math.min(5, Math.round(Number(previous?.selfRating) || 0))),
-    reviewSubmitted: Boolean(previous?.reviewSubmitted || remote?.review_submitted)
+    reviewSubmitted: Boolean(previous?.reviewSubmitted || remote?.review_submitted),
+    planUpdateAppliedAt: previous?.planUpdateAppliedAt || null,
+    planUpdatePlanId: previous?.planUpdatePlanId || null
   });
 }

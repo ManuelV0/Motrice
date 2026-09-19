@@ -1,6 +1,7 @@
 package com.motrice.app;
 
 import android.Manifest;
+import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -42,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TimeZone;
@@ -56,7 +58,9 @@ public class EventLocationService extends Service implements LocationListener {
 
     private static final String PREFS = "motrice_event_location_tracking";
     private static final String CHANNEL_ID = "motrice_event_presence";
+    private static final String ARRIVAL_CHANNEL_ID = "motrice_events";
     private static final int NOTIFICATION_ID = 6210;
+    private static final int ARRIVAL_NOTIFICATION_ID = 6211;
     private static final int MAX_PENDING = 720;
     private static final Object QUEUE_LOCK = new Object();
 
@@ -85,6 +89,7 @@ public class EventLocationService extends Service implements LocationListener {
         boolean isNewEvent = !eventId.equals(values.getString("eventId", ""));
         SharedPreferences.Editor editor = values.edit()
                 .putBoolean("active", true)
+                .putString("trackingMode", "presence")
                 .putString("eventId", eventId)
                 .putString("eventTitle", eventTitle)
                 .putLong("latitudeBits", Double.doubleToRawLongBits(latitude))
@@ -97,6 +102,8 @@ public class EventLocationService extends Service implements LocationListener {
                 .putString("refreshToken", refreshToken)
                 .putLong("intervalMs", intervalMs)
                 .putString("activityKind", activityKind == null ? "" : activityKind)
+                .putBoolean("arrivalDetected", false)
+                .remove("arrivalDetectedAt")
                 .putString("lastError", "");
         if (isNewEvent) {
             editor
@@ -115,6 +122,32 @@ public class EventLocationService extends Service implements LocationListener {
         editor.apply();
     }
 
+    public static void saveArrivalConfiguration(
+            Context context,
+            String eventId,
+            String eventTitle,
+            double latitude,
+            double longitude,
+            double radiusM,
+            long expectedEndAtMs,
+            long intervalMs
+    ) {
+        prefs(context).edit()
+                .putBoolean("active", true)
+                .putString("trackingMode", "arrival")
+                .putString("eventId", eventId)
+                .putString("eventTitle", eventTitle)
+                .putLong("latitudeBits", Double.doubleToRawLongBits(latitude))
+                .putLong("longitudeBits", Double.doubleToRawLongBits(longitude))
+                .putLong("radiusBits", Double.doubleToRawLongBits(radiusM))
+                .putLong("expectedEndAtMs", expectedEndAtMs)
+                .putLong("intervalMs", intervalMs)
+                .putBoolean("arrivalDetected", false)
+                .remove("arrivalDetectedAt")
+                .putString("lastError", "")
+                .apply();
+    }
+
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
@@ -127,7 +160,11 @@ public class EventLocationService extends Service implements LocationListener {
         SharedPreferences values = prefs(context);
         JSObject result = new JSObject();
         result.put("active", values.getBoolean("active", false));
+        result.put("trackingMode", values.getString("trackingMode", ""));
         result.put("eventId", values.getString("eventId", ""));
+        result.put("eventTitle", values.getString("eventTitle", ""));
+        result.put("arrivalDetected", values.getBoolean("arrivalDetected", false));
+        result.put("arrivalDetectedAtMs", values.getLong("arrivalDetectedAt", 0L));
         result.put("lastPingAt", values.getString("lastPingAt", null));
         result.put("lastError", values.getString("lastError", ""));
         result.put("pendingPingCount", readQueue(context).length());
@@ -161,6 +198,16 @@ public class EventLocationService extends Service implements LocationListener {
     public static void markStopped(Context context, boolean clearCredentials) {
         SharedPreferences.Editor editor = prefs(context).edit().putBoolean("active", false);
         if (clearCredentials) editor.remove("accessToken").remove("refreshToken");
+        editor.apply();
+    }
+
+    public static void stopArrivalMonitoring(Context context, boolean clearDetection) {
+        SharedPreferences values = prefs(context);
+        if (!"arrival".equals(values.getString("trackingMode", ""))) return;
+        SharedPreferences.Editor editor = values.edit().putBoolean("active", false);
+        if (clearDetection) {
+            editor.putBoolean("arrivalDetected", false).remove("arrivalDetectedAt");
+        }
         editor.apply();
     }
 
@@ -242,7 +289,7 @@ public class EventLocationService extends Service implements LocationListener {
         try {
             startForeground(
                     NOTIFICATION_ID,
-                    buildNotification(values.getString("eventTitle", "Evento Motrice"))
+                    buildNotification(values)
             );
         } catch (RuntimeException error) {
             setError("Monitoraggio GPS non disponibile su questo dispositivo");
@@ -256,7 +303,9 @@ public class EventLocationService extends Service implements LocationListener {
         }
         scheduleExpiration(expectedEndAt);
         startLocationUpdates();
-        executeUploadSafely(this::uploadPendingPings);
+        if (!"arrival".equals(values.getString("trackingMode", ""))) {
+            executeUploadSafely(this::uploadPendingPings);
+        }
         return START_STICKY;
     }
 
@@ -272,10 +321,23 @@ public class EventLocationService extends Service implements LocationListener {
         channel.enableVibration(false);
         channel.setLightColor(Color.parseColor("#C6FF00"));
         NotificationManager manager = getSystemService(NotificationManager.class);
-        if (manager != null) manager.createNotificationChannel(channel);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
+            NotificationChannel arrivalChannel = new NotificationChannel(
+                    ARRIVAL_CHANNEL_ID,
+                    "Eventi e sicurezza",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            arrivalChannel.setDescription("Check-in, arrivo e avvisi degli eventi Motrice");
+            arrivalChannel.enableVibration(true);
+            arrivalChannel.setLightColor(Color.parseColor("#C6FF00"));
+            manager.createNotificationChannel(arrivalChannel);
+        }
     }
 
-    private Notification buildNotification(String eventTitle) {
+    private Notification buildNotification(SharedPreferences values) {
+        String eventTitle = values.getString("eventTitle", "Evento Motrice");
+        boolean arrivalMode = "arrival".equals(values.getString("trackingMode", ""));
         Intent launchIntent = new Intent(this, MainActivity.class);
         launchIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
@@ -286,14 +348,39 @@ public class EventLocationService extends Service implements LocationListener {
         );
         return new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_monochrome)
-                .setContentTitle("Presenza Motrice attiva")
-                .setContentText(eventTitle + " · posizione verificata in background")
+                .setContentTitle(arrivalMode ? "Arrivo intelligente attivo" : "Presenza Motrice attiva")
+                .setContentText(arrivalMode
+                        ? eventTitle + " · ti avvisiamo quando raggiungi il luogo"
+                        : eventTitle + " · posizione verificata in background")
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
+    }
+
+    private void notifyArrival(SharedPreferences values) {
+        Intent launchIntent = new Intent(this, MainActivity.class);
+        launchIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        launchIntent.putExtra("motriceArrivalEventId", values.getString("eventId", ""));
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+                this,
+                ARRIVAL_NOTIFICATION_ID,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        Notification notification = new NotificationCompat.Builder(this, ARRIVAL_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_monochrome)
+                .setContentTitle("Sei arrivato?")
+                .setContentText("Conferma ora la presenza a " + values.getString("eventTitle", "questo evento") + ".")
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build();
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) manager.notify(ARRIVAL_NOTIFICATION_ID, notification);
     }
 
     private void startLocationUpdates() {
@@ -356,6 +443,11 @@ public class EventLocationService extends Service implements LocationListener {
             return;
         }
 
+        if ("arrival".equals(values.getString("trackingMode", ""))) {
+            handleArrivalLocation(values, location);
+            return;
+        }
+
         updateActivityMetrics(location);
         JSONObject ping = new JSONObject();
         try {
@@ -373,6 +465,53 @@ public class EventLocationService extends Service implements LocationListener {
         } catch (JSONException error) {
             setError("Campione posizione non valido");
         }
+    }
+
+    private void handleArrivalLocation(SharedPreferences values, @NonNull Location location) {
+        double radiusM = Math.max(50.0, readDouble(values, "radiusBits", 250.0));
+        float maximumAccuracyM = (float) Math.min(100.0, Math.max(35.0, radiusM / 2.0));
+        if (!location.hasAccuracy() || location.getAccuracy() < 0f || location.getAccuracy() > maximumAccuracyM) {
+            return;
+        }
+
+        Location eventLocation = new Location("motrice_event");
+        eventLocation.setLatitude(readDouble(values, "latitudeBits", 0.0));
+        eventLocation.setLongitude(readDouble(values, "longitudeBits", 0.0));
+        float distanceM = location.distanceTo(eventLocation);
+        if (!Float.isFinite(distanceM) || distanceM + location.getAccuracy() > radiusM) return;
+
+        long detectedAt = System.currentTimeMillis();
+        values.edit()
+                .putBoolean("active", false)
+                .putBoolean("arrivalDetected", true)
+                .putLong("arrivalDetectedAt", detectedAt)
+                .putString("lastPingAt", isoTimestamp(detectedAt))
+                .putString("lastError", "")
+                .apply();
+        if (!isAppInForeground()) {
+            try {
+                notifyArrival(values);
+            } catch (RuntimeException error) {
+                setError("Avviso di arrivo non disponibile");
+            }
+        }
+        stopLocationUpdates();
+        stopForegroundAndSelfSafely();
+    }
+
+    private boolean isAppInForeground() {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (manager == null) return false;
+        List<ActivityManager.RunningAppProcessInfo> processes = manager.getRunningAppProcesses();
+        if (processes == null) return false;
+        String packageName = getPackageName();
+        for (ActivityManager.RunningAppProcessInfo process : processes) {
+            if (packageName.equals(process.processName)) {
+                return process.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+                        || process.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE;
+            }
+        }
+        return false;
     }
 
     private void updateActivityMetrics(@NonNull Location location) {
@@ -616,6 +755,11 @@ public class EventLocationService extends Service implements LocationListener {
         finishing = true;
         mainHandler.removeCallbacks(expirationTask);
         stopLocationUpdates();
+        if ("arrival".equals(prefs(this).getString("trackingMode", ""))) {
+            stopArrivalMonitoring(this, false);
+            stopForegroundAndSelfSafely();
+            return;
+        }
         boolean scheduled = executeUploadSafely(() -> {
             uploadPendingPings();
             try {

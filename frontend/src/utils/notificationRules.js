@@ -8,6 +8,7 @@ const EVENT_SECURITY_TYPES = new Set([
   'event_minimum_reached',
   'event_checkin_verified',
   'event_checkin_reminder',
+  'event_arrival_detected',
   'event_checkin_closing',
   'event_starting_soon',
   'event_presence_warning',

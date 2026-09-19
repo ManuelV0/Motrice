@@ -360,6 +360,11 @@
   white-space: nowrap;
 }
 
+.extraContent {
+  min-width: 0;
+  border-top: 1px solid #282b27;
+}
+
 .statsGrid small {
   color: #7f857c;
   font-size: 0.62rem;

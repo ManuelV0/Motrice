@@ -860,6 +860,159 @@
   outline: none;
 }
 
+.smartArrival {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  padding: 0.72rem 0.82rem;
+  background: linear-gradient(135deg, rgb(198 255 0 / 5%), rgb(255 255 255 / 1.5%));
+}
+
+.smartArrival[data-tone='warning'] {
+  background: linear-gradient(135deg, rgb(255 190 72 / 7%), rgb(255 255 255 / 1.5%));
+}
+
+.smartArrivalDetected {
+  border-top-color: rgb(198 255 0 / 28%);
+  background:
+    radial-gradient(circle at 0 0, rgb(198 255 0 / 14%), transparent 48%),
+    #121612;
+}
+
+.smartArrivalSuccess {
+  background: rgb(198 255 0 / 6%);
+}
+
+.smartArrivalIcon {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.7rem;
+  background: rgb(198 255 0 / 10%);
+  color: var(--accent);
+}
+
+.smartArrival[data-tone='warning'] .smartArrivalIcon {
+  background: rgb(255 190 72 / 11%);
+  color: #ffc35b;
+}
+
+.smartArrivalCopy {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.smartArrivalCopy strong {
+  color: #f2f4ef;
+  font-size: 0.76rem;
+  line-height: 1.2;
+}
+
+.smartArrivalCopy small {
+  overflow: hidden;
+  color: #969c93;
+  font-size: 0.67rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+.smartArrivalSwitch {
+  position: relative;
+  width: 2.35rem;
+  height: 1.3rem;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid #3a3e38;
+  border-radius: 999px;
+  background: #242724;
+}
+
+.smartArrivalSwitch > span {
+  position: absolute;
+  top: 50%;
+  left: 0.17rem;
+  width: 0.86rem;
+  height: 0.86rem;
+  border-radius: 50%;
+  background: #8f958c;
+  transform: translateY(-50%);
+  transition: left 160ms ease, background 160ms ease;
+}
+
+.smartArrivalSwitchOn {
+  border-color: rgb(198 255 0 / 45%);
+  background: rgb(198 255 0 / 15%);
+}
+
+.smartArrivalSwitchOn > span {
+  left: 1.24rem;
+  background: var(--accent);
+}
+
+.smartArrivalPermission {
+  grid-column: 2 / -1;
+  justify-self: end;
+  min-height: 1.75rem;
+  padding: 0 0.6rem;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  background: #202320;
+  color: #dfe3dc;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.smartArrivalActions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto;
+  gap: 0.42rem;
+  padding-top: 0.18rem;
+}
+
+.smartArrivalActions button {
+  min-width: 0;
+  min-height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32rem;
+  padding: 0.38rem 0.56rem;
+  border: 1px solid #343834;
+  border-radius: 0.75rem;
+  background: #202320;
+  color: #e8ebe5;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.smartArrivalActions .smartArrivalPrimary {
+  border-color: rgb(198 255 0 / 52%);
+  background: var(--accent);
+  color: #10130c;
+}
+
+.smartArrivalActions .smartArrivalLater {
+  padding-inline: 0.5rem;
+  background: transparent;
+  color: #969c93;
+}
+
+@media (max-width: 390px) {
+  .smartArrivalActions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .smartArrivalActions .smartArrivalLater {
+    grid-column: 1 / -1;
+    min-height: 1.75rem;
+  }
+}
+
 .sheetEventCard {
   display: grid;
   gap: var(--s-3);

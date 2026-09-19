@@ -44,6 +44,7 @@ function EventCard({
   secondaryAction,
   detailsLabel = 'Dettagli',
   detailsIconOnly = false,
+  extraContent = null,
   onSelect,
   onToggleSave,
   onBookGroup,
@@ -167,6 +168,8 @@ function EventCard({
           ))}
         </div>
       ) : null}
+
+      {extraContent ? <div className={styles.extraContent}>{extraContent}</div> : null}
 
       {hasActions ? (
         <div className={styles.actions}>

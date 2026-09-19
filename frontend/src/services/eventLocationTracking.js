@@ -330,7 +330,7 @@ export async function resumeEventLocationTracking() {
   if (!active) {
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
       const orphanStatus = await NativeTracking.getStatus().catch(() => null);
-      if (orphanStatus?.active) {
+      if (orphanStatus?.active && orphanStatus?.trackingMode !== 'arrival') {
         await NativeTracking.stopTracking({ clearCredentials: false }).catch(() => undefined);
       }
     }

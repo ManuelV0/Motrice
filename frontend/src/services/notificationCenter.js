@@ -275,6 +275,39 @@ export async function scheduleEventReminders() {
   return { scheduled: reminders.length };
 }
 
+export async function showSmartArrivalNotification(event) {
+  if (!event?.id) return { delivered: false, reason: 'invalid_event' };
+  const path = `/agenda?verifyEvent=${encodeURIComponent(String(event.id))}&arrival=1`;
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('motrice:smart-arrival-detected', {
+      detail: { eventId: String(event.id), path }
+    }));
+  }
+
+  if (!isNativeDevice()) return { delivered: false, reason: 'web', path };
+  const permission = await LocalNotifications.checkPermissions().catch(() => ({ display: 'denied' }));
+  if (permission.display !== 'granted') return { delivered: false, reason: permission.display, path };
+
+  const eventName = event.title || event.sport_name || 'il tuo evento';
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: stableNotificationId(`smart-arrival:${event.id}`),
+      title: 'Sei arrivato?',
+      body: `Conferma ora la presenza a ${eventName}.`,
+      channelId: 'motrice_events',
+      schedule: { at: new Date(Date.now() + 250), allowWhileIdle: true },
+      extra: {
+        type: 'event_arrival_detected',
+        event_id: String(event.id),
+        action_path: path
+      }
+    }]
+  }).catch(() => undefined);
+
+  return { delivered: true, path };
+}
+
 export async function requestNotificationPermission() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
   writeLocalFlag(PERMISSION_PROMPTED_KEY);
