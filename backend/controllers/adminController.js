@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { assertInteger, assertRequired } = require('../utils/validators');
 const coachModel = require('../models/coachModel');
+const { run } = require('../config/db');
 const {
   getRejectionReasons,
   resolveReasonText,
@@ -134,9 +135,42 @@ const streamCoachCertification = asyncHandler(async (req, res) => {
   fs.createReadStream(absolutePath).pipe(res);
 });
 
+function optionalUserId(req) {
+  const raw = req.body?.user_id;
+  if (raw === undefined || raw === null || raw === '') return null;
+  return assertInteger(raw, 'user_id', 1);
+}
+
+const resetCredits = asyncHandler(async (req, res) => {
+  const userId = optionalUserId(req);
+  const result = userId
+    ? await run('UPDATE credit_wallet SET available_cents = 0, locked_cents = 0 WHERE user_id = ?', [userId])
+    : await run('UPDATE credit_wallet SET available_cents = 0, locked_cents = 0');
+  res.json({ success: true, affected: result.changes, scope: userId ? 'user' : 'all' });
+});
+
+const resetMot = asyncHandler(async (req, res) => {
+  const userId = optionalUserId(req);
+  const result = userId
+    ? await run('DELETE FROM mot_logs WHERE user_id = ?', [userId])
+    : await run('DELETE FROM mot_logs');
+  res.json({ success: true, affected: result.changes, scope: userId ? 'user' : 'all' });
+});
+
+const resetXp = asyncHandler(async (req, res) => {
+  const userId = optionalUserId(req);
+  const result = userId
+    ? await run('DELETE FROM xp_logs WHERE user_id = ?', [userId])
+    : await run('DELETE FROM xp_logs');
+  res.json({ success: true, affected: result.changes, scope: userId ? 'user' : 'all' });
+});
+
 module.exports = {
   listCoachApplications,
   listRejectionReasons,
+  resetCredits,
+  resetMot,
+  resetXp,
   reviewCoachApplication,
   streamCoachCertification
 };

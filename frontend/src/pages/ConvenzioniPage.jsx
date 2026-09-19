@@ -10,7 +10,6 @@ import ConvenzioniContractPanel from '../components/ConvenzioniContractPanel';
 import ConvenzioniFilters from '../components/ConvenzioniFilters';
 import FeaturedPartnersRow from '../components/FeaturedPartnersRow';
 import HowItWorksConvenzioni from '../components/HowItWorksConvenzioni';
-import AccountWalletCard from '../components/account/AccountWalletCard';
 import ExploreMapToggle from '../components/explore/ExploreMapToggle';
 import PartnerCard from '../components/PartnerCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -298,10 +297,9 @@ function ConvenzioniPage() {
   const hasExpiry = Number.isFinite(Date.parse(subscriptionExpiresAt));
   const currentView = useMemo(() => {
     const raw = new URLSearchParams(location.search).get('view');
-    if (raw === 'wallet' || raw === 'join') return raw;
+    if (raw === 'join') return raw;
     return 'catalog';
   }, [location.search]);
-  const isWalletView = currentView === 'wallet';
   const isJoinView = currentView === 'join';
 
   useEffect(() => {
@@ -558,46 +556,16 @@ function ConvenzioniPage() {
     joinSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function handleInvestWallet() {
-    try {
-      const next = piggybank.investAvailableBalance();
-      setWallet(next);
-      showToast('Saldo spostato nel budget reinvestito.', 'success');
-    } catch (error) {
-      showToast(error.message || 'Operazione non disponibile.', 'error');
-    }
-  }
-
-  function handleWithdrawWallet() {
-    try {
-      const next = piggybank.withdrawReinvestedBalance();
-      setWallet(next);
-      showToast('Saldo reinvestito riportato su disponibile.', 'success');
-    } catch (error) {
-      showToast(error.message || 'Operazione non disponibile.', 'error');
-    }
-  }
-
   return (
     <section className={styles.page}>
       <ExploreMapToggle
-        activeView={isJoinView ? 'third' : isWalletView ? 'right' : 'left'}
+        activeView={isJoinView ? 'right' : 'left'}
         leftLabel="Convenzioni"
-        rightLabel="Salvadanaio"
-        thirdLabel="Vuoi unirti?"
+        rightLabel="Vuoi unirti?"
         leftTo="/convenzioni"
-        rightTo="/convenzioni?view=wallet"
-        thirdTo="/convenzioni?view=join"
+        rightTo="/convenzioni?view=join"
       />
-      {isWalletView ? (
-        <AccountWalletCard
-          wallet={wallet}
-          onInvest={handleInvestWallet}
-          onWithdraw={handleWithdrawWallet}
-          onPricing={() => navigate('/pricing')}
-        />
-      ) : (
-        <>
+      <>
           {!isJoinView ? (
             <>
           <Card className={`${styles.hero} ${styles.heroPrimary}`}>
@@ -1126,8 +1094,7 @@ function ConvenzioniPage() {
           </Card>
             </>
           ) : null}
-        </>
-      )}
+      </>
 
       <Modal
         open={Boolean(voucherModalPartner)}

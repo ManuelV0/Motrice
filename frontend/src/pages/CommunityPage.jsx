@@ -1,10 +1,18 @@
 import { ChevronLeft, Globe2, List, Lock, Plus, Search, Shield, Users } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import L from 'leaflet';
 import Button from '../components/Button';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
+import {
+  applyLocalizedMapLabels,
+  canUseAcceleratedMapRenderer,
+  getHighDefinitionPixelRatio,
+  getHighDefinitionRasterTiles,
+  MAPLIBRE_STYLES
+} from '../utils/mapRendering';
 import styles from '../styles/pages/community.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -33,6 +41,9 @@ function CommunityPage() {
   const [selectedCommunityId, setSelectedCommunityId] = useState(() => COMMUNITY_POINTS[0].id);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [mapReady, setMapReady] = useState(false);
+  const [mapRenderer, setMapRenderer] = useState(() => (
+    canUseAcceleratedMapRenderer() ? 'maplibre' : 'raster'
+  ));
   const mapNodeRef = useRef(null);
   const mapRef = useRef(null);
   const markerRefs = useRef([]);
@@ -100,27 +111,74 @@ function CommunityPage() {
   useEffect(() => {
     if (!mapNodeRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: mapNodeRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [12.4964, 41.9028],
-      zoom: 5.6,
-      pitch: 0,
-      bearing: 0
-    });
+    let readyTimer = null;
+    let map;
+    if (mapRenderer === 'raster') {
+      map = L.map(mapNodeRef.current, {
+        attributionControl: true,
+        zoomControl: false,
+        preferCanvas: true,
+        fadeAnimation: true,
+        markerZoomAnimation: true
+      }).setView([41.9028, 12.4964], 5.6);
+      map.attributionControl.setPrefix(false);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      const tileDefinition = getHighDefinitionRasterTiles('satellite');
+      L.tileLayer(tileDefinition.url, tileDefinition.options)
+        .once('load', () => setMapReady(true))
+        .addTo(map);
+      if (tileDefinition.overlayUrl) {
+        L.tileLayer(tileDefinition.overlayUrl, tileDefinition.overlayOptions).addTo(map);
+      }
+      readyTimer = window.setTimeout(() => setMapReady(true), 4000);
+    } else {
+      try {
+        map = new maplibregl.Map({
+          container: mapNodeRef.current,
+          style: MAPLIBRE_STYLES.satellite,
+          center: [12.4964, 41.9028],
+          zoom: 5.6,
+          pitch: 0,
+          bearing: 0,
+          pixelRatio: getHighDefinitionPixelRatio(),
+          antialias: true,
+          attributionControl: false,
+          dragRotate: false,
+          pitchWithRotate: false,
+          touchPitch: false
+        });
+      } catch {
+        setMapRenderer('raster');
+        return undefined;
+      }
+      let loaded = false;
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+      map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      map.on('load', () => {
+        loaded = true;
+        applyLocalizedMapLabels(map);
+        setMapReady(true);
+      });
+      map.on('error', (event) => {
+        const message = String(event?.error?.message || event?.error || '');
+        if (/webgl|context|worker|offscreencanvas/i.test(message)) setMapRenderer('raster');
+      });
+      map.getCanvas().addEventListener('webglcontextlost', () => setMapRenderer('raster'), { once: true });
+      readyTimer = window.setTimeout(() => {
+        if (!loaded) setMapRenderer('raster');
+      }, 4500);
+    }
     mapRef.current = map;
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-    map.on('load', () => setMapReady(true));
-
     return () => {
+      if (readyTimer) window.clearTimeout(readyTimer);
       setMapReady(false);
       markerRefs.current.forEach((entry) => entry.remove());
       markerRefs.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [mapRenderer]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !mapNodeRef.current) return undefined;
@@ -129,13 +187,17 @@ function CommunityPage() {
     let timer = null;
 
     const syncResize = () => {
-      map.resize();
+      if (mapRenderer === 'raster') map.invalidateSize({ animate: false });
+      else map.resize();
       if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(() => map.resize(), 220);
+      timer = window.setTimeout(() => {
+        if (mapRenderer === 'raster') map.invalidateSize({ animate: false });
+        else map.resize();
+      }, 220);
     };
 
-    const observer = new ResizeObserver(syncResize);
-    observer.observe(node);
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(syncResize) : null;
+    observer?.observe(node);
 
     const vv = window.visualViewport;
     vv?.addEventListener('resize', syncResize);
@@ -145,13 +207,13 @@ function CommunityPage() {
 
     return () => {
       if (timer) window.clearTimeout(timer);
-      observer.disconnect();
+      observer?.disconnect();
       vv?.removeEventListener('resize', syncResize);
       vv?.removeEventListener('scroll', syncResize);
       window.removeEventListener('orientationchange', syncResize);
       window.removeEventListener('resize', syncResize);
     };
-  }, [mapReady]);
+  }, [mapReady, mapRenderer]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
@@ -159,9 +221,7 @@ function CommunityPage() {
     markerRefs.current = [];
 
     visibleCommunities.forEach((point) => {
-      const marker = document.createElement('button');
-      marker.type = 'button';
-      marker.className = [
+      const markerClassName = [
         styles.mapMarker,
         point.accessType === 'public'
           ? styles.mapMarkerPublic
@@ -170,38 +230,76 @@ function CommunityPage() {
             : styles.mapMarkerSemi,
         point.id === selectedCommunity?.id ? styles.mapMarkerActive : ''
       ].join(' ');
-      marker.setAttribute('aria-label', `${point.name}, ${point.city}`);
-      marker.onclick = () => {
+      const selectPoint = () => {
         setSelectedCommunityId(point.id);
         setSheetOpen(true);
       };
 
-      const popup = new maplibregl.Popup({ offset: 16 }).setText(`${point.name} · ${point.city}`);
-      const markerInstance = new maplibregl.Marker({ element: marker }).setLngLat([point.lng, point.lat]).setPopup(popup).addTo(mapRef.current);
+      let markerInstance;
+      if (mapRenderer === 'raster') {
+        markerInstance = L.marker([point.lat, point.lng], {
+          icon: L.divIcon({
+            className: markerClassName,
+            html: '',
+            iconSize: [15, 15],
+            iconAnchor: [7, 7]
+          }),
+          keyboard: true,
+          title: `${point.name}, ${point.city}`
+        })
+          .on('click', selectPoint)
+          .bindPopup(`${point.name} · ${point.city}`)
+          .addTo(mapRef.current);
+      } else {
+        const marker = document.createElement('button');
+        marker.type = 'button';
+        marker.className = markerClassName;
+        marker.setAttribute('aria-label', `${point.name}, ${point.city}`);
+        marker.onclick = selectPoint;
+        const popup = new maplibregl.Popup({ offset: 16 }).setText(`${point.name} · ${point.city}`);
+        markerInstance = new maplibregl.Marker({ element: marker })
+          .setLngLat([point.lng, point.lat])
+          .setPopup(popup)
+          .addTo(mapRef.current);
+      }
       markerRefs.current.push(markerInstance);
     });
-  }, [mapReady, selectedCommunity?.id, visibleCommunities]);
+  }, [mapReady, mapRenderer, selectedCommunity?.id, visibleCommunities]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current || !selectedCommunity) return;
-    mapRef.current.easeTo({
-      center: [selectedCommunity.lng, selectedCommunity.lat],
-      duration: 450,
-      padding: { top: 88, right: 72, left: 72, bottom: sheetOpen ? 320 : 72 },
-      essential: true
-    });
-  }, [mapReady, selectedCommunity, sheetOpen]);
+    if (mapRenderer === 'raster') {
+      mapRef.current.flyTo([selectedCommunity.lat, selectedCommunity.lng], mapRef.current.getZoom(), {
+        animate: true,
+        duration: 0.45
+      });
+    } else {
+      mapRef.current.easeTo({
+        center: [selectedCommunity.lng, selectedCommunity.lat],
+        duration: 450,
+        padding: { top: 88, right: 72, left: 72, bottom: sheetOpen ? 320 : 72 },
+        essential: true
+      });
+    }
+  }, [mapReady, mapRenderer, selectedCommunity, sheetOpen]);
 
   useEffect(() => {
     if (!query || !mapReady || !mapRef.current || !visibleCommunities.length) return;
     const first = visibleCommunities[0];
-    mapRef.current.easeTo({
-      center: [first.lng, first.lat],
-      duration: 520,
-      padding: { top: 88, right: 72, left: 72, bottom: sheetOpen ? 320 : 72 },
-      essential: true
-    });
-  }, [mapReady, query, sheetOpen, visibleCommunities]);
+    if (mapRenderer === 'raster') {
+      mapRef.current.flyTo([first.lat, first.lng], mapRef.current.getZoom(), {
+        animate: true,
+        duration: 0.52
+      });
+    } else {
+      mapRef.current.easeTo({
+        center: [first.lng, first.lat],
+        duration: 520,
+        padding: { top: 88, right: 72, left: 72, bottom: sheetOpen ? 320 : 72 },
+        essential: true
+      });
+    }
+  }, [mapReady, mapRenderer, query, sheetOpen, visibleCommunities]);
 
   function renderPrimaryAction() {
     if (isMember) {
@@ -233,7 +331,12 @@ function CommunityPage() {
   return (
     <section className={styles.page} aria-label="Community Motrice">
       <div className={styles.mapViewport}>
-        <div ref={mapNodeRef} className={styles.mapCanvas} aria-label="Mappa community interattiva" />
+        <div
+          ref={mapNodeRef}
+          className={styles.mapCanvas}
+          data-renderer={mapRenderer}
+          aria-label="Mappa community interattiva"
+        />
         {!mapReady ? <div className={styles.mapLoading}>Caricamento mappa community...</div> : null}
         <div className={styles.topReadabilityLayer} aria-hidden="true" />
 

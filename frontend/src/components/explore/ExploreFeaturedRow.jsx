@@ -15,7 +15,8 @@ function ExploreFeaturedRow({ events, onToggleSave, onBookGroup, savingIds, book
           <div key={`featured-${event.id}`} className={styles.item} role="listitem">
             <EventCard
               event={event}
-              variant="folder"
+              variant="featured"
+              context="featured"
               onToggleSave={onToggleSave}
               onBookGroup={onBookGroup}
               saving={savingIds.includes(event.id)}

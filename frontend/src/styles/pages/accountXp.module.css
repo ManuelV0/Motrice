@@ -143,6 +143,84 @@
   color: var(--muted);
 }
 
+.syncState {
+  margin: -0.2rem 0 0;
+  min-height: 1.85rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--success) 22%, var(--glass-border));
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: color-mix(in srgb, var(--success) 68%, var(--text));
+  background: color-mix(in srgb, var(--success) 7%, transparent);
+  font-size: 0.72rem;
+  font-weight: var(--weight-semibold);
+}
+
+.badgePath {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.badgeStep {
+  min-width: 0;
+  padding: 0.5rem 0.2rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.16rem;
+  color: color-mix(in srgb, var(--muted) 75%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 56%, var(--surface));
+}
+
+.badgeStep > span {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--surface-2) 85%, var(--surface));
+}
+
+.badgeStep strong,
+.badgeStep small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badgeStep strong {
+  font-size: 0.62rem;
+}
+
+.badgeStep small {
+  color: currentColor;
+  font-size: 0.54rem;
+}
+
+.badgeStepUnlocked {
+  color: color-mix(in srgb, var(--primary) 62%, var(--text));
+  border-color: color-mix(in srgb, var(--primary) 18%, var(--glass-border));
+}
+
+.badgeStepUnlocked > span {
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-2));
+}
+
+.badgeStepCurrent {
+  color: color-mix(in srgb, var(--primary) 82%, white);
+  border-color: color-mix(in srgb, var(--primary) 50%, var(--glass-border));
+  background:
+    radial-gradient(100% 100% at 50% 0%, color-mix(in srgb, var(--primary) 14%, transparent), transparent),
+    color-mix(in srgb, var(--surface-2) 72%, var(--surface));
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
 .sectionCard {
   display: grid;
   gap: var(--s-3);

@@ -1,0 +1,23 @@
+{
+  "name": "motrice-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "cap:sync": "cap sync android",
+    "cap:android": "cap open android",
+    "android:apk": "cd android && ./gradlew assembleDebug",
+    "android:aab": "cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/camera": "^8.2.4",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/push-notifications": "^8.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.4.3"
+  }
+}

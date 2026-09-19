@@ -18,7 +18,8 @@ export const seededSports = [
   { id: 3, slug: 'calcio', name: 'Calcio' },
   { id: 4, slug: 'palestra', name: 'Palestra' },
   { id: 5, slug: 'bici', name: 'Bici' },
-  { id: 6, slug: 'trekking', name: 'Trekking' }
+  { id: 6, slug: 'trekking', name: 'Trekking' },
+  { id: 7, slug: 'palestra-outdoor', name: 'Palestra outdoor' }
 ];
 
 export const seededProfiles = [
