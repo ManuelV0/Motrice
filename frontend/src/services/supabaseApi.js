@@ -15,6 +15,9 @@ import {
 
 const profileUuidByLegacyId = new Map();
 const profileByUuid = new Map();
+let personalSeriesSyncPromise = null;
+let personalSeriesSyncedAt = 0;
+const PERSONAL_SERIES_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -214,6 +217,26 @@ async function ensureMyProfile(client) {
   return rememberProfile(data);
 }
 
+async function ensurePersonalSeriesOccurrences(client) {
+  if (!currentAuthUserId() || Date.now() - personalSeriesSyncedAt < PERSONAL_SERIES_SYNC_INTERVAL_MS) return;
+  if (!personalSeriesSyncPromise) {
+    personalSeriesSyncPromise = client
+      .rpc('ensure_personal_event_occurrences', { weeks_ahead_value: 8 })
+      .then(({ error }) => {
+        if (error && !['PGRST202', '42883'].includes(error.code)) throw error;
+        personalSeriesSyncedAt = Date.now();
+      })
+      .catch(() => {
+        // Compatibilità temporanea mentre la migrazione raggiunge tutti gli ambienti.
+        personalSeriesSyncedAt = Date.now();
+      })
+      .finally(() => {
+        personalSeriesSyncPromise = null;
+      });
+  }
+  await personalSeriesSyncPromise;
+}
+
 async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false } = {}) {
   const events = Array.isArray(rawEvents) ? rawEvents : [];
   const eventIds = events.map((event) => event.id);
@@ -230,6 +253,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       organizers: new Map(),
       joinRequests: new Map(),
       workoutPlans: new Map(),
+      workoutSessions: new Map(),
       moneyHolds: new Map(),
       moneySettlements: new Map(),
       moneyDisputes: new Map()
@@ -243,6 +267,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       organizers: new Map(),
       joinRequests: new Map(),
       workoutPlans: new Map(),
+      workoutSessions: new Map(),
       moneyHolds: new Map(),
       moneySettlements: new Map(),
       moneyDisputes: new Map()
@@ -257,7 +282,8 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
     workoutPlansResult,
     moneyHoldsResult,
     moneySettlementsResult,
-    moneyDisputesResult
+    moneyDisputesResult,
+    workoutSessionsResult
   ] = await Promise.all([
     client
       .from('event_participants')
@@ -301,7 +327,12 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       .select('id,event_id,settlement_id,reason,status,created_at,resolved_at,resolution_note')
       .eq('opened_by', authUserId)
       .in('event_id', eventIds)
-      .order('created_at', { ascending: false })
+      .order('created_at', { ascending: false }),
+    client
+      .from('event_workout_sessions')
+      .select('event_id,started_at,completed_at,progress_percent')
+      .eq('user_id', authUserId)
+      .in('event_id', eventIds)
   ]);
 
   throwIfError(participantsResult.error);
@@ -312,6 +343,7 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
   throwIfError(moneyHoldsResult.error);
   throwIfError(moneySettlementsResult.error);
   throwIfError(moneyDisputesResult.error);
+  throwIfError(workoutSessionsResult.error);
 
   const participants = participantsResult.data || [];
   participants.forEach((participant) => rememberProfile(participant.profile));
@@ -337,6 +369,9 @@ async function loadEventContext(client, rawEvents, { includeWorkoutPlans = false
       (moneySettlementsResult.data || []).map((settlement) => [String(settlement.event_id), settlement])
     ),
     moneyDisputes,
+    workoutSessions: new Map(
+      (workoutSessionsResult.data || []).map((session) => [String(session.event_id), session])
+    ),
     workoutPlans: new Map(
       (workoutPlansResult.data || []).map((plan) => [String(plan.id), {
         id: plan.client_id || plan.id,
@@ -373,7 +408,8 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const ownActiveCheckInAt = ['going', 'completed'].includes(String(ownParticipation?.status || ''))
     ? ownParticipation?.checked_in_at
     : null;
-  const sessionStartedAt = ownActiveCheckInAt || (
+  const personalWorkoutSession = context.workoutSessions.get(String(rawEvent.id)) || null;
+  const sessionStartedAt = (rawEvent.is_personal ? personalWorkoutSession?.started_at : null) || ownActiveCheckInAt || (
     String(rawEvent.creator_id) === authUserId && Number.isFinite(firstGroupCheckInMs)
       ? new Date(firstGroupCheckInMs).toISOString()
       : null
@@ -513,6 +549,11 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     visibility: rawEvent.visibility || 'public',
     join_policy: rawEvent.join_policy || 'open',
     is_personal: Boolean(rawEvent.is_personal),
+    personal_series_id: rawEvent.personal_series_id || null,
+    personal_occurrence_date: rawEvent.personal_occurrence_date || null,
+    personal_available_from: rawEvent.personal_available_from || null,
+    personal_available_until: rawEvent.personal_available_until || null,
+    personal_arrival_enabled: Boolean(rawEvent.personal_arrival_enabled),
     created_by: rawEvent.creator_id === authUserId ? 'me' : rawEvent.creator_id,
     creator_plan: 'free',
     featured_boost: false,
@@ -546,6 +587,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
 
 async function fetchEvents(filters = {}) {
   const client = requireSupabase();
+  await ensurePersonalSeriesOccurrences(client);
   let query = client
     .from('events')
     .select('*,sport:sports(id,slug,name)')
@@ -556,7 +598,10 @@ async function fetchEvents(filters = {}) {
   }
 
   if (filters.includePast !== true) {
-    query = query.gte('starts_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString());
+    // Una sessione personale può essere disponibile dal mattino fino alle
+    // 23:59: manteniamo l'intera giornata nel set e lasciamo a ends_at la
+    // decisione sullo stato, senza nasconderla dopo dodici ore.
+    query = query.gte('starts_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
   }
 
   if (filters.sport != null && filters.sport !== '') {
@@ -736,6 +781,53 @@ function createRemoteMethods(localApi) {
         .single();
       throwIfError(error);
       return fetchEvent(data.id);
+    },
+
+    async createPersonalEventSeries(payload) {
+      const client = requireSupabase();
+      requireAuthUserId();
+      await ensureMyProfile(client);
+      await assertProfileVerified('creare un programma personale.');
+
+      const { data, error } = await client.rpc('create_personal_event_series', {
+        series_payload: {
+          start_date: payload.start_date,
+          timezone: payload.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome',
+          weeks: Number(payload.weeks || 4),
+          weekly_schedule: payload.weekly_schedule || {},
+          event: {
+            sport_id: Number(payload.event?.sport_id),
+            title: normalizeText(payload.event?.title),
+            description: normalizeText(payload.event?.description),
+            city: normalizeText(payload.event?.city),
+            location_name: normalizeText(payload.event?.location_name),
+            lat: Number(payload.event?.lat),
+            lng: Number(payload.event?.lng),
+            duration_minutes: Number(payload.event?.duration_minutes || 60),
+            level: payload.event?.level || 'beginner',
+            route_info: payload.event?.route_info || null,
+            venue_type: normalizeVenueType(payload.event?.venue_type),
+            gym_access_policy: normalizeGymAccessPolicy(
+              payload.event?.venue_type,
+              payload.event?.gym_access_policy
+            ),
+            gym_venue_key: normalizeVenueType(payload.event?.venue_type) === 'gym'
+              ? normalizeGymVenueKey(
+                payload.event?.gym_venue_key,
+                `${payload.event?.location_name || ''}-${payload.event?.city || ''}`
+              )
+              : null
+          }
+        }
+      });
+      throwIfError(error);
+      personalSeriesSyncedAt = Date.now();
+
+      const firstEventId = data?.first_event_id;
+      return {
+        ...data,
+        first_event: firstEventId ? await fetchEvent(firstEventId) : null
+      };
     },
 
     async updateManagedEvent(eventId, payload = {}) {
@@ -1747,6 +1839,7 @@ export function createSupabaseApi(localApi) {
     return {
       ...localApi,
       createEvent: requireSecureBackend,
+      createPersonalEventSeries: requireSecureBackend,
       joinEvent: requireSecureBackend,
       approveEventJoinRequest: requireSecureBackend,
       declineEventJoinRequest: requireSecureBackend,

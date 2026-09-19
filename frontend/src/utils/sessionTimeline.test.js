@@ -57,12 +57,19 @@ test('usa il primo check-in del gruppo per la vista organizzatore', () => {
   assert.equal(timeline.label, '30 di 60 min');
 });
 
-test('gli eventi personali conservano l orario programmato', () => {
-  const timeline = getEventSessionTimeline(
+test('gli eventi personali attendono la verifica e partono dal vero avvio', () => {
+  const waiting = getEventSessionTimeline(
     { duration_minutes: 60, is_personal: true },
     timing,
     Date.parse('2026-09-17T14:29:00.000Z')
   );
-  assert.equal(timeline.progress, 25);
-  assert.equal(timeline.startsAtMs, timing.startsAtMs);
+  const active = getEventSessionTimeline(
+    { duration_minutes: 60, is_personal: true, session_started_at: '2026-09-17T14:20:00.000Z' },
+    { ...timing, endsAtMs: Date.parse('2026-09-17T21:59:59.000Z') },
+    Date.parse('2026-09-17T14:35:00.000Z')
+  );
+  assert.equal(waiting.progress, 0);
+  assert.equal(waiting.label, 'In attesa del check-in');
+  assert.equal(active.progress, 25);
+  assert.equal(active.endsAtMs, Date.parse('2026-09-17T15:20:00.000Z'));
 });

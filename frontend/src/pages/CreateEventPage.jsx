@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  BellRing,
+  CalendarRange,
   CalendarDays,
   CalendarPlus,
   Check,
@@ -16,6 +18,7 @@ import {
   MapPinned,
   Minus,
   Plus,
+  Repeat2,
   Route,
   Search,
   ShieldCheck,
@@ -62,6 +65,15 @@ import {
   ensurePersonalWorkoutPlanRemote,
   listAvailablePersonalWorkoutPlans
 } from '../features/coach/services/personalWorkoutPlansApi';
+import {
+  PERSONAL_RECURRENCE_DAYS,
+  PERSONAL_RECURRENCE_WEEKS,
+  buildPersonalRecurrencePreview,
+  createPersonalWeeklySchedule,
+  getEnabledPersonalRecurrenceDays,
+  getPersonalRecurrenceDayId,
+  serializePersonalWeeklySchedule
+} from '../utils/personalEventRecurrence';
 import styles from '../styles/pages/createEvent.module.css';
 
 const initialGroupRules = getSystemEventRules({ durationMinutes: 120 });
@@ -179,10 +191,29 @@ const STEP_ERROR_FIELDS = {
     'checkin_grace_minutes',
     'visibility',
     'join_policy',
-    'description'
+    'description',
+    'recurrence_days',
+    'recurrence_times',
+    'recurrence_plans'
   ],
   4: []
 };
+
+function getStepErrorFields(stepId, isPersonal) {
+  const fields = STEP_ERROR_FIELDS[stepId] || [];
+  if (!isPersonal) return fields;
+  if (stepId === 1) {
+    return fields.filter((field) => !['title', 'event_datetime', 'duration_minutes'].includes(field));
+  }
+  if (stepId === 3) {
+    return [...fields, 'event_datetime', 'duration_minutes'];
+  }
+  return fields;
+}
+
+function getWorkoutPlanValue(plan) {
+  return String(plan?.remoteId || plan?.id || '');
+}
 
 const NON_KEYBOARD_INPUT_TYPES = new Set([
   'button',
@@ -517,6 +548,8 @@ function CreateEventPage() {
   const [workoutPlanQuery, setWorkoutPlanQuery] = useState('');
   const [selectedWorkoutPlan, setSelectedWorkoutPlan] = useState(null);
   const [pendingWorkoutPlan, setPendingWorkoutPlan] = useState(null);
+  const [recurrenceMode, setRecurrenceMode] = useState('once');
+  const [weeklySchedule, setWeeklySchedule] = useState(() => createPersonalWeeklySchedule());
   const [submitting, setSubmitting] = useState(false);
   const creationLimit = PREMIUM_FEATURES_FREE || creationStats.is_unlimited
     ? Number.POSITIVE_INFINITY
@@ -525,6 +558,8 @@ function CreateEventPage() {
       : entitlements.maxEventsPerMonth;
   const keyboardVisible = useKeyboardVisibility();
   const groupSettingsRef = useRef(null);
+  const recurrencePlansLoadedRef = useRef(false);
+  const recurrenceScheduleTouchedRef = useRef(false);
   const locationRequestRef = useRef(null);
   const autoLocationAttemptedRef = useRef(false);
   const {
@@ -540,6 +575,8 @@ function CreateEventPage() {
     [eventTime, form.duration_minutes]
   );
   const todayDateValue = toLocalDateInputValue();
+  const fixedLocationLabel = form.is_personal ? 'Punto d’allenamento' : 'Punto d’incontro';
+  const fixedLocationLabelLower = form.is_personal ? 'punto d’allenamento' : 'punto d’incontro';
 
   const refreshCreationStats = useCallback(async () => {
     const nextStats = await api.getEventCreationStats();
@@ -564,6 +601,7 @@ function CreateEventPage() {
   function selectEventDate(value) {
     if (!value) return;
     setEventDate(value);
+    syncUntouchedPersonalRecurrence(value, eventTime);
     if (value === todayDateValue && eventTime) {
       const selectedDateTime = new Date(`${value}T${eventTime}`);
       if (selectedDateTime.getTime() <= Date.now()) setEventTime('');
@@ -580,7 +618,30 @@ function CreateEventPage() {
       return;
     }
     setEventTime(value);
+    syncUntouchedPersonalRecurrence(eventDate || todayDateValue, value);
     setActiveWhenPanel('duration');
+  }
+
+  function syncUntouchedPersonalRecurrence(dateValue, timeValue) {
+    if (
+      !form.is_personal ||
+      recurrenceMode !== 'weekly' ||
+      recurrenceScheduleTouchedRef.current
+    ) return;
+
+    const preferredDay = getPersonalRecurrenceDayId(dateValue);
+    if (!preferredDay) return;
+    setWeeklySchedule((current) => {
+      const previouslyEnabled = getEnabledPersonalRecurrenceDays(current)[0];
+      const previousConfiguration = previouslyEnabled ? current[previouslyEnabled.id] : null;
+      const next = createPersonalWeeklySchedule(timeValue || previousConfiguration?.time || '18:00');
+      next[preferredDay] = {
+        enabled: true,
+        time: timeValue || previousConfiguration?.time || '18:00',
+        planId: previousConfiguration?.planId || getWorkoutPlanValue(selectedWorkoutPlan)
+      };
+      return next;
+    });
   }
 
   function selectEventDuration(minutes) {
@@ -595,6 +656,22 @@ function CreateEventPage() {
       `${plan.title || ''} ${plan.type || ''}`.toLowerCase().includes(query)
     );
   }, [workoutPlanQuery, workoutPlans]);
+  const recurringDays = useMemo(
+    () => getEnabledPersonalRecurrenceDays(weeklySchedule),
+    [weeklySchedule]
+  );
+  const recurrencePreview = useMemo(
+    () => buildPersonalRecurrencePreview({
+      startDate: eventDate,
+      schedule: weeklySchedule,
+      weeks: PERSONAL_RECURRENCE_WEEKS
+    }),
+    [eventDate, weeklySchedule]
+  );
+  const workoutPlansById = useMemo(
+    () => new Map(workoutPlans.map((plan) => [getWorkoutPlanValue(plan), plan])),
+    [workoutPlans]
+  );
 
   usePageMeta({
     title: 'Crea Sessione | Motrice',
@@ -630,6 +707,34 @@ function CreateEventPage() {
       setWorkoutPlansLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (
+      activeStep !== 3 ||
+      !form.is_personal ||
+      recurrenceMode !== 'weekly' ||
+      recurrencePlansLoadedRef.current
+    ) return undefined;
+
+    let active = true;
+    recurrencePlansLoadedRef.current = true;
+    setWorkoutPlansLoading(true);
+    listAvailablePersonalWorkoutPlans()
+      .then((plans) => {
+        if (active) setWorkoutPlans(plans);
+      })
+      .catch((error) => {
+        recurrencePlansLoadedRef.current = false;
+        if (active) showToast(error.message || 'Schede personali non disponibili', 'error');
+      })
+      .finally(() => {
+        if (active) setWorkoutPlansLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeStep, form.is_personal, recurrenceMode, showToast]);
 
   function attachPendingWorkoutPlan() {
     setSelectedWorkoutPlan(pendingWorkoutPlan);
@@ -846,8 +951,12 @@ function CreateEventPage() {
   }
 
   function togglePersonalEvent(enabled) {
+    if (Boolean(enabled) === Boolean(form.is_personal)) return;
+
     if (enabled) {
       groupSettingsRef.current = {
+        title: form.title,
+        description: form.description,
         visibility: form.visibility,
         join_policy: form.join_policy,
         max_participants: form.max_participants,
@@ -859,6 +968,8 @@ function CreateEventPage() {
         const rules = getSystemEventRules({ durationMinutes: prev.duration_minutes, isPersonal: true });
         return {
           ...prev,
+          title: '',
+          description: '',
           is_personal: true,
           participation_protection: false,
           visibility: 'private',
@@ -876,6 +987,8 @@ function CreateEventPage() {
       return;
     }
 
+    setRecurrenceMode('once');
+    recurrenceScheduleTouchedRef.current = false;
     const previous = groupSettingsRef.current || {};
     setForm((prev) => {
       const rules = getSystemEventRules({
@@ -884,6 +997,8 @@ function CreateEventPage() {
       });
       return {
         ...prev,
+        title: previous.title || '',
+        description: previous.description || '',
         is_personal: false,
         participation_protection: previous.participation_protection ?? true,
         visibility: previous.visibility || 'public',
@@ -897,6 +1012,64 @@ function CreateEventPage() {
         completion_xp: rules.completionXp,
         review_bonus_xp: rules.reviewBonusXp
       };
+    });
+  }
+
+  function selectRecurrenceMode(mode) {
+    const nextMode = mode === 'weekly' ? 'weekly' : 'once';
+    setRecurrenceMode(nextMode);
+    recurrenceScheduleTouchedRef.current = false;
+    if (nextMode !== 'weekly') return;
+
+    if (!eventTime) setEventTime('18:00');
+
+    setWeeklySchedule((current) => {
+      if (getEnabledPersonalRecurrenceDays(current).length > 0) return current;
+      const preferredDay = getPersonalRecurrenceDayId(eventDate) || 'monday';
+      return {
+        ...current,
+        [preferredDay]: {
+          ...current[preferredDay],
+          enabled: true,
+          time: eventTime || current[preferredDay]?.time || '18:00',
+          planId: getWorkoutPlanValue(selectedWorkoutPlan)
+        }
+      };
+    });
+  }
+
+  function toggleRecurringDay(dayId) {
+    recurrenceScheduleTouchedRef.current = true;
+    setWeeklySchedule((current) => ({
+      ...current,
+      [dayId]: {
+        ...current[dayId],
+        enabled: !current[dayId]?.enabled,
+        time: current[dayId]?.time || eventTime || '18:00',
+        planId: current[dayId]?.planId || ''
+      }
+    }));
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.recurrence_days;
+      return next;
+    });
+  }
+
+  function updateRecurringDay(dayId, field, value) {
+    recurrenceScheduleTouchedRef.current = true;
+    setWeeklySchedule((current) => ({
+      ...current,
+      [dayId]: {
+        ...current[dayId],
+        [field]: value
+      }
+    }));
+    setErrors((current) => {
+      const next = { ...current };
+      if (field === 'time') delete next.recurrence_times;
+      if (field === 'planId') delete next.recurrence_plans;
+      return next;
     });
   }
 
@@ -985,7 +1158,7 @@ function CreateEventPage() {
     }
     setLocationSelectionMessage(
       locationPreview
-        ? 'Controlla il pin centrale e conferma il punto d’incontro.'
+        ? `Controlla il pin centrale e conferma il ${fixedLocationLabelLower}.`
         : 'Cerca un luogo oppure centra la mappa sulla tua posizione.'
     );
     setRoutePicking(false);
@@ -1262,7 +1435,7 @@ function CreateEventPage() {
         delete next.coordinates;
         return next;
       });
-      setLocationSelectionMessage('Punto d’incontro aggiornato automaticamente.');
+      setLocationSelectionMessage(`${fixedLocationLabel} aggiornato automaticamente.`);
       if (source !== 'map') showToast('Punto e indirizzo aggiornati', 'success');
       return result;
     } catch (error) {
@@ -1290,15 +1463,15 @@ function CreateEventPage() {
       return;
     }
     setLocationConfirmed(true);
-    setLocationSelectionMessage('Punto d’incontro confermato. Puoi continuare.');
-    showToast('Punto d’incontro confermato', 'success');
+    setLocationSelectionMessage(`${fixedLocationLabel} confermato. Puoi continuare.`);
+    showToast(`${fixedLocationLabel} confermato`, 'success');
   }
 
   function collectValidationErrors() {
     const nextErrors = {};
 
     if (!form.sport_id) nextErrors.sport_id = 'Seleziona uno sport';
-    if (form.title.trim() && form.title.trim().length < 4) {
+    if (!form.is_personal && form.title.trim() && form.title.trim().length < 4) {
       nextErrors.title = 'Inserisci almeno 4 caratteri oppure lascia il campo vuoto';
     }
     if (!form.city || form.city.length < 2) nextErrors.city = 'Citta richiesta';
@@ -1341,10 +1514,22 @@ function CreateEventPage() {
     if (form.is_personal && (form.visibility !== 'private' || Number(form.max_participants) !== 1)) {
       nextErrors.visibility = 'Il promemoria personale deve restare privato';
     }
+    if (form.is_personal && recurrenceMode === 'weekly') {
+      const enabledDays = getEnabledPersonalRecurrenceDays(weeklySchedule);
+      if (!enabledDays.length) {
+        nextErrors.recurrence_days = 'Seleziona almeno un giorno di allenamento';
+      }
+      if (enabledDays.some((day) => !String(weeklySchedule[day.id]?.time || '').trim())) {
+        nextErrors.recurrence_times = 'Indica da che ora è disponibile ogni allenamento';
+      }
+      if (enabledDays.some((day) => !String(weeklySchedule[day.id]?.planId || '').trim())) {
+        nextErrors.recurrence_plans = 'Associa una scheda a ogni giorno';
+      }
+    }
     if (Number(form.max_participants) < (form.is_personal ? 1 : 2)) {
       nextErrors.max_participants = form.is_personal ? 'Partecipanti non validi' : 'Minimo 2 partecipanti';
     }
-    if (!form.description || form.description.trim().length < 20) {
+    if (!form.is_personal && (!form.description || form.description.trim().length < 20)) {
       nextErrors.description = 'Inserisci almeno 20 caratteri';
     }
 
@@ -1391,7 +1576,7 @@ function CreateEventPage() {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       const firstInvalidStep = WIZARD_STEPS.find((step) =>
-        STEP_ERROR_FIELDS[step.id].some((field) => nextErrors[field])
+        getStepErrorFields(step.id, form.is_personal).some((field) => nextErrors[field])
       );
       if (firstInvalidStep) {
         setStepDirection(firstInvalidStep.id < activeStep ? 'backward' : 'forward');
@@ -1404,7 +1589,7 @@ function CreateEventPage() {
 
   function goToNextStep() {
     const nextErrors = collectValidationErrors();
-    const fields = STEP_ERROR_FIELDS[activeStep];
+    const fields = getStepErrorFields(activeStep, form.is_personal);
     const currentStepErrors = Object.fromEntries(
       Object.entries(nextErrors).filter(([field]) => fields.includes(field))
     );
@@ -1416,7 +1601,7 @@ function CreateEventPage() {
     });
 
     if (Object.keys(currentStepErrors).length) {
-      if (activeStep === 1) {
+      if (activeStep === 1 || (activeStep === 3 && form.is_personal)) {
         if (currentStepErrors.event_datetime) {
           setActiveWhenPanel(eventDate ? 'time' : 'date');
         } else if (currentStepErrors.duration_minutes) {
@@ -1480,6 +1665,30 @@ function CreateEventPage() {
         setSelectedWorkoutPlan(attachedWorkoutPlan);
       }
 
+      let syncedWorkoutPlans = workoutPlans;
+      let syncedWeeklySchedule = serializePersonalWeeklySchedule(weeklySchedule);
+      if (form.is_personal && recurrenceMode === 'weekly') {
+        const planUpdates = new Map();
+        for (const day of getEnabledPersonalRecurrenceDays(syncedWeeklySchedule)) {
+          const selectedPlanId = String(syncedWeeklySchedule[day.id]?.planId || '');
+          const plan = workoutPlansById.get(selectedPlanId);
+          if (!plan) throw new Error(`Scheda non disponibile per ${day.label}`);
+          const syncedPlan = plan.remoteId ? plan : await ensurePersonalWorkoutPlanRemote(plan);
+          planUpdates.set(String(plan.id), syncedPlan);
+          planUpdates.set(String(plan.remoteId || ''), syncedPlan);
+          syncedWeeklySchedule = {
+            ...syncedWeeklySchedule,
+            [day.id]: {
+              ...syncedWeeklySchedule[day.id],
+              planId: String(syncedPlan.remoteId || syncedPlan.id)
+            }
+          };
+        }
+        syncedWorkoutPlans = workoutPlans.map((plan) => planUpdates.get(String(plan.id)) || plan);
+        setWorkoutPlans(syncedWorkoutPlans);
+        setWeeklySchedule(syncedWeeklySchedule);
+      }
+
       let resolvedLat = form.lat === '' ? null : Number(form.lat);
       let resolvedLng = form.lng === '' ? null : Number(form.lng);
       if (resolvedLat == null || resolvedLng == null) {
@@ -1498,9 +1707,55 @@ function CreateEventPage() {
         checkInGraceMinutes: form.checkin_grace_minutes
       });
 
+      const routeInfo = form.has_route
+        ? {
+            name: String(form.route_name || '').trim(),
+            from_label: String(form.route_from || '').trim(),
+            to_label: String(form.route_to || '').trim(),
+            from_lat: form.route_from_lat === '' ? null : Number(form.route_from_lat),
+            from_lng: form.route_from_lng === '' ? null : Number(form.route_from_lng),
+            to_lat: form.route_to_lat === '' ? null : Number(form.route_to_lat),
+            to_lng: form.route_to_lng === '' ? null : Number(form.route_to_lng),
+            distance_km: Number(form.route_distance_km),
+            elevation_gain_m:
+              form.route_elevation_gain_m === '' ? null : Number(form.route_elevation_gain_m),
+            map_url: String(form.route_map_url || '').trim(),
+            route_points: Array.isArray(form.route_points) ? form.route_points : []
+          }
+        : null;
+
+      if (form.is_personal && recurrenceMode === 'weekly') {
+        const program = await api.createPersonalEventSeries({
+          start_date: eventDate,
+          weeks: PERSONAL_RECURRENCE_WEEKS,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome',
+          weekly_schedule: syncedWeeklySchedule,
+          workout_plans: syncedWorkoutPlans,
+          event: {
+            ...form,
+            title: getEventDisplayTitle(form, selectedSport),
+            description: `Allenamento personale di ${selectedSport?.name || 'fitness'}`,
+            sport_id: Number(form.sport_id),
+            duration_minutes: Number(form.duration_minutes),
+            lat: resolvedLat,
+            lng: resolvedLng,
+            route_info: routeInfo
+          }
+        });
+        const createdCount = Number(program?.occurrences_created || recurrencePreview.length);
+        showToast(`Programma creato · ${createdCount} allenamenti pronti`, 'success');
+        markStepByAction('event_created');
+        api.getEventCreationStats().then(setCreationStats).catch(() => {});
+        navigate('/agenda');
+        return;
+      }
+
       const created = await api.createEvent({
         ...form,
         title: getEventDisplayTitle(form, selectedSport),
+        description: form.is_personal
+          ? `Allenamento personale di ${selectedSport?.name || 'fitness'}`
+          : form.description,
         sport_id: Number(form.sport_id),
         duration_minutes: Number(form.duration_minutes),
         deposit_cents: form.is_personal ? 0 : 1000,
@@ -1522,22 +1777,7 @@ function CreateEventPage() {
         lng: resolvedLng,
         scheda_id: attachedWorkoutPlan?.remoteId || null,
         workout_plan: attachedWorkoutPlan || null,
-        route_info: form.has_route
-          ? {
-              name: String(form.route_name || '').trim(),
-              from_label: String(form.route_from || '').trim(),
-              to_label: String(form.route_to || '').trim(),
-              from_lat: form.route_from_lat === '' ? null : Number(form.route_from_lat),
-              from_lng: form.route_from_lng === '' ? null : Number(form.route_from_lng),
-              to_lat: form.route_to_lat === '' ? null : Number(form.route_to_lat),
-              to_lng: form.route_to_lng === '' ? null : Number(form.route_to_lng),
-              distance_km: Number(form.route_distance_km),
-              elevation_gain_m:
-                form.route_elevation_gain_m === '' ? null : Number(form.route_elevation_gain_m),
-              map_url: String(form.route_map_url || '').trim(),
-              route_points: Array.isArray(form.route_points) ? form.route_points : []
-            }
-          : null
+        route_info: routeInfo
       });
 
       if (form.add_to_calendar) {
@@ -1597,6 +1837,20 @@ function CreateEventPage() {
     }
   }
 
+  const currentWizardStep = WIZARD_STEPS[activeStep - 1];
+  const currentWizardLabel = activeStep === 3 && form.is_personal
+    ? 'Programma'
+    : currentWizardStep.label;
+  const currentWizardDescription = form.is_personal
+    ? activeStep === 1
+      ? 'Sport e frequenza'
+      : activeStep === 2
+        ? 'Punto d’allenamento e percorso'
+        : activeStep === 3
+          ? (recurrenceMode === 'weekly' ? 'Giorni, disponibilità e schede' : 'Data, ora e scheda')
+          : currentWizardStep.description
+    : currentWizardStep.description;
+
   return (
     <section className={styles.page}>
       <header className={styles.pageHeader}>
@@ -1624,8 +1878,8 @@ function CreateEventPage() {
 
         <div className={styles.stepIntro}>
           <div>
-            <span>{WIZARD_STEPS[activeStep - 1].label}</span>
-            <h2>{WIZARD_STEPS[activeStep - 1].description}</h2>
+            <span>{currentWizardLabel}</span>
+            <h2>{currentWizardDescription}</h2>
           </div>
           <strong>{activeStep}/{WIZARD_STEPS.length}</strong>
         </div>
@@ -1633,7 +1887,63 @@ function CreateEventPage() {
         {activeStep === 1 ? (
           <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Informazioni base">
 
-            <label className={styles.field}>
+            <section className={styles.eventKindCard} aria-label="Tipo di evento">
+              <div className={styles.sectionLabelRow}>
+                <span>Tipo di evento</span>
+                <small>{form.is_personal ? 'Solo per te' : 'Con partecipanti'}</small>
+              </div>
+              <div className={styles.eventKindOptions} role="group" aria-label="Scegli il tipo di evento">
+                <button
+                  type="button"
+                  className={!form.is_personal ? styles.eventKindSelected : ''}
+                  aria-pressed={!form.is_personal}
+                  onClick={() => togglePersonalEvent(false)}
+                >
+                  <Users size={21} aria-hidden="true" />
+                  <span><strong>Di gruppo</strong><small>Invita o incontra altri atleti</small></span>
+                </button>
+                <button
+                  type="button"
+                  className={form.is_personal ? styles.eventKindSelected : ''}
+                  aria-pressed={form.is_personal}
+                  onClick={() => togglePersonalEvent(true)}
+                >
+                  <UserRoundCheck size={21} aria-hidden="true" />
+                  <span><strong>Personale</strong><small>Allenamento privato e progressi</small></span>
+                </button>
+              </div>
+
+              {form.is_personal ? (
+                <div className={styles.recurrenceModePicker}>
+                  <span>Frequenza</span>
+                  <div role="group" aria-label="Frequenza evento personale">
+                    <button
+                      type="button"
+                      className={recurrenceMode === 'once' ? styles.recurrenceModeSelected : ''}
+                      aria-pressed={recurrenceMode === 'once'}
+                      onClick={() => selectRecurrenceMode('once')}
+                    >
+                      <CalendarDays size={18} aria-hidden="true" /> Una volta
+                    </button>
+                    <button
+                      type="button"
+                      className={recurrenceMode === 'weekly' ? styles.recurrenceModeSelected : ''}
+                      aria-pressed={recurrenceMode === 'weekly'}
+                      onClick={() => selectRecurrenceMode('weekly')}
+                    >
+                      <Repeat2 size={18} aria-hidden="true" /> Ricorrente
+                    </button>
+                  </div>
+                  <small>
+                    {recurrenceMode === 'weekly'
+                      ? 'Configurerai giorni, disponibilità e schede nella terza pagina.'
+                      : 'Creerai un singolo allenamento personale.'}
+                  </small>
+                </div>
+              ) : null}
+            </section>
+
+            {!form.is_personal ? <label className={styles.field}>
               <span className={styles.fieldLabel}>Nome personalizzato</span>
               <input
                 className={invalidClass('title')}
@@ -1643,7 +1953,7 @@ function CreateEventPage() {
                 maxLength="100"
               />
               {errors.title && <span className="error">{errors.title}</span>}
-            </label>
+            </label> : null}
 
             <div className={styles.choiceSection}>
               <div className={styles.sectionLabelRow}>
@@ -1685,7 +1995,7 @@ function CreateEventPage() {
               {errors.sport_id && <span className="error">{errors.sport_id}</span>}
             </div>
 
-            <div className={styles.choiceSection}>
+            {!form.is_personal ? <div className={styles.choiceSection}>
               <div className={styles.sectionLabelRow}><span>Livello richiesto</span></div>
               <div className={styles.levelGrid} role="group" aria-label="Livello richiesto">
                 {LEVEL_OPTIONS.map((level) => (
@@ -1700,9 +2010,9 @@ function CreateEventPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </div> : null}
 
-            <div className={styles.whenSection}>
+            {!form.is_personal ? <><div className={styles.whenSection}>
               <div className={styles.sectionLabelRow}>
                 <span>Data e ora</span>
                 <small>Completa in ordine</small>
@@ -1867,7 +2177,9 @@ function CreateEventPage() {
               </div>
             </div>
             {errors.event_datetime && <span className="error">{errors.event_datetime}</span>}
+            </> : null}
 
+            {!form.is_personal ? <>
             <div className={styles.controlGrid}>
               <div className={`${styles.controlCard} ${styles.participantsCard} ${errors.max_participants ? styles.invalidCard : ''}`}>
                 <span className={styles.controlTitle}><Users size={18} />Partecipanti</span>
@@ -1969,6 +2281,12 @@ function CreateEventPage() {
               {errors.min_age && <span className="error">{errors.min_age}</span>}
               {errors.max_age && <span className="error">{errors.max_age}</span>}
             </div>
+            </> : (
+              <div className={styles.personalFirstStepHint}>
+                <UserRoundCheck size={21} aria-hidden="true" />
+                <span>Nessun partecipante, deposito o filtro pubblico. L’allenamento sarà visibile soltanto a te.</span>
+              </div>
+            )}
           </fieldset>
         ) : null}
 
@@ -1991,7 +2309,7 @@ function CreateEventPage() {
               >
                 <MapPin size={22} aria-hidden="true" />
                 <span>
-                  <strong>Punto d’incontro</strong>
+                  <strong>{fixedLocationLabel}</strong>
                   <small>Un solo luogo</small>
                 </span>
                 {!form.has_route ? <Check size={18} aria-hidden="true" /> : null}
@@ -2026,7 +2344,7 @@ function CreateEventPage() {
                   }
                 }}
                 placeholder={form.has_route ? 'Cerca il luogo di partenza' : 'Nome palestra, centro sportivo o indirizzo'}
-                aria-label={form.has_route ? 'Cerca il luogo di partenza' : 'Cerca il punto d’incontro'}
+                aria-label={form.has_route ? 'Cerca il luogo di partenza' : `Cerca il ${fixedLocationLabelLower}`}
               />
               <button type="button" disabled={locationResolving} onClick={() => void searchLocationForMode()}>
                 Cerca
@@ -2056,7 +2374,7 @@ function CreateEventPage() {
             ) : null}
 
             {!form.has_route ? (
-              <div className={styles.locationFlowGuide} aria-label="Come scegliere il punto d’incontro">
+              <div className={styles.locationFlowGuide} aria-label={`Come scegliere il ${fixedLocationLabelLower}`}>
                 <span className={locationPreview ? styles.locationFlowDone : ''}>
                   <b>1</b> Trova l’area
                 </span>
@@ -2075,7 +2393,7 @@ function CreateEventPage() {
               <div className={styles.locationMapHead}>
                 <span>
                   {form.has_route ? <Route size={17} aria-hidden="true" /> : <MapPinned size={17} aria-hidden="true" />}
-                  {form.has_route ? 'Costruisci il percorso' : 'Scegli il punto d’incontro'}
+                  {form.has_route ? 'Costruisci il percorso' : `Scegli il ${fixedLocationLabelLower}`}
                 </span>
                 <small className={styles.locationGpsStatus}>
                   <i className={userLocationCoords ? styles.locationGpsActive : ''} />
@@ -2406,7 +2724,7 @@ function CreateEventPage() {
         {activeStep === 3 ? (
           <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Regole e pubblicazione">
 
-            <div className={styles.primarySettingsCard}>
+            {!form.is_personal ? <div className={styles.primarySettingsCard}>
               <div
                 className={`${styles.settingRow} ${styles.settingRowCompact} ${form.participation_protection ? styles.settingRowActive : ''}`}
               >
@@ -2415,36 +2733,205 @@ function CreateEventPage() {
                   <strong>Proteggi la partecipazione</strong>
                   <small>Deposito fisso e sblocco tramite QR o GPS. Presenza e premi sono calcolati da Motrice.</small>
                 </span>
-                <span className={styles.requiredBadge}>{form.is_personal ? 'Non richiesta' : 'Sempre attiva'}</span>
+                <span className={styles.requiredBadge}>Sempre attiva</span>
               </div>
-
-              <label
-                className={`${styles.settingRow} ${styles.settingRowCompact} ${form.is_personal ? styles.settingRowActive : ''}`}
-              >
-                <span className={styles.settingIcon}><UserRoundCheck size={22} /></span>
-                <span className={styles.settingCopy}>
-                  <strong>Evento personale</strong>
-                  <small>Attiva per tracciare un allenamento personale visibile solo a te.</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={form.is_personal}
-                  onChange={(event) => togglePersonalEvent(event.target.checked)}
-                />
-                <span className={styles.switchTrack} aria-hidden="true"><i /></span>
-              </label>
-            </div>
+            </div> : null}
 
             {form.is_personal ? (
               <div className={styles.personalNotice}>
                 <UserRoundCheck size={24} aria-hidden="true" />
                 <div>
-                  <strong>Solo tu</strong>
-                  <span>Deposito, partecipanti, approvazioni e QR vengono disattivati automaticamente.</span>
+                  <strong>{recurrenceMode === 'weekly' ? 'Programma personale ricorrente' : 'Evento personale singolo'}</strong>
+                  <span>
+                    {recurrenceMode === 'weekly'
+                      ? 'Privato e flessibile: si sblocca dall’orario scelto e parte soltanto dopo GPS e conferma.'
+                      : 'Privato, senza deposito, partecipanti o QR. L’avvio avviene dal tuo allenamento live.'}
+                  </span>
                 </div>
               </div>
             ) : null}
 
+            {form.is_personal ? (
+              <section className={styles.personalTimingCard} aria-label="Programmazione allenamento personale">
+                <div className={styles.personalTimingHead}>
+                  <span><CalendarDays size={21} aria-hidden="true" /></span>
+                  <div>
+                    <strong>{recurrenceMode === 'weekly' ? 'Inizio del programma' : 'Quando ti alleni'}</strong>
+                    <small>
+                      {recurrenceMode === 'weekly'
+                        ? 'Scegli la data di partenza e la durata comune delle sessioni.'
+                        : 'Imposta data, ora e durata del tuo allenamento.'}
+                    </small>
+                  </div>
+                </div>
+
+                <div className={`${styles.personalTimingFields} ${recurrenceMode === 'weekly' ? styles.personalTimingFieldsCompact : ''}`}>
+                  <label>
+                    <span>{recurrenceMode === 'weekly' ? 'Data di partenza' : 'Data'}</span>
+                    <input
+                      type="date"
+                      min={todayDateValue}
+                      value={eventDate}
+                      onChange={(event) => selectEventDate(event.target.value)}
+                    />
+                  </label>
+                  {recurrenceMode === 'once' ? (
+                    <label>
+                      <span>Ora</span>
+                      <input
+                        type="time"
+                        step="300"
+                        value={eventTime}
+                        onChange={(event) => selectEventTime(event.target.value)}
+                      />
+                    </label>
+                  ) : null}
+                  <label>
+                    <span>Durata sessione</span>
+                    <span className={styles.personalDurationInput}>
+                      <input
+                        type="number"
+                        min="15"
+                        max="360"
+                        step="15"
+                        value={form.duration_minutes}
+                        onChange={(event) => setField('duration_minutes', event.target.value)}
+                        aria-label="Durata allenamento personale in minuti"
+                      />
+                      <b>min</b>
+                    </span>
+                  </label>
+                </div>
+
+                <div className={styles.personalDurationPresets} role="group" aria-label="Durate rapide">
+                  {DURATION_PRESETS.map((minutes) => (
+                    <button
+                      key={minutes}
+                      type="button"
+                      className={Number(form.duration_minutes) === minutes ? styles.personalDurationSelected : ''}
+                      onClick={() => selectEventDuration(minutes)}
+                    >
+                      {minutes}′
+                    </button>
+                  ))}
+                </div>
+                {errors.event_datetime ? <span className="error">{errors.event_datetime}</span> : null}
+                {errors.duration_minutes ? <span className="error">{errors.duration_minutes}</span> : null}
+              </section>
+            ) : null}
+
+            {form.is_personal && recurrenceMode === 'weekly' ? (
+              <section className={styles.recurrencePlanner} aria-label="Programmazione settimanale">
+                <div className={styles.recurrencePlannerHead}>
+                  <span className={styles.recurrencePlannerIcon}><CalendarRange size={23} aria-hidden="true" /></span>
+                  <div>
+                    <span className={styles.fieldLabel}>Programmazione settimanale</span>
+                    <strong>Scegli giorni e disponibilità</strong>
+                    <small>A partire dal {formatEventDateLabel(eventDate)} · anteprima di {PERSONAL_RECURRENCE_WEEKS} settimane</small>
+                  </div>
+                  <span className={styles.previewBadge}>Anteprima</span>
+                </div>
+
+                <div className={styles.recurrenceDayPicker} role="group" aria-label="Giorni di allenamento">
+                  {PERSONAL_RECURRENCE_DAYS.map((day) => (
+                    <button
+                      key={day.id}
+                      type="button"
+                      className={weeklySchedule[day.id]?.enabled ? styles.recurrenceDaySelected : ''}
+                      aria-pressed={Boolean(weeklySchedule[day.id]?.enabled)}
+                      onClick={() => toggleRecurringDay(day.id)}
+                    >
+                      <span>{day.shortLabel}</span>
+                      {weeklySchedule[day.id]?.enabled ? <Check size={15} aria-hidden="true" /> : null}
+                    </button>
+                  ))}
+                </div>
+                {errors.recurrence_days ? <span className="error">{errors.recurrence_days}</span> : null}
+
+                {recurringDays.length ? (
+                  <div className={styles.recurrenceDayList}>
+                    {recurringDays.map((day) => {
+                      const configuration = weeklySchedule[day.id];
+                      const plan = workoutPlansById.get(String(configuration.planId || ''));
+                      return (
+                        <article key={day.id} className={styles.recurrenceDayCard}>
+                          <header>
+                            <span>{day.shortLabel}</span>
+                            <div><strong>{day.label}</strong><small>{configuration.time ? `Disponibile dalle ${configuration.time}` : 'Disponibilità da scegliere'}</small></div>
+                            <button type="button" onClick={() => toggleRecurringDay(day.id)} aria-label={`Rimuovi ${day.label}`}>
+                              <X size={17} aria-hidden="true" />
+                            </button>
+                          </header>
+                          <div className={styles.recurrenceDayFields}>
+                            <label>
+                              <span>Disponibile dalle</span>
+                              <input
+                                type="time"
+                                step="300"
+                                value={configuration.time}
+                                onChange={(event) => updateRecurringDay(day.id, 'time', event.target.value)}
+                              />
+                            </label>
+                            <label>
+                              <span>Scheda</span>
+                              <select
+                                value={configuration.planId}
+                                onChange={(event) => updateRecurringDay(day.id, 'planId', event.target.value)}
+                                disabled={workoutPlansLoading}
+                              >
+                                <option value="">{workoutPlansLoading ? 'Caricamento…' : 'Scegli una scheda'}</option>
+                                {workoutPlans.map((item) => (
+                                  <option key={getWorkoutPlanValue(item)} value={getWorkoutPlanValue(item)}>
+                                    {item.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+                          <footer>
+                            <Dumbbell size={15} aria-hidden="true" />
+                            <span>{plan ? `${plan.exercises?.length || 0} esercizi · ${plan.duration || form.duration_minutes} min` : 'Collega una scheda per questo giorno'}</span>
+                          </footer>
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.recurrenceEmpty}>Seleziona almeno un giorno per costruire la tua settimana.</div>
+                )}
+                {errors.recurrence_times ? <span className="error">{errors.recurrence_times}</span> : null}
+                {errors.recurrence_plans ? <span className="error">{errors.recurrence_plans}</span> : null}
+
+                <div className={styles.recurrenceAccessRule}>
+                  <Clock3 size={18} aria-hidden="true" />
+                  <span>
+                    <strong>Finestra flessibile</strong>
+                    <small>Accesso dall’orario indicato fino alle 23:59. Il timer parte solo dopo verifica GPS e “Avvia allenamento”.</small>
+                  </span>
+                </div>
+
+                {!workoutPlansLoading && !workoutPlans.length ? (
+                  <div className={styles.recurrenceNoPlans}>
+                    <Dumbbell size={19} aria-hidden="true" />
+                    <span><strong>Nessuna scheda disponibile</strong><small>Crea prima almeno una scheda personale.</small></span>
+                    <button type="button" onClick={() => navigate('/dashboard/plans')}>Vai alle schede</button>
+                  </div>
+                ) : null}
+
+                <div className={styles.recurrenceReminder}>
+                  <BellRing size={19} aria-hidden="true" />
+                  <div><strong>Promemoria intelligente</strong><small>Quando il GPS rileva che hai raggiunto il punto di allenamento, ricevi un avviso per verificare la presenza e avviare la sessione.</small></div>
+                </div>
+              </section>
+            ) : null}
+
+            {form.is_personal ? (
+              <div className={styles.personalVisibilityCompact} aria-label="Visibilità allenamento personale">
+                <LockKeyhole size={18} aria-hidden="true" />
+                <span><strong>Solo tu</strong><small>Visibile esclusivamente ne “I miei eventi”.</small></span>
+                <b>Privato</b>
+              </div>
+            ) : (
             <div className={`${styles.choiceSection} ${styles.optionCard}`}>
               <div className={styles.sectionLabelRow}><span>Visibilita</span></div>
               <div className={styles.segmentedControl} role="group" aria-label="Visibilita evento">
@@ -2452,7 +2939,6 @@ function CreateEventPage() {
                   type="button"
                   className={form.visibility === 'public' ? styles.segmentSelected : ''}
                   aria-pressed={form.visibility === 'public'}
-                  disabled={form.is_personal}
                   onClick={() => setVisibility('public')}
                 >
                   <Globe2 size={20} /> Pubblico
@@ -2469,15 +2955,14 @@ function CreateEventPage() {
               <div className={styles.settingHint}>
                 <i aria-hidden="true" />
                 <span>
-                  {form.is_personal
-                    ? 'Promemoria privato: compare solo nella tua sezione I miei eventi.'
-                    : form.visibility === 'private'
+                  {form.visibility === 'private'
                       ? 'Solo su invito con link. Non compare nella mappa o nelle liste pubbliche.'
                       : `Visibile a tutti${form.city ? ` a ${form.city}` : ''}. Chiunque puo trovare l evento.`}
                 </span>
               </div>
               {errors.visibility && <span className="error">{errors.visibility}</span>}
             </div>
+            )}
 
             {!form.is_personal && form.visibility === 'public' ? (
               <div className={`${styles.choiceSection} ${styles.optionCard}`}>
@@ -2590,12 +3075,16 @@ function CreateEventPage() {
               </section>
             ) : null}
 
-            <section className={`${styles.workoutAttachmentCard} ${selectedWorkoutPlan ? styles.workoutAttachmentSelected : ''}`}>
+            {!(form.is_personal && recurrenceMode === 'weekly') ? <section className={`${styles.workoutAttachmentCard} ${selectedWorkoutPlan ? styles.workoutAttachmentSelected : ''}`}>
               <div className={styles.workoutAttachmentHeading}>
                 <span className={styles.workoutAttachmentIcon}><Dumbbell size={23} aria-hidden="true" /></span>
                 <div>
                   <span className={styles.fieldLabel}>Allega scheda</span>
-                  <small>Condividi una delle tue Schede personali con i partecipanti.</small>
+                  <small>
+                    {form.is_personal
+                      ? 'Collega una delle tue Schede personali all’allenamento.'
+                      : 'Condividi una delle tue Schede personali con i partecipanti.'}
+                  </small>
                 </div>
               </div>
               {selectedWorkoutPlan ? (
@@ -2614,9 +3103,9 @@ function CreateEventPage() {
                   <Plus size={19} aria-hidden="true" /> Scegli una scheda
                 </button>
               )}
-            </section>
+            </section> : null}
 
-            <label className={`${styles.field} ${styles.descriptionCard}`}>
+            {!form.is_personal ? <label className={`${styles.field} ${styles.descriptionCard}`}>
               <span className={styles.descriptionLabel}>
                 <span className={styles.fieldLabel}>Descrizione</span>
                 <Button
@@ -2647,7 +3136,7 @@ function CreateEventPage() {
                 </b>
               </span>
               {errors.description && <span className="error">{errors.description}</span>}
-            </label>
+            </label> : null}
           </fieldset>
         ) : null}
 
@@ -2656,7 +3145,9 @@ function CreateEventPage() {
             <section className={styles.reviewHero}>
               <span className={styles.reviewHeroVisual}>{getSportVisual(selectedSport).emoji}</span>
               <div>
-                <span className={styles.reviewEyebrow}>Pronto per la pubblicazione</span>
+                <span className={styles.reviewEyebrow}>
+                  {form.is_personal && recurrenceMode === 'weekly' ? 'Programma personale pronto' : 'Pronto per la pubblicazione'}
+                </span>
                 <h3>{getEventDisplayTitle(form, selectedSport)}</h3>
                 <p>{selectedSport?.name || 'Attività sportiva'} · {form.city}</p>
               </div>
@@ -2666,18 +3157,47 @@ function CreateEventPage() {
             <section className={styles.reviewSection}>
               <div className={styles.reviewSectionHeader}>
                 <div><CalendarDays size={19} /><strong>Attività e orario</strong></div>
-                <button type="button" onClick={() => editReviewStep(1)}>Modifica</button>
+                <button type="button" onClick={() => editReviewStep(form.is_personal ? 3 : 1)}>Modifica</button>
               </div>
               <div className={styles.reviewGrid}>
                 <div><span>Sport</span><strong>{selectedSport?.name || '—'}</strong></div>
-                <div><span>Livello</span><strong>{LEVEL_OPTIONS.find((item) => item.value === form.level)?.label || 'Open'}</strong></div>
-                <div><span>Data</span><strong>{formatEventDateLabel(eventDate)}</strong></div>
-                <div><span>Orario</span><strong>{eventTime}–{eventEndTime}</strong></div>
+                {!form.is_personal ? <div><span>Livello</span><strong>{LEVEL_OPTIONS.find((item) => item.value === form.level)?.label || 'Open'}</strong></div> : null}
+                <div><span>{form.is_personal && recurrenceMode === 'weekly' ? 'Inizio programma' : 'Data'}</span><strong>{formatEventDateLabel(eventDate)}</strong></div>
+                <div><span>{form.is_personal && recurrenceMode === 'weekly' ? 'Disponibilità' : 'Orario'}</span><strong>{form.is_personal && recurrenceMode === 'weekly' ? 'Dalle ore indicate' : `${eventTime}–${eventEndTime}`}</strong></div>
                 <div><span>Durata</span><strong>{form.duration_minutes} min</strong></div>
-                <div><span>Partecipanti</span><strong>Fino a {form.max_participants}</strong></div>
-                <div><span>Età</span><strong>{form.min_age}–{form.max_age} anni</strong></div>
+                {form.is_personal
+                  ? <div><span>Frequenza</span><strong>{recurrenceMode === 'weekly' ? `${recurringDays.length} giorni a settimana` : 'Una volta'}</strong></div>
+                  : <>
+                    <div><span>Partecipanti</span><strong>Fino a {form.max_participants}</strong></div>
+                    <div><span>Età</span><strong>{form.min_age}–{form.max_age} anni</strong></div>
+                  </>}
               </div>
             </section>
+
+            {form.is_personal && recurrenceMode === 'weekly' ? (
+              <section className={styles.reviewSection}>
+                <div className={styles.reviewSectionHeader}>
+                  <div><Repeat2 size={19} /><strong>Settimana di allenamento</strong></div>
+                  <button type="button" onClick={() => editReviewStep(3)}>Modifica</button>
+                </div>
+                <div className={styles.recurrenceReviewList}>
+                  {recurringDays.map((day) => {
+                    const configuration = weeklySchedule[day.id];
+                    const plan = workoutPlansById.get(String(configuration.planId || ''));
+                    return (
+                      <div key={day.id}>
+                        <span>{day.shortLabel}</span>
+                        <strong>{day.label}</strong>
+                        <small>Dalle {configuration.time} · {plan?.title || 'Scheda non selezionata'}</small>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className={styles.recurrenceReviewSummary}>
+                  {recurrencePreview.length} allenamenti nelle prossime {PERSONAL_RECURRENCE_WEEKS} settimane, generati progressivamente.
+                </p>
+              </section>
+            ) : null}
 
             <section className={styles.reviewSection}>
               <div className={styles.reviewSectionHeader}>
@@ -2695,7 +3215,7 @@ function CreateEventPage() {
                     {getGymAccessPresentation(form)?.label}
                   </small>
                 ) : (
-                  <small>Punto d’incontro confermato sulla mappa</small>
+                  <small>{fixedLocationLabel} confermato sulla mappa</small>
                 )}
               </div>
             </section>
@@ -2711,28 +3231,32 @@ function CreateEventPage() {
                 <div><span>Deposito</span><strong>{form.is_personal ? 'Non richiesto' : '10 €'}</strong></div>
                 <div><span>Tolleranza</span><strong>{form.is_personal ? '—' : `${form.checkin_grace_minutes} min`}</strong></div>
                 <div><span>Verifica</span><strong>{form.is_personal ? 'GPS' : 'QR + GPS'}</strong></div>
-                <div><span>Scheda</span><strong>{selectedWorkoutPlan?.title || 'Non allegata'}</strong></div>
+                <div><span>Scheda</span><strong>{form.is_personal && recurrenceMode === 'weekly' ? 'Diversa per ogni giorno' : selectedWorkoutPlan?.title || 'Non allegata'}</strong></div>
               </div>
-              <div className={styles.reviewDescription}>
+              {!form.is_personal ? <div className={styles.reviewDescription}>
                 <span>Descrizione</span>
                 <p>{form.description}</p>
-              </div>
+              </div> : null}
             </section>
 
             <div className={styles.reviewConfirmation}>
               <Check size={21} aria-hidden="true" />
-              <span>Controlla i dati. La pubblicazione avverrà solo dopo la conferma finale.</span>
+              <span>
+                {form.is_personal && recurrenceMode === 'weekly'
+                  ? 'Confermando, Motrice creerà le sessioni e continuerà a generarle progressivamente senza duplicati.'
+                  : 'Controlla i dati. La pubblicazione avverrà solo dopo la conferma finale.'}
+              </span>
             </div>
           </fieldset>
         ) : null}
 
         <footer
-          className={`${styles.wizardFooter} ${activeStep < WIZARD_STEPS.length ? styles.wizardFooterSingle : ''}`}
+          className={`${styles.wizardFooter} ${activeStep === 1 ? styles.wizardFooterSingle : ''}`}
           hidden={keyboardVisible}
         >
-          {activeStep === WIZARD_STEPS.length ? (
-            <button type="button" className={styles.backButton} onClick={goToPreviousStep}>
-              <ChevronLeft size={21} />Indietro
+          {activeStep > 1 ? (
+            <button type="button" className={`${styles.backButton} ${styles.backButtonCompact}`} onClick={goToPreviousStep}>
+              <ChevronLeft size={18} />Indietro
             </button>
           ) : null}
           {activeStep < WIZARD_STEPS.length ? (
@@ -2741,7 +3265,11 @@ function CreateEventPage() {
             </button>
           ) : (
             <button type="button" className={styles.nextButton} disabled={submitting} onClick={publishEvent}>
-              {submitting ? 'Pubblicazione...' : 'Conferma e pubblica'}{' '}
+              {submitting
+                ? 'Pubblicazione...'
+                : form.is_personal && recurrenceMode === 'weekly'
+                  ? 'Crea programma'
+                  : 'Conferma e pubblica'}{' '}
               <Check size={23} />
             </button>
           )}

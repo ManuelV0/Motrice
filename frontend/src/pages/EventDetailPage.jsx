@@ -69,6 +69,7 @@ import {
 import {
   EVENT_CAPACITY_MAX_EXTENSION,
   EVENT_DURATION_MAX_EXTENSION_MINUTES,
+  canDeleteOwnedEvent,
   getCapacityExtensionOptions,
   getDurationExtensionOptions,
   getEventManagementPolicy
@@ -968,7 +969,9 @@ function EventDetailPage() {
       const refundedCents = Number(result?.refunded_cents || 0);
       const refundedParticipants = Number(result?.refunded_participants || 0);
       showToast(
-        refundedCents > 0
+        event.is_personal
+          ? 'Evento personale eliminato.'
+          : refundedCents > 0
           ? `Evento annullato · ${refundedParticipants} ${refundedParticipants === 1 ? 'rimborso eseguito' : 'rimborsi eseguiti'}`
           : 'Evento annullato. I partecipanti sono stati avvisati.',
         'success'
@@ -1091,7 +1094,9 @@ function EventDetailPage() {
       setOrganizerEditOpen(false);
       showToast(
         (result?.changes || []).length > 0
-          ? 'Evento aggiornato. I partecipanti sono stati avvisati.'
+          ? event.is_personal
+            ? 'Evento personale aggiornato.'
+            : 'Evento aggiornato. I partecipanti sono stati avvisati.'
           : 'Nessuna modifica da salvare.',
         'success'
       );
@@ -1780,13 +1785,10 @@ function EventDetailPage() {
       : isArchivedEvent
         ? `Archiviato · verifica economica ancora aperta per ${formatLifecycleTimeLeft(eventTiming.financialReviewEndsAtMs, checkInNowMs)}`
         : `Azioni post-evento disponibili per ${formatLifecycleTimeLeft(eventTiming.archiveAtMs, checkInNowMs)}`;
-  const canCancelOrganizedEvent = Boolean(
-    isOrganizerForEvent &&
-    !event.is_personal &&
-    event.status === 'scheduled' &&
-    Number.isFinite(eventStartsMs) &&
-    eventStartsMs > Date.now()
-  );
+  const canCancelOrganizedEvent = canDeleteOwnedEvent(event, {
+    isOwner: isOrganizerForEvent,
+    referenceTime: checkInNowMs
+  });
   const cancellationIsLatePreview = Boolean(
     Number.isFinite(eventStartsMs) && eventStartsMs < Date.now() + 24 * 60 * 60 * 1000
   );
@@ -2492,6 +2494,17 @@ function EventDetailPage() {
               {eventIsCancelled ? 'Evento annullato' : isOrganizerForEvent ? 'Azioni evento' : 'Altre opzioni'}
             </h2>
             <div className={styles.primaryParticipationAction}>
+              {isOrganizerForEvent && event.is_personal && !eventIsCancelled && !isClosedEvent ? (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant="secondary"
+                  icon={PencilLine}
+                  onClick={openOrganizerEditDialog}
+                >
+                  Modifica evento
+                </Button>
+              ) : null}
               {isOrganizerForEvent && event.is_personal ? (
                 <Button
                   type="button"
@@ -2536,7 +2549,7 @@ function EventDetailPage() {
             </button> : null}
             {actionsOpen ? (
             <div id={`event-secondary-actions-${event.id}`} className={styles.actions}>
-              {isOrganizerForEvent && !eventIsCancelled && !isClosedEvent ? (
+              {isOrganizerForEvent && !event.is_personal && !eventIsCancelled && !isClosedEvent ? (
                 <Button type="button" variant="secondary" icon={PencilLine} onClick={openOrganizerEditDialog}>
                   Modifica evento
                 </Button>
@@ -2944,7 +2957,7 @@ function EventDetailPage() {
 
       <Modal
         open={organizerEditOpen}
-        title="Modifica evento"
+        title={event.is_personal ? 'Modifica evento personale' : 'Modifica evento'}
         onClose={() => {
           if (!organizerEditSubmitting) setOrganizerEditOpen(false);
         }}
@@ -2966,8 +2979,12 @@ function EventDetailPage() {
           <div className={styles.organizerEditIntro}>
             <PencilLine size={21} aria-hidden="true" />
             <div>
-              <strong>Modifiche protette per tutti</strong>
-              <p>Ogni campo segue una finestra precisa. Le variazioni salvate vengono comunicate ai partecipanti.</p>
+              <strong>{event.is_personal ? 'Aggiorna il tuo allenamento' : 'Modifiche protette per tutti'}</strong>
+              <p>
+                {event.is_personal
+                  ? 'Puoi aggiornare descrizione, indicazioni e durata rispettando le stesse finestre di sicurezza.'
+                  : 'Ogni campo segue una finestra precisa. Le variazioni salvate vengono comunicate ai partecipanti.'}
+              </p>
             </div>
           </div>
 
@@ -3179,7 +3196,7 @@ function EventDetailPage() {
           ) : null}
           </section>
 
-          <section className={styles.organizerUrgentSection}>
+          {!event.is_personal ? <section className={styles.organizerUrgentSection}>
             <div className={styles.organizerEditGroupHead}>
               <span>03</span>
               <div>
@@ -3212,13 +3229,17 @@ function EventDetailPage() {
               <small>{organizerEditForm.organizer_alert.length}/280</small>
             </span>
           </label>
-          </section>
+          </section> : null}
 
           <div className={styles.organizerProtectedChanges}>
             <ShieldCheck size={19} aria-hidden="true" />
             <div>
               <strong>Informazioni protette</strong>
-              <p>Sport, data, orario, luogo, immagine, scheda, accesso e deposito restano quelli definiti alla pubblicazione.</p>
+              <p>
+                {event.is_personal
+                  ? 'Sport, data, orario, luogo, immagine e scheda restano quelli definiti alla creazione.'
+                  : 'Sport, data, orario, luogo, immagine, scheda, accesso e deposito restano quelli definiti alla pubblicazione.'}
+              </p>
             </div>
           </div>
 
@@ -3246,7 +3267,9 @@ function EventDetailPage() {
                 ))}
               </div>
               <p>
-                {Number(event.participants_count || 0) > 0
+                {event.is_personal
+                  ? 'Le modifiche saranno subito visibili nella tua agenda.'
+                  : Number(event.participants_count || 0) > 0
                   ? `${event.participants_count} ${Number(event.participants_count) === 1 ? 'partecipante riceverà' : 'partecipanti riceveranno'} una notifica.`
                   : 'Le modifiche saranno già visibili alle prossime richieste.'}
               </p>
@@ -3269,10 +3292,17 @@ function EventDetailPage() {
               </button>
               {organizerDangerOpen ? (
                 <div className={styles.organizerDangerZone}>
-                  <p>Chiude iscrizioni e QR, avvisa tutti e restituisce le quote secondo le regole Motrice.</p>
+                  <p>
+                    {event.is_personal
+                      ? 'Rimuove l’attività dalla tua agenda. Dopo la conferma non potrà essere ripristinata.'
+                      : 'Chiude iscrizioni e QR, avvisa tutti e restituisce le quote secondo le regole Motrice.'}
+                  </p>
                   <button
                 type="button"
                 onClick={() => {
+                  setOrganizerCancelForm(event.is_personal
+                    ? { reasonCode: 'personal', note: '' }
+                    : { reasonCode: '', note: '' });
                   setOrganizerEditOpen(false);
                   setOrganizerCancelOpen(true);
                 }}
@@ -3304,9 +3334,13 @@ function EventDetailPage() {
             <AlertTriangle size={22} aria-hidden="true" />
             <div>
               <strong>Azione permanente</strong>
-              <p>Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.</p>
+              <p>
+                {event.is_personal
+                  ? 'L’evento personale verrà rimosso dalle sezioni attive e non potrà essere recuperato.'
+                  : 'Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.'}
+              </p>
             </div>
-            <ContextInfoButton
+            {!event.is_personal ? <ContextInfoButton
               title="Eliminazione evento"
               description="L’eliminazione rimuove l’attività dalle sezioni attive e informa tutte le persone coinvolte."
               items={[
@@ -3315,22 +3349,24 @@ function EventDetailPage() {
                 { title: 'Eliminazione tardiva', text: 'Se mancano meno di 24 ore, l’operazione viene registrata come tardiva.' }
               ]}
               note="Dopo la conferma l’evento non può essere riattivato."
-            />
+            /> : null}
           </div>
 
           <div className={styles.organizerCancelSummary}>
             <div><span>Evento</span><strong>{event?.title || event?.sport_name}</strong></div>
-            <div><span>Partecipanti da rimborsare</span><strong>{refundableParticipantsCount}</strong></div>
-            <div><span>Depositi restituiti</span><strong>{formatCurrencyFromCents(refundableDepositCents)}</strong></div>
+            {!event.is_personal ? <>
+              <div><span>Partecipanti da rimborsare</span><strong>{refundableParticipantsCount}</strong></div>
+              <div><span>Depositi restituiti</span><strong>{formatCurrencyFromCents(refundableDepositCents)}</strong></div>
+            </> : null}
           </div>
 
-          {cancellationIsLatePreview ? (
+          {!event.is_personal && cancellationIsLatePreview ? (
             <p className={styles.organizerLateWarning}>
               <AlertTriangle size={17} aria-hidden="true" /> Mancano meno di 24 ore: la cancellazione sarà registrata come tardiva.
             </p>
           ) : null}
 
-          <label className={styles.organizerCancelField}>
+          {!event.is_personal ? <label className={styles.organizerCancelField}>
             Motivo <span>obbligatorio</span>
             <select
               value={organizerCancelForm.reasonCode}
@@ -3345,9 +3381,9 @@ function EventDetailPage() {
                 <option key={reason.value} value={reason.value}>{reason.label}</option>
               ))}
             </select>
-          </label>
+          </label> : null}
 
-          <label className={styles.organizerCancelField}>
+          {!event.is_personal ? <label className={styles.organizerCancelField}>
             Messaggio ai partecipanti <span>facoltativo</span>
             <textarea
               rows="3"
@@ -3361,7 +3397,7 @@ function EventDetailPage() {
               disabled={organizerCancelSubmitting}
             />
             <small>{organizerCancelForm.note.length}/500</small>
-          </label>
+          </label> : null}
         </div>
       </Modal>
 

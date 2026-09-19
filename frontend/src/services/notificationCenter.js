@@ -290,11 +290,14 @@ export async function showSmartArrivalNotification(event) {
   if (permission.display !== 'granted') return { delivered: false, reason: permission.display, path };
 
   const eventName = event.title || event.sport_name || 'il tuo evento';
+  const isPersonal = Boolean(event.is_personal);
   await LocalNotifications.schedule({
     notifications: [{
       id: stableNotificationId(`smart-arrival:${event.id}`),
-      title: 'Sei arrivato?',
-      body: `Conferma ora la presenza a ${eventName}.`,
+      title: isPersonal ? 'Punto di allenamento raggiunto' : 'Sei arrivato?',
+      body: isPersonal
+        ? `Conferma la posizione per sbloccare ${eventName}. Il timer non partirà automaticamente.`
+        : `Conferma ora la presenza a ${eventName}.`,
       channelId: 'motrice_events',
       schedule: { at: new Date(Date.now() + 250), allowWhileIdle: true },
       extra: {

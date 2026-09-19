@@ -108,6 +108,27 @@ function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return undefined;
+    let active = true;
+    let listenerHandle = null;
+
+    import('@capacitor/app')
+      .then(({ App }) => App.addListener('appStateChange', ({ isActive }) => {
+        if (active && isActive) void location.refreshPermission();
+      }))
+      .then((handle) => {
+        listenerHandle = handle;
+        if (!active) void handle?.remove?.();
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+      void listenerHandle?.remove?.();
+    };
+  }, [location.refreshPermission]);
+
+  useEffect(() => {
     let active = true;
     api.getNotificationPreferences()
       .then((preferences) => {
@@ -187,9 +208,13 @@ function SettingsPage() {
         ? 'Disponibili nell’app installata'
         : 'Da autorizzare';
 
-  const locationStatusLabel = location.hasLocation
-    ? location.permission === 'approximate' ? 'Posizione approssimativa' : 'Posizione disponibile'
-    : location.permission === 'denied' ? 'Autorizzazione negata' : 'Da verificare';
+  const locationAuthorized = location.permission === 'granted' || location.permission === 'approximate';
+  const locationAuthorizationLabel = locationAuthorized ? 'Autorizzata' : 'Non autorizzata';
+  const locationStatusLabel = !location.permissionReady
+    ? 'Verifico autorizzazione'
+    : locationAuthorized
+      ? location.permission === 'approximate' ? 'Posizione autorizzata · approssimativa' : 'Posizione autorizzata'
+      : 'Posizione non autorizzata';
 
   const activeNotificationCategories = 1
     + Number(Boolean(notificationPreferences.chat_social))
@@ -203,6 +228,9 @@ function SettingsPage() {
   ].filter(Boolean).join(' · ') || 'Feedback disattivato';
 
   function toggleSection(section) {
+    if (section === 'location' && openSection !== 'location') {
+      void location.refreshPermission();
+    }
     setOpenSection((current) => current === section ? null : section);
   }
 
@@ -281,7 +309,24 @@ function SettingsPage() {
           </div>
           <div className={styles.locationCard}>
             <LocateFixed size={20} aria-hidden="true" />
-            <div><strong>Controllo posizione</strong><small>Usata soltanto per mappa, arrivo intelligente, check-in o evento attivo.</small></div>
+            <div>
+              <span className={styles.locationTitle}>
+                <strong>Controllo posizione</strong>
+                <span
+                  className={`${styles.locationPermissionStatus} ${
+                    !location.permissionReady
+                      ? styles.locationPermissionChecking
+                      : locationAuthorized
+                        ? styles.locationPermissionAuthorized
+                        : styles.locationPermissionDenied
+                  }`}
+                  role="status"
+                >
+                  {location.permissionReady ? `(${locationAuthorizationLabel})` : '(Verifica…)'}
+                </span>
+              </span>
+              <small>Usata soltanto per mappa, arrivo intelligente, check-in o evento attivo.</small>
+            </div>
             <button type="button" onClick={location.permission === 'denied' ? openSystemSettings : verifyLocation} disabled={location.requesting}>
               {location.requesting ? 'Verifico…' : location.permission === 'denied' ? 'Autorizza' : 'Verifica'}
             </button>

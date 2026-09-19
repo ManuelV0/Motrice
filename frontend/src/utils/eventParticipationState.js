@@ -433,8 +433,31 @@ export function resolveEventPrimaryAction({
   }
 
   if (event?.is_personal) {
-    if (timing.phase === 'active' || timing.phase === 'in_progress' || timing.phase === 'live_checkin') {
+    if (sessionTimeline.hasStarted) {
       return sessionAction(event);
+    }
+    if (event?.personal_arrival_enabled && timing.isCheckInOpen) {
+      return {
+        id: 'personal_location',
+        label: 'Verifica posizione',
+        target: 'verify',
+        disabled: false,
+        tone: 'primary'
+      };
+    }
+    if (!event?.personal_arrival_enabled && (
+      timing.phase === 'active' || timing.phase === 'in_progress' || timing.phase === 'live_checkin'
+    )) {
+      return sessionAction(event);
+    }
+    if (isOrganizer) {
+      return {
+        id: 'personal_manage',
+        label: 'Modifica evento',
+        target: 'manage',
+        disabled: false,
+        tone: 'primary'
+      };
     }
     return {
       id: 'personal_details',
@@ -557,7 +580,9 @@ export function getEventPrimaryActionPath(event, action) {
     case 'join':
       return `/events/${eventId}?action=join`;
     case 'manage':
-      return `/events/${eventId}#organizer-controls`;
+      return event?.is_personal
+        ? `/events/${eventId}?manage=1`
+        : `/events/${eventId}#organizer-controls`;
     case 'feedback':
       return `/events/${eventId}#post-event-feedback`;
     case 'event':

@@ -10,7 +10,6 @@ function formatEventTime(value) {
 }
 
 export function getEventSessionStartAt(event) {
-  if (event?.is_personal) return null;
   return timestamp(
     event?.session_started_at
       || event?.user_rsvp?.checked_in_at
@@ -23,11 +22,14 @@ export function getEventSessionTimeline(event, timing, referenceTime = Date.now(
   const plannedStartAtMs = Number(timing?.startsAtMs);
   const plannedEndAtMs = Number(timing?.endsAtMs);
   const checkedInAtMs = getEventSessionStartAt(event);
-  const scheduledDurationMs = Number.isFinite(plannedStartAtMs)
+  const configuredDurationMs = Math.max(1, Number(event?.duration_minutes || 0)) * 60 * 1000;
+  const scheduledDurationMs = event?.is_personal
+    ? configuredDurationMs
+    : Number.isFinite(plannedStartAtMs)
     && Number.isFinite(plannedEndAtMs)
     && plannedEndAtMs > plannedStartAtMs
     ? plannedEndAtMs - plannedStartAtMs
-    : Math.max(1, Number(event?.duration_minutes || 0)) * 60 * 1000;
+    : configuredDurationMs;
 
   if (!Number.isFinite(plannedStartAtMs) || !Number.isFinite(scheduledDurationMs) || scheduledDurationMs <= 0) {
     return {
@@ -40,8 +42,7 @@ export function getEventSessionTimeline(event, timing, referenceTime = Date.now(
     };
   }
 
-  const requiresCheckIn = !event?.is_personal;
-  const actualStartAtMs = requiresCheckIn ? checkedInAtMs : plannedStartAtMs;
+  const actualStartAtMs = checkedInAtMs;
 
   if (!Number.isFinite(actualStartAtMs)) {
     const plannedHasEnded = Number.isFinite(plannedEndAtMs) && nowMs >= plannedEndAtMs;

@@ -5,6 +5,7 @@ import { getAuthSession } from './authSession';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { piggybank } from './piggybank';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
+import { getWorkoutCompletionGate } from '../utils/workoutCompletionGate';
 import { awardXp, getXpState as getUserXpState } from './xp';
 import {
   awardPartnerScore,
@@ -22,6 +23,12 @@ import {
 } from '../utils/eventLifecycle';
 import { getSystemEventRules } from '../utils/eventCreationRules';
 import { getEventManagementPolicy, getParticipantRemovalPolicy } from '../utils/eventManagementRules';
+import {
+  PERSONAL_RECURRENCE_WEEKS,
+  buildPersonalRecurrencePreview,
+  getPersonalOccurrenceAvailability,
+  serializePersonalWeeklySchedule
+} from '../utils/personalEventRecurrence';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
 import {
   normalizeGymAccessPolicy,
@@ -1300,11 +1307,16 @@ function enrichEvent(event, store, origin) {
     )
     .filter(Number.isFinite)
     .reduce((earliest, value) => Math.min(earliest, value), Number.POSITIVE_INFINITY);
-  const sessionStartedAt = Number.isFinite(participantCheckInMs)
-    ? new Date(participantCheckInMs).toISOString()
-    : isCurrentUserOrganizer && Number.isFinite(firstGroupCheckInMs)
-      ? new Date(firstGroupCheckInMs).toISOString()
-      : null;
+  const personalWorkoutStartedAt = event.is_personal
+    ? store.workoutSessionsByEvent?.[String(event.id)]?.started_at || null
+    : null;
+  const sessionStartedAt = personalWorkoutStartedAt || (
+    Number.isFinite(participantCheckInMs)
+      ? new Date(participantCheckInMs).toISOString()
+      : isCurrentUserOrganizer && Number.isFinite(firstGroupCheckInMs)
+        ? new Date(firstGroupCheckInMs).toISOString()
+        : null
+  );
 
   return {
     ...event,
@@ -1673,7 +1685,7 @@ const localApi = {
     const entitlements = subscription.entitlements;
     const stats = getCreationStats(store);
 
-    if (stats.created_this_month >= entitlements.maxEventsPerMonth) {
+    if (!payload._series_occurrence && stats.created_this_month >= entitlements.maxEventsPerMonth) {
       throw new Error(`Piano Free: massimo ${entitlements.maxEventsPerMonth} eventi al mese`);
     }
 
@@ -1728,6 +1740,9 @@ const localApi = {
       verification_mode: systemRules.verificationMode,
       geofence_radius_m: systemRules.geofenceRadiusM,
       checkin_grace_minutes: systemRules.checkInGraceMinutes,
+      checkin_opens_at: payload.personal_available_from || null,
+      checkin_closes_at: payload.personal_available_until || null,
+      ends_at: payload.personal_available_until || null,
       lifecycle_state: 'published',
       lifecycle_version: 1,
       lifecycle_updated_at: nowIso(),
@@ -1746,6 +1761,11 @@ const localApi = {
       visibility: String(payload.visibility || 'public'),
       join_policy: String(payload.join_policy || 'open'),
       is_personal: Boolean(payload.is_personal),
+      personal_series_id: payload.personal_series_id || null,
+      personal_occurrence_date: payload.personal_occurrence_date || null,
+      personal_available_from: payload.personal_available_from || null,
+      personal_available_until: payload.personal_available_until || null,
+      personal_arrival_enabled: Boolean(payload.personal_arrival_enabled),
       created_by: currentUserId,
       creator_plan: subscription.effective_plan || subscription.plan,
       featured_boost: subscription.effective_plan === 'premium'
@@ -1760,24 +1780,85 @@ const localApi = {
     }
 
     store.events.unshift(event);
-    store.monthlyEventCreations[stats.month] = stats.created_this_month + 1;
+    if (!payload._series_occurrence) {
+      store.monthlyEventCreations[stats.month] = stats.created_this_month + 1;
+    }
 
-    addNotification(store, {
-      type: 'event_created',
-      title: 'Evento creato',
-      message: `${sport.name} pubblicato con successo.`,
-      event_id: event.id
-    });
+    if (!payload._suppress_notifications) {
+      addNotification(store, {
+        type: 'event_created',
+        title: 'Evento creato',
+        message: `${sport.name} pubblicato con successo.`,
+        event_id: event.id
+      });
 
-    addNotification(store, {
-      type: 'similar_event',
-      title: 'Nuovo evento simile',
-      message: `Nuova sessione ${sport.name} disponibile nella tua area.`,
-      event_id: event.id
-    });
+      if (!event.is_personal) {
+        addNotification(store, {
+          type: 'similar_event',
+          title: 'Nuovo evento simile',
+          message: `Nuova sessione ${sport.name} disponibile nella tua area.`,
+          event_id: event.id
+        });
+      }
+    }
 
     saveStore(store);
     return withDelay(clone(event));
+  },
+
+  async createPersonalEventSeries(payload) {
+    const schedule = serializePersonalWeeklySchedule(payload.weekly_schedule);
+    const occurrences = buildPersonalRecurrencePreview({
+      startDate: payload.start_date,
+      schedule,
+      weeks: payload.weeks || PERSONAL_RECURRENCE_WEEKS
+    });
+    if (!occurrences.length) throw new Error('Seleziona almeno un giorno per il programma ricorrente');
+
+    const seriesId = globalThis.crypto?.randomUUID?.() || `personal-series-${Date.now()}`;
+    const planById = new Map((payload.workout_plans || []).map((plan) => [
+      String(plan?.remoteId || plan?.id || ''),
+      plan
+    ]));
+    const createdEvents = [];
+
+    for (const occurrence of occurrences) {
+      const availability = getPersonalOccurrenceAvailability(occurrence.date, occurrence.time);
+      const workoutPlan = planById.get(String(occurrence.planId)) || null;
+      const created = await localApi.createEvent({
+        ...payload.event,
+        is_personal: true,
+        event_datetime: `${occurrence.date}T${occurrence.time}`,
+        scheda_id: occurrence.planId,
+        workout_plan: workoutPlan,
+        personal_series_id: seriesId,
+        personal_occurrence_date: occurrence.date,
+        personal_available_from: availability.availableFrom,
+        personal_available_until: availability.availableUntil,
+        personal_arrival_enabled: true,
+        _series_occurrence: true,
+        _suppress_notifications: true
+      });
+      createdEvents.push(created);
+    }
+
+    const store = loadStore();
+    const stats = getCreationStats(store);
+    store.monthlyEventCreations[stats.month] = stats.created_this_month + 1;
+    addNotification(store, {
+      type: 'personal_program_created',
+      title: 'Programma personale creato',
+      message: `${createdEvents.length} allenamenti programmati per le prossime ${payload.weeks || PERSONAL_RECURRENCE_WEEKS} settimane.`,
+      event_id: createdEvents[0]?.id || null
+    });
+    saveStore(store);
+
+    return withDelay(clone({
+      id: seriesId,
+      occurrences_created: createdEvents.length,
+      first_event: createdEvents[0] || null,
+      events: createdEvents
+    }));
   },
 
   async updateManagedEvent(id, payload = {}) {
@@ -3073,6 +3154,14 @@ const localApi = {
       (event.verification_mode || 'both') === 'qr' ||
       distanceM <= Number(event.geofence_radius_m ?? 250);
 
+    if (event.is_personal && event.personal_arrival_enabled) {
+      const opensAt = Date.parse(event.personal_available_from || event.checkin_opens_at || event.event_datetime || '');
+      const closesAt = Date.parse(event.personal_available_until || event.checkin_closes_at || event.ends_at || '');
+      if ((Number.isFinite(opensAt) && nowMs() < opensAt) || (Number.isFinite(closesAt) && nowMs() > closesAt)) {
+        throw new Error('Allenamento non disponibile in questa fascia oraria');
+      }
+    }
+
     if (isOrganizer) {
       store.participationFlowsByEvent = {
         ...(store.participationFlowsByEvent || {}),
@@ -3302,8 +3391,33 @@ const localApi = {
     if (!isOrganizer && !event.is_personal && !flow.checked_in_at && Number(flow.cashback_percent || 0) < 60) {
       throw new Error('Verifica prima la presenza');
     }
+    if (event.is_personal && event.personal_arrival_enabled) {
+      const opensAt = Date.parse(event.personal_available_from || event.checkin_opens_at || event.event_datetime || '');
+      const closesAt = Date.parse(event.personal_available_until || event.checkin_closes_at || event.ends_at || '');
+      if ((Number.isFinite(opensAt) && nowMs() < opensAt) || (Number.isFinite(closesAt) && nowMs() > closesAt)) {
+        throw new Error('L’allenamento personale non è disponibile in questo momento');
+      }
+      const verifiedAt = Date.parse(flow.organizer_presence_at || '');
+      if (!flow.organizer_present || !Number.isFinite(verifiedAt) || nowMs() - verifiedAt > 10 * 60 * 1000) {
+        throw new Error('Raggiungi il punto di allenamento e conferma la posizione');
+      }
+    }
     const previous = store.workoutSessionsByEvent?.[eventKey] || {};
-    const next = { ...previous, started_at: previous.started_at || nowIso(), role: isOrganizer ? 'organizer' : 'participant', progress_percent: Number(previous.progress_percent || 0) };
+    const firstParticipantCheckIn = Object.values(store.checkinRecordsByEvent?.[eventKey] || {})
+      .map((record) => record?.ts)
+      .filter(Boolean)
+      .sort((left, right) => Date.parse(left) - Date.parse(right))[0];
+    const verifiedStart = event.is_personal
+      ? (event.personal_arrival_enabled ? (flow.organizer_presence_at || nowIso()) : nowIso())
+      : isOrganizer
+        ? (firstParticipantCheckIn || flow.organizer_presence_at || nowIso())
+        : (flow.checked_in_at || nowIso());
+    const next = {
+      ...previous,
+      started_at: previous.started_at || verifiedStart,
+      role: isOrganizer ? 'organizer' : 'participant',
+      progress_percent: Number(previous.progress_percent || 0)
+    };
     store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
     saveStore(store);
     return withDelay(clone(next));
@@ -3328,12 +3442,22 @@ const localApi = {
     const current = store.workoutSessionsByEvent?.[eventKey];
     if (!current?.started_at) throw new Error('Avvia prima l allenamento');
     const progress = Math.max(Number(current.progress_percent || 0), Math.min(100, Number(progressPercent) || 0));
+    const completionGate = getWorkoutCompletionGate({
+      startedAt: current.started_at,
+      durationMinutes: event.duration_minutes ?? event.duration ?? 60,
+      now: nowMs()
+    });
     const isGps = String(store.participationFlowsByEvent?.[eventKey]?.verification_source || '') === 'gps';
-    const motAwarded = isGps && progress >= 60 && !current.mot_sixty_awarded ? 3 : 0;
+    const motAwarded = isGps && progress >= 60 && completionGate.reached && !current.mot_sixty_awarded ? 3 : 0;
     const next = { ...current, progress_percent: progress, mot_sixty_awarded: Boolean(current.mot_sixty_awarded || motAwarded) };
     store.workoutSessionsByEvent = { ...(store.workoutSessionsByEvent || {}), [eventKey]: next };
     saveStore(store);
-    return withDelay({ ...clone(next), mot_awarded: motAwarded });
+    return withDelay({
+      ...clone(next),
+      mot_awarded: motAwarded,
+      minimum_time_reached: completionGate.reached,
+      remaining_seconds: completionGate.remainingSeconds
+    });
   },
 
   async completeEventWorkout(eventId) {
@@ -3344,6 +3468,14 @@ const localApi = {
     const current = store.workoutSessionsByEvent?.[eventKey];
     if (!current?.started_at) throw new Error('Avvia prima l allenamento');
     if (Number(current.progress_percent || 0) < 100) throw new Error('Completa tutta la scheda prima di terminare');
+    const completionGate = getWorkoutCompletionGate({
+      startedAt: current.started_at,
+      durationMinutes: event.duration_minutes ?? event.duration ?? 60,
+      now: nowMs()
+    });
+    if (!completionGate.reached) {
+      throw new Error(`Allenamento troppo breve: attendi ancora ${Math.ceil(completionGate.remainingSeconds / 60)} minuti`);
+    }
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
     const xp = !isOrganizer && !current.xp_completion_awarded ? 25 : 0;
     if (xp) {

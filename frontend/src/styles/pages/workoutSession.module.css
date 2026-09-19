@@ -870,6 +870,105 @@
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 8px 24px rgba(198, 255, 0, 0.14);
 }
 
+.completionGateCard {
+  padding: 13px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(255, 194, 60, 0.34);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 194, 60, 0.1), #17140e);
+}
+
+.completionGateCard > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 194, 60, 0.13);
+  color: #ffc54a;
+}
+
+.completionGateCard > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.completionGateCard small {
+  color: #ffc54a;
+  font-size: 0.55rem;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.completionGateCard strong {
+  font-size: 0.8rem;
+}
+
+.completionGateCard p {
+  margin: 0;
+  color: #9d9687;
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+.completionGateCard i {
+  height: 4px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #343028;
+}
+
+.completionGateCard i b {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: #ffc54a;
+  transition: width 0.3s linear;
+}
+
+.completionGateCard time {
+  min-width: 54px;
+  color: #ffc54a;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 950;
+  text-align: right;
+}
+
+.returnToExerciseButton {
+  position: fixed;
+  right: max(14px, calc((100vw - 680px) / 2 + 14px));
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 55;
+  min-height: 44px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #c6ff00;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 6px 22px rgba(198, 255, 0, 0.2);
+  color: #0b0b0b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  animation: focusReturnIn 0.2s ease-out;
+}
+
+.returnToExerciseButton:active {
+  transform: scale(0.97);
+}
+
+.returnToExerciseButton:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .completedCard {
   padding: 18px;
   display: flex;
@@ -1349,7 +1448,7 @@
   min-height: 88px;
   padding: 8px 9px 7px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
   border: 1px solid rgba(198, 255, 0, 0.36);
@@ -1366,8 +1465,11 @@
 }
 
 .restDockControls {
-  display: flex;
+  display: grid;
+  grid-template-columns: 42px 45px;
+  grid-template-rows: repeat(2, 40px);
   align-items: center;
+  justify-items: center;
   gap: 5px;
 }
 
@@ -1381,10 +1483,10 @@
 
 .restDock strong {
   color: #c6ff00;
-  font-size: clamp(3rem, 15vw, 4.25rem);
+  font-size: clamp(4rem, 18.5vw, 4.5rem);
   font-weight: 950;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.055em;
+  letter-spacing: -0.01em;
   line-height: 0.94;
   text-shadow: 0 0 22px rgba(198, 255, 0, 0.12);
 }
@@ -1412,10 +1514,22 @@
   padding: 0;
   display: grid;
   place-items: center;
-  border: 1px solid #383838;
+  border: 0;
   border-radius: 10px;
-  background: #262626;
+  background: #272927;
   color: #fff;
+  box-shadow: none;
+  transition: background 0.16s ease, transform 0.12s ease;
+}
+
+.restDock button:active {
+  background: #30342e;
+  transform: scale(0.96);
+}
+
+.restDock button:focus-visible {
+  outline: 2px solid rgba(198, 255, 0, 0.72);
+  outline-offset: 1px;
 }
 
 .restDock button:disabled {
@@ -1426,9 +1540,9 @@
   width: 40px;
   height: 40px;
   min-width: 40px;
-  border: 1px solid #383838;
+  border: 0;
   border-radius: 10px;
-  background: #262626;
+  background: #272927;
   color: #c6ff00;
 }
 
@@ -1452,9 +1566,8 @@
   width: auto;
   min-width: 45px;
   padding-inline: 7px;
-  border-color: #323232;
-  background: #1d1d1d;
-  color: #9b9b9b;
+  background: rgba(255, 92, 102, 0.06);
+  color: #ff5c66;
   font-size: 0.66rem;
   font-weight: 850;
 }
@@ -1501,6 +1614,17 @@
   from {
     opacity: 0;
     transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes focusReturnIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -1754,7 +1878,7 @@
   }
 
   .restDock {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .restDock button {
@@ -1773,6 +1897,8 @@
   }
 
   .restDockControls {
+    grid-template-columns: 39px 42px;
+    grid-template-rows: repeat(2, 38px);
     gap: 3px;
   }
 
@@ -1785,6 +1911,11 @@
 
   .restDock .addRestButton {
     width: 39px;
+  }
+
+  .restDock .skipRestButton {
+    min-width: 42px;
+    padding-inline: 4px;
   }
 
   .exerciseSummary {
@@ -1819,6 +1950,10 @@
   }
 
   .restDock {
+    animation: none;
+  }
+
+  .returnToExerciseButton {
     animation: none;
   }
 

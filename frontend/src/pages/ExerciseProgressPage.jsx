@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarDays,
   ChevronRight,
+  CircleAlert,
   Dumbbell,
   Flame,
+  Minus,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -45,21 +48,47 @@ function formatDate(value, compact = false) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
   return new Intl.DateTimeFormat('it-IT', compact
-    ? { day: '2-digit', month: 'short' }
-    : { day: '2-digit', month: 'short', year: 'numeric' }
+    ? { day: '2-digit', month: '2-digit' }
+    : { day: 'numeric', month: 'long', year: 'numeric' }
   ).format(date);
 }
 
-function bestSetLabel(item) {
-  if (item.bodyweight) return `${formatNumber(item.bestSet?.reps)} rip.`;
-  return `${formatNumber(item.bestSet?.weightKg, 1)} kg × ${formatNumber(item.bestSet?.reps)}`;
+function setPerformanceLabel(record, bodyweight) {
+  if (!record || Number(record.reps || 0) <= 0) {
+    return Number(record?.weightKg || 0) > 0
+      ? `${formatNumber(record.weightKg, 1)} kg · rip. mancanti`
+      : 'Ripetizioni non registrate';
+  }
+  if (bodyweight) return `${formatNumber(record.reps)} rip.`;
+  return `${formatNumber(record.weightKg, 1)} kg × ${formatNumber(record.reps)}`;
 }
 
-function trendLabel(item) {
-  if (item.isRecord) return `Record · +${item.trendPercent}%`;
-  if (item.trendStatus === 'new') return 'Nuovo';
-  if (item.trendStatus === 'stable') return 'Stabile';
-  return `${item.trendPercent > 0 ? '+' : ''}${item.trendPercent}%`;
+function bestSetLabel(item) {
+  return setPerformanceLabel(item.bestSet, item.bodyweight);
+}
+
+function latestSetLabel(item) {
+  return setPerformanceLabel(item.latestSession?.bestSet, item.bodyweight);
+}
+
+function trendLabel(item, compact = false) {
+  if (item.trendStatus === 'incomplete') return 'Dati incompleti';
+  if (item.isRecord) return compact
+    ? `Record · +${item.trendPercent}%`
+    : `Nuovo record · +${item.trendPercent}% rispetto alla sessione precedente`;
+  if (item.trendStatus === 'new') return 'Prima sessione';
+  if (item.trendStatus === 'stable') return compact ? 'Stabile vs prec.' : 'Stabile rispetto alla sessione precedente';
+  const delta = `${item.trendPercent > 0 ? '+' : ''}${item.trendPercent}%`;
+  return compact ? `${delta} vs prec.` : `${delta} rispetto alla sessione precedente`;
+}
+
+function TrendIcon({ item, size = 14 }) {
+  if (item.isRecord) return <Trophy size={size} />;
+  if (item.trendStatus === 'down') return <ArrowDownRight size={size} />;
+  if (item.trendStatus === 'up') return <ArrowUpRight size={size} />;
+  if (item.trendStatus === 'incomplete') return <CircleAlert size={size} />;
+  if (item.trendStatus === 'new') return <Sparkles size={size} />;
+  return <Minus size={size} />;
 }
 
 function chartPoints(values, width = 320, height = 126, inset = 12) {
@@ -88,6 +117,15 @@ function MiniTrend({ item }) {
 }
 
 function PerformanceChart({ item, metric }) {
+  if (!item.chartSessions.length) {
+    return (
+      <div className={styles.chartEmpty} role="status">
+        <CircleAlert size={21} aria-hidden="true" />
+        <strong>Grafico non ancora disponibile</strong>
+        <span>Registra almeno una serie completa di ripetizioni.</span>
+      </div>
+    );
+  }
   const values = item.chartSessions.map((session) => {
     if (item.bodyweight) {
       if (metric === 'sets') return session.sets;
@@ -169,15 +207,27 @@ function ExerciseDetailSheet({ item, onClose }) {
         <div className={styles.sheetScroll}>
           <section className={styles.primaryMetric}>
             <div>
-              <small>MIGLIORE PRESTAZIONE</small>
-              <strong>{bestSetLabel(item)}</strong>
-              <span>{formatDate(item.bestSet?.completedAt)}</span>
+              <small>ULTIMA PRESTAZIONE</small>
+              <strong>{latestSetLabel(item)}</strong>
+              <span>{formatDate(item.latestSession?.completedAt)}</span>
             </div>
-            <span className={`${styles.trendPill} ${styles[item.trendStatus]}`}>
-              {item.isRecord ? <Trophy size={14} /> : item.trendStatus === 'down' ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-              {trendLabel(item)}
+            <span
+              className={`${styles.trendPill} ${styles[item.trendStatus]}`}
+              aria-label={trendLabel(item)}
+              title={trendLabel(item)}
+            >
+              <TrendIcon item={item} />
+              {trendLabel(item, true)}
             </span>
           </section>
+
+          {item.hasValidPerformance ? (
+            <section className={styles.personalBest} aria-label="Record personale">
+              <span><Trophy size={17} aria-hidden="true" /></span>
+              <div><small>RECORD PERSONALE</small><strong>{bestSetLabel(item)}</strong></div>
+              <time>{formatDate(item.bestSet?.completedAt)}</time>
+            </section>
+          ) : null}
 
           <section className={styles.chartCard}>
             <div className={styles.chartTabs} role="tablist" aria-label="Metrica del grafico">
@@ -199,8 +249,8 @@ function ExerciseDetailSheet({ item, onClose }) {
 
           <section className={styles.detailMetrics} aria-label="Statistiche esercizio">
             <article><small>SESSIONI</small><strong>{item.sessionCount}</strong></article>
-            <article><small>{item.bodyweight ? 'MAX RIP.' : '1RM STIMATO'}</small><strong>{item.bodyweight ? item.bestReps : `${formatNumber(item.bestEstimatedMax, 1)} kg`}</strong></article>
-            <article><small>{item.bodyweight ? 'RIP. TOTALI' : 'VOLUME'}</small><strong>{item.bodyweight ? item.totalReps : `${formatNumber(item.totalVolume)} kg`}</strong></article>
+            <article><small>{item.bodyweight ? 'MAX RIP.' : '1RM STIMATO'}</small><strong>{item.hasValidPerformance ? (item.bodyweight ? item.bestReps : `${formatNumber(item.bestEstimatedMax, 1)} kg`) : '—'}</strong></article>
+            <article><small>{item.bodyweight ? 'RIP. TOTALI' : 'VOLUME'}</small><strong>{item.hasValidPerformance ? (item.bodyweight ? item.totalReps : `${formatNumber(item.totalVolume)} kg`) : '—'}</strong></article>
           </section>
 
           <section className={styles.sessionHistory}>
@@ -213,13 +263,13 @@ function ExerciseDetailSheet({ item, onClose }) {
                 <article key={session.eventId} className={styles.sessionCard}>
                   <div className={styles.sessionTitle}>
                     <div><strong>{formatDate(session.completedAt)}</strong><small>{session.sets} {session.sets === 1 ? 'serie completata' : 'serie completate'}</small></div>
-                    <span>{item.bodyweight ? `${session.bestReps} rip.` : `${formatNumber(session.bestWeight, 1)} kg`}</span>
+                    <span>{setPerformanceLabel(session.bestSet, item.bodyweight)}</span>
                   </div>
                   <div className={styles.setRows}>
                     {session.records.map((record) => (
                       <div key={record.id}>
                         <span>Serie {record.setNumber}</span>
-                        <strong>{record.weightKg > 0 ? `${formatNumber(record.weightKg, 1)} kg × ${formatNumber(record.reps)}` : `${formatNumber(record.reps)} ripetizioni`}</strong>
+                        <strong>{setPerformanceLabel(record, item.bodyweight)}</strong>
                         <small>RIR {formatNumber(record.rir)}</small>
                       </div>
                     ))}
@@ -236,6 +286,7 @@ function ExerciseDetailSheet({ item, onClose }) {
 }
 
 function ExerciseProgressPage() {
+  const navigate = useNavigate();
   const [history, setHistory] = useState(() => loadWorkoutExerciseHistory());
   const [period, setPeriod] = useState('4w');
   const [query, setQuery] = useState('');
@@ -367,11 +418,15 @@ function ExerciseProgressPage() {
                 <span className={styles.exerciseIcon}><Dumbbell size={18} /></span>
                 <span className={styles.exerciseIdentity}>
                   <strong>{item.name}</strong>
-                  <small>{bestSetLabel(item)} · {formatDate(item.lastCompletedAt, true)}</small>
+                  <small>Ultima: {latestSetLabel(item)} · {formatDate(item.lastCompletedAt, true)}</small>
                 </span>
-                <span className={`${styles.cardTrend} ${styles[item.trendStatus]} ${item.isRecord ? styles.record : ''}`}>
-                  {item.isRecord ? <Trophy size={12} /> : item.trendStatus === 'new' ? <Sparkles size={12} /> : null}
-                  {trendLabel(item)}
+                <span
+                  className={`${styles.cardTrend} ${styles[item.trendStatus]} ${item.isRecord ? styles.record : ''}`}
+                  aria-label={trendLabel(item)}
+                  title={trendLabel(item)}
+                >
+                  <TrendIcon item={item} size={12} />
+                  {trendLabel(item, true)}
                 </span>
                 <MiniTrend item={item} />
                 <ChevronRight className={styles.cardChevron} size={19} />

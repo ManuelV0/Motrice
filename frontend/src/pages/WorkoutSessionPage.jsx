@@ -44,6 +44,11 @@ import {
   buildWorkoutPlanUpdatePreview,
   findOwnedLinkedWorkoutPlan
 } from '../utils/workoutPlanSessionUpdate';
+import {
+  getSetCadenceRemaining,
+  getWorkoutCompletionGate,
+  normalizeWorkoutDurationMinutes
+} from '../utils/workoutCompletionGate';
 import styles from '../styles/pages/workoutSession.module.css';
 
 function formatClock(totalSeconds) {
@@ -102,6 +107,12 @@ function WorkoutSessionPage() {
   const wakeLockRef = useRef(null);
   const previousRestRemainingRef = useRef(0);
   const metricPressTimerRef = useRef(null);
+  const headerRef = useRef(null);
+  const currentExerciseCardRef = useRef(null);
+  const currentExerciseSummaryRef = useRef(null);
+  const focusTransitionRef = useRef({ exerciseId: '', restActive: false });
+  const progressAwardBusyRef = useRef(false);
+  const [currentExerciseVisible, setCurrentExerciseVisible] = useState(true);
   const auth = useMemo(() => getAuthSession(), []);
 
   usePageMeta({ title: 'Allenamento live · Motrice', description: 'Sessione allenamento Motrice' });
@@ -215,6 +226,96 @@ function WorkoutSessionPage() {
       percent: totalSets ? Math.round((completedSets / totalSets) * 100) : 0
     };
   }, [liveExercises, session?.completedSets]);
+  const workoutDurationMinutes = normalizeWorkoutDurationMinutes(
+    event?.duration_minutes ?? event?.durationMinutes ?? event?.workout_plan?.duration,
+    60
+  );
+  const completionGate = getWorkoutCompletionGate({
+    startedAt: session?.startedAt,
+    durationMinutes: workoutDurationMinutes,
+    now: session?.completedAt ? Date.parse(session.completedAt) : Date.now()
+  });
+  const setCadenceRemaining = getSetCadenceRemaining(session?.lastSetCompletedAt, Date.now());
+  const restBlocksNextSet = Boolean(restTimer.exerciseId && restTimer.remaining > 0 && !restTimer.finished);
+  const firstIncompleteExerciseIndex = liveExercises.findIndex((exercise) => (
+    Number(session?.completedSets?.[exercise.id] || 0) < exercise.sets
+  ));
+  const currentExerciseIndex = firstIncompleteExerciseIndex >= 0
+    ? firstIncompleteExerciseIndex
+    : Math.max(0, liveExercises.length - 1);
+  const currentExercise = liveExercises[currentExerciseIndex] || liveExercises[0];
+
+  function centerCurrentExercise(behavior = 'smooth') {
+    const card = currentExerciseCardRef.current;
+    if (!card) return;
+    const viewportHeight = window.visualViewport?.height || window.innerHeight;
+    const headerBottom = headerRef.current?.getBoundingClientRect().bottom || 0;
+    const safeTop = headerBottom + 12;
+    const safeBottom = 14;
+    const availableHeight = Math.max(0, viewportHeight - safeTop - safeBottom);
+    const cardRect = card.getBoundingClientRect();
+    const visibleCardHeight = Math.min(cardRect.height, availableHeight);
+    const desiredTop = safeTop + Math.max(0, (availableHeight - visibleCardHeight) / 2);
+    const targetTop = window.scrollY + cardRect.top - desiredTop;
+    window.scrollTo({ top: Math.max(0, targetTop), behavior });
+  }
+
+  useEffect(() => {
+    const exerciseId = String(currentExercise?.id || '');
+    const restActive = Boolean(restTimer.exerciseId);
+    const previous = focusTransitionRef.current;
+    const shouldCenter = Boolean(exerciseId) && (
+      previous.exerciseId !== exerciseId ||
+      (!previous.restActive && restActive)
+    );
+    focusTransitionRef.current = { exerciseId, restActive };
+    if (!shouldCenter || session?.completedAt) return undefined;
+
+    let timeoutId;
+    const frameId = window.requestAnimationFrame(() => {
+      timeoutId = window.setTimeout(() => centerCurrentExercise('smooth'), restActive ? 80 : 180);
+    });
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [currentExercise?.id, restTimer.exerciseId, session?.completedAt]);
+
+  useEffect(() => {
+    const summary = currentExerciseSummaryRef.current;
+    if (!summary || session?.completedAt) {
+      setCurrentExerciseVisible(true);
+      return undefined;
+    }
+
+    let frameId = 0;
+    const measureVisibility = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(() => {
+        const summaryRect = summary.getBoundingClientRect();
+        const headerBottom = headerRef.current?.getBoundingClientRect().bottom || 0;
+        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        const visibleHeight = Math.max(
+          0,
+          Math.min(summaryRect.bottom, viewportHeight) - Math.max(summaryRect.top, headerBottom + 8)
+        );
+        setCurrentExerciseVisible(visibleHeight >= Math.min(54, summaryRect.height * 0.6));
+      });
+    };
+
+    measureVisibility();
+    window.addEventListener('scroll', measureVisibility, { passive: true });
+    window.addEventListener('resize', measureVisibility);
+    window.visualViewport?.addEventListener('resize', measureVisibility);
+    window.visualViewport?.addEventListener('scroll', measureVisibility);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener('scroll', measureVisibility);
+      window.removeEventListener('resize', measureVisibility);
+      window.visualViewport?.removeEventListener('resize', measureVisibility);
+      window.visualViewport?.removeEventListener('scroll', measureVisibility);
+    };
+  }, [currentExercise?.id, restTimer.exerciseId, session?.completedAt]);
 
   useEffect(() => {
     if (!session?.startedAt) return undefined;
@@ -352,20 +453,32 @@ function WorkoutSessionPage() {
   }, [planUpdateBusy, planUpdateOpen]);
 
   useEffect(() => {
-    if (!session || totals.percent < 60 || session.sixtyPercentAwarded) return;
+    if (
+      !session ||
+      totals.percent < 60 ||
+      !completionGate.reached ||
+      session.sixtyPercentAwarded ||
+      progressAwardBusyRef.current
+    ) return;
     let active = true;
+    progressAwardBusyRef.current = true;
     api.recordEventWorkoutProgress(id, totals.percent)
       .then((result) => {
         if (!active) return;
+        const milestoneReached = Boolean(
+          result?.minimum_time_reached ?? Number(result?.progress_percent || 0) >= 60
+        );
+        if (!milestoneReached) return;
         const next = { ...session, sixtyPercentAwarded: true };
         setSession(saveWorkoutSession(id, next));
         if (Number(result?.mot_awarded || 0) > 0) {
-          showToast(`60% raggiunto · +${result.mot_awarded} MOT`, 'success');
+          showToast(`Tempo minimo verificato · +${result.mot_awarded} MOT`, 'success');
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => { progressAwardBusyRef.current = false; });
     return () => { active = false; };
-  }, [id, session, showToast, totals.percent]);
+  }, [completionGate.reached, id, session, showToast, totals.percent]);
 
   function getExerciseLoad(exercise) {
     const savedLoad = session?.exerciseLoads?.[exercise.id];
@@ -549,6 +662,14 @@ function WorkoutSessionPage() {
 
   function completeSet(exercise) {
     if (!session || session.completedAt) return;
+    if (restBlocksNextSet) {
+      showToast('Termina o salta consapevolmente il recupero prima della prossima serie.', 'info');
+      return;
+    }
+    if (setCadenceRemaining > 0) {
+      showToast(`Attendi ancora ${setCadenceRemaining} secondi prima di registrare un’altra serie.`, 'info');
+      return;
+    }
     ensureCountdownAudio();
     const current = Math.min(exercise.sets, Number(session.completedSets?.[exercise.id] || 0));
     if (current >= exercise.sets) return;
@@ -560,7 +681,12 @@ function WorkoutSessionPage() {
     const completedLoads = Array.isArray(session.completedSetLoads?.[exercise.id])
       ? [...session.completedSetLoads[exercise.id]]
       : [];
+    const completedTimes = Array.isArray(session.completedSetTimes?.[exercise.id])
+      ? [...session.completedSetTimes[exercise.id]]
+      : [];
+    const completedAt = new Date().toISOString();
     completedLoads[current] = loadKg;
+    completedTimes[current] = completedAt;
     const next = {
       ...session,
       currentExerciseId: nextExerciseId,
@@ -568,7 +694,12 @@ function WorkoutSessionPage() {
       completedSetLoads: {
         ...(session.completedSetLoads || {}),
         [exercise.id]: completedLoads
-      }
+      },
+      completedSetTimes: {
+        ...(session.completedSetTimes || {}),
+        [exercise.id]: completedTimes
+      },
+      lastSetCompletedAt: completedAt
     };
     setSession(saveWorkoutSession(id, next));
     const recordedSet = recordWorkoutSet({
@@ -579,7 +710,9 @@ function WorkoutSessionPage() {
       reps: exercise.reps,
       rir: exercise.rir
     });
-    api.recordWorkoutExerciseSet(recordedSet).catch(() => {});
+    api.recordWorkoutExerciseSet(recordedSet).catch((recordError) => {
+      showToast(recordError?.message || 'Serie salvata sul dispositivo, sincronizzazione da riprovare.', 'info');
+    });
     setUndoAction({
       exerciseId: exercise.id,
       exerciseName: exercise.name,
@@ -610,6 +743,16 @@ function WorkoutSessionPage() {
     const completedLoads = Array.isArray(session.completedSetLoads?.[exercise.id])
       ? session.completedSetLoads[exercise.id].slice(0, Math.max(0, action.setNumber - 1))
       : [];
+    const completedSetTimes = {
+      ...(session.completedSetTimes || {}),
+      [exercise.id]: Array.isArray(session.completedSetTimes?.[exercise.id])
+        ? session.completedSetTimes[exercise.id].slice(0, Math.max(0, action.setNumber - 1))
+        : []
+    };
+    const lastSetCompletedAt = Object.values(completedSetTimes)
+      .flat()
+      .filter(Boolean)
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0] || null;
     const next = {
       ...session,
       currentExerciseId: exercise.id,
@@ -620,7 +763,9 @@ function WorkoutSessionPage() {
       completedSetLoads: {
         ...(session.completedSetLoads || {}),
         [exercise.id]: completedLoads
-      }
+      },
+      completedSetTimes,
+      lastSetCompletedAt
     };
     setSession(saveWorkoutSession(id, next));
     removeWorkoutSet({ eventId: id, exerciseId: exercise.id, setNumber: action.setNumber });
@@ -631,6 +776,10 @@ function WorkoutSessionPage() {
 
   async function finishWorkout() {
     if (!session || totals.percent < 100 || busy) return;
+    if (!completionGate.reached) {
+      showToast(`Scheda completata: attendi ancora ${formatClock(completionGate.remainingSeconds)} per validare l’attività.`, 'info');
+      return;
+    }
     setBusy(true);
     try {
       await api.recordEventWorkoutProgress(id, 100);
@@ -731,13 +880,6 @@ function WorkoutSessionPage() {
   const verificationMode = String(event.verification_mode || 'both');
   const qrVerified = verificationMode !== 'geo' && Boolean(participation?.checked_in_at || organizer);
   const restExercise = liveExercises.find((exercise) => exercise.id === restTimer.exerciseId);
-  const firstIncompleteExerciseIndex = liveExercises.findIndex((exercise) => (
-    Number(session.completedSets?.[exercise.id] || 0) < exercise.sets
-  ));
-  const currentExerciseIndex = firstIncompleteExerciseIndex >= 0
-    ? firstIncompleteExerciseIndex
-    : Math.max(0, liveExercises.length - 1);
-  const currentExercise = liveExercises[currentExerciseIndex] || liveExercises[0];
   const queuedExercises = liveExercises
     .map((exercise, index) => ({ exercise, index }))
     .filter(({ exercise }) => exercise.id !== currentExercise?.id);
@@ -771,9 +913,11 @@ function WorkoutSessionPage() {
     return (
       <article
         key={exercise.id}
+        ref={currentExerciseCardRef}
         className={`${styles.exerciseCard} ${styles.exerciseCurrent} ${isComplete ? styles.exerciseComplete : ''}`}
       >
         <div
+          ref={currentExerciseSummaryRef}
           className={styles.exerciseSummary}
         >
           <span className={styles.exerciseIndex}>{isComplete ? <Check size={18} /> : String(index + 1).padStart(2, '0')}</span>
@@ -863,8 +1007,18 @@ function WorkoutSessionPage() {
             ))}
           </div>
           {completed < exercise.sets ? (
-            <button type="button" className={styles.completeSetButton} onClick={() => completeSet(exercise)} disabled={Boolean(session.completedAt)}>
-              <CheckCircle2 size={19} /> Completa serie {completed + 1}
+            <button
+              type="button"
+              className={styles.completeSetButton}
+              onClick={() => completeSet(exercise)}
+              disabled={Boolean(session.completedAt) || restBlocksNextSet || setCadenceRemaining > 0}
+            >
+              <CheckCircle2 size={19} />
+              {restBlocksNextSet
+                ? `Recupero · ${formatClock(restTimer.remaining)}`
+                : setCadenceRemaining > 0
+                  ? `Prossima serie tra ${formatClock(setCadenceRemaining)}`
+                  : `Completa serie ${completed + 1}`}
             </button>
           ) : <p className={styles.exerciseDoneLabel}><CheckCircle2 size={18} /> Esercizio completato</p>}
         </div>
@@ -874,7 +1028,7 @@ function WorkoutSessionPage() {
 
   return (
     <section className={styles.page}>
-      <header className={styles.header}>
+      <header ref={headerRef} className={styles.header}>
         <button type="button" onClick={() => navigate(`/events/${id}`)} aria-label="Torna al dettaglio evento"><span aria-hidden="true">←</span></button>
         <div><small>ALLENAMENTO LIVE</small><strong>{event.workout_plan?.title || event.title}</strong></div>
         <time className={restExercise && (restTimer.remaining > 0 || restTimer.running || restTimer.finished) ? styles.sessionTimerDimmed : undefined}>
@@ -920,12 +1074,12 @@ function WorkoutSessionPage() {
                 }))}
                 aria-label="Aggiungi 30 secondi al recupero"
               >+30</button>
+              <button
+                type="button"
+                className={styles.skipRestButton}
+                onClick={() => setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false })}
+              >{restTimer.finished ? 'Chiudi' : 'Salta'}</button>
             </div>
-            <button
-              type="button"
-              className={styles.skipRestButton}
-              onClick={() => setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false })}
-            >{restTimer.finished ? 'Chiudi' : 'Salta'}</button>
             {restTimer.finished ? <span className={styles.visuallyHidden} aria-live="assertive">Recupero terminato</span> : null}
           </aside>
         ) : null}
@@ -976,7 +1130,7 @@ function WorkoutSessionPage() {
                 <i>{qrVerified ? <Check size={14} /> : '1'}</i><b>Verifica</b><small>{qrVerified ? '+5 MOT · +25 XP' : '+2 MOT posizione'}</small>
               </span>
               <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>
-                <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>60% scheda</b><small>+3 MOT</small>
+                <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>66% durata</b><small>+3 MOT</small>
               </span>
               <span className={session.completionAwarded ? styles.rewardReached : undefined}>
                 <i>{session.completionAwarded ? <Check size={14} /> : '3'}</i><b>Conclusione</b><small>+25 XP</small>
@@ -1058,9 +1212,35 @@ function WorkoutSessionPage() {
             ) : null}
           </>
         ) : (
-          <button type="button" className={`${styles.finishButton} ${totals.percent >= 100 ? styles.finishButtonReady : ''}`} disabled={totals.percent < 100 || busy} onClick={finishWorkout}>
-            <CheckCircle2 /> {totals.percent < 100 ? `Completa ancora ${totals.totalSets - totals.completedSets} serie` : busy ? 'Salvataggio…' : 'Termina allenamento · +25 XP'}
-          </button>
+          <>
+            {totals.percent >= 100 && !completionGate.reached ? (
+              <section className={styles.completionGateCard} aria-live="polite">
+                <span><Clock3 size={22} aria-hidden="true" /></span>
+                <div>
+                  <small>SCHEDA COMPLETATA</small>
+                  <strong>Attività ancora in corso</strong>
+                  <p>La validazione si sblocca al 66% della durata prevista.</p>
+                  <i><b style={{ width: `${Math.min(100, (completionGate.elapsedSeconds / completionGate.requiredSeconds) * 100)}%` }} /></i>
+                </div>
+                <time>{formatClock(completionGate.remainingSeconds)}</time>
+              </section>
+            ) : null}
+            <button
+              type="button"
+              className={`${styles.finishButton} ${totals.percent >= 100 && completionGate.reached ? styles.finishButtonReady : ''}`}
+              disabled={totals.percent < 100 || !completionGate.reached || busy}
+              onClick={finishWorkout}
+            >
+              <CheckCircle2 />
+              {totals.percent < 100
+                ? `Completa ancora ${totals.totalSets - totals.completedSets} serie`
+                : !completionGate.reached
+                  ? `Validazione tra ${formatClock(completionGate.remainingSeconds)}`
+                  : busy
+                    ? 'Salvataggio…'
+                    : 'Termina allenamento · +25 XP'}
+            </button>
+          </>
         )}
 
         <PostEventUserFeedback
@@ -1076,6 +1256,18 @@ function WorkoutSessionPage() {
           }}
         />
       </main>
+
+      {!session.completedAt && currentExercise && !currentExerciseVisible ? (
+        <button
+          type="button"
+          className={styles.returnToExerciseButton}
+          onClick={() => centerCurrentExercise('smooth')}
+          aria-label={`Torna all'esercizio ${currentExercise.name}`}
+        >
+          <Dumbbell size={17} aria-hidden="true" />
+          <span>Torna all’esercizio</span>
+        </button>
+      ) : null}
 
       {editingExercise && exerciseDraft ? createPortal(
         <div className={styles.liveEditorBackdrop} onPointerDown={closeExerciseEditor}>

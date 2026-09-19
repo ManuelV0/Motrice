@@ -222,3 +222,51 @@ test('the organizer sees management, check-in, live session and feedback in orde
     referenceTime: startsAt + 26 * 60 * 60 * 1000
   }).id, 'summary');
 });
+
+test('the owner can open the edit flow for a scheduled personal event', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const event = {
+    id: 'personal-event',
+    created_by: 'me',
+    is_personal: true,
+    status: 'scheduled',
+    event_datetime: new Date(startsAt).toISOString(),
+    duration_minutes: 60
+  };
+
+  const action = resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt - 3 * 60 * 60 * 1000
+  });
+
+  assert.equal(action.id, 'personal_manage');
+  assert.equal(action.label, 'Modifica evento');
+  assert.equal(getEventPrimaryActionPath(event, action), '/events/personal-event?manage=1');
+});
+
+test('a recurring personal session requires GPS before opening the workout', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const event = {
+    id: 'personal-recurring',
+    created_by: 'me',
+    is_personal: true,
+    personal_arrival_enabled: true,
+    status: 'scheduled',
+    event_datetime: new Date(startsAt).toISOString(),
+    checkin_opens_at: new Date(startsAt).toISOString(),
+    checkin_closes_at: new Date(startsAt + 12 * 60 * 60 * 1000).toISOString(),
+    ends_at: new Date(startsAt + 12 * 60 * 60 * 1000).toISOString(),
+    duration_minutes: 60,
+    workout_plan: { id: 'plan-1' }
+  };
+
+  const locked = resolveEventPrimaryAction({ event, referenceTime: startsAt + 60 * 1000 });
+  const active = resolveEventPrimaryAction({
+    event: { ...event, session_started_at: new Date(startsAt + 2 * 60 * 1000).toISOString() },
+    referenceTime: startsAt + 3 * 60 * 1000
+  });
+
+  assert.equal(locked.id, 'personal_location');
+  assert.equal(locked.target, 'verify');
+  assert.equal(active.id, 'open_workout');
+});

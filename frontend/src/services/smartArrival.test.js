@@ -67,3 +67,20 @@ test('verified presence disables smart arrival', () => {
   assert.equal(isEventPresenceVerified(event), true);
   assert.equal(getSmartArrivalEligibility(event, START_AT).phase, 'verified');
 });
+
+test('personal recurring arrival follows its flexible daily window', () => {
+  const event = makeEvent({
+    is_personal: true,
+    personal_arrival_enabled: true,
+    personal_available_from: new Date(START_AT).toISOString(),
+    personal_available_until: new Date(START_AT + 6 * 60 * 60 * 1000).toISOString()
+  });
+  assert.equal(getSmartArrivalEligibility(event, START_AT - 1).phase, 'scheduled');
+  assert.equal(getSmartArrivalEligibility(event, START_AT + 3 * 60 * 60 * 1000).eligible, true);
+  assert.equal(getSmartArrivalEligibility(event, START_AT + 6 * 60 * 60 * 1000 + 1).phase, 'expired');
+});
+
+test('personal reminders without automatic arrival remain excluded', () => {
+  const event = makeEvent({ is_personal: true, personal_arrival_enabled: false });
+  assert.equal(getSmartArrivalEligibility(event, START_AT).phase, 'unavailable');
+});

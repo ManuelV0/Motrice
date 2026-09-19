@@ -90,9 +90,11 @@ function SmartArrivalPanel({
           <button type="button" className={styles.smartArrivalPrimary} onClick={() => onVerify(event, 'geo')}>
             <LocateFixed size={15} aria-hidden="true" /> Conferma con GPS
           </button>
-          <button type="button" onClick={() => onVerify(event, 'qr')}>
-            <QrCode size={15} aria-hidden="true" /> {organizer ? 'Scansiona QR' : 'Mostra QR'}
-          </button>
+          {!event?.is_personal ? (
+            <button type="button" onClick={() => onVerify(event, 'qr')}>
+              <QrCode size={15} aria-hidden="true" /> {organizer ? 'Scansiona QR' : 'Mostra QR'}
+            </button>
+          ) : null}
           <button type="button" className={styles.smartArrivalLater} onClick={() => onSnooze(event)}>Non ora</button>
         </div>
       </div>
@@ -339,8 +341,10 @@ function getTodaySessionState(event, referenceTime = Date.now()) {
   const hasOutdoorTracking = isOutdoorTrackedEvent(event);
   const participantOutcome = resolveParticipantOutcome(event);
   const isCompleted = participantOutcome.id === 'completed';
+  const requiresPersonalArrival = Boolean(event?.is_personal && event?.personal_arrival_enabled);
   const isVerified =
-    Boolean(event?.is_personal) ||
+    (event?.is_personal && !requiresPersonalArrival) ||
+    isEventPresenceVerified(event) ||
     participantOutcome.id === 'checked_in' ||
     isCompleted;
 
@@ -1054,7 +1058,7 @@ function AgendaPage() {
             {verificationEventId === String(event.id) ? (
               <AgendaEventVerificationPanel
                 event={event}
-                isOrganizer={event.created_by === 'me' && !event.is_personal}
+                isOrganizer={event.created_by === 'me'}
                 initialMethod={String(searchParams.get('arrivalMethod') || '')}
                 showToast={showToast}
                 onClose={() => setVerificationEventId('')}
@@ -1352,6 +1356,7 @@ function AgendaPage() {
                 }
 
                 const isOrganizer = event.created_by === 'me';
+                const isPersonalOwnedEvent = Boolean(isOrganizer && event.is_personal);
                 const action = resolveEventPrimaryAction({
                   event,
                   isOrganizer,
@@ -1367,12 +1372,17 @@ function AgendaPage() {
                     variant="compact"
                     context="agendaSheet"
                     status={{ label: 'Da svolgere', tone: 'success' }}
-                    secondaryAction={isOrganizer ? {
+                    secondaryAction={isOrganizer && !isPersonalOwnedEvent ? {
                       label: 'Modifica evento',
                       icon: Settings2,
                       onClick: (selectedEvent) => navigate(`/events/${selectedEvent.id}?manage=1`)
                     } : undefined}
-                    primaryAction={isOrganizer ? {
+                    primaryAction={isPersonalOwnedEvent ? {
+                      label: action.label,
+                      icon: ActionIcon,
+                      disabled: action.disabled,
+                      onClick: (selectedEvent) => openEventPrimaryAction(selectedEvent, action)
+                    } : isOrganizer ? {
                       label: 'Gestisci richieste',
                       icon: Users,
                       tone: 'warning',
@@ -1383,7 +1393,7 @@ function AgendaPage() {
                       disabled: action.disabled,
                       onClick: (selectedEvent) => openEventPrimaryAction(selectedEvent, action)
                     }}
-                    extraContent={!event.is_personal && !['unavailable', 'expired'].includes(smartArrivalPhase) ? (
+                    extraContent={!['unavailable', 'expired'].includes(smartArrivalPhase) ? (
                       <SmartArrivalPanel
                         event={event}
                         nowMs={nowMs}

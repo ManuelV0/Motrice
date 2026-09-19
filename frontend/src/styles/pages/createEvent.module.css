@@ -2198,6 +2198,466 @@
 .personalNotice div { display: grid; gap: 0.18rem; }
 .personalNotice span { color: var(--muted); font-size: var(--text-sm); line-height: 1.45; }
 
+.personalTimingCard {
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background: var(--create-panel-2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.personalTimingHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.personalTimingHead > span {
+  width: 2.55rem;
+  height: 2.55rem;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 11%, #202420);
+}
+
+.personalTimingHead > div { min-width: 0; display: grid; gap: 0.15rem; }
+.personalTimingHead strong { color: var(--text); font-size: var(--text-base); }
+.personalTimingHead small { color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
+
+.personalTimingFields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.personalTimingFieldsCompact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.personalTimingFields > label { min-width: 0; display: grid; gap: 0.36rem; }
+.personalTimingFields > label > span:first-child {
+  color: var(--muted);
+  font-size: 0.67rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.personalTimingFields input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.85rem;
+  padding: 0 0.7rem;
+  border: 1px solid var(--create-border);
+  border-radius: 0.72rem;
+  color: var(--text);
+  background: #151815;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.personalDurationInput { position: relative; display: block; }
+.personalDurationInput input { padding-right: 2.8rem; }
+.personalDurationInput b {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.personalDurationPresets {
+  padding: 0.24rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.3rem;
+  border-radius: 0.8rem;
+  background: #0d100d;
+}
+
+.personalDurationPresets button {
+  min-height: 2.45rem;
+  border: 0;
+  border-radius: 0.62rem;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.personalDurationPresets .personalDurationSelected {
+  color: var(--primary-contrast);
+  background: var(--primary);
+}
+
+.personalVisibilityCompact {
+  min-height: 3.65rem;
+  padding: 0.7rem 0.85rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--create-border));
+  border-radius: var(--r-lg);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--create-panel-2));
+}
+
+.personalVisibilityCompact > span { min-width: 0; display: grid; gap: 0.08rem; }
+.personalVisibilityCompact strong { color: var(--text); font-size: var(--text-sm); }
+.personalVisibilityCompact small { color: var(--muted); font-size: 0.68rem; }
+.personalVisibilityCompact > b {
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.eventKindCard,
+.recurrencePlanner {
+  padding: var(--s-4);
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-xl);
+  background:
+    radial-gradient(circle at 100% 0, rgb(168 240 0 / 7%), transparent 42%),
+    var(--create-panel-2);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.eventKindOptions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.eventKindOptions > button {
+  min-width: 0;
+  min-height: 4.65rem;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  background: #111411;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eventKindOptions > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.eventKindOptions strong { color: var(--text); font-size: var(--text-sm); }
+.eventKindOptions small { color: var(--muted); font-size: 0.68rem; line-height: 1.3; }
+
+.eventKindOptions > .eventKindSelected {
+  border-color: color-mix(in srgb, var(--primary) 66%, var(--create-border));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, #111411);
+  box-shadow: 0 0 24px rgb(168 240 0 / 8%);
+}
+
+.recurrenceModePicker {
+  padding-top: var(--s-3);
+  display: grid;
+  gap: var(--s-2);
+  border-top: 1px solid var(--create-border);
+}
+
+.recurrenceModePicker > span {
+  color: #adb2aa;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.recurrenceModePicker > div {
+  padding: 0.28rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+  border-radius: var(--r-lg);
+  background: #0c0f0c;
+}
+
+.recurrenceModePicker button {
+  min-height: 2.85rem;
+  border: 0;
+  border-radius: calc(var(--r-lg) - 0.22rem);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.recurrenceModePicker .recurrenceModeSelected {
+  color: var(--primary-contrast);
+  background: var(--primary);
+}
+
+.recurrenceModePicker > small,
+.personalFirstStepHint {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
+.personalFirstStepHint {
+  padding: var(--s-3);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 1px dashed color-mix(in srgb, var(--primary) 28%, var(--create-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+
+.personalFirstStepHint svg { flex: 0 0 auto; color: var(--primary); }
+
+.recurrencePlanner {
+  gap: var(--s-4);
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--create-border));
+}
+
+.recurrencePlannerHead {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.recurrencePlannerHead > div { min-width: 0; display: grid; gap: 0.15rem; }
+.recurrencePlannerHead > div > strong { color: var(--text); font-size: var(--text-lg); }
+.recurrencePlannerHead > div > small { color: var(--muted); font-size: var(--text-xs); line-height: 1.35; }
+
+.recurrencePlannerIcon {
+  width: 2.8rem;
+  height: 2.8rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, #202420);
+}
+
+.previewBadge {
+  padding: 0.34rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: 999px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  font-size: 0.62rem;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recurrenceDayPicker {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.recurrenceDayPicker button {
+  min-width: 0;
+  min-height: 2.7rem;
+  padding: 0.32rem 0.18rem;
+  border: 1px solid var(--create-border);
+  border-radius: 0.72rem;
+  display: grid;
+  place-items: center;
+  gap: 0.08rem;
+  color: #8f958d;
+  background: #101310;
+  font: inherit;
+  font-size: 0.67rem;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.recurrenceDayPicker .recurrenceDaySelected {
+  border-color: var(--primary);
+  color: #0a0c09;
+  background: var(--primary);
+  box-shadow: 0 0 15px rgb(168 240 0 / 18%);
+}
+
+.recurrenceDayList { display: grid; gap: var(--s-2); }
+
+.recurrenceDayCard {
+  padding: var(--s-3);
+  display: grid;
+  gap: var(--s-3);
+  border: 1px solid var(--create-border);
+  border-radius: var(--r-lg);
+  background: #101310;
+}
+
+.recurrenceDayCard > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.recurrenceDayCard > header > span,
+.recurrenceReviewList > div > span {
+  width: 2.35rem;
+  height: 2.35rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.72rem;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 11%, #202420);
+  font-size: 0.67rem;
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+}
+
+.recurrenceDayCard header > div { display: grid; gap: 0.12rem; }
+.recurrenceDayCard header small { color: var(--muted); font-size: var(--text-xs); }
+.recurrenceDayCard header button {
+  width: 2.3rem;
+  height: 2.3rem;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: #ff7a7a;
+  background: transparent;
+  cursor: pointer;
+}
+
+.recurrenceDayFields {
+  display: grid;
+  grid-template-columns: minmax(7.3rem, 0.42fr) minmax(0, 1fr);
+  gap: var(--s-2);
+}
+
+.recurrenceDayFields label { min-width: 0; display: grid; gap: 0.36rem; }
+.recurrenceDayFields label > span { color: var(--muted); font-size: 0.67rem; font-weight: var(--weight-bold); text-transform: uppercase; }
+.recurrenceDayFields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--create-border);
+  border-radius: 0.72rem;
+  color: var(--text);
+  background: #181b18;
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.recurrenceDayCard > footer {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.recurrenceDayCard > footer svg { color: var(--primary); }
+
+.recurrenceEmpty {
+  padding: var(--s-4);
+  border: 1px dashed var(--create-border);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  background: #101310;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.recurrenceNoPlans,
+.recurrenceAccessRule,
+.recurrenceReminder {
+  padding: var(--s-3);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  border-radius: var(--r-lg);
+}
+
+.recurrenceNoPlans {
+  border: 1px solid rgb(255 184 76 / 25%);
+  color: #ffbd59;
+  background: rgb(255 184 76 / 6%);
+}
+
+.recurrenceNoPlans > span,
+.recurrenceAccessRule > span,
+.recurrenceReminder > div { min-width: 0; display: grid; gap: 0.12rem; }
+.recurrenceNoPlans small,
+.recurrenceAccessRule small,
+.recurrenceReminder small { color: var(--muted); font-size: var(--text-xs); line-height: 1.35; }
+.recurrenceNoPlans button {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 0;
+  color: #ffbd59;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.recurrenceReminder {
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--create-border));
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.recurrenceAccessRule {
+  align-items: flex-start;
+  border: 1px solid rgb(109 165 255 / 22%);
+  color: #7fb1ff;
+  background: rgb(64 119 210 / 7%);
+}
+
+.recurrenceAccessRule svg { flex: 0 0 auto; margin-top: 0.08rem; }
+.recurrenceAccessRule strong { color: #d8e7ff; font-size: var(--text-sm); }
+
+.recurrenceReviewList { display: grid; gap: var(--s-2); }
+.recurrenceReviewList > div {
+  padding: 0.62rem 0;
+  display: grid;
+  grid-template-columns: auto minmax(5rem, 0.42fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-2);
+  border-bottom: 1px solid var(--create-border);
+}
+.recurrenceReviewList > div:last-child { border-bottom: 0; }
+.recurrenceReviewList small { color: var(--muted); text-align: right; }
+.recurrenceReviewSummary {
+  margin: var(--s-2) 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 .segmentedControl {
   padding: 0.35rem;
   display: grid;
@@ -2676,7 +3136,7 @@
   bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px));
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(7.5rem, 0.42fr) minmax(0, 1fr);
+  grid-template-columns: minmax(6.7rem, 0.28fr) minmax(0, 1fr);
   gap: var(--s-2);
   margin: 0;
   padding: var(--s-3) max(var(--container-pad-x), env(safe-area-inset-right, 0px)) var(--s-3) max(var(--container-pad-x), env(safe-area-inset-left, 0px));
@@ -2711,6 +3171,11 @@
   color: var(--text);
 }
 
+.backButtonCompact {
+  padding-inline: var(--s-3);
+  font-size: var(--text-sm);
+}
+
 .nextButton {
   border: 1px solid var(--primary);
   background: var(--primary);
@@ -2738,6 +3203,43 @@
     margin-inline: calc(var(--container-pad-x) * -0.45);
     padding: var(--s-4) var(--s-4) 10rem;
     border-radius: var(--r-xl);
+  }
+
+  .eventKindOptions { grid-template-columns: 1fr; }
+
+  .personalTimingFields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .personalTimingFields:not(.personalTimingFieldsCompact) > label:last-child { grid-column: 1 / -1; }
+
+  .recurrencePlannerHead {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .recurrencePlannerHead .previewBadge {
+    grid-column: 1 / -1;
+    width: fit-content;
+  }
+
+  .recurrenceDayFields { grid-template-columns: 1fr; }
+
+  .recurrenceNoPlans {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .recurrenceNoPlans button {
+    width: 100%;
+    margin-left: 0;
+    padding: 0.5rem 0;
+    text-align: left;
+  }
+
+  .recurrenceReviewList > div {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .recurrenceReviewList small {
+    grid-column: 2;
+    text-align: left;
   }
 
   .sportCard {
@@ -2803,7 +3305,7 @@
   .settingIcon { display: none; }
   .settingCopy small { max-width: 16rem; }
 
-  .wizardFooter { grid-template-columns: minmax(6.8rem, 0.4fr) minmax(0, 1fr); }
+  .wizardFooter { grid-template-columns: minmax(6.5rem, 0.28fr) minmax(0, 1fr); }
   .wizardFooterSingle { grid-template-columns: 1fr; }
 }
 

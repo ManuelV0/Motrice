@@ -64,6 +64,18 @@ export function getParticipantRemovalPolicy(event = {}, referenceTime = Date.now
   };
 }
 
+export function canDeleteOwnedEvent(event = {}, { isOwner = false, referenceTime = Date.now() } = {}) {
+  const nowMs = referenceTime instanceof Date ? referenceTime.getTime() : Number(referenceTime);
+  const startsAtMs = toTimestamp(event.event_datetime || event.starts_at);
+  return Boolean(
+    isOwner &&
+    String(event.status || 'scheduled').toLowerCase() === 'scheduled' &&
+    Number.isFinite(nowMs) &&
+    Number.isFinite(startsAtMs) &&
+    startsAtMs > nowMs
+  );
+}
+
 function closestTolerance(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return EVENT_LATE_TOLERANCE_OPTIONS[0];
@@ -103,7 +115,9 @@ export function getEventManagementPolicy(event = {}, referenceTime = Date.now())
   const canEditParticipantSettings = Boolean(isActive && hasValidTiming && nowMs <= durationCutoffMs);
   const canEditWorkoutPlan = false;
   const canEditMedia = false;
-  const canSendOrganizerAlert = Boolean(isActive && hasValidTiming && nowMs < eventEndsAtMs);
+  const canSendOrganizerAlert = Boolean(
+    !isPersonal && isActive && hasValidTiming && nowMs < eventEndsAtMs
+  );
   const canEditToleranceBeforeStart = Boolean(
     !isPersonal &&
     isActive &&

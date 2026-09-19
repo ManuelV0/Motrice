@@ -342,6 +342,10 @@
 }
 
 .cardTrend.new { color: #d3d3d3; }
+.cardTrend.incomplete {
+  background: rgba(255, 190, 74, 0.1);
+  color: #ffc65f;
+}
 
 .miniTrend {
   grid-column: 3;
@@ -521,6 +525,56 @@
 .trendPill.down { background: rgba(255, 105, 105, 0.1); color: #ff8e8e; }
 .trendPill.stable,
 .trendPill.new { background: #272727; color: #bbb; }
+.trendPill.incomplete { background: rgba(255, 190, 74, 0.1); color: #ffc65f; }
+
+.personalBest {
+  min-height: 48px;
+  margin-top: 7px;
+  padding: 8px 11px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #2b2b2b;
+  border-radius: 13px;
+  background: #171717;
+}
+
+.personalBest > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(198, 255, 0, 0.09);
+  color: #c6ff00;
+}
+
+.personalBest > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.personalBest small {
+  color: #777;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.personalBest strong {
+  overflow: hidden;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personalBest time {
+  color: #777;
+  font-size: 0.57rem;
+  white-space: nowrap;
+}
 
 .chartCard {
   margin-top: 9px;
@@ -542,6 +596,29 @@
   font-weight: 750;
 }
 .chartScale span:first-child { color: #9da67f; }
+.chartEmpty {
+  min-height: 152px;
+  padding: 22px 16px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  color: #ffc65f;
+  text-align: center;
+}
+
+.chartEmpty strong {
+  color: #dedede;
+  font-size: 0.74rem;
+}
+
+.chartEmpty span {
+  max-width: 270px;
+  color: #747474;
+  font-size: 0.63rem;
+  line-height: 1.4;
+}
+
 .detailChart { width: 100%; height: 132px; overflow: visible; }
 .detailChart line { stroke: #2a2a2a; stroke-width: 1; }
 .chartArea { stroke: none; }

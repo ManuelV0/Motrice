@@ -181,6 +181,11 @@
 .locationCard > div { display: grid; gap: 0.12rem; }
 .locationCard strong { font-size: 0.73rem; }
 .locationCard small { color: var(--muted); font-size: 0.59rem; line-height: 1.35; }
+.locationTitle { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; }
+.locationPermissionStatus { font-size: 0.61rem; font-weight: 850; line-height: 1.2; }
+.locationPermissionAuthorized { color: #79e89a; }
+.locationPermissionDenied { color: #ff6b78; }
+.locationPermissionChecking { color: var(--muted); }
 
 .mapThemeBlock { display: grid; gap: 0.65rem; padding: 0 0.72rem 0.72rem; }
 .mapThemeBlock > div:first-child { display: flex; align-items: center; gap: 0.6rem; }

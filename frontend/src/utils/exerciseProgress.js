@@ -29,9 +29,24 @@ function normalizedRecord(entry) {
     reps,
     rir: number(entry?.rir),
     completedAt: entry?.completedAt || null,
-    estimatedMax: weightKg > 0 && reps > 0 ? weightKg * (1 + reps / 30) : weightKg,
+    hasValidReps: reps > 0,
+    estimatedMax: weightKg > 0 && reps > 0 ? weightKg * (1 + reps / 30) : 0,
     volume: weightKg * reps
   };
+}
+
+function performanceScore(record) {
+  if (!record?.hasValidReps) return 0;
+  return record.estimatedMax || record.reps || 0;
+}
+
+function isBetterSet(record, best) {
+  if (!best) return true;
+  const score = performanceScore(record);
+  const bestScore = performanceScore(best);
+  if (score !== bestScore) return score > bestScore;
+  if (score === 0 && record.weightKg !== best.weightKg) return record.weightKg > best.weightKg;
+  return false;
 }
 
 function dateBounds(period, now = new Date()) {
@@ -69,9 +84,7 @@ function buildSessions(records) {
   return [...groups.entries()]
     .map(([eventId, sessionRecords]) => {
       const sorted = [...sessionRecords].sort((a, b) => timestamp(a.completedAt) - timestamp(b.completedAt));
-      const bestSet = sorted.reduce((best, record) => (
-        (record.estimatedMax || record.reps) > (best?.estimatedMax || best?.reps || -1) ? record : best
-      ), null);
+      const bestSet = sorted.reduce((best, record) => (isBetterSet(record, best) ? record : best), null);
       return {
         eventId,
         completedAt: sorted[sorted.length - 1]?.completedAt || null,
@@ -102,16 +115,21 @@ export function summarizeExerciseHistory(history = [], period = '4w', now = new 
       const sorted = [...records].sort((a, b) => timestamp(a.completedAt) - timestamp(b.completedAt));
       const sessions = buildSessions(sorted);
       const latestSession = sessions[sessions.length - 1];
-      const previousSession = sessions[sessions.length - 2] || null;
       const bodyweight = !sorted.some((record) => record.weightKg > 0);
       const sessionMetric = (session) => bodyweight ? session?.bestReps || 0 : session?.bestEstimatedMax || 0;
       const latestMetric = sessionMetric(latestSession);
+      const previousSession = [...sessions]
+        .slice(0, -1)
+        .reverse()
+        .find((session) => sessionMetric(session) > 0) || null;
       const previousMetric = sessionMetric(previousSession);
       const trendPercent = previousMetric > 0
         ? Math.round(((latestMetric - previousMetric) / previousMetric) * 100)
         : 0;
-      const trendStatus = sessions.length < 2
-        ? 'new'
+      const trendStatus = latestMetric <= 0
+        ? 'incomplete'
+        : !previousSession
+          ? 'new'
         : Math.abs(trendPercent) < 1
           ? 'stable'
           : trendPercent > 0 ? 'up' : 'down';
@@ -119,10 +137,9 @@ export function summarizeExerciseHistory(history = [], period = '4w', now = new 
         (best, session) => Math.max(best, sessionMetric(session)),
         0
       );
-      const isRecord = sessions.length > 1 && latestMetric > previousBest;
-      const bestSet = sorted.reduce((best, record) => (
-        (record.estimatedMax || record.reps) > (best?.estimatedMax || best?.reps || -1) ? record : best
-      ), null);
+      const isRecord = Boolean(previousSession) && latestMetric > previousBest;
+      const bestSet = sorted.reduce((best, record) => (isBetterSet(record, best) ? record : best), null);
+      const chartSessions = sessions.filter((session) => sessionMetric(session) > 0);
 
       return {
         key,
@@ -131,7 +148,7 @@ export function summarizeExerciseHistory(history = [], period = '4w', now = new 
         bodyweight,
         records: [...sorted].reverse(),
         sessions: [...sessions].reverse(),
-        chartSessions: sessions,
+        chartSessions,
         sessionCount: sessions.length,
         totalSets: sorted.length,
         totalVolume: sorted.reduce((sum, record) => sum + record.volume, 0),
@@ -140,7 +157,9 @@ export function summarizeExerciseHistory(history = [], period = '4w', now = new 
         bestEstimatedMax: Math.max(0, ...sorted.map((record) => record.estimatedMax)),
         bestReps: Math.max(0, ...sorted.map((record) => record.reps)),
         bestSet,
+        hasValidPerformance: performanceScore(bestSet) > 0,
         latestSession,
+        previousSession,
         trendPercent,
         trendStatus,
         isRecord,

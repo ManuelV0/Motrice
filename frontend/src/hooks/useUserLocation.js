@@ -68,6 +68,7 @@ function useUserLocation() {
     };
   });
   const [permission, setPermission] = useState('prompt');
+  const [permissionReady, setPermissionReady] = useState(false);
   const [error, setError] = useState('');
   const [errorCode, setErrorCode] = useState('');
   const [requesting, setRequesting] = useState(false);
@@ -82,31 +83,51 @@ function useUserLocation() {
     return liveCoords;
   }, []);
 
+  const refreshPermission = useCallback(async () => {
+    if (isNative) {
+      try {
+        const status = await NativeEventLocation.checkLocationPermissions();
+        const nativePermission = resolveLocationPermission(status);
+        setPermission(nativePermission);
+        if (!hasAnyLocationPermission(status)) {
+          setCoords(null);
+        } else {
+          setError('');
+          setErrorCode('');
+        }
+        return nativePermission;
+      } catch (permissionError) {
+        const normalized = normalizeLocationError(permissionError);
+        setPermission(normalized.permission);
+        setError(normalized.message);
+        setErrorCode(normalized.code);
+        return normalized.permission;
+      } finally {
+        setPermissionReady(true);
+      }
+    }
+
+    if (!navigator?.permissions?.query) {
+      setPermissionReady(true);
+      return 'prompt';
+    }
+
+    try {
+      const status = await navigator.permissions.query({ name: 'geolocation' });
+      const browserPermission = status.state || 'prompt';
+      setPermission(browserPermission);
+      return browserPermission;
+    } catch {
+      return 'prompt';
+    } finally {
+      setPermissionReady(true);
+    }
+  }, [isNative]);
+
   useEffect(() => {
     if (isNative) {
-      let active = true;
-      NativeEventLocation.checkLocationPermissions()
-        .then((status) => {
-          if (!active) return;
-          const nativePermission = resolveLocationPermission(status);
-          setPermission(nativePermission);
-          if (!hasAnyLocationPermission(status)) {
-            setCoords(null);
-          } else {
-            setError('');
-            setErrorCode('');
-          }
-        })
-        .catch((permissionError) => {
-          if (!active) return;
-          const normalized = normalizeLocationError(permissionError);
-          setPermission(normalized.permission);
-          setError(normalized.message);
-          setErrorCode(normalized.code);
-        });
-      return () => {
-        active = false;
-      };
+      refreshPermission().catch(() => undefined);
+      return undefined;
     }
 
     if (!navigator?.permissions?.query) return;
@@ -119,20 +140,22 @@ function useUserLocation() {
         if (!active) return;
         statusRef = status;
         setPermission(status.state || 'prompt');
+        setPermissionReady(true);
         status.onchange = () => {
           if (!active) return;
           setPermission(status.state || 'prompt');
+          setPermissionReady(true);
         };
       })
       .catch(() => {
-        // no-op
+        if (active) setPermissionReady(true);
       });
 
     return () => {
       active = false;
       if (statusRef) statusRef.onchange = null;
     };
-  }, [isNative]);
+  }, [isNative, refreshPermission]);
 
   const requestLocation = useCallback(async ({
     requireFresh = false,
@@ -166,6 +189,7 @@ function useUserLocation() {
 
         precisePermission = hasPreciseLocationPermission(currentPermission);
         setPermission(resolveLocationPermission(currentPermission));
+        setPermissionReady(true);
         if (requireFresh && !precisePermission) {
           const preciseError = new Error('Posizione precisa necessaria');
           preciseError.code = 'MOTRICE_PRECISE_LOCATION_REQUIRED';
@@ -201,6 +225,7 @@ function useUserLocation() {
     } catch (geoError) {
       const normalized = normalizeLocationError(geoError);
       setPermission(normalized.permission);
+      setPermissionReady(true);
       setError(normalized.message);
       setErrorCode(normalized.code);
       return null;
@@ -321,11 +346,13 @@ function useUserLocation() {
     coords,
     hasLocation: Boolean(coords),
     permission,
+    permissionReady,
     error,
     errorCode,
     requesting,
     watching,
     requestLocation,
+    refreshPermission,
     startLocationWatch,
     stopLocationWatch,
     originParams

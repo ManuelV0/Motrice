@@ -72,3 +72,28 @@ test('sorts records first without losing recent fallback', () => {
   ];
   assert.equal(sortExerciseSummaries(input, 'records')[0].name, 'B');
 });
+
+test('does not treat a zero-repetition set as a performance or record', () => {
+  const summary = summarizeExerciseHistory([
+    set('one', 'Dips alle parallele', 0, 0, '2026-09-10T10:00:00.000Z', 1),
+    set('one', 'Dips alle parallele', 10, 0, '2026-09-10T10:01:00.000Z', 2)
+  ], '4w', now)[0];
+  assert.equal(summary.trendStatus, 'incomplete');
+  assert.equal(summary.bestEstimatedMax, 0);
+  assert.equal(summary.hasValidPerformance, false);
+  assert.equal(summary.chartSessions.length, 0);
+  assert.equal(summary.isRecord, false);
+  assert.equal(summary.latestSession.bestSet.weightKg, 10);
+});
+
+test('an incomplete latest session does not compare against or replace a valid personal best', () => {
+  const summary = summarizeExerciseHistory([
+    set('one', 'Chest Press', 80, 8, '2026-09-01T10:00:00.000Z'),
+    set('two', 'Chest Press', 90, 0, '2026-09-10T10:00:00.000Z')
+  ], '4w', now)[0];
+  assert.equal(summary.trendStatus, 'incomplete');
+  assert.equal(summary.bestSet.weightKg, 80);
+  assert.equal(summary.latestSession.bestSet.weightKg, 90);
+  assert.equal(summary.chartSessions.length, 1);
+  assert.equal(summary.isRecord, false);
+});

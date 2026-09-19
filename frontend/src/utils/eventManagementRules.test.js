@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  canDeleteOwnedEvent,
   getCapacityExtensionOptions,
   getDurationExtensionOptions,
   getEventManagementPolicy,
@@ -79,6 +80,25 @@ test('dopo la fine blocca anche le comunicazioni urgenti', () => {
 test('gli eventi personali non espongono la tolleranza', () => {
   const policy = getEventManagementPolicy({ ...baseEvent, is_personal: true }, start - 3 * 60 * 60 * 1000);
   assert.equal(policy.canEditTolerance, false);
+  assert.equal(policy.canSendOrganizerAlert, false);
+  assert.equal(policy.canEditDescription, true);
+  assert.equal(policy.canEditDuration, true);
+});
+
+test('il proprietario può eliminare un evento personale soltanto prima dell inizio', () => {
+  const personalEvent = { ...baseEvent, is_personal: true };
+  assert.equal(canDeleteOwnedEvent(personalEvent, {
+    isOwner: true,
+    referenceTime: start - 60 * 1000
+  }), true);
+  assert.equal(canDeleteOwnedEvent(personalEvent, {
+    isOwner: true,
+    referenceTime: start
+  }), false);
+  assert.equal(canDeleteOwnedEvent(personalEvent, {
+    isOwner: false,
+    referenceTime: start - 60 * 1000
+  }), false);
 });
 
 test('la rimozione del partecipante diventa tardiva soltanto nelle ultime 12 ore', () => {

@@ -68,7 +68,9 @@ function EventCard({
   const defaultMetaItems = [
     event.duration_minutes ? { icon: Clock3, label: `${Number(event.duration_minutes)} min` } : null,
     capacity ? { icon: Users, label: `${participants}/${capacity}` } : null,
-    event.created_by === 'me' ? { icon: ShieldCheck, label: 'Organizer' } : null
+    event.created_by === 'me'
+      ? { icon: ShieldCheck, label: event.is_personal ? 'Personale' : 'Organizer' }
+      : null
   ].filter(Boolean);
   const renderedMetaItems = Array.isArray(metaItems) ? metaItems : defaultMetaItems;
   const hasActions = Boolean(primaryAction || secondaryAction || onBookGroup || detailsLabel);

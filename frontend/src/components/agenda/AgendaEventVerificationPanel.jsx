@@ -485,11 +485,13 @@ function AgendaEventVerificationPanel({
       <header className={styles.header}>
         <span className={styles.headerIcon} aria-hidden="true"><ShieldCheck size={20} /></span>
         <div>
-          <small>{isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
-          <h3>{panelVerified ? 'Presenza verificata' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
+          <small>{event?.is_personal ? 'ALLENAMENTO PERSONALE' : isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
+          <h3>{panelVerified ? 'Presenza verificata' : event?.is_personal ? 'Conferma il punto di allenamento' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
           <p>{panelVerified
             ? hasOutdoorTracking ? 'Il monitoraggio GPS dell’attività è ora sbloccato.' : hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
-            : isOrganizer
+            : event?.is_personal
+              ? 'Il GPS verifica il tuo arrivo. Sarai sempre tu a premere “Avvia allenamento”.'
+              : isOrganizer
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
               : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
         </div>

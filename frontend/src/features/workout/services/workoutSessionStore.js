@@ -174,16 +174,28 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
     const effectiveSets = exerciseOverrides[exercise.id]?.sets || exercise.sets;
     return [exercise.id, savedLoads.slice(0, effectiveSets).map(normalizeLoad)];
   }));
+  const completedSetTimes = Object.fromEntries(normalized.map((exercise) => {
+    const savedTimes = Array.isArray(previous?.completedSetTimes?.[exercise.id])
+      ? previous.completedSetTimes[exercise.id]
+      : [];
+    const effectiveSets = exerciseOverrides[exercise.id]?.sets || exercise.sets;
+    return [exercise.id, savedTimes.slice(0, effectiveSets).map((value) => {
+      const parsed = Date.parse(value || '');
+      return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+    })];
+  }));
 
   return saveWorkoutSession(eventId, {
     eventId: String(eventId),
-    startedAt: previous?.startedAt || remote?.started_at || new Date().toISOString(),
-    completedAt: previous?.completedAt || remote?.completed_at || null,
+    startedAt: remote?.started_at || previous?.startedAt || new Date().toISOString(),
+    completedAt: remote?.completed_at || previous?.completedAt || null,
     completedSets,
     exerciseLoads,
     completedSetLoads,
+    completedSetTimes,
     exerciseOverrides,
     currentExerciseId: previous?.currentExerciseId || normalized[0]?.id || null,
+    lastSetCompletedAt: previous?.lastSetCompletedAt || null,
     sixtyPercentAwarded: Boolean(previous?.sixtyPercentAwarded || remote?.mot_sixty_awarded),
     completionAwarded: Boolean(previous?.completionAwarded || remote?.xp_completion_awarded),
     selfRating: Math.max(0, Math.min(5, Math.round(Number(previous?.selfRating) || 0))),

@@ -48,6 +48,7 @@ import ContextInfoButton from '../components/ContextInfoButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import EventMapPreview from '../components/EventMapPreview';
 import { NativeEventLocation } from '../services/nativeEventLocation';
+import { getWorkoutCompletionGate } from '../utils/workoutCompletionGate';
 import styles from '../styles/pages/outdoorActivitySession.module.css';
 
 function formatClock(totalSeconds) {
@@ -261,6 +262,11 @@ function OutdoorActivitySessionPage() {
   const elapsedSeconds = Math.floor(elapsedMs / 1000);
   const durationSeconds = Math.max(60, Number(event?.duration_minutes || 60) * 60);
   const timeProgress = Math.min(100, Math.round((elapsedSeconds / durationSeconds) * 100));
+  const completionGate = getWorkoutCompletionGate({
+    startedAt: session?.startedAt,
+    durationMinutes: event?.duration_minutes || 60,
+    now: session?.completedAt ? Date.parse(session.completedAt) : Date.now()
+  });
   const distanceKm = Math.max(0, Number(session?.distanceM || 0)) / 1000;
   const routeTargetKm = Number(event?.route_info?.distance_km || 0);
   const routeProgress = routeTargetKm > 0 ? Math.min(100, Math.round((distanceKm / routeTargetKm) * 100)) : null;
@@ -300,10 +306,12 @@ function OutdoorActivitySessionPage() {
   const remainingSeconds = Math.max(0, durationSeconds - elapsedSeconds);
 
   useEffect(() => {
-    if (!session || timeProgress < 60 || session.sixtyPercentAwarded || progressAwardBusyRef.current) return;
+    if (!session || !completionGate.reached || session.sixtyPercentAwarded || progressAwardBusyRef.current) return;
     progressAwardBusyRef.current = true;
     api.recordEventWorkoutProgress(id, timeProgress)
       .then((result) => {
+        const milestoneReached = Boolean(result?.minimum_time_reached ?? completionGate.reached);
+        if (!milestoneReached) return;
         setSession((current) => {
           if (!current) return current;
           return saveOutdoorSession(id, {
@@ -312,12 +320,12 @@ function OutdoorActivitySessionPage() {
           });
         });
         if (Number(result?.mot_awarded || 0) > 0) {
-          showToast(`60% dell’attività raggiunto · +${result.mot_awarded} MOT`, 'success');
+          showToast(`Tempo minimo verificato · +${result.mot_awarded} MOT`, 'success');
         }
       })
       .catch(() => undefined)
       .finally(() => { progressAwardBusyRef.current = false; });
-  }, [id, session, showToast, timeProgress]);
+  }, [completionGate.reached, id, session, showToast, timeProgress]);
 
   function togglePause() {
     if (!session || isCompleted) return;
@@ -499,7 +507,7 @@ function OutdoorActivitySessionPage() {
             <i><Check size={14} /></i><b>Check-in</b><small>{qrVerified ? '+5 MOT · +25 XP' : '+2 MOT'}</small>
           </span>
           <span className={session.sixtyPercentAwarded ? styles.rewardReached : undefined}>
-            <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>60% durata</b><small>+3 MOT</small>
+            <i>{session.sixtyPercentAwarded ? <Check size={14} /> : '2'}</i><b>66% durata</b><small>+3 MOT</small>
           </span>
           <span className={session.completionAwarded ? styles.rewardReached : undefined}>
             <i>{session.completionAwarded ? <Check size={14} /> : '3'}</i><b>Conclusione</b><small>+25 XP</small>

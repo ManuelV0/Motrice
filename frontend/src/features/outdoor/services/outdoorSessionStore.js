@@ -31,10 +31,12 @@ export function createOutdoorSession(eventId, kind, remote = {}) {
   const session = {
     eventId: String(eventId),
     kind,
-    startedAt: previous?.startedAt || remote?.started_at || new Date().toISOString(),
+    // Il timestamp verificato dal server (check-in) e autorevole. In questo modo
+    // una sessione locale obsoleta non puo anticipare o posticipare la durata.
+    startedAt: remote?.started_at || previous?.startedAt || new Date().toISOString(),
     pausedAt: previous?.pausedAt || null,
     pausedTotalMs: Math.max(0, Number(previous?.pausedTotalMs || 0)),
-    completedAt: previous?.completedAt || remote?.completed_at || null,
+    completedAt: remote?.completed_at || previous?.completedAt || null,
     distanceM: Math.max(0, Number(previous?.distanceM || 0)),
     elevationGainM: Math.max(0, Number(previous?.elevationGainM || 0)),
     currentSpeedMps: Math.max(0, Number(previous?.currentSpeedMps || 0)),

@@ -83,14 +83,35 @@ export function isEventPresenceVerified(event) {
 }
 
 export function getSmartArrivalEligibility(event, nowMs = Date.now()) {
-  const timing = getEventTiming(event, nowMs);
+  const baseTiming = getEventTiming(event, nowMs);
+  const personalAvailableFromMs = Date.parse(event?.personal_available_from || '');
+  const personalAvailableUntilMs = Date.parse(event?.personal_available_until || '');
+  const hasPersonalWindow = Boolean(
+    event?.is_personal &&
+    event?.personal_arrival_enabled &&
+    Number.isFinite(personalAvailableFromMs) &&
+    Number.isFinite(personalAvailableUntilMs)
+  );
+  const timing = hasPersonalWindow
+    ? {
+        ...baseTiming,
+        checkInOpensAtMs: personalAvailableFromMs,
+        checkInClosesAtMs: personalAvailableUntilMs,
+        isCheckInOpen: Number(nowMs) >= personalAvailableFromMs && Number(nowMs) <= personalAvailableUntilMs
+      }
+    : baseTiming;
   const relevant = Boolean(
     event?.created_by === 'me'
       || event?.is_going
       || event?.user_rsvp
   );
 
-  if (!event?.id || event?.is_personal || !relevant || String(event?.status || '').toLowerCase() === 'cancelled') {
+  if (
+    !event?.id ||
+    (event?.is_personal && !hasPersonalWindow) ||
+    !relevant ||
+    String(event?.status || '').toLowerCase() === 'cancelled'
+  ) {
     return { eligible: false, phase: 'unavailable', timing };
   }
   if (isEventPresenceVerified(event)) {

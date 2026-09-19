@@ -115,7 +115,10 @@ function SmartArrivalMonitor({ enabled }) {
         const arrival = getSmartArrivalState(event.id);
         return !arrival.detectedAt && (!arrival.snoozedUntil || arrival.snoozedUntil <= nowMs);
       })
-      .sort((left, right) => Date.parse(left.event_datetime || '') - Date.parse(right.event_datetime || ''))[0] || null;
+      .sort((left, right) =>
+        Date.parse(left.personal_available_from || left.event_datetime || '') -
+        Date.parse(right.personal_available_from || right.event_datetime || '')
+      )[0] || null;
   }, [enabled, events, nowMs, settings.smartArrivalEnabled, stateVersion]);
 
   const candidateId = String(candidate?.id || '');
@@ -225,7 +228,12 @@ function SmartArrivalMonitor({ enabled }) {
     } catch {
       // Il feedback aptico e facoltativo.
     }
-    showToast('Sei nell’area dell’evento · conferma la presenza', 'success');
+    showToast(
+      candidate.is_personal
+        ? 'Sei nel punto di allenamento · conferma per sbloccare la sessione'
+        : 'Sei nell’area dell’evento · conferma la presenza',
+      'success'
+    );
   }, [candidate, candidateId, coords, showToast]);
 
   return null;
