@@ -18,6 +18,7 @@ import {
   Save,
   Search,
   Sparkles,
+  Star,
   Trash2,
   X
 } from 'lucide-react';
@@ -29,6 +30,7 @@ import { useToast } from '../../../context/ToastContext';
 import { safeStorageGet, safeStorageSet } from '../../../utils/safeStorage';
 import {
   EXERCISE_CATEGORIES,
+  EXERCISE_EQUIPMENT_FILTERS,
   PERSONAL_EXERCISE_LIBRARY,
   STARTER_EXERCISE_IDS,
   WORKOUT_DURATIONS,
@@ -36,8 +38,11 @@ import {
   WORKOUT_LEVELS,
   WORKOUT_SPORTS,
   getCategoryLabel,
+  getLatestExercisePrescription,
+  getExerciseSearchText,
   getSportById
 } from '../data/personalWorkoutCatalog';
+import { loadWorkoutExerciseHistory } from '../../workout/services/workoutSessionStore';
 import {
   canSyncPersonalWorkoutPlans,
   getPersonalWorkoutPlansStorageKey,
@@ -49,7 +54,26 @@ import {
 import styles from '../../../styles/pages/personalPlans.module.css';
 
 const DELETED_STORAGE_SUFFIX = ':deleted';
-const ALL_CATEGORIES = [{ id: 'all', label: 'Tutti' }, ...EXERCISE_CATEGORIES];
+const FAVORITES_STORAGE_SUFFIX = ':exercise-favorites';
+const RECENT_STORAGE_SUFFIX = ':exercise-recent';
+const CUSTOM_EXERCISES_STORAGE_SUFFIX = ':custom-exercises';
+const ALL_CATEGORIES = [
+  { id: 'all', label: 'Tutti' },
+  { id: 'favorites', label: 'Preferiti' },
+  { id: 'recent', label: 'Recenti' },
+  ...EXERCISE_CATEGORIES
+];
+const ALL_EXERCISE_EQUIPMENT = [
+  { id: 'all', label: 'Tutta' },
+  ...EXERCISE_EQUIPMENT_FILTERS.map((label) => ({ id: label, label }))
+];
+const PLAN_EQUIPMENT_TO_CATALOG = {
+  bilanciere: 'Bilanciere',
+  manubri: 'Manubri',
+  macchine: 'Macchina',
+  cavi: 'Cavi',
+  'corpo-libero': 'Corpo libero'
+};
 
 function uniqueId(prefix = 'item') {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -62,7 +86,7 @@ function copyValue(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function exerciseFromCatalog(item) {
+function exerciseFromCatalog(item, prescription = null) {
   return {
     instanceId: uniqueId('exercise'),
     catalogId: item.id,
@@ -70,10 +94,32 @@ function exerciseFromCatalog(item) {
     category: item.category,
     equipment: item.equipment,
     sets: item.sets,
-    reps: item.reps,
-    weight: item.weight,
-    rir: item.rir,
+    reps: prescription?.reps || item.reps,
+    weight: prescription?.weight ?? item.weight,
+    rir: prescription?.rir ?? item.rir,
     recovery: item.recovery
+  };
+}
+
+function loadStoredArray(key) {
+  try {
+    const value = JSON.parse(safeStorageGet(key) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function createCustomExerciseDraft() {
+  return {
+    name: '',
+    category: 'petto',
+    equipment: 'Corpo libero',
+    sets: 3,
+    reps: '10',
+    weight: 0,
+    rir: 2,
+    recovery: 60
   };
 }
 
@@ -153,8 +199,20 @@ function MyPlansPage() {
   const [draft, setDraft] = useState(createStarterDraft);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerCategory, setPickerCategory] = useState('all');
+  const [pickerEquipment, setPickerEquipment] = useState('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [pendingExerciseIds, setPendingExerciseIds] = useState([]);
+  const [favoriteExerciseIds, setFavoriteExerciseIds] = useState(() => (
+    loadStoredArray(`${storageKey}${FAVORITES_STORAGE_SUFFIX}`).map(String)
+  ));
+  const [recentExerciseIds, setRecentExerciseIds] = useState(() => (
+    loadStoredArray(`${storageKey}${RECENT_STORAGE_SUFFIX}`).map(String)
+  ));
+  const [customExercises, setCustomExercises] = useState(() => (
+    loadStoredArray(`${storageKey}${CUSTOM_EXERCISES_STORAGE_SUFFIX}`)
+  ));
+  const [customExerciseDraft, setCustomExerciseDraft] = useState(createCustomExerciseDraft);
+  const [customExerciseOpen, setCustomExerciseOpen] = useState(false);
   const [editingExercise, setEditingExercise] = useState(null);
   const [draggedExerciseIndex, setDraggedExerciseIndex] = useState(null);
   const [syncState, setSyncState] = useState(remoteSyncEnabled ? 'syncing' : 'local');
@@ -174,18 +232,43 @@ function MyPlansPage() {
   });
 
   const currentSport = getSportById(draft.sportId);
+  const workoutHistory = useMemo(() => loadWorkoutExerciseHistory(), []);
+  const exerciseLibrary = useMemo(() => {
+    const catalogIds = new Set(PERSONAL_EXERCISE_LIBRARY.map((exercise) => exercise.id));
+    const validCustom = customExercises.filter((exercise) => (
+      exercise?.id && exercise?.name && !catalogIds.has(exercise.id)
+    ));
+    return [...validCustom, ...PERSONAL_EXERCISE_LIBRARY];
+  }, [customExercises]);
+  const favoriteExerciseIdSet = useMemo(() => new Set(favoriteExerciseIds), [favoriteExerciseIds]);
+  const recentExerciseIdSet = useMemo(() => new Set(recentExerciseIds), [recentExerciseIds]);
+  const latestPrescriptions = useMemo(() => new Map(
+    exerciseLibrary.map((exercise) => [
+      exercise.id,
+      getLatestExercisePrescription(exercise, workoutHistory)
+    ])
+  ), [exerciseLibrary, workoutHistory]);
   const addedExerciseIds = useMemo(
     () => new Set(draft.exercises.map((exercise) => exercise.catalogId)),
     [draft.exercises]
   );
   const filteredExercises = useMemo(() => {
     const query = normalizeSearch(pickerQuery);
-    return PERSONAL_EXERCISE_LIBRARY.filter((exercise) => {
-      if (!query && pickerCategory !== 'all' && exercise.category !== pickerCategory) return false;
+    const filtered = exerciseLibrary.filter((exercise) => {
+      if (pickerCategory === 'favorites' && !favoriteExerciseIdSet.has(exercise.id)) return false;
+      if (pickerCategory === 'recent' && !recentExerciseIdSet.has(exercise.id)) return false;
+      if (!['all', 'favorites', 'recent'].includes(pickerCategory) && exercise.category !== pickerCategory) return false;
+      if (pickerEquipment !== 'all' && exercise.equipment !== pickerEquipment) return false;
       if (!query) return true;
-      return normalizeSearch(`${exercise.name} ${exercise.equipment} ${getCategoryLabel(exercise.category)}`).includes(query);
+      return normalizeSearch(getExerciseSearchText(exercise)).includes(query);
     });
-  }, [pickerCategory, pickerQuery]);
+    if (pickerCategory !== 'recent') return filtered;
+    const recentOrder = new Map(recentExerciseIds.map((id, index) => [id, index]));
+    return filtered.sort((left, right) => (
+      (recentOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+      (recentOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    ));
+  }, [exerciseLibrary, favoriteExerciseIdSet, pickerCategory, pickerEquipment, pickerQuery, recentExerciseIdSet, recentExerciseIds]);
   const visiblePlans = useMemo(() => {
     const query = normalizeSearch(libraryQuery);
     return plans.filter((plan) => {
@@ -447,9 +530,13 @@ function MyPlansPage() {
   }
 
   function openExercisePicker() {
+    const selectedEquipment = draft.equipment
+      .map((equipment) => PLAN_EQUIPMENT_TO_CATALOG[equipment])
+      .filter(Boolean);
     setPendingExerciseIds([]);
     setPickerQuery('');
     setPickerCategory('all');
+    setPickerEquipment(selectedEquipment.length === 1 ? selectedEquipment[0] : 'all');
     setPickerOpen(true);
   }
 
@@ -469,16 +556,77 @@ function MyPlansPage() {
       : [...current, item.id]);
   }
 
+  function toggleFavoriteExercise(exerciseId) {
+    setFavoriteExerciseIds((current) => {
+      const next = current.includes(exerciseId)
+        ? current.filter((id) => id !== exerciseId)
+        : [exerciseId, ...current];
+      safeStorageSet(`${storageKey}${FAVORITES_STORAGE_SUFFIX}`, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function openCustomExerciseCreator() {
+    setCustomExerciseDraft(createCustomExerciseDraft());
+    setCustomExerciseOpen(true);
+  }
+
+  function saveCustomExercise() {
+    const name = String(customExerciseDraft.name || '').trim();
+    if (name.length < 2) {
+      showToast('Inserisci il nome dell’esercizio', 'error');
+      return;
+    }
+
+    const nameSlug = normalizeSearch(name).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'esercizio';
+    const exercise = {
+      id: uniqueId(`custom-${nameSlug}`),
+      name: name.slice(0, 70),
+      category: customExerciseDraft.category,
+      equipment: customExerciseDraft.equipment,
+      sets: Math.max(1, Math.min(20, Number(customExerciseDraft.sets) || 3)),
+      reps: String(customExerciseDraft.reps || '10').trim().slice(0, 20) || '10',
+      weight: Math.max(0, Number(customExerciseDraft.weight) || 0),
+      rir: Math.max(0, Math.min(5, Number(customExerciseDraft.rir) || 0)),
+      recovery: Math.max(0, Math.min(900, Number(customExerciseDraft.recovery) || 0)),
+      custom: true
+    };
+
+    setCustomExercises((current) => {
+      const next = [exercise, ...current];
+      safeStorageSet(`${storageKey}${CUSTOM_EXERCISES_STORAGE_SUFFIX}`, JSON.stringify(next));
+      return next;
+    });
+    setPendingExerciseIds((current) => [exercise.id, ...current.filter((id) => id !== exercise.id)]);
+    setPickerCategory('all');
+    setPickerEquipment('all');
+    setPickerQuery('');
+    setCustomExerciseOpen(false);
+    showToast('Esercizio personale creato e selezionato', 'success');
+  }
+
   function confirmExerciseSelection() {
     const selectedExercises = pendingExerciseIds
-      .map((id) => PERSONAL_EXERCISE_LIBRARY.find((item) => item.id === id))
+      .map((id) => exerciseLibrary.find((item) => item.id === id))
       .filter(Boolean);
     if (!selectedExercises.length) return;
 
     setDraft((current) => ({
       ...current,
-      exercises: [...current.exercises, ...selectedExercises.map(exerciseFromCatalog)]
+      exercises: [
+        ...current.exercises,
+        ...selectedExercises.map((exercise) => exerciseFromCatalog(
+          exercise,
+          latestPrescriptions.get(exercise.id)
+        ))
+      ]
     }));
+    setRecentExerciseIds((current) => {
+      const selectedIds = selectedExercises.map((exercise) => exercise.id);
+      const next = [...selectedIds, ...current.filter((id) => !selectedIds.includes(id))].slice(0, 12);
+      safeStorageSet(`${storageKey}${RECENT_STORAGE_SUFFIX}`, JSON.stringify(next));
+      return next;
+    });
     setDraftError('');
     setPendingExerciseIds([]);
     setPickerOpen(false);
@@ -971,35 +1119,80 @@ function MyPlansPage() {
       {pickerOpen ? (
         <div className={styles.fullscreenOverlay} role="dialog" aria-modal="true" aria-label="Aggiungi esercizio">
           <div className={styles.fullscreenPanel}>
-            <header className={styles.modalHeader}><div><p className={styles.eyebrow}>Libreria esercizi</p><h2>Aggiungi esercizi</h2></div><button type="button" className={styles.modalCloseText} onClick={closeExercisePicker}>Annulla</button></header>
-            <label className={styles.searchBox}><Search size={19} aria-hidden="true" /><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="Cerca in tutte le categorie" autoFocus />{pickerQuery ? <button type="button" onClick={() => setPickerQuery('')} aria-label="Cancella ricerca"><X size={16} /></button> : null}</label>
+            <header className={styles.modalHeader}>
+              <div><p className={styles.eyebrow}>Libreria esercizi</p><h2>Aggiungi esercizi</h2></div>
+              <div className={styles.modalHeaderActions}>
+                <button type="button" className={styles.customExerciseButton} onClick={openCustomExerciseCreator}><Plus size={15} aria-hidden="true" /> Crea</button>
+                <button type="button" className={styles.modalCloseText} onClick={closeExercisePicker}>Annulla</button>
+              </div>
+            </header>
+            <label className={styles.searchBox}><Search size={19} aria-hidden="true" /><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="Cerca esercizio o sinonimo" autoFocus />{pickerQuery ? <button type="button" onClick={() => setPickerQuery('')} aria-label="Cancella ricerca"><X size={16} /></button> : null}</label>
             <div className={styles.categoryScroller}>
               {ALL_CATEGORIES.map((category) => (
                 <button key={category.id} type="button" className={pickerCategory === category.id ? styles.categoryActive : ''} onClick={() => setPickerCategory(category.id)} aria-pressed={pickerCategory === category.id}>{category.label}</button>
               ))}
             </div>
+            <div className={styles.equipmentFilterRow}>
+              <span>Attrezzatura</span>
+              <div className={styles.equipmentScroller}>
+                {ALL_EXERCISE_EQUIPMENT.map((equipment) => (
+                  <button key={equipment.id} type="button" className={pickerEquipment === equipment.id ? styles.equipmentActive : ''} onClick={() => setPickerEquipment(equipment.id)} aria-pressed={pickerEquipment === equipment.id}>{equipment.label}</button>
+                ))}
+              </div>
+              <strong aria-live="polite">{filteredExercises.length}</strong>
+            </div>
             <div className={styles.catalogList}>
               {filteredExercises.length ? filteredExercises.map((exercise) => {
                 const added = addedExerciseIds.has(exercise.id);
                 const selected = pendingExerciseIds.includes(exercise.id);
+                const favorite = favoriteExerciseIdSet.has(exercise.id);
+                const latest = latestPrescriptions.get(exercise.id);
                 return (
-                  <button
+                  <article
                     key={exercise.id}
-                    type="button"
-                    className={styles.catalogChoice}
+                    className={styles.catalogRow}
                     data-selected={selected ? 'true' : 'false'}
-                    onClick={() => togglePickerExercise(exercise)}
-                    aria-label={added ? `${exercise.name} già presente` : selected ? `Rimuovi ${exercise.name} dalla selezione` : `Seleziona ${exercise.name}`}
-                    aria-pressed={selected}
-                    disabled={added}
                   >
-                    <div><strong>{exercise.shortName || exercise.name}</strong><small>{getCategoryLabel(exercise.category)} · {exercise.equipment}</small></div>
-                    <span className={added || selected ? styles.catalogAdded : ''}>
-                      {added || selected ? <Check size={20} /> : <Plus size={20} />}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      className={styles.catalogChoice}
+                      data-selected={selected ? 'true' : 'false'}
+                      onClick={() => togglePickerExercise(exercise)}
+                      aria-label={added ? `${exercise.name} già presente` : selected ? `Rimuovi ${exercise.name} dalla selezione` : `Seleziona ${exercise.name}`}
+                      aria-pressed={selected}
+                      disabled={added}
+                    >
+                      <div>
+                        <strong>{exercise.shortName || exercise.name}</strong>
+                        <small>{exercise.custom ? 'Personale · ' : ''}{getCategoryLabel(exercise.category)} · {exercise.equipment}</small>
+                        {latest ? (
+                          <em className={styles.latestPrescription}>
+                            Ultimo: {latest.weight > 0 ? `${latest.weight} kg · ` : ''}{latest.reps} rip. · RIR {latest.rir}
+                          </em>
+                        ) : null}
+                      </div>
+                      <span className={added || selected ? styles.catalogAdded : ''}>
+                        {added || selected ? <Check size={20} /> : <Plus size={20} />}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.favoriteExerciseButton} ${favorite ? styles.favoriteExerciseButtonActive : ''}`}
+                      onClick={() => toggleFavoriteExercise(exercise.id)}
+                      aria-label={favorite ? `Rimuovi ${exercise.name} dai preferiti` : `Aggiungi ${exercise.name} ai preferiti`}
+                      aria-pressed={favorite}
+                    >
+                      <Star size={17} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" />
+                    </button>
+                  </article>
                 );
-              }) : <p className={styles.noResults}>Nessun esercizio trovato</p>}
+              }) : (
+                <div className={styles.noResults}>
+                  <strong>Nessun esercizio trovato</strong>
+                  <span>Prova un altro termine oppure azzera i filtri.</span>
+                  <button type="button" onClick={() => { setPickerQuery(''); setPickerCategory('all'); setPickerEquipment('all'); }}>Azzera filtri</button>
+                </div>
+              )}
             </div>
             <div className={styles.pickerFooter}>
               <span aria-live="polite">
@@ -1016,6 +1209,39 @@ function MyPlansPage() {
                 Salva e torna alla scheda
               </Button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {customExerciseOpen ? (
+        <div className={styles.fullscreenOverlay} role="dialog" aria-modal="true" aria-label="Crea esercizio personale">
+          <div className={`${styles.fullscreenPanel} ${styles.customExercisePanel}`}>
+            <header className={styles.modalHeader}>
+              <div><p className={styles.eyebrow}>Esercizio personale</p><h2>Crea esercizio</h2></div>
+              <button type="button" onClick={() => setCustomExerciseOpen(false)} aria-label="Chiudi creazione esercizio"><X size={21} /></button>
+            </header>
+            <p className={styles.customExerciseLead}>Aggiungilo alla tua libreria e riutilizzalo in tutte le schede.</p>
+            <label className={styles.fieldLabel}><span>Nome esercizio</span><input value={customExerciseDraft.name} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Es. Pressa orizzontale" autoFocus /></label>
+            <div className={styles.editGrid}>
+              <label className={styles.fieldLabel}>
+                <span>Gruppo muscolare</span>
+                <select value={customExerciseDraft.category} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, category: event.target.value }))}>
+                  {EXERCISE_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
+                </select>
+              </label>
+              <label className={styles.fieldLabel}>
+                <span>Attrezzatura</span>
+                <select value={customExerciseDraft.equipment} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, equipment: event.target.value }))}>
+                  {EXERCISE_EQUIPMENT_FILTERS.map((equipment) => <option key={equipment} value={equipment}>{equipment}</option>)}
+                </select>
+              </label>
+              <label className={styles.fieldLabel}><span>Serie</span><input type="number" inputMode="numeric" min="1" max="20" value={customExerciseDraft.sets} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, sets: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>Ripetizioni</span><input value={customExerciseDraft.reps} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, reps: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>Carico · kg</span><input type="number" inputMode="decimal" min="0" step="0.5" value={customExerciseDraft.weight} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, weight: event.target.value }))} /></label>
+              <label className={styles.fieldLabel}><span>RIR · 0–5</span><input type="number" inputMode="numeric" min="0" max="5" value={customExerciseDraft.rir} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, rir: event.target.value }))} /></label>
+              <label className={`${styles.fieldLabel} ${styles.fullField}`}><span>Recupero · secondi</span><input type="number" inputMode="numeric" min="0" max="900" step="15" value={customExerciseDraft.recovery} onChange={(event) => setCustomExerciseDraft((current) => ({ ...current, recovery: event.target.value }))} /></label>
+            </div>
+            <Button type="button" fullWidth icon={Plus} onClick={saveCustomExercise}>Crea e seleziona</Button>
           </div>
         </div>
       ) : null}
