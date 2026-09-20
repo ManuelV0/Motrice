@@ -3036,7 +3036,7 @@
   color: color-mix(in srgb, var(--danger) 82%, white);
 }
 
-.organizerCancelWarning > :last-child {
+.organizerCancelWarning > button:last-child {
   width: 2.4rem;
   height: 2.4rem;
   min-width: 2.4rem;
@@ -3059,6 +3059,73 @@
   color: rgb(255 255 255 / 0.58);
   font-size: 0.77rem;
   line-height: 1.45;
+}
+
+.organizerCancelScope {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.organizerCancelScope legend {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.organizerCancelScope button {
+  min-width: 0;
+  min-height: 4.6rem;
+  padding: 0.72rem;
+  border: 1px solid rgb(255 255 255 / 0.09);
+  border-radius: 0.9rem;
+  background: #111311;
+  color: rgb(255 255 255 / 0.52);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.58rem;
+  text-align: left;
+}
+
+.organizerCancelScope button > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.organizerCancelScope strong,
+.organizerCancelScope small {
+  display: block;
+}
+
+.organizerCancelScope strong {
+  color: #fff;
+  font-size: 0.77rem;
+}
+
+.organizerCancelScope small {
+  color: rgb(255 255 255 / 0.42);
+  font-size: 0.65rem;
+  line-height: 1.3;
+}
+
+.organizerCancelScope button.organizerCancelScopeSelected {
+  border-color: color-mix(in srgb, var(--danger) 64%, white 8%);
+  background: color-mix(in srgb, var(--danger) 12%, #111311);
+  color: color-mix(in srgb, var(--danger) 82%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.organizerCancelScope button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  outline-offset: 2px;
 }
 
 .organizerCancelSummary {
@@ -3598,6 +3665,10 @@
 }
 
 @media (max-width: 24rem) {
+  .organizerCancelScope {
+    grid-template-columns: 1fr;
+  }
+
   .organizerDangerZone {
     grid-template-columns: 1fr;
   }

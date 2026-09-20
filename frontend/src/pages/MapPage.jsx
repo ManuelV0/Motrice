@@ -4,13 +4,18 @@ import * as maplibregl from 'maplibre-gl';
 import L from 'leaflet';
 import {
   ArrowRight,
+  CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock3,
   LocateFixed,
   MapPinOff,
   Minus,
   Play,
   Plus,
+  Repeat2,
   RotateCcw,
   Search,
   Settings2,
@@ -26,6 +31,7 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
 import { getUserFocusZoom } from '../utils/mapViewport';
+import { groupRecurringMapEvents } from '../utils/mapEventGroups';
 import EventCard from '../components/EventCard';
 import {
   getEventPrimaryActionPath,
@@ -180,11 +186,17 @@ function renderEventActivityNodes(activityType, pinFill) {
     .join('');
 }
 
-function getEventPinImageId(activityType, saved = false, selected = false, gym = false) {
-  return `motrice-pin-${activityType}-${gym ? 'gym' : 'standard'}-${saved ? 'saved' : 'default'}${selected ? '-selected' : ''}`;
+function getEventPinImageId(activityType, saved = false, selected = false, gym = false, recurring = false) {
+  return `motrice-pin-${activityType}-${gym ? 'gym' : 'standard'}-${saved ? 'saved' : 'default'}${recurring ? '-recurring' : ''}${selected ? '-selected' : ''}`;
 }
 
-function createEventPinSvg(activityType, { saved = false, selected = false, cluster = false, gym = false } = {}) {
+function createEventPinSvg(activityType, {
+  saved = false,
+  selected = false,
+  cluster = false,
+  gym = false,
+  recurring = false
+} = {}) {
   const pinFill = gym
     ? (saved ? EVENT_GYM_PIN_SAVED_FILL : EVENT_GYM_PIN_FILL)
     : (saved ? EVENT_PIN_SAVED_FILL : EVENT_PIN_FILL);
@@ -198,6 +210,7 @@ function createEventPinSvg(activityType, { saved = false, selected = false, clus
     ${selectedOutline}
     <path d="${EVENT_PIN_PATH}" fill="${pinFill}" stroke="#050705" stroke-width="2.5" stroke-linejoin="round"/>
     ${cluster ? '' : `<g transform="translate(12 10)" fill="none" stroke="#050705" stroke-width="2.15" stroke-linecap="round" stroke-linejoin="round">${activityNodes}</g>`}
+    ${recurring && !cluster ? '<g aria-hidden="true"><circle cx="10" cy="13" r="5.25" fill="#10170b" stroke="#ffffff" stroke-opacity=".55" stroke-width="1"/><path d="M7.1 12.1a3.1 3.1 0 0 1 5.2-1.35l.85.85M12.9 13.9a3.1 3.1 0 0 1-5.2 1.35l-.85-.85M12.9 9.45v2.15h-2.15M7.1 16.55V14.4h2.15" fill="none" stroke="#c6ff00" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></g>' : ''}
     ${gym && !cluster ? '<g aria-hidden="true"><circle cx="38" cy="13" r="5.25" fill="#0d0712" stroke="#ffffff" stroke-opacity=".55" stroke-width="1"/><path d="M36.25 13v-1.15a1.75 1.75 0 0 1 3.5 0V13m-4.1 0h4.7v3.4h-4.7z" fill="none" stroke="#cf70ff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></g>' : ''}
   </svg>`;
 }
@@ -241,9 +254,10 @@ function getRequiredEventMarkerImages(events, selectedEventId) {
     const saved = Boolean(event.is_saved);
     const selected = String(event.id) === String(selectedEventId);
     const gym = isGymEvent(event);
+    const recurring = Boolean(event.is_recurring_group);
     imageDefinitions.set(
-      getEventPinImageId(activityType, saved, selected, gym),
-      createEventPinSvg(activityType, { saved, selected, gym })
+      getEventPinImageId(activityType, saved, selected, gym, recurring),
+      createEventPinSvg(activityType, { saved, selected, gym, recurring })
     );
   });
 
@@ -365,6 +379,7 @@ function buildEventMarkerGeoJson(events, selectedEventId) {
       const activityType = getEventActivityType(event);
       const saved = Boolean(event.is_saved);
       const gym = isGymEvent(event);
+      const recurring = Boolean(event.is_recurring_group);
       return {
         type: 'Feature',
         id: String(event.id),
@@ -376,7 +391,7 @@ function buildEventMarkerGeoJson(events, selectedEventId) {
           eventId: String(event.id),
           selected,
           gym: gym ? 1 : 0,
-          icon: getEventPinImageId(activityType, saved, Boolean(selected), gym),
+          icon: getEventPinImageId(activityType, saved, Boolean(selected), gym, recurring),
           label: event.sport_name || event.title || 'Evento'
         }
       };
@@ -585,7 +600,8 @@ function RasterMapFallback({
       const svg = createEventPinSvg(getEventActivityType(event), {
         saved: Boolean(event.is_saved),
         selected,
-        gym: isGymEvent(event)
+        gym: isGymEvent(event),
+        recurring: Boolean(event.is_recurring_group)
       });
       const icon = L.divIcon({
         className: styles.rasterEventMarker,
@@ -596,7 +612,9 @@ function RasterMapFallback({
       L.marker([event.lat, event.lng], {
         icon,
         keyboard: true,
-        title: event.sport_name || event.title || 'Evento Motrice',
+        title: event.is_recurring_group
+          ? `Programma ricorrente · ${event.sport_name || event.title || 'Evento Motrice'}`
+          : event.sport_name || event.title || 'Evento Motrice',
         riseOnHover: true
       })
         .on('click', () => eventSelectRef.current?.(event))
@@ -1183,6 +1201,72 @@ function MapFiltersDrawer({
   );
 }
 
+function formatRecurringOccurrence(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return { day: 'Data da definire', time: '--:--' };
+  return {
+    day: new Intl.DateTimeFormat('it-IT', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short'
+    }).format(date),
+    time: new Intl.DateTimeFormat('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date)
+  };
+}
+
+function RecurringMapSummary({ event, expanded, onToggle, onOpenOccurrence }) {
+  const occurrences = Array.isArray(event?.recurring_occurrences)
+    ? event.recurring_occurrences
+    : [event];
+  const nextDate = formatRecurringOccurrence(event?.event_datetime);
+
+  return (
+    <div className={styles.recurringSummary}>
+      <button
+        type="button"
+        className={styles.recurringSummaryToggle}
+        onClick={onToggle}
+        aria-expanded={expanded}
+      >
+        <span className={styles.recurringSummaryIcon}><Repeat2 size={17} aria-hidden="true" /></span>
+        <span>
+          <strong>Programma ricorrente</strong>
+          <small>Prossimo: {nextDate.day}, ore {nextDate.time}</small>
+        </span>
+        <span className={styles.recurringSummaryAction}>
+          {expanded ? 'Nascondi' : 'Tutte le date'}
+          <ChevronDown size={16} aria-hidden="true" />
+        </span>
+      </button>
+
+      {expanded ? (
+        <div className={styles.recurringDateList} aria-label="Date del programma ricorrente">
+          {occurrences.map((occurrence, index) => {
+            const occurrenceDate = formatRecurringOccurrence(occurrence.event_datetime);
+            return (
+              <button
+                type="button"
+                key={occurrence.id}
+                onClick={() => onOpenOccurrence(occurrence)}
+              >
+                <span className={styles.recurringDateIcon}><CalendarDays size={15} aria-hidden="true" /></span>
+                <span>
+                  <strong>{index === 0 ? 'Prossima sessione' : occurrenceDate.day}</strong>
+                  <small>{index === 0 ? occurrenceDate.day : 'Allenamento programmato'} · {occurrenceDate.time}</small>
+                </span>
+                <ChevronRight size={16} aria-hidden="true" />
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MapPage({ active = true }) {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1223,6 +1307,7 @@ function MapPage({ active = true }) {
   const [resolvingCoordinates, setResolvingCoordinates] = useState(false);
   const [savingIds, setSavingIds] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
+  const [expandedRecurringGroup, setExpandedRecurringGroup] = useState(null);
   const [sheetSnap, setSheetSnap] = useState('compact');
   const [followUser, setFollowUser] = useState(false);
   const [viewportBounds, setViewportBounds] = useState(null);
@@ -1368,9 +1453,14 @@ function MapPage({ active = true }) {
     return () => window.removeEventListener('motrice:app-settings-changed', syncMapTheme);
   }, []);
 
+  const mapEvents = useMemo(
+    () => groupRecurringMapEvents(events),
+    [events]
+  );
+
   useEffect(() => {
     if (!active) return undefined;
-    const missing = events.filter((event) => {
+    const missing = mapEvents.filter((event) => {
       if (hasValidCoordinates(event.lat, event.lng)) return false;
       if (Object.prototype.hasOwnProperty.call(resolvedCoordinates, String(event.id))) return false;
       return !coordinateAttemptsRef.current.has(String(event.id));
@@ -1409,11 +1499,11 @@ function MapPage({ active = true }) {
       geocodingActive = false;
       controller.abort();
     };
-  }, [active, events, resolvedCoordinates]);
+  }, [active, mapEvents, resolvedCoordinates]);
 
   const withCoords = useMemo(
     () =>
-      events
+      mapEvents
         .map((event) => {
           const fallback = resolvedCoordinates[String(event.id)];
           const lat = hasValidCoordinates(event.lat, event.lng) ? event.lat : fallback?.lat;
@@ -1422,7 +1512,7 @@ function MapPage({ active = true }) {
           return { ...event, lat: Number(lat), lng: Number(lng) };
         })
         .filter(Boolean),
-    [events, resolvedCoordinates]
+    [mapEvents, resolvedCoordinates]
   );
 
   const selectedRadiusKm = useMemo(() => {
@@ -1431,7 +1521,7 @@ function MapPage({ active = true }) {
     return Number.isFinite(parsedDistance) && parsedDistance > 0 ? parsedDistance : null;
   }, [filters.distance]);
 
-  const eventsWithoutCoordinates = Math.max(0, events.length - withCoords.length);
+  const eventsWithoutCoordinates = Math.max(0, mapEvents.length - withCoords.length);
 
   const eventsInRadius = useMemo(() => {
     if (!selectedRadiusKm || !coords) return withCoords;
@@ -1994,7 +2084,10 @@ function MapPage({ active = true }) {
 
   useEffect(() => {
     if (!active || !requestedEventId || !markersReady) return;
-    const requestedEvent = withCoords.find((event) => String(event.id) === String(requestedEventId));
+    const requestedEvent = withCoords.find((event) => (
+      String(event.id) === String(requestedEventId)
+      || event.recurring_occurrence_ids?.includes(String(requestedEventId))
+    ));
     if (!requestedEvent || (mapRenderer === 'maplibre' ? !mapRef.current : !rasterMapControllerRef.current)) return;
     hasAutoFitEventsRef.current = true;
     focusEvent(requestedEvent);
@@ -2255,28 +2348,50 @@ function MapPage({ active = true }) {
                     isFull: capacity > 0 && participants >= capacity,
                     referenceTime: lifecycleTick
                   });
+                  const recurrenceCount = Number(event.recurring_occurrence_count || 0);
                   return (
-                    <EventCard
+                    <div
                       key={event.id}
-                      event={event}
-                      variant="compact"
-                      context="map"
-                      selected={selected}
-                      onSelect={focusEvent}
-                      onToggleSave={toggleSaveEvent}
-                      saving={savingIds.includes(event.id)}
-                      primaryAction={{
-                        label: action.label,
-                        icon: getPrimaryActionIcon(action),
-                        disabled: action.disabled,
-                        onClick: (selectedEvent) => {
-                          const target = getEventPrimaryActionPath(selectedEvent, action);
-                          if (target) navigate(target);
-                        }
-                      }}
-                      detailsIconOnly
-                      showProgress={false}
-                    />
+                      className={`${styles.sheetEventEntry} ${selected && event.is_recurring_group ? styles.sheetEventEntryRecurring : ''}`}
+                    >
+                      <EventCard
+                        event={event}
+                        variant="compact"
+                        context="map"
+                        className={selected && event.is_recurring_group ? styles.recurringEventCard : ''}
+                        selected={selected}
+                        onSelect={focusEvent}
+                        onToggleSave={toggleSaveEvent}
+                        saving={savingIds.includes(event.id)}
+                        metaItems={event.is_recurring_group ? [
+                          event.duration_minutes
+                            ? { icon: Clock3, label: `${Number(event.duration_minutes)} min` }
+                            : null,
+                          { icon: CalendarDays, label: `${recurrenceCount} ${recurrenceCount === 1 ? 'data' : 'date'}` }
+                        ].filter(Boolean) : undefined}
+                        primaryAction={{
+                          label: action.label,
+                          icon: getPrimaryActionIcon(action),
+                          disabled: action.disabled,
+                          onClick: (selectedEvent) => {
+                            const target = getEventPrimaryActionPath(selectedEvent, action);
+                            if (target) navigate(target);
+                          }
+                        }}
+                        detailsIconOnly
+                        showProgress={false}
+                      />
+                      {selected && event.is_recurring_group ? (
+                        <RecurringMapSummary
+                          event={event}
+                          expanded={expandedRecurringGroup === event.recurring_group_key}
+                          onToggle={() => setExpandedRecurringGroup((current) => (
+                            current === event.recurring_group_key ? null : event.recurring_group_key
+                          ))}
+                          onOpenOccurrence={(occurrence) => navigate(`/events/${occurrence.id}`)}
+                        />
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>

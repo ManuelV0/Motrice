@@ -29,6 +29,10 @@ import {
   getPersonalOccurrenceAvailability,
   serializePersonalWeeklySchedule
 } from '../utils/personalEventRecurrence';
+import {
+  getFuturePersonalSeriesEvents,
+  normalizeCancellationScope
+} from '../utils/personalEventCancellation';
 import { computeReliabilityWithPeer, getPeerFeedbackAverage } from '../utils/eventFeedback';
 import {
   normalizeGymAccessPolicy,
@@ -2572,7 +2576,7 @@ const localApi = {
     });
   },
 
-  async cancelEvent(id, { reasonCode, note = '' } = {}) {
+  async cancelEvent(id, { reasonCode, note = '', scope = 'single' } = {}) {
     const store = loadStore();
     const currentUserId = resolveAuthUserId();
     const event = ensureEventExists(store, id);
@@ -2600,6 +2604,36 @@ const localApi = {
     const eventStartMs = Date.parse(event.event_datetime || '');
     if (!Number.isFinite(eventStartMs) || eventStartMs <= nowMs()) {
       throw new Error('L evento e gia iniziato: chiudilo dalla gestione presenze');
+    }
+
+    const cancellationScope = normalizeCancellationScope(scope, event);
+    if (cancellationScope === 'series') {
+      const cancellationTimestamp = nowIso();
+      const occurrences = getFuturePersonalSeriesEvents(store.events, event, nowMs());
+      occurrences.forEach((occurrence) => {
+        occurrence.status = 'cancelled';
+        occurrence.cancelled_at = cancellationTimestamp;
+        occurrence.cancelled_by = String(currentUserId);
+        occurrence.cancellation_reason = 'personal';
+        occurrence.cancellation_note = String(note || '').trim().slice(0, 500);
+        occurrence.cancellation_is_late = false;
+      });
+      addNotification(store, {
+        type: 'personal_program_cancelled',
+        title: 'Ricorrenza eliminata',
+        message: `${occurrences.length} allenamenti futuri sono stati rimossi dal programma.`,
+        event_id: event.id
+      });
+      saveStore(store);
+      return withDelay({
+        success: true,
+        scope: 'series',
+        cancelled_occurrences: occurrences.length,
+        cancelled_at: cancellationTimestamp,
+        refunded_participants: 0,
+        refunded_cents: 0,
+        is_late: false
+      });
     }
 
     const eventKey = String(event.id);

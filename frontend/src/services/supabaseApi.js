@@ -1002,8 +1002,15 @@ function createRemoteMethods(localApi) {
       return data;
     },
 
-    async cancelEvent(id, { reasonCode, note = '' } = {}) {
+    async cancelEvent(id, { reasonCode, note = '', scope = 'single' } = {}) {
       const client = requireSupabase();
+      if (scope === 'series') {
+        const { data, error } = await client.rpc('cancel_personal_event_series', {
+          target_event_id: String(id)
+        });
+        throwIfError(error);
+        return data;
+      }
       const { data, error } = await client.rpc('cancel_event', {
         target_event_id: String(id),
         reason_code: normalizeText(reasonCode),

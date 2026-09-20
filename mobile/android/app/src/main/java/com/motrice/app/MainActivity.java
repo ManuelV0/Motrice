@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(EventLocationTrackingPlugin.class);
         registerPlugin(NotificationSettingsPlugin.class);
+        registerPlugin(ProfileVerificationCameraPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

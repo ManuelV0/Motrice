@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowRight,
-  BellRing,
   CalendarDays,
   CheckCircle2,
   Clock3,
@@ -35,114 +34,10 @@ import {
 import { isOutdoorTrackedEvent } from '../utils/outdoorActivity';
 import { resolveEventPostSummary } from '../utils/eventPostSummary';
 import { getEventSessionTimeline } from '../utils/sessionTimeline';
-import { getAppSettings, updateAppSettings } from '../services/appSettings';
 import {
   clearSmartArrivalState,
-  getSmartArrivalEligibility,
-  getSmartArrivalState,
-  isEventPresenceVerified,
-  SMART_ARRIVAL_STATE_EVENT,
-  snoozeSmartArrival
+  isEventPresenceVerified
 } from '../services/smartArrival';
-
-function SmartArrivalPanel({
-  event,
-  nowMs,
-  enabled,
-  permission,
-  onToggle,
-  onAuthorize,
-  onOpenSettings,
-  onVerify,
-  onSnooze
-}) {
-  const eligibility = getSmartArrivalEligibility(event, nowMs);
-  const arrival = getSmartArrivalState(event?.id);
-  const checkedInAt = event?.session_started_at || event?.checked_in_at || event?.user_rsvp?.checked_in_at;
-  const permissionDenied = ['denied', 'unavailable'].includes(permission);
-  const permissionApproximate = permission === 'approximate';
-  const permissionReady = permission === 'granted';
-
-  if (eligibility.phase === 'unavailable' || eligibility.phase === 'expired') return null;
-
-  if (eligibility.phase === 'verified' || isEventPresenceVerified(event)) {
-    return (
-      <div className={`${styles.smartArrival} ${styles.smartArrivalSuccess}`}>
-        <span className={styles.smartArrivalIcon}><CheckCircle2 size={18} aria-hidden="true" /></span>
-        <span className={styles.smartArrivalCopy}>
-          <strong>Presenza verificata{checkedInAt ? ` alle ${formatEventTime(checkedInAt)}` : ''}</strong>
-          <small>Allenamento iniziato dal check-in</small>
-        </span>
-      </div>
-    );
-  }
-
-  if (arrival.detectedAt && (!arrival.snoozedUntil || arrival.snoozedUntil <= nowMs)) {
-    const organizer = event?.created_by === 'me';
-    return (
-      <div className={`${styles.smartArrival} ${styles.smartArrivalDetected}`} role="status" aria-live="polite">
-        <span className={styles.smartArrivalIcon}><LocateFixed size={20} aria-hidden="true" /></span>
-        <span className={styles.smartArrivalCopy}>
-          <strong>Sei arrivato?</strong>
-          <small>La posizione è nell’area. Conferma tu la presenza.</small>
-        </span>
-        <div className={styles.smartArrivalActions}>
-          <button type="button" className={styles.smartArrivalPrimary} onClick={() => onVerify(event, 'geo')}>
-            <LocateFixed size={15} aria-hidden="true" /> Conferma con GPS
-          </button>
-          {!event?.is_personal ? (
-            <button type="button" onClick={() => onVerify(event, 'qr')}>
-              <QrCode size={15} aria-hidden="true" /> {organizer ? 'Scansiona QR' : 'Mostra QR'}
-            </button>
-          ) : null}
-          <button type="button" className={styles.smartArrivalLater} onClick={() => onSnooze(event)}>Non ora</button>
-        </div>
-      </div>
-    );
-  }
-
-  const scheduled = eligibility.phase === 'scheduled';
-  const statusCopy = !enabled
-    ? 'Disattivato'
-    : permissionDenied
-      ? 'Posizione non autorizzata'
-      : permissionApproximate
-        ? 'Serve la posizione precisa'
-        : permissionReady
-          ? scheduled
-            ? `Si attiva alle ${formatEventTime(eligibility.timing.checkInOpensAtMs)}`
-            : 'Attivo · ti avviseremo quando arrivi'
-          : 'Autorizza la posizione per ricevere l’avviso';
-
-  return (
-    <div className={styles.smartArrival} data-tone={permissionDenied || permissionApproximate ? 'warning' : 'default'}>
-      <span className={styles.smartArrivalIcon}><BellRing size={18} aria-hidden="true" /></span>
-      <span className={styles.smartArrivalCopy}>
-        <strong>Arrivo intelligente</strong>
-        <small>{statusCopy}</small>
-      </span>
-      <button
-        type="button"
-        className={`${styles.smartArrivalSwitch} ${enabled ? styles.smartArrivalSwitchOn : ''}`}
-        role="switch"
-        aria-checked={enabled}
-        aria-label="Arrivo intelligente"
-        onClick={() => onToggle(!enabled)}
-      >
-        <span aria-hidden="true" />
-      </button>
-      {enabled && !permissionReady ? (
-        <button
-          type="button"
-          className={styles.smartArrivalPermission}
-          onClick={permissionDenied ? onOpenSettings : onAuthorize}
-        >
-          {permissionDenied ? 'Impostazioni' : 'Autorizza'}
-        </button>
-      ) : null}
-    </div>
-  );
-}
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
 
@@ -498,9 +393,6 @@ function AgendaPage() {
   const [calendarSheetSnap, setCalendarSheetSnap] = useState('medium');
   const [legendOpen, setLegendOpen] = useState(false);
   const [verificationEventId, setVerificationEventId] = useState('');
-  const [appSettings, setAppSettings] = useState(() => getAppSettings());
-  const [arrivalPermission, setArrivalPermission] = useState('prompt');
-  const [, setArrivalStateVersion] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const now = useMemo(() => new Date(nowMs), [nowMs]);
   const todayKey = useMemo(() => toDateKey(now), [now]);
@@ -575,11 +467,6 @@ function AgendaPage() {
   }, [ownedEvents, participatingEvents]);
 
   useEffect(() => {
-    const onSettings = (event) => setAppSettings(event?.detail || getAppSettings());
-    const onArrivalState = () => setArrivalStateVersion((version) => version + 1);
-    const onArrivalPermission = (event) => {
-      if (event?.detail?.permission) setArrivalPermission(event.detail.permission);
-    };
     const onArrivalDetected = (event) => {
       const eventId = String(event?.detail?.eventId || '');
       const arrivedEvent = calendarEvents.find((item) => String(item.id) === eventId);
@@ -594,14 +481,8 @@ function AgendaPage() {
       }
     };
 
-    window.addEventListener('motrice:app-settings-changed', onSettings);
-    window.addEventListener(SMART_ARRIVAL_STATE_EVENT, onArrivalState);
-    window.addEventListener('motrice:smart-arrival-permission', onArrivalPermission);
     window.addEventListener('motrice:smart-arrival-detected', onArrivalDetected);
     return () => {
-      window.removeEventListener('motrice:app-settings-changed', onSettings);
-      window.removeEventListener(SMART_ARRIVAL_STATE_EVENT, onArrivalState);
-      window.removeEventListener('motrice:smart-arrival-permission', onArrivalPermission);
       window.removeEventListener('motrice:smart-arrival-detected', onArrivalDetected);
     };
   }, [calendarEvents]);
@@ -906,39 +787,6 @@ function AgendaPage() {
     if (!event?.id || action?.disabled) return;
     const target = getEventPrimaryActionPath(event, action);
     if (target) navigate(target);
-  }
-
-  function toggleSmartArrival(nextEnabled) {
-    const next = updateAppSettings({ smartArrivalEnabled: nextEnabled });
-    setAppSettings(next);
-    if (nextEnabled) {
-      window.dispatchEvent(new Event('motrice:smart-arrival-authorize'));
-      showToast('Arrivo intelligente attivato', 'success');
-    } else {
-      showToast('Arrivo intelligente disattivato', 'info');
-    }
-  }
-
-  function authorizeSmartArrival() {
-    window.dispatchEvent(new Event('motrice:smart-arrival-authorize'));
-    showToast('Controllo della posizione in corso…', 'info');
-  }
-
-  async function openSmartArrivalSettings() {
-    const { openNotificationSettings } = await import('../services/notificationCenter');
-    const opened = await openNotificationSettings();
-    if (!opened) showToast('Apri le autorizzazioni di Motrice dalle impostazioni del telefono', 'info');
-  }
-
-  function openSmartArrivalVerification(event, method) {
-    if (!event?.id) return;
-    navigate(`/agenda?verifyEvent=${encodeURIComponent(String(event.id))}&arrival=1&arrivalMethod=${method}`);
-  }
-
-  function postponeSmartArrival(event) {
-    if (!event?.id) return;
-    snoozeSmartArrival(event.id);
-    showToast('Avviso rimandato di 5 minuti', 'info');
   }
 
   function openTodaySession() {
@@ -1364,7 +1212,6 @@ function AgendaPage() {
                   referenceTime: nowMs
                 });
                 const ActionIcon = getPrimaryActionIcon(action);
-                const smartArrivalPhase = getSmartArrivalEligibility(event, nowMs).phase;
                 return (
                   <EventCard
                     key={event.id}
@@ -1393,19 +1240,6 @@ function AgendaPage() {
                       disabled: action.disabled,
                       onClick: (selectedEvent) => openEventPrimaryAction(selectedEvent, action)
                     }}
-                    extraContent={!['unavailable', 'expired'].includes(smartArrivalPhase) ? (
-                      <SmartArrivalPanel
-                        event={event}
-                        nowMs={nowMs}
-                        enabled={appSettings.smartArrivalEnabled}
-                        permission={arrivalPermission}
-                        onToggle={toggleSmartArrival}
-                        onAuthorize={authorizeSmartArrival}
-                        onOpenSettings={openSmartArrivalSettings}
-                        onVerify={openSmartArrivalVerification}
-                        onSnooze={postponeSmartArrival}
-                      />
-                    ) : null}
                     showProgress
                     detailsLabel={null}
                   />

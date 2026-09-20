@@ -127,7 +127,7 @@ const initialState = {
 const ROUTE_SPORT_SLUGS = new Set(['running', 'bici', 'trekking', 'ciclismo', 'cycling', 'trail']);
 
 const WIZARD_STEPS = [
-  { id: 1, label: 'Info base', description: 'Sport, livello e orario' },
+  { id: 1, label: 'Tipo', description: 'Sport, livello e orario' },
   { id: 2, label: 'Luogo', description: 'Posizione e percorso' },
   { id: 3, label: 'Regole', description: 'Accesso, deposito e contenuti' },
   { id: 4, label: 'Riepilogo', description: 'Controlla e conferma il tuo evento' }
@@ -1850,6 +1850,9 @@ function CreateEventPage() {
           ? (recurrenceMode === 'weekly' ? 'Giorni, disponibilità e schede' : 'Data, ora e scheda')
           : currentWizardStep.description
     : currentWizardStep.description;
+  const wizardPathLabels = form.is_personal
+    ? ['Tipo', 'Luogo', 'Programma', 'Riepilogo']
+    : ['Tipo', 'Luogo', 'Regole', 'Riepilogo'];
 
   return (
     <section className={styles.page}>
@@ -1867,12 +1870,15 @@ function CreateEventPage() {
 
       <form className={styles.formCard} onSubmit={onWizardSubmit} noValidate>
         <div className={styles.stepProgress} aria-label={`Passaggio ${activeStep} di ${WIZARD_STEPS.length}`}>
-          {WIZARD_STEPS.map((step) => (
-            <span
+          {WIZARD_STEPS.map((step, index) => (
+            <div
               key={step.id}
-              className={step.id <= activeStep ? styles.stepProgressActive : ''}
-              aria-hidden="true"
-            />
+              className={`${styles.stepProgressItem} ${step.id <= activeStep ? styles.stepProgressActive : ''} ${step.id === activeStep ? styles.stepProgressCurrent : ''}`}
+              aria-current={step.id === activeStep ? 'step' : undefined}
+            >
+              <span aria-hidden="true" />
+              <small>{wizardPathLabels[index]}</small>
+            </div>
           ))}
         </div>
 
@@ -1887,7 +1893,7 @@ function CreateEventPage() {
         {activeStep === 1 ? (
           <fieldset className={`${styles.wizardStep} ${stepDirection === 'backward' ? styles.wizardStepBackward : styles.wizardStepForward}`} aria-label="Informazioni base">
 
-            <section className={styles.eventKindCard} aria-label="Tipo di evento">
+            <section className={`${styles.eventKindCard} ${form.is_personal ? styles.eventKindCardPersonal : ''}`} aria-label="Tipo di evento">
               <div className={styles.sectionLabelRow}>
                 <span>Tipo di evento</span>
                 <small>{form.is_personal ? 'Solo per te' : 'Con partecipanti'}</small>
@@ -1895,21 +1901,21 @@ function CreateEventPage() {
               <div className={styles.eventKindOptions} role="group" aria-label="Scegli il tipo di evento">
                 <button
                   type="button"
-                  className={!form.is_personal ? styles.eventKindSelected : ''}
+                  className={`${styles.eventKindGroup} ${!form.is_personal ? styles.eventKindSelected : ''}`}
                   aria-pressed={!form.is_personal}
                   onClick={() => togglePersonalEvent(false)}
                 >
-                  <Users size={21} aria-hidden="true" />
-                  <span><strong>Di gruppo</strong><small>Invita o incontra altri atleti</small></span>
+                  <span className={styles.eventKindIcon}><Users size={20} aria-hidden="true" /></span>
+                  <span><strong>Di gruppo</strong><small>Allenati con altri</small></span>
                 </button>
                 <button
                   type="button"
-                  className={form.is_personal ? styles.eventKindSelected : ''}
+                  className={`${styles.eventKindPersonal} ${form.is_personal ? styles.eventKindSelected : ''}`}
                   aria-pressed={form.is_personal}
                   onClick={() => togglePersonalEvent(true)}
                 >
-                  <UserRoundCheck size={21} aria-hidden="true" />
-                  <span><strong>Personale</strong><small>Allenamento privato e progressi</small></span>
+                  <span className={styles.eventKindIcon}><UserRoundCheck size={20} aria-hidden="true" /></span>
+                  <span><strong>Personale</strong><small>Programma i tuoi allenamenti</small></span>
                 </button>
               </div>
 
@@ -1936,8 +1942,8 @@ function CreateEventPage() {
                   </div>
                   <small>
                     {recurrenceMode === 'weekly'
-                      ? 'Configurerai giorni, disponibilità e schede nella terza pagina.'
-                      : 'Creerai un singolo allenamento personale.'}
+                      ? 'Giorni e schede al passaggio 3.'
+                      : 'Un solo allenamento.'}
                   </small>
                 </div>
               ) : null}
@@ -2744,8 +2750,8 @@ function CreateEventPage() {
                   <strong>{recurrenceMode === 'weekly' ? 'Programma personale ricorrente' : 'Evento personale singolo'}</strong>
                   <span>
                     {recurrenceMode === 'weekly'
-                      ? 'Privato e flessibile: si sblocca dall’orario scelto e parte soltanto dopo GPS e conferma.'
-                      : 'Privato, senza deposito, partecipanti o QR. L’avvio avviene dal tuo allenamento live.'}
+                      ? 'Privato e flessibile. Si avvia dopo verifica GPS.'
+                      : 'Privato, senza deposito o partecipanti.'}
                   </span>
                 </div>
               </div>
@@ -2759,8 +2765,8 @@ function CreateEventPage() {
                     <strong>{recurrenceMode === 'weekly' ? 'Inizio del programma' : 'Quando ti alleni'}</strong>
                     <small>
                       {recurrenceMode === 'weekly'
-                        ? 'Scegli la data di partenza e la durata comune delle sessioni.'
-                        : 'Imposta data, ora e durata del tuo allenamento.'}
+                        ? 'Data iniziale e durata comune.'
+                        : 'Data, ora e durata.'}
                     </small>
                   </div>
                 </div>
@@ -2827,7 +2833,7 @@ function CreateEventPage() {
                   <div>
                     <span className={styles.fieldLabel}>Programmazione settimanale</span>
                     <strong>Scegli giorni e disponibilità</strong>
-                    <small>A partire dal {formatEventDateLabel(eventDate)} · anteprima di {PERSONAL_RECURRENCE_WEEKS} settimane</small>
+                    <small>Dal {formatEventDateLabel(eventDate)} · {PERSONAL_RECURRENCE_WEEKS} settimane</small>
                   </div>
                   <span className={styles.previewBadge}>Anteprima</span>
                 </div>
@@ -2906,7 +2912,7 @@ function CreateEventPage() {
                   <Clock3 size={18} aria-hidden="true" />
                   <span>
                     <strong>Finestra flessibile</strong>
-                    <small>Accesso dall’orario indicato fino alle 23:59. Il timer parte solo dopo verifica GPS e “Avvia allenamento”.</small>
+                    <small>Dall’orario indicato alle 23:59. Il timer parte dopo GPS e conferma.</small>
                   </span>
                 </div>
 
@@ -2920,7 +2926,7 @@ function CreateEventPage() {
 
                 <div className={styles.recurrenceReminder}>
                   <BellRing size={19} aria-hidden="true" />
-                  <div><strong>Promemoria intelligente</strong><small>Quando il GPS rileva che hai raggiunto il punto di allenamento, ricevi un avviso per verificare la presenza e avviare la sessione.</small></div>
+                  <div><strong>Promemoria intelligente</strong><small>Quando arrivi, ricevi un avviso per verificare la presenza.</small></div>
                 </div>
               </section>
             ) : null}

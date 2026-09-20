@@ -9,8 +9,8 @@ def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.toLowerCase().contains("release")
 }
 // Keep Play Store releases explicit and reproducible even when the CI run counter advances.
-def releaseVersionCode = 131
-def releaseVersionName = "1.0.131"
+def releaseVersionCode = 132
+def releaseVersionName = "1.0.132"
 
 if (releaseTaskRequested && !hasReleaseSigning) {
     throw new GradleException(
@@ -79,6 +79,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation "androidx.exifinterface:exifinterface:$androidxExifInterfaceVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

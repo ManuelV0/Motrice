@@ -329,7 +329,7 @@ function EventDetailPage() {
   const [cancelKaboom, setCancelKaboom] = useState(false);
   const [organizerCancelOpen, setOrganizerCancelOpen] = useState(false);
   const [organizerCancelSubmitting, setOrganizerCancelSubmitting] = useState(false);
-  const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '' });
+  const [organizerCancelForm, setOrganizerCancelForm] = useState({ reasonCode: '', note: '', scope: 'single' });
   const [organizerEditOpen, setOrganizerEditOpen] = useState(false);
   const [organizerEditSubmitting, setOrganizerEditSubmitting] = useState(false);
   const [organizerDangerOpen, setOrganizerDangerOpen] = useState(false);
@@ -970,7 +970,9 @@ function EventDetailPage() {
       const refundedParticipants = Number(result?.refunded_participants || 0);
       showToast(
         event.is_personal
-          ? 'Evento personale eliminato.'
+          ? result?.scope === 'series'
+            ? `Ricorrenza eliminata · ${Number(result?.cancelled_occurrences || 0)} eventi futuri rimossi.`
+            : 'Evento personale eliminato.'
           : refundedCents > 0
           ? `Evento annullato · ${refundedParticipants} ${refundedParticipants === 1 ? 'rimborso eseguito' : 'rimborsi eseguiti'}`
           : 'Evento annullato. I partecipanti sono stati avvisati.',
@@ -3301,8 +3303,8 @@ function EventDetailPage() {
                 type="button"
                 onClick={() => {
                   setOrganizerCancelForm(event.is_personal
-                    ? { reasonCode: 'personal', note: '' }
-                    : { reasonCode: '', note: '' });
+                    ? { reasonCode: 'personal', note: '', scope: 'single' }
+                    : { reasonCode: '', note: '', scope: 'single' });
                   setOrganizerEditOpen(false);
                   setOrganizerCancelOpen(true);
                 }}
@@ -3319,12 +3321,16 @@ function EventDetailPage() {
 
       <Modal
         open={organizerCancelOpen}
-        title="Elimina evento"
+        title={event?.is_personal && event?.personal_series_id ? 'Elimina evento ricorrente' : 'Elimina evento'}
         onClose={() => {
           if (!organizerCancelSubmitting) setOrganizerCancelOpen(false);
         }}
         onConfirm={cancelOrganizedEvent}
-        confirmText={organizerCancelSubmitting ? 'Eliminazione in corso...' : 'Conferma eliminazione'}
+        confirmText={organizerCancelSubmitting
+          ? 'Eliminazione in corso...'
+          : organizerCancelForm.scope === 'series'
+            ? 'Elimina ricorrenza'
+            : 'Elimina evento'}
         confirmDisabled={!organizerCancelForm.reasonCode || organizerCancelSubmitting}
         confirmClassName={styles.organizerCancelConfirm}
         closeText="Mantieni evento"
@@ -3336,7 +3342,9 @@ function EventDetailPage() {
               <strong>Azione permanente</strong>
               <p>
                 {event.is_personal
-                  ? 'L’evento personale verrà rimosso dalle sezioni attive e non potrà essere recuperato.'
+                  ? organizerCancelForm.scope === 'series'
+                    ? 'Le sessioni future della ricorrenza verranno rimosse. Gli allenamenti già svolti resteranno nello storico.'
+                    : 'Solo questo evento personale verrà rimosso e non potrà essere recuperato.'
                   : 'Le iscrizioni verranno chiuse, i QR disattivati e tutti gli utenti riceveranno una notifica.'}
               </p>
             </div>
@@ -3351,6 +3359,38 @@ function EventDetailPage() {
               note="Dopo la conferma l’evento non può essere riattivato."
             /> : null}
           </div>
+
+          {event.is_personal && event.personal_series_id ? (
+            <fieldset className={styles.organizerCancelScope}>
+              <legend>Cosa vuoi eliminare?</legend>
+              <button
+                type="button"
+                className={organizerCancelForm.scope === 'single' ? styles.organizerCancelScopeSelected : ''}
+                aria-pressed={organizerCancelForm.scope === 'single'}
+                onClick={() => setOrganizerCancelForm((current) => ({ ...current, scope: 'single' }))}
+                disabled={organizerCancelSubmitting}
+              >
+                <Trash2 size={18} aria-hidden="true" />
+                <span>
+                  <strong>Solo questo evento</strong>
+                  <small>Le altre date restano programmate</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className={organizerCancelForm.scope === 'series' ? styles.organizerCancelScopeSelected : ''}
+                aria-pressed={organizerCancelForm.scope === 'series'}
+                onClick={() => setOrganizerCancelForm((current) => ({ ...current, scope: 'series' }))}
+                disabled={organizerCancelSubmitting}
+              >
+                <CalendarDays size={18} aria-hidden="true" />
+                <span>
+                  <strong>Tutta la ricorrenza</strong>
+                  <small>Rimuove questa e tutte le date future</small>
+                </span>
+              </button>
+            </fieldset>
+          ) : null}
 
           <div className={styles.organizerCancelSummary}>
             <div><span>Evento</span><strong>{event?.title || event?.sport_name}</strong></div>
