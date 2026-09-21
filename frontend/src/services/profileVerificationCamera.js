@@ -96,7 +96,9 @@ export async function cameraResultToFile(result, kind = 'profile') {
 export async function getProfileCameraPermission() {
   if (!Capacitor.isNativePlatform()) return 'web';
   try {
-    const currentPermissions = await ProfileVerificationCamera.checkCameraPermission();
+    // Use Capacitor's built-in permission bridge. It is registered for every
+    // native plugin and avoids coupling this UI check to a custom callback.
+    const currentPermissions = await ProfileVerificationCamera.checkPermissions();
     return normalizeCameraPermission(currentPermissions?.camera);
   } catch {
     return 'unavailable';
@@ -113,7 +115,7 @@ export async function requestProfileCameraPermission() {
     // Request again even when Android reports "denied": after a first refusal
     // the system can still show its native prompt. Only Android can grant this
     // permission; Motrice never tries to bypass the operating system dialog.
-    const requested = await ProfileVerificationCamera.requestCameraPermission();
+    const requested = await ProfileVerificationCamera.requestPermissions({ permissions: ['camera'] });
     cameraPermission = normalizeCameraPermission(requested?.camera);
   } catch {
     cameraPermission = 'denied';
@@ -126,10 +128,12 @@ export async function captureProfileVerificationPhoto(kind) {
   const captureKind = normalizeKind(kind);
   if (!Capacitor.isNativePlatform()) return null;
 
-  // Register the restoration listener before Android leaves the WebView to
-  // open its native camera Activity. Low-memory devices can terminate Motrice
-  // while the camera is visible and later recreate it.
-  await initializeProfileVerificationCamera();
+  // Start registering the restoration listener before Android leaves the
+  // WebView, but never block the camera on the listener acknowledgement. Some
+  // Android WebViews can leave App.addListener() pending even though the app is
+  // healthy; waiting here used to leave the button stuck on "Apertura…" and
+  // the native camera was never called.
+  initializeProfileVerificationCamera().catch(() => {});
   const cameraPermission = await requestProfileCameraPermission();
   if (cameraPermission !== 'granted') {
     throw cameraError(
