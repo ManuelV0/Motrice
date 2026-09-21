@@ -5,3 +5,13 @@ export function normalizeCameraPermission(value) {
   if (permission === 'denied') return 'denied';
   return 'unavailable';
 }
+
+export async function checkNativeProfileCameraPermission(plugin) {
+  const result = await plugin.checkCameraPermission();
+  return normalizeCameraPermission(result?.camera);
+}
+
+export async function requestNativeProfileCameraPermission(plugin) {
+  const result = await plugin.requestCameraPermission();
+  return normalizeCameraPermission(result?.camera);
+}

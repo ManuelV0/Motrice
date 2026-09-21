@@ -1,6 +1,9 @@
 import { App } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { normalizeCameraPermission } from '../utils/profileCameraPermission';
+import {
+  checkNativeProfileCameraPermission,
+  requestNativeProfileCameraPermission
+} from '../utils/profileCameraPermission';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 
 const PENDING_CAPTURE_KEY = 'motrice.profile-verification-camera-pending';
@@ -96,10 +99,11 @@ export async function cameraResultToFile(result, kind = 'profile') {
 export async function getProfileCameraPermission() {
   if (!Capacitor.isNativePlatform()) return 'web';
   try {
-    // Use Capacitor's built-in permission bridge. It is registered for every
-    // native plugin and avoids coupling this UI check to a custom callback.
-    const currentPermissions = await ProfileVerificationCamera.checkPermissions();
-    return normalizeCameraPermission(currentPermissions?.camera);
+    // The Motrice plugin owns an explicit permission callback. Do not replace
+    // this with Capacitor's generic checkPermissions/requestPermissions bridge:
+    // on some Android devices that inherited bridge can dereference a missing
+    // callback and terminate the native process.
+    return await checkNativeProfileCameraPermission(ProfileVerificationCamera);
   } catch {
     return 'unavailable';
   }
@@ -115,8 +119,7 @@ export async function requestProfileCameraPermission() {
     // Request again even when Android reports "denied": after a first refusal
     // the system can still show its native prompt. Only Android can grant this
     // permission; Motrice never tries to bypass the operating system dialog.
-    const requested = await ProfileVerificationCamera.requestPermissions({ permissions: ['camera'] });
-    cameraPermission = normalizeCameraPermission(requested?.camera);
+    cameraPermission = await requestNativeProfileCameraPermission(ProfileVerificationCamera);
   } catch {
     cameraPermission = 'denied';
   }
