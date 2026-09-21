@@ -9,6 +9,7 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safe
 const PENDING_CAPTURE_KEY = 'motrice.profile-verification-camera-pending';
 const RESTORED_CAPTURE_EVENT = 'motrice-profile-camera-restored';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const CAMERA_OPEN_TIMEOUT_MS = 30_000;
 
 let restoredCapture = null;
 let restoreListenerPromise = null;
@@ -28,6 +29,44 @@ function cameraError(message, code = 'CAMERA_UNAVAILABLE') {
 function isCancelledError(error) {
   const value = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
   return value.includes('cancel') || value.includes('user cancelled') || value.includes('user canceled');
+}
+
+async function takeNativeVerificationPhoto(options) {
+  let cameraActivityOpened = false;
+  let timeoutId = null;
+
+  // A native camera Activity normally moves Motrice to the background. Once
+  // that happens the user may take as long as needed to frame the photo, so
+  // the launch watchdog is disabled. If Android never opens either its
+  // permission prompt or the camera, the pending bridge call cannot leave the
+  // interface stuck on "Apertura..." forever.
+  const stateListenerPromise = App.addListener('appStateChange', ({ isActive }) => {
+    if (!isActive) {
+      cameraActivityOpened = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }).catch(() => null);
+
+  const capturePromise = ProfileVerificationCamera.takeVerificationPhoto(options);
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      if (!cameraActivityOpened) {
+        reject(cameraError(
+          'Android non ha aperto la fotocamera. Riprova; se il problema continua, controlla il permesso Fotocamera nelle impostazioni del telefono.',
+          'CAMERA_OPEN_TIMEOUT'
+        ));
+      }
+    }, CAMERA_OPEN_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([capturePromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    stateListenerPromise
+      .then((listener) => listener?.remove?.())
+      .catch(() => {});
+  }
 }
 
 function mimeFromFormat(format) {
@@ -137,17 +176,14 @@ export async function captureProfileVerificationPhoto(kind) {
   // healthy; waiting here used to leave the button stuck on "Apertura…" and
   // the native camera was never called.
   initializeProfileVerificationCamera().catch(() => {});
-  const cameraPermission = await requestProfileCameraPermission();
-  if (cameraPermission !== 'granted') {
-    throw cameraError(
-      'Permesso fotocamera non concesso. Tocca di nuovo il pulsante di scatto e scegli “Consenti” nella finestra di Android.',
-      'CAMERA_PERMISSION_DENIED'
-    );
-  }
 
   safeStorageSet(PENDING_CAPTURE_KEY, captureKind);
   try {
-    const result = await ProfileVerificationCamera.takeVerificationPhoto({
+    // One native call owns the whole flow: Android asks for the permission, its
+    // explicit permission callback opens the system camera, and the captured
+    // file is returned. Avoiding a separate permission request removes a
+    // second bridge round-trip that can remain unresolved on some WebViews.
+    const result = await takeNativeVerificationPhoto({
       kind: captureKind,
       quality: 76,
       maxDimension: 1080,
