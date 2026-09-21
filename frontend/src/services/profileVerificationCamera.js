@@ -88,7 +88,7 @@ export async function cameraResultToFile(result, kind = 'profile') {
 
   if (!blob) throw cameraError('Foto non disponibile. Riapri la fotocamera e riprova.');
   if (blob.size > MAX_IMAGE_BYTES) {
-    throw cameraError('La foto supera 8 MB. Riduci la qualità oppure usa la galleria.', 'IMAGE_TOO_LARGE');
+    throw cameraError('La foto supera 8 MB. Riprova a scattarla.', 'IMAGE_TOO_LARGE');
   }
 
   const mime = blob.type?.startsWith('image/') ? blob.type : metadataMime;
@@ -159,7 +159,7 @@ export async function captureProfileVerificationPhoto(kind) {
     safeStorageRemove(PENDING_CAPTURE_KEY);
     if (isCancelledError(error)) return null;
     throw cameraError(
-      error?.message || 'Fotocamera non disponibile. Riprova oppure usa la galleria.',
+      error?.message || 'Fotocamera non disponibile. Riprova.',
       error?.code || 'CAMERA_UNAVAILABLE'
     );
   }

@@ -392,13 +392,15 @@
   font-weight: 850;
 }
 
-.hiddenInput { display: none; }
-
 .photoActions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.55rem;
   margin-top: 0.75rem;
+}
+
+.singlePhotoAction {
+  grid-template-columns: 1fr;
 }
 
 .photoActions button {

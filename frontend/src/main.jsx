@@ -32,7 +32,7 @@ function renderApp() {
       import('./services/profileVerificationCamera')
         .then(({ initializeProfileVerificationCamera }) => initializeProfileVerificationCamera())
         .catch(() => {
-          // La verifica mantiene disponibile il fallback galleria.
+          // La pagina di verifica mostrera un errore e consentira un nuovo scatto.
         });
     }
   } catch {
