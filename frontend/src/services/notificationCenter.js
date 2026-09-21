@@ -12,6 +12,7 @@ import {
   stableNotificationId
 } from '../utils/notificationRules';
 import { withTimeout } from '../utils/asyncTimeout';
+import { createCapacitorPluginLoader } from '../utils/capacitorPluginLoader';
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
 const PERMISSION_PROMPTED_KEY = 'motrice_notification_permission_prompted_v1';
@@ -27,21 +28,20 @@ const PUSH_REGISTRATION_TIMEOUT_MS = 8000;
 
 const NotificationSettings = registerPlugin('NotificationSettings');
 
-let pushNotificationsPromise;
 let pushRegistrationPromise;
 let lastRegisteredPushToken = '';
 let lastRegisteredPushIdentity = '';
 let logoutCleanupActive = false;
 const pushTokenRequests = new Map();
 
-async function getPushNotifications() {
-  if (!REMOTE_PUSH_ENABLED) return null;
-  if (!pushNotificationsPromise) {
-    pushNotificationsPromise = import('@capacitor/push-notifications')
-      .then(({ PushNotifications }) => PushNotifications)
-      .catch(() => null);
-  }
-  return pushNotificationsPromise;
+const loadPushNotifications = createCapacitorPluginLoader(
+  () => import('@capacitor/push-notifications'),
+  ({ PushNotifications }) => PushNotifications
+);
+
+function getPushNotificationsContainer() {
+  if (!REMOTE_PUSH_ENABLED) return Promise.resolve(null);
+  return loadPushNotifications();
 }
 
 const CHANNELS = [
@@ -135,7 +135,8 @@ async function persistPushToken(value) {
 export async function prepareNotificationCenterForLogout() {
   logoutCleanupActive = true;
   const token = String(lastRegisteredPushToken || safeStorageGet(PUSH_TOKEN_KEY) || '').trim();
-  const pushNotifications = await getPushNotifications().catch(() => null);
+  const pushNotificationsContainer = await getPushNotificationsContainer().catch(() => null);
+  const pushNotifications = pushNotificationsContainer?.plugin || null;
 
   if (token) {
     await withTimeout(
@@ -169,7 +170,10 @@ export async function registerCurrentDeviceForPush(pushNotificationsInstance) {
   if (!isNativeDevice()) return false;
   if (pushRegistrationPromise) return pushRegistrationPromise;
 
-  const pushNotifications = pushNotificationsInstance || await getPushNotifications();
+  const pushNotificationsContainer = pushNotificationsInstance
+    ? null
+    : await getPushNotificationsContainer();
+  const pushNotifications = pushNotificationsInstance || pushNotificationsContainer?.plugin || null;
   if (!pushNotifications) return false;
 
   pushRegistrationPromise = new Promise(async (resolve) => {
@@ -244,7 +248,8 @@ export function consumePendingNotificationPath() {
 
 async function createNotificationChannels() {
   if (!isNativeDevice() || Capacitor.getPlatform() !== 'android') return;
-  const pushNotifications = await getPushNotifications();
+  const pushNotificationsContainer = await getPushNotificationsContainer();
+  const pushNotifications = pushNotificationsContainer?.plugin || null;
   await Promise.all(CHANNELS.map(async (channel) => {
     await LocalNotifications.createChannel(channel).catch(() => undefined);
     if (pushNotifications) {
@@ -360,7 +365,8 @@ export async function requestNotificationPermission() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
   writeLocalFlag(PERMISSION_PROMPTED_KEY);
   const local = await LocalNotifications.requestPermissions().catch(() => ({ display: 'denied' }));
-  const pushNotifications = await getPushNotifications();
+  const pushNotificationsContainer = await getPushNotificationsContainer();
+  const pushNotifications = pushNotificationsContainer?.plugin || null;
   const push = pushNotifications
     ? await pushNotifications.requestPermissions().catch(() => ({ receive: 'denied' }))
     : { receive: 'disabled' };
@@ -390,11 +396,12 @@ export async function openNotificationSettings() {
 
 export async function getNotificationPermissionStatus() {
   if (!isNativeDevice()) return { display: 'unsupported', receive: 'unsupported' };
-  const pushNotifications = await withTimeout(
-    getPushNotifications(),
+  const pushNotificationsContainer = await withTimeout(
+    getPushNotificationsContainer(),
     NATIVE_PERMISSION_TIMEOUT_MS,
     'Modulo push non disponibile'
   ).catch(() => null);
+  const pushNotifications = pushNotificationsContainer?.plugin || null;
   const [local, push] = await Promise.all([
     withTimeout(
       LocalNotifications.checkPermissions(),
@@ -425,7 +432,8 @@ export async function initializeNotificationCenter({ onOpen } = {}) {
     .catch(() => null);
   if (localActionHandle) handles.push(localActionHandle);
 
-  const pushNotifications = await getPushNotifications();
+  const pushNotificationsContainer = await getPushNotificationsContainer();
+  const pushNotifications = pushNotificationsContainer?.plugin || null;
   if (pushNotifications) {
     const pushHandles = await Promise.all([
       pushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
