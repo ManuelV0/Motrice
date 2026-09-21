@@ -20,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import {
   listProfileVerificationRequests,
+  revokeProfileVerification,
   reviewProfileVerification
 } from '../services/profileVerification';
 import styles from '../styles/pages/adminProfileVerifications.module.css';
@@ -68,6 +69,7 @@ function AdminProfileVerificationsPage() {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [reviewArea, setReviewArea] = useState('identity');
@@ -97,6 +99,7 @@ function AdminProfileVerificationsPage() {
 
   useEffect(() => {
     setRejectOpen(false);
+    setRevokeOpen(false);
     setUnlockOpen(false);
     setReason('');
     loadRequests(filter);
@@ -127,11 +130,33 @@ function AdminProfileVerificationsPage() {
       }[decision];
       showToast(message || 'Verifica aggiornata', 'success');
       setRejectOpen(false);
+      setRevokeOpen(false);
       setUnlockOpen(false);
       setReason('');
       await loadRequests(filter);
     } catch (error) {
       showToast(error.message || 'Revisione non riuscita', 'error');
+    } finally {
+      setReviewing(false);
+    }
+  }
+
+  async function revokeVerification() {
+    if (!selected || reviewing) return;
+    if (reason.trim().length < 5) {
+      showToast('Inserisci una motivazione chiara', 'info');
+      return;
+    }
+
+    setReviewing(true);
+    try {
+      await revokeProfileVerification(selected.user_id, reason);
+      showToast('Verifica annullata: l’utente potrà ripetere la procedura', 'success');
+      setRevokeOpen(false);
+      setReason('');
+      await loadRequests(filter);
+    } catch (error) {
+      showToast(error.message || 'Annullamento della verifica non riuscito', 'error');
     } finally {
       setReviewing(false);
     }
@@ -201,6 +226,7 @@ function AdminProfileVerificationsPage() {
                     onClick={() => {
                       setSelectedId(request.user_id);
                       setRejectOpen(false);
+                      setRevokeOpen(false);
                       setUnlockOpen(false);
                       setReason('');
                     }}
@@ -278,7 +304,37 @@ function AdminProfileVerificationsPage() {
                   <span><BadgeCheck size={20} /> Stato: <strong>{STATUS_COPY[selected.status] || selected.status}</strong></span>
                   {selected.rejection_reason ? <p>{selected.rejection_reason}</p> : null}
                   {selected.status === 'verified' ? (
-                    <button type="button" disabled={reviewing} onClick={() => review('suspended')}><ShieldAlert size={17} /> Sospendi profilo</button>
+                    revokeOpen ? (
+                      <div className={styles.revokeBox} role="alertdialog" aria-labelledby="revoke-verification-title">
+                        <span>
+                          <ShieldAlert size={18} />
+                          <strong id="revoke-verification-title">Annullare la verifica di {selected.display_name}?</strong>
+                        </span>
+                        <p>L’utente tornerà “Non verificato”, perderà l’accesso alle funzioni protette e potrà inviare una nuova verifica.</p>
+                        <label htmlFor="revoke-verification-reason">Motivazione</label>
+                        <textarea
+                          id="revoke-verification-reason"
+                          rows={3}
+                          maxLength={500}
+                          value={reason}
+                          placeholder="Esempio: dati non più attendibili, richiedere una nuova verifica"
+                          onChange={(event) => setReason(event.target.value)}
+                        />
+                        <div>
+                          <button type="button" disabled={reviewing} onClick={() => { setRevokeOpen(false); setReason(''); }}>
+                            Mantieni verifica
+                          </button>
+                          <button type="button" className={styles.revokeConfirm} disabled={reviewing} onClick={revokeVerification}>
+                            <X size={17} /> {reviewing ? 'Annullamento…' : 'Conferma annullamento'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={styles.verifiedActions}>
+                        <button type="button" disabled={reviewing} onClick={() => review('suspended')}><ShieldAlert size={17} /> Sospendi profilo</button>
+                        <button type="button" className={styles.revokeButton} disabled={reviewing} onClick={() => { setRevokeOpen(true); setReason(''); }}><X size={17} /> Annulla verifica</button>
+                      </div>
+                    )
                   ) : null}
                   {selected.status === 'suspended' ? (
                     unlockOpen ? (

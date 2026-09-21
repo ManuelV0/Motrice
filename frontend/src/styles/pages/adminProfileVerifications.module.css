@@ -544,6 +544,78 @@
   background: rgb(198 255 0 / 8%);
 }
 
+.verifiedActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.reviewedState .revokeButton {
+  border-color: rgb(255 91 91 / 45%);
+  color: #ff6b6b;
+  background: rgb(255 91 91 / 8%);
+}
+
+.revokeBox {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgb(255 91 91 / 42%);
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(circle at 100% 0%, rgb(255 91 91 / 11%), transparent 48%),
+    #150f0f;
+}
+
+.revokeBox > span {
+  color: #ff6b6b;
+}
+
+.revokeBox > p {
+  color: #aaa09e;
+  line-height: 1.45;
+}
+
+.revokeBox label {
+  color: #ff8585;
+  font-size: 0.66rem;
+  font-weight: 850;
+}
+
+.revokeBox textarea {
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid #463030;
+  border-radius: 0.75rem;
+  outline: 0;
+  color: #f7f7f7;
+  background: #110d0d;
+  font: inherit;
+  font-size: 0.75rem;
+  resize: vertical;
+}
+
+.revokeBox textarea:focus { border-color: #ff6b6b; }
+
+.revokeBox > div {
+  display: grid;
+  grid-template-columns: 0.8fr 1.25fr;
+  gap: 0.55rem;
+}
+
+.reviewedState .revokeBox button:first-child {
+  border-color: #383838;
+  color: #c7c7c7;
+  background: #202020;
+}
+
+.reviewedState .revokeConfirm {
+  border-color: #ff5b5b;
+  color: #fff;
+  background: #c73737;
+  box-shadow: 0 0 1.2rem rgb(255 91 91 / 12%);
+}
+
 .unlockBox {
   display: grid;
   gap: 0.65rem;
@@ -613,4 +685,5 @@
   .photoGrid figure { min-height: 12.5rem; }
   .dataGrid { gap: 0.45rem; }
   .actions { grid-template-columns: 0.75fr 1.25fr; }
+  .verifiedActions { grid-template-columns: 1fr; }
 }

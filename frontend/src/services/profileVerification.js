@@ -333,3 +333,19 @@ export async function reviewProfileVerification(targetUserId, decision, reason =
   if (error) throw new Error(error.message || 'Revisione non riuscita');
   return normalizeSummary(data);
 }
+
+export async function revokeProfileVerification(targetUserId, reason = '') {
+  if (!isSupabaseConfigured) throw new Error('Supabase non configurato');
+  const normalizedReason = String(reason || '').trim();
+  if (normalizedReason.length < 5) {
+    throw new Error('Inserisci una motivazione chiara');
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc('revoke_profile_verification', {
+    target_user_id: String(targetUserId || ''),
+    reason: normalizedReason
+  });
+  if (error) throw new Error(error.message || 'Annullamento della verifica non riuscito');
+  return normalizeSummary(data);
+}
