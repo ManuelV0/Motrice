@@ -1,6 +1,8 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { api } from './api';
+import { getAuthSession } from './authSession';
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import {
   buildEventReminderPlan,
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -13,6 +15,7 @@ import { withTimeout } from '../utils/asyncTimeout';
 
 const PENDING_PATH_KEY = 'motrice_pending_notification_path_v1';
 const PERMISSION_PROMPTED_KEY = 'motrice_notification_permission_prompted_v1';
+const PUSH_TOKEN_KEY = 'motrice_push_device_token_v1';
 const MANAGED_REMINDER_FLAG = 'motriceManagedReminder';
 // Native releases enable remote push by default. Developers can still disable
 // it explicitly with VITE_PUSH_NOTIFICATIONS_ENABLED=false in local builds.
@@ -27,6 +30,8 @@ const NotificationSettings = registerPlugin('NotificationSettings');
 let pushNotificationsPromise;
 let pushRegistrationPromise;
 let lastRegisteredPushToken = '';
+let lastRegisteredPushIdentity = '';
+let logoutCleanupActive = false;
 const pushTokenRequests = new Map();
 
 async function getPushNotifications() {
@@ -101,8 +106,13 @@ function writeLocalFlag(key) {
 async function persistPushToken(value) {
   const token = String(value || '').trim();
   if (!token) return false;
-  if (lastRegisteredPushToken === token) return true;
-  if (pushTokenRequests.has(token)) return pushTokenRequests.get(token);
+  if (logoutCleanupActive) return false;
+  const session = getAuthSession();
+  const identity = String(session?.authUserId || session?.userId || session?.email || '').trim();
+  if (!identity) return false;
+  const requestKey = `${identity}:${token}`;
+  if (lastRegisteredPushToken === token && lastRegisteredPushIdentity === identity) return true;
+  if (pushTokenRequests.has(requestKey)) return pushTokenRequests.get(requestKey);
 
   const request = api.registerPushDevice({
     token,
@@ -111,13 +121,48 @@ async function persistPushToken(value) {
   })
     .then(() => {
       lastRegisteredPushToken = token;
+      lastRegisteredPushIdentity = identity;
+      safeStorageSet(PUSH_TOKEN_KEY, token);
       return true;
     })
     .catch(() => false)
-    .finally(() => pushTokenRequests.delete(token));
+    .finally(() => pushTokenRequests.delete(requestKey));
 
-  pushTokenRequests.set(token, request);
+  pushTokenRequests.set(requestKey, request);
   return request;
+}
+
+export async function prepareNotificationCenterForLogout() {
+  logoutCleanupActive = true;
+  const token = String(lastRegisteredPushToken || safeStorageGet(PUSH_TOKEN_KEY) || '').trim();
+  const pushNotifications = await getPushNotifications().catch(() => null);
+
+  if (token) {
+    await withTimeout(
+      api.unregisterPushDevice(token),
+      3000,
+      'Scollegamento notifiche non completato'
+    ).catch(() => undefined);
+  }
+
+  const pending = await LocalNotifications.getPending().catch(() => ({ notifications: [] }));
+  const pendingNotifications = Array.isArray(pending?.notifications) ? pending.notifications : [];
+  if (pendingNotifications.length) {
+    await LocalNotifications.cancel({
+      notifications: pendingNotifications.map((item) => ({ id: item.id }))
+    }).catch(() => undefined);
+  }
+  await LocalNotifications.removeAllDeliveredNotifications().catch(() => undefined);
+  await pushNotifications?.unregister?.().catch(() => undefined);
+
+  lastRegisteredPushToken = '';
+  lastRegisteredPushIdentity = '';
+  pushRegistrationPromise = null;
+  pushTokenRequests.clear();
+  safeStorageRemove(PUSH_TOKEN_KEY);
+  safeStorageRemove(PENDING_PATH_KEY);
+
+  return { tokenRemoved: Boolean(token), pendingCancelled: pendingNotifications.length };
 }
 
 export async function registerCurrentDeviceForPush(pushNotificationsInstance) {
@@ -369,6 +414,7 @@ export async function getNotificationPermissionStatus() {
 
 export async function initializeNotificationCenter({ onOpen } = {}) {
   if (!isNativeDevice()) return () => {};
+  logoutCleanupActive = false;
   await createNotificationChannels();
 
   const handles = [];

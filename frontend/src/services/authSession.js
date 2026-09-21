@@ -1,11 +1,14 @@
 import { Capacitor } from '@capacitor/core';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
+import { withTimeout } from '../utils/asyncTimeout';
 import { getPasswordPolicyError } from '../utils/passwordPolicy';
 import { isSupabaseConfigured, requireSupabase, supabase } from './supabaseClient';
 
 const STORAGE_KEY = 'motrice_auth_session_v1';
 const OPERATIONAL_STORE_KEY = 'motrice_operational_store_v2';
 const LOGOUT_REASON_KEY = 'motrice_auth_logout_reason_v1';
+const USER_LOCATION_CACHE_KEY = 'motrice_user_location_v1';
+const LOGOUT_CLEANUP_TIMEOUT_MS = 5000;
 // Callback nativi intercettati dagli intent-filter Android.
 const NATIVE_AUTH_REDIRECT_URL = 'com.motrice.app://login-callback';
 const NATIVE_PASSWORD_RESET_REDIRECT_URL = 'com.motrice.app://reset-password';
@@ -456,12 +459,39 @@ export async function signInWithPassword({ email, password }) {
   return applySupabaseSession(data.session);
 }
 
-export async function signOutFromSupabase() {
-  if (supabase) {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+async function prepareDeviceForLogout() {
+  safeStorageRemove(USER_LOCATION_CACHE_KEY);
+  const cleanup = Promise.allSettled([
+    import('./eventLocationTracking')
+      .then((tracking) => tracking.stopEventLocationTracking({ status: 'interrupted', reason: 'logout' })),
+    import('./notificationCenter')
+      .then((notifications) => notifications.prepareNotificationCenterForLogout())
+  ]);
+  await withTimeout(
+    cleanup,
+    LOGOUT_CLEANUP_TIMEOUT_MS,
+    'Pulizia dispositivo non completata'
+  ).catch(() => undefined);
+}
+
+export async function signOutFromSupabase({ scope = 'local', cleanupDevice = true } = {}) {
+  const safeScope = scope === 'global' ? 'global' : 'local';
+  if (cleanupDevice) await prepareDeviceForLogout();
+
+  let signOutError = null;
+  try {
+    if (supabase) {
+      await supabase.removeAllChannels().catch(() => undefined);
+      const { error } = await supabase.auth.signOut({ scope: safeScope });
+      signOutError = error || null;
+    }
+  } finally {
+    // L'utente deve sempre poter uscire da questo dispositivo, anche senza rete.
+    clearAuthSession();
   }
-  clearAuthSession();
+
+  if (signOutError && safeScope === 'global') throw signOutError;
+  return { scope: safeScope, warning: signOutError?.message || '' };
 }
 
 export function readAuthLogoutReason() {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation as useRouterLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import {
   Bell,
@@ -89,6 +89,7 @@ function SettingsAccordion({ id, icon: Icon, title, summary, open, onToggle, chi
 }
 
 function SettingsPage() {
+  const routerLocation = useRouterLocation();
   const { showToast } = useToast();
   const location = useUserLocation();
   const [appSettings, setAppSettings] = useState(() => getAppSettings());
@@ -106,6 +107,21 @@ function SettingsPage() {
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, []);
+
+  useEffect(() => {
+    const sectionByHash = {
+      '#settings-notifications': 'notifications',
+      '#settings-location': 'location',
+      '#settings-workout': 'workout',
+      '#settings-privacy': 'privacy'
+    };
+    const targetSection = sectionByHash[routerLocation.hash];
+    if (!targetSection) return;
+    setOpenSection(targetSection);
+    window.requestAnimationFrame(() => {
+      document.getElementById(routerLocation.hash.slice(1))?.scrollIntoView({ block: 'start' });
+    });
+  }, [routerLocation.hash]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return undefined;

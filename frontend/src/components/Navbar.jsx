@@ -8,13 +8,17 @@ import {
   UserRound,
   MessageCircle,
   Bell,
+  ChevronDown,
+  CircleHelp,
   LockKeyhole,
+  MapPin,
   Menu,
   Target,
   LogIn,
   LogOut,
   ShieldCheck,
   Settings,
+  Sparkles,
   TrendingUp,
   X
 } from 'lucide-react';
@@ -26,6 +30,7 @@ import { isProfileVerificationAdmin } from '../services/profileVerification';
 import IconButton from './IconButton';
 import BrandLogo from './BrandLogo';
 import HeaderWallet from './HeaderWallet';
+import Modal from './Modal';
 import styles from '../styles/components/navbar.module.css';
 
 const DRAWER_OPEN_THRESHOLD = 0.34;
@@ -55,14 +60,27 @@ const drawerSections = [
     ]
   },
   {
-    title: 'Altro',
+    title: 'Sistema',
     items: [
-      { to: '/coach', label: 'Coach', icon: Target, locked: true },
-      { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake, locked: true },
-      { to: '/settings', label: 'Impostazioni', icon: Settings }
+      { to: '/settings', label: 'Impostazioni', icon: Settings },
+      { to: '/faq', label: 'Aiuto e assistenza', icon: CircleHelp }
     ]
   }
 ];
+
+const upcomingDrawerItems = [
+  { to: '/coach', label: 'Coach', icon: Target },
+  { to: '/convenzioni', label: 'Premi e convenzioni', icon: Handshake }
+];
+
+const VERIFICATION_LABELS = {
+  verified: 'Profilo verificato',
+  pending: 'Verifica in corso',
+  rejected: 'Verifica da ripetere',
+  suspended: 'Profilo sospeso',
+  expired: 'Verifica scaduta',
+  unverified: 'Profilo da verificare'
+};
 
 function Navbar({ forceMobile = false }) {
   const location = useLocation();
@@ -74,7 +92,15 @@ function Navbar({ forceMobile = false }) {
   const [unread, setUnread] = useState(0);
   const [authSession, setAuthSession] = useState(() => getAuthSession());
   const [authActionBusy, setAuthActionBusy] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
+  const [drawerIdentity, setDrawerIdentity] = useState({
+    displayName: '',
+    avatarUrl: '',
+    verificationStatus: 'unverified'
+  });
+  const [appVersion, setAppVersion] = useState('Web');
   const visibleDrawerSections = isProfileVerificationAdmin(authSession)
     ? [
         ...drawerSections,
@@ -84,7 +110,12 @@ function Navbar({ forceMobile = false }) {
         }
       ]
     : drawerSections;
-  const { hasLocation, error: locationError, requesting, requestLocation } = useUserLocation();
+  const {
+    permission: locationPermission,
+    permissionReady: locationPermissionReady,
+    error: locationError,
+    requesting
+  } = useUserLocation();
   const drawerRef = useRef(null);
   const drawerPanelRef = useRef(null);
   const drawerGestureSessionRef = useRef(null);
@@ -335,6 +366,41 @@ function Navbar({ forceMobile = false }) {
   }, []);
 
   useEffect(() => {
+    if (!isOpen || !authSession.isAuthenticated) return undefined;
+
+    let active = true;
+    Promise.allSettled([
+      import('../services/api').then(({ api }) => api.getLocalProfile()),
+      import('../services/profileVerification').then(({ getMyProfileVerification }) => getMyProfileVerification())
+    ]).then(([profileResult, verificationResult]) => {
+      if (!active) return;
+      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const verification = verificationResult.status === 'fulfilled' ? verificationResult.value : null;
+      setDrawerIdentity({
+        displayName: String(profile?.display_name || profile?.name || '').trim(),
+        avatarUrl: String(profile?.avatar_url || '').trim(),
+        verificationStatus: String(verification?.status || 'unverified').toLowerCase()
+      });
+    });
+
+    return () => { active = false; };
+  }, [authSession.authUserId, authSession.isAuthenticated, authSession.userId, isOpen]);
+
+  useEffect(() => {
+    let active = true;
+    import('@capacitor/core')
+      .then(({ Capacitor }) => {
+        if (!Capacitor.isNativePlatform()) return null;
+        return import('@capacitor/app').then(({ App }) => App.getInfo());
+      })
+      .then((info) => {
+        if (active && info) setAppVersion(`${info.version} (${info.build})`);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     setWalletOpen(false);
   }, [location.pathname, location.search]);
 
@@ -373,6 +439,13 @@ function Navbar({ forceMobile = false }) {
 
   useEffect(() => {
     if (!isOpen) return undefined;
+
+    drawerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    setUpcomingOpen(false);
+    document.documentElement.classList.add('mobile-menu-open');
+    const drawerScrollResetFrame = window.requestAnimationFrame(() => {
+      if (drawerRef.current) drawerRef.current.scrollTop = 0;
+    });
 
     const previousOverflow = document.body.style.overflow;
     const previousPaddingRight = document.body.style.paddingRight;
@@ -420,6 +493,8 @@ function Navbar({ forceMobile = false }) {
 
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      window.cancelAnimationFrame(drawerScrollResetFrame);
+      document.documentElement.classList.remove('mobile-menu-open');
       document.body.style.overflow = previousOverflow;
       document.body.style.paddingRight = previousPaddingRight;
       if (previousActive && typeof previousActive.focus === 'function') {
@@ -434,26 +509,46 @@ function Navbar({ forceMobile = false }) {
     setIsOpen(false);
   }
 
-  async function onAuthAction() {
+  function onAuthAction() {
     if (!authSession.isAuthenticated) {
       setIsOpen(false);
       navigate('/login');
       return;
     }
 
+    setIsOpen(false);
+    setLogoutConfirmOpen(true);
+  }
+
+  async function confirmLogout() {
+    if (authActionBusy) return;
     setAuthActionBusy(true);
     try {
       await signOutFromSupabase();
       setAuthSession(getAuthSession());
+      setLogoutConfirmOpen(false);
       setIsOpen(false);
-      showToast('Sei uscito da Motrice', 'success');
-      navigate('/login');
+      showToast('Account disconnesso da questo dispositivo', 'success');
+      navigate('/login', { replace: true });
     } catch (error) {
-      showToast(error?.message || 'Impossibile uscire dall’app', 'error');
+      showToast(error?.message || 'Impossibile uscire dall’account', 'error');
     } finally {
       setAuthActionBusy(false);
     }
   }
+
+  const identityDisplayName = drawerIdentity.displayName
+    || authSession.email?.split('@')[0]
+    || 'Account Motrice';
+  const identityInitial = identityDisplayName.slice(0, 1).toUpperCase();
+  const verificationLabel = VERIFICATION_LABELS[drawerIdentity.verificationStatus]
+    || VERIFICATION_LABELS.unverified;
+  const locationAuthorized = locationPermission === 'granted' || locationPermission === 'approximate';
+  const locationStatusLabel = !locationPermissionReady
+    ? 'Verifica autorizzazione…'
+    : locationAuthorized
+      ? locationPermission === 'approximate' ? 'Autorizzata · approssimativa' : 'Autorizzata'
+      : 'Non autorizzata';
 
   return (
     <header className={`${styles.header} ${forceMobile ? styles.forceMobile : ''}`} role="banner">
@@ -600,6 +695,64 @@ function Navbar({ forceMobile = false }) {
             </button>
           </div>
 
+          {authSession.isAuthenticated ? (
+            <section className={styles.drawerIdentityBlock} aria-label="Account e autorizzazioni">
+              <NavLink
+                to="/account"
+                className={({ isActive }) =>
+                  `${styles.drawerIdentity} ${isActive ? styles.drawerIdentityActive : ''}`
+                }
+                onClick={() => setIsOpen(false)}
+                aria-label={`Apri il profilo di ${identityDisplayName}`}
+              >
+                <span className={styles.drawerAvatar} aria-hidden="true">
+                  {drawerIdentity.avatarUrl
+                    ? <img src={drawerIdentity.avatarUrl} alt="" />
+                    : identityInitial}
+                </span>
+                <span className={styles.drawerIdentityCopy}>
+                  <strong>{identityDisplayName}</strong>
+                  <small>{authSession.email || 'Account Motrice'}</small>
+                </span>
+                <span className={styles.drawerIdentityArrow} aria-hidden="true">›</span>
+              </NavLink>
+
+              <div className={styles.drawerStatusRow}>
+                <button
+                  type="button"
+                  className={`${styles.drawerVerification} ${styles.drawerVerificationAction} ${styles[`drawerVerification_${drawerIdentity.verificationStatus}`] || ''}`}
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate('/verify-profile');
+                  }}
+                  aria-label={`${verificationLabel}. Apri stato verifica profilo`}
+                >
+                  <ShieldCheck size={13} aria-hidden="true" />
+                  <span className={styles.drawerStatusLabelFull}>{verificationLabel}</span>
+                  <span className={styles.drawerStatusLabelCompact} aria-hidden="true">
+                    {drawerIdentity.verificationStatus === 'verified' ? 'Profilo ✓' : 'Profilo !'}
+                  </span>
+                </button>
+
+                <NavLink
+                  to="/settings#settings-location"
+                  className={`${styles.drawerLocationInline} ${locationAuthorized ? styles.drawerLocationAuthorized : styles.drawerLocationDenied}`}
+                  onClick={() => setIsOpen(false)}
+                  aria-label={`Posizione: ${locationStatusLabel}. Apri autorizzazioni posizione`}
+                >
+                  <MapPin size={13} aria-hidden="true" />
+                  <span className={styles.drawerStatusLabelFull}>
+                    {requesting ? 'Attivazione…' : `Posizione ${locationStatusLabel.toLowerCase()}`}
+                  </span>
+                  <span className={styles.drawerStatusLabelCompact} aria-hidden="true">
+                    {requesting ? 'Posizione…' : `Posizione ${locationAuthorized ? '✓' : '!'}`}
+                  </span>
+                  <i className={styles.drawerStatusDot} aria-hidden="true" />
+                </NavLink>
+              </div>
+            </section>
+          ) : null}
+
           <form className={styles.search} onSubmit={onSearchSubmit}>
             <input
               className={styles.searchInput}
@@ -629,7 +782,8 @@ function Navbar({ forceMobile = false }) {
                         <Icon size={18} aria-hidden="true" />
                         <span>{item.label}</span>
                         <span className={styles.drawerLockBadge} aria-hidden="true">
-                          <LockKeyhole size={15} strokeWidth={2.3} />
+                          <span>Presto</span>
+                          <LockKeyhole size={14} strokeWidth={2.3} />
                         </span>
                       </button>
                     );
@@ -660,43 +814,94 @@ function Navbar({ forceMobile = false }) {
                     </NavLink>
                   );
                 })}
-                {section.title === 'Altro' ? (
-                  <button
-                    type="button"
-                    className={`${styles.link} ${styles.drawerLink} ${styles.authLink}`}
-                    onClick={onAuthAction}
-                    disabled={authActionBusy}
-                  >
-                    {authSession.isAuthenticated ? (
-                      <LogOut size={18} aria-hidden="true" />
-                    ) : (
-                      <LogIn size={18} aria-hidden="true" />
-                    )}
-                    <span>
-                      {authActionBusy
-                        ? 'Uscita in corso…'
-                        : authSession.isAuthenticated
-                          ? 'Esci dall’app'
-                          : 'Accedi all’app'}
-                    </span>
-                  </button>
-                ) : null}
               </div>
             </section>
           ))}
 
+          <section className={styles.upcomingSection} aria-label="Funzioni in arrivo">
+            <button
+              type="button"
+              className={styles.upcomingToggle}
+              aria-expanded={upcomingOpen}
+              aria-controls="drawer-upcoming-items"
+              onClick={() => setUpcomingOpen((current) => !current)}
+            >
+              <Sparkles size={18} aria-hidden="true" />
+              <span>
+                <strong>Funzioni in arrivo</strong>
+                <small>Coach e convenzioni</small>
+              </span>
+              <b aria-label="2 funzioni">2</b>
+              <ChevronDown className={upcomingOpen ? styles.upcomingChevronOpen : ''} size={18} aria-hidden="true" />
+            </button>
+            {upcomingOpen ? (
+              <div id="drawer-upcoming-items" className={styles.upcomingList}>
+                {upcomingDrawerItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.to} className={styles.upcomingItem}>
+                      <Icon size={16} aria-hidden="true" />
+                      <span>{item.label}</span>
+                      <span className={styles.drawerLockBadge} aria-hidden="true">
+                        <span>Presto</span>
+                        <LockKeyhole size={13} strokeWidth={2.3} />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+          </section>
+
           <button
             type="button"
-            className={`${styles.locationPill} ${hasLocation ? styles.locationOn : styles.locationOff}`}
-            onClick={() => {
-              if (!hasLocation) requestLocation();
-            }}
+            className={`${styles.link} ${styles.drawerLink} ${styles.authLink} ${authSession.isAuthenticated ? styles.authDanger : ''}`}
+            onClick={onAuthAction}
+            disabled={authActionBusy}
           >
-            <span>{hasLocation ? 'Posizione attiva' : requesting ? 'Attivazione...' : 'Posizione off'}</span>
+            {authSession.isAuthenticated ? (
+              <LogOut size={18} aria-hidden="true" />
+            ) : (
+              <LogIn size={18} aria-hidden="true" />
+            )}
+            <span>
+              {authActionBusy
+                ? 'Uscita in corso…'
+                : authSession.isAuthenticated
+                  ? 'Esci dall’account'
+                  : 'Accedi all’app'}
+            </span>
           </button>
+
+          <p className={styles.drawerVersion} aria-label={`Versione Motrice ${appVersion}`}>
+            Motrice Beta <span aria-hidden="true">·</span> {appVersion}
+          </p>
         </nav>
       </div>
 
+      <Modal
+        open={logoutConfirmOpen}
+        title="Uscire dall’account?"
+        onClose={() => {
+          if (!authActionBusy) setLogoutConfirmOpen(false);
+        }}
+        onConfirm={confirmLogout}
+        confirmText={authActionBusy ? 'Uscita in corso…' : 'Esci'}
+        confirmDisabled={authActionBusy}
+        confirmClassName={styles.logoutConfirm}
+        closeText="Resta nell’app"
+      >
+        <div className={styles.logoutDialog}>
+          <span className={styles.logoutDialogIcon} aria-hidden="true">
+            <LogOut size={22} />
+          </span>
+          <div>
+            <strong>{authSession.email || 'Account Motrice'}</strong>
+            <p>I tuoi dati resteranno salvati. Per rientrare su questo telefono dovrai effettuare nuovamente l’accesso.</p>
+            <small>Verrà disconnesso soltanto questo dispositivo.</small>
+          </div>
+        </div>
+      </Modal>
     </header>
   );
 }

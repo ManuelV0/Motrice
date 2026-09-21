@@ -540,14 +540,15 @@ function MotriceProfileV3({
     <main className={`${styles.page} ${!isPrivate ? styles.publicMode : ''}`}>
       <header className={styles.topHeader}>
         <span>PROFILO</span>
-        <button
-          type="button"
-          className={styles[`verification_${verificationStatus}`]}
-          onClick={isPrivate && onVerify ? onVerify : undefined}
-          aria-label={isPrivate ? `${verificationLabel}. Apri verifica profilo` : verificationLabel}
-        >
-          <i aria-hidden="true" /> {verificationLabel} <ChevronDown size={14} aria-hidden="true" />
-        </button>
+        {!isPrivate ? (
+          <button
+            type="button"
+            className={styles[`verification_${verificationStatus}`]}
+            aria-label={verificationLabel}
+          >
+            <i aria-hidden="true" /> {verificationLabel}
+          </button>
+        ) : null}
       </header>
 
       {isPrivate && verificationStatus !== 'verified' ? (
