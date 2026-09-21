@@ -307,61 +307,6 @@
   box-shadow: 0 0 0 0.2rem rgb(198 255 0 / 8%);
 }
 
-.cameraPermissionCard {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.65rem;
-  margin-top: 1rem;
-  padding: 0.72rem;
-  border: 1px solid rgb(198 255 0 / 28%);
-  border-radius: 1rem;
-  background: linear-gradient(135deg, rgb(198 255 0 / 8%), rgb(255 255 255 / 2%));
-}
-
-.cameraPermissionIcon {
-  width: 2.35rem;
-  height: 2.35rem;
-  display: grid;
-  place-items: center;
-  border-radius: 0.8rem;
-  color: #c6ff00;
-  background: rgb(198 255 0 / 10%);
-}
-
-.cameraPermissionCopy {
-  min-width: 0;
-  display: grid;
-  gap: 0.18rem;
-}
-
-.cameraPermissionCopy strong {
-  color: #f7f7f7;
-  font-size: 0.75rem;
-}
-
-.cameraPermissionCopy small {
-  color: #969696;
-  font-size: 0.64rem;
-  line-height: 1.35;
-}
-
-.cameraPermissionCard button {
-  min-height: 2.25rem;
-  padding: 0 0.7rem;
-  border: 0;
-  border-radius: 0.72rem;
-  color: #111;
-  background: #c6ff00;
-  font-size: 0.68rem;
-  font-weight: 850;
-}
-
-.cameraPermissionCard button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
 .cameraFrame {
   position: relative;
   min-height: 17.25rem;
@@ -372,17 +317,6 @@
   border: 1px solid #303030;
   border-radius: 1.45rem;
   background: radial-gradient(circle, rgb(198 255 0 / 8%), transparent 50%), #151515;
-}
-
-@media (max-width: 25rem) {
-  .cameraPermissionCard {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .cameraPermissionCard button {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
 }
 
 .cameraFrame::before,

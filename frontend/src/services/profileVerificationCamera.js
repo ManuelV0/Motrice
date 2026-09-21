@@ -140,7 +140,7 @@ export async function captureProfileVerificationPhoto(kind) {
   const cameraPermission = await requestProfileCameraPermission();
   if (cameraPermission !== 'granted') {
     throw cameraError(
-      'Permesso fotocamera non concesso. Tocca “Autorizza fotocamera” e conferma nella finestra di Android.',
+      'Permesso fotocamera non concesso. Tocca di nuovo il pulsante di scatto e scegli “Consenti” nella finestra di Android.',
       'CAMERA_PERMISSION_DENIED'
     );
   }

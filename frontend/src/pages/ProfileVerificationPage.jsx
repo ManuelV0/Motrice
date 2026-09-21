@@ -36,10 +36,8 @@ import {
   cameraResultToFile,
   captureProfileVerificationPhoto,
   consumeRestoredProfileCameraCapture,
-  getProfileCameraPermission,
   initializeProfileVerificationCamera,
-  profileCameraRestoredEvent,
-  requestProfileCameraPermission
+  profileCameraRestoredEvent
 } from '../services/profileVerificationCamera';
 import styles from '../styles/pages/profileVerification.module.css';
 
@@ -127,9 +125,6 @@ function ProfileVerificationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [cameraBusy, setCameraBusy] = useState('');
   const [cameraIssue, setCameraIssue] = useState('');
-  const [cameraPermission, setCameraPermission] = useState(
-    Capacitor.isNativePlatform() ? 'checking' : 'web'
-  );
   const [step, setStep] = useState(0);
   const [summary, setSummary] = useState({ status: 'unverified', rejection_reason: '' });
   const [profilePhoto, setProfilePhoto] = useState(null);
@@ -247,23 +242,6 @@ function ProfileVerificationPage() {
     };
   }, [showToast]);
 
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform() || ![2, 3].includes(step)) return undefined;
-
-    let active = true;
-    getProfileCameraPermission()
-      .then((permission) => {
-        if (active) setCameraPermission(permission);
-      })
-      .catch(() => {
-        if (active) setCameraPermission('unavailable');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [step]);
-
   const canAdvance = useMemo(() => {
     if (step === 1) {
       return form.firstName.trim().length >= 2
@@ -317,7 +295,6 @@ function ProfileVerificationPage() {
     setCameraIssue('');
     try {
       const file = await captureProfileVerificationPhoto(kind);
-      if (isNative) setCameraPermission('granted');
       if (file) {
         choosePhoto(kind, file);
         showToast('Foto acquisita', 'success');
@@ -325,54 +302,15 @@ function ProfileVerificationPage() {
         fallbackInputRef.current?.click();
       }
     } catch (error) {
-      const message = error.message || 'Fotocamera non disponibile. Usa la galleria.';
-      if (error?.code === 'CAMERA_PERMISSION_DENIED') setCameraPermission('denied');
+      const captureLabel = kind === 'challenge' ? 'Scatta challenge' : 'Scatta foto';
+      const message = error?.code === 'CAMERA_PERMISSION_DENIED'
+        ? `Permesso fotocamera non concesso. Premi di nuovo “${captureLabel}” e scegli “Consenti” nella finestra Android, oppure usa la galleria.`
+        : error.message || 'Fotocamera non disponibile. Usa la galleria.';
       setCameraIssue(message);
       showToast(message, 'error');
     } finally {
       setCameraBusy('');
     }
-  }
-
-  async function authorizeCamera() {
-    if (cameraBusy || !Capacitor.isNativePlatform()) return;
-    setCameraBusy('permission');
-    setCameraIssue('');
-    try {
-      const permission = await requestProfileCameraPermission();
-      setCameraPermission(permission);
-      if (permission === 'granted') {
-        showToast('Fotocamera autorizzata. Ora puoi scattare la foto.', 'success');
-      } else {
-        setCameraIssue('Android non ha concesso l’accesso. Tocca di nuovo “Autorizza fotocamera” oppure usa la galleria.');
-      }
-    } catch (error) {
-      setCameraPermission('unavailable');
-      setCameraIssue(error?.message || 'Non riesco a richiedere il permesso fotocamera. Usa la galleria.');
-    } finally {
-      setCameraBusy('');
-    }
-  }
-
-  function renderCameraPermissionNotice() {
-    if (!Capacitor.isNativePlatform() || cameraPermission === 'granted') return null;
-    const checking = cameraPermission === 'checking';
-    return (
-      <section className={styles.cameraPermissionCard} aria-live="polite">
-        <span className={styles.cameraPermissionIcon}><Camera size={20} /></span>
-        <span className={styles.cameraPermissionCopy}>
-          <strong>{checking ? 'Controllo fotocamera…' : 'Autorizza la fotocamera'}</strong>
-          <small>Conferma direttamente nella finestra di Android. Posizione e notifiche non vengono richieste.</small>
-        </span>
-        <button
-          type="button"
-          disabled={checking || Boolean(cameraBusy)}
-          onClick={authorizeCamera}
-        >
-          {cameraBusy === 'permission' ? 'Attendo…' : 'Autorizza'}
-        </button>
-      </section>
-    );
   }
 
   function skipVerification() {
@@ -516,7 +454,6 @@ function ProfileVerificationPage() {
               <p className={styles.eyebrow}>Passaggio 2</p>
               <h1>Scatta una foto per la verifica.</h1>
               <p className={styles.lead}>Viso ben visibile, luce frontale e niente occhiali scuri. La foto resterà privata e non sostituirà l’immagine del profilo.</p>
-              {renderCameraPermissionNotice()}
               <div className={styles.cameraFrame}>
                 {profilePreview ? <img src={profilePreview} alt="Anteprima foto di verifica" /> : <span className={styles.silhouette}><UserRound size={62} /></span>}
                 {profilePreview ? <span className={styles.captureOk}><Check size={18} /> Foto di verifica acquisita</span> : <small>Inquadra viso e spalle</small>}
@@ -524,7 +461,7 @@ function ProfileVerificationPage() {
               <input ref={profileInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
               <input ref={profileGalleryInputRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={(event) => { choosePhoto('profile', event.target.files?.[0]); event.target.value = ''; }} />
               <div className={styles.photoActions}>
-                <button type="button" className={styles.primarySmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('profile', profileInputRef)}><Camera size={18} /> {cameraBusy === 'profile' ? 'Apertura...' : cameraPermission === 'granted' || !Capacitor.isNativePlatform() ? 'Scatta foto' : 'Autorizza e scatta'}</button>
+                <button type="button" className={styles.primarySmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('profile', profileInputRef)}><Camera size={18} /> {cameraBusy === 'profile' ? 'Apertura...' : 'Scatta foto'}</button>
                 <button type="button" onClick={() => profileGalleryInputRef.current?.click()}><ImagePlus size={18} /> Galleria</button>
               </div>
               {cameraIssue ? <p className={styles.cameraIssue} role="alert"><Info size={17} /> {cameraIssue}</p> : null}
@@ -536,7 +473,6 @@ function ProfileVerificationPage() {
               <p className={styles.eyebrow}>Passaggio 3</p>
               <h1>Conferma che sei tu con un gesto.</h1>
               <p className={styles.lead}>È sufficiente una sola foto con il gesto mostrato. Se non ti è comodo, scegli “Cambia gesto”. L’immagine non sarà pubblica.</p>
-              {renderCameraPermissionNotice()}
               <div className={styles.gesture}>
                 <b>{challenge.emoji}</b>
                 <span><strong>{challenge.title}</strong><small>{challenge.description}</small></span>
@@ -547,7 +483,7 @@ function ProfileVerificationPage() {
               </div>
               <input ref={challengeInputRef} className={styles.hiddenInput} type="file" accept="image/*" capture="user" onChange={(event) => { choosePhoto('challenge', event.target.files?.[0]); event.target.value = ''; }} />
               <div className={styles.photoActions}>
-                <button type="button" className={styles.orangeSmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('challenge', challengeInputRef)}><Camera size={18} /> {cameraBusy === 'challenge' ? 'Apertura...' : cameraPermission === 'granted' || !Capacitor.isNativePlatform() ? 'Scatta challenge' : 'Autorizza e scatta'}</button>
+                <button type="button" className={styles.orangeSmall} disabled={Boolean(cameraBusy)} onClick={() => openCamera('challenge', challengeInputRef)}><Camera size={18} /> {cameraBusy === 'challenge' ? 'Apertura...' : 'Scatta challenge'}</button>
                 <button type="button" onClick={() => { setChallengePhoto(null); setChallengePreview(''); setChallengeIndex((current) => (current + 1) % CHALLENGES.length); }}><RefreshCw size={18} /> Cambia gesto</button>
               </div>
               {cameraIssue ? <p className={styles.cameraIssue} role="alert"><Info size={17} /> {cameraIssue}</p> : null}
