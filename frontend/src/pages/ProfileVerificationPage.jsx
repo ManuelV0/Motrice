@@ -8,7 +8,6 @@ import {
   Clock3,
   Eye,
   Info,
-  LockKeyhole,
   RefreshCw,
   ScanFace,
   Send,
@@ -97,7 +96,7 @@ function statusCopy(status) {
     return {
       eyebrow: 'Esito verifica',
       title: 'Profilo verificato.',
-      body: 'Il badge è attivo e puoi creare eventi, partecipare e usare il check-in QR.'
+      body: 'Il badge è attivo e rende il tuo profilo più riconoscibile nella community.'
     };
   }
   if (status === 'suspended') {
@@ -110,7 +109,7 @@ function statusCopy(status) {
   return {
     eyebrow: 'Richiesta inviata',
     title: 'Verifica in revisione.',
-    body: 'Ti avviseremo appena il controllo manuale sarà concluso. Nel frattempo puoi esplorare Motrice.'
+    body: 'Ti avviseremo appena il controllo manuale sarà concluso. Nel frattempo puoi continuare a usare Motrice.'
   };
 }
 
@@ -360,7 +359,7 @@ function ProfileVerificationPage() {
               items={[
                 { title: 'Dati personali', text: 'Completi le informazioni necessarie alla tua identità sportiva.' },
                 { title: 'Foto e gestualità', text: 'La foto principale e le challenge confermano che la richiesta appartenga alla stessa persona.' },
-                { title: 'Controllo', text: 'Durante la beta la richiesta viene esaminata prima di sbloccare creazione, partecipazione e check-in.' }
+                { title: 'Controllo', text: 'Durante la beta la richiesta è facoltativa e viene esaminata per assegnare il badge di profilo verificato.' }
               ]}
               note="Le foto di verifica non vengono utilizzate automaticamente come immagine pubblica del profilo."
             />
@@ -379,7 +378,7 @@ function ProfileVerificationPage() {
             <>
               <p className={styles.eyebrow}>Prima di iniziare</p>
               <h1>Una community fatta di persone reali.</h1>
-              <p className={styles.lead}>La verifica protegge chi crea e partecipa agli eventi. Richiede circa 2 minuti e durante la beta viene controllata manualmente.</p>
+              <p className={styles.lead}>La verifica aumenta la fiducia tra gli utenti. Richiede circa 2 minuti, è facoltativa durante la beta e viene controllata manualmente.</p>
 
               {summary.status === 'rejected' || summary.status === 'expired' ? (
                 <div className={styles.warning} role="alert">
@@ -394,11 +393,11 @@ function ProfileVerificationPage() {
                   <span><strong>Profilo verificato Motrice</strong><small>Conferma che profilo, foto e challenge appartengano alla stessa persona.</small></span>
                 </div>
                 <div className={styles.lockGrid}>
-                  <span><LockKeyhole size={14} /> Crea eventi</span>
-                  <span><LockKeyhole size={14} /> Partecipa</span>
-                  <span><LockKeyhole size={14} /> Check-in</span>
+                  <span><CheckCircle2 size={14} /> Badge pubblico</span>
+                  <span><CheckCircle2 size={14} /> Più fiducia</span>
+                  <span><CheckCircle2 size={14} /> Controllo manuale</span>
                 </div>
-                <p className={styles.note}><Eye size={16} /> Puoi comunque esplorare eventi e mappa.</p>
+                <p className={styles.note}><Eye size={16} /> Puoi usare normalmente l’app anche senza completarla.</p>
               </section>
             </>
           ) : null}
@@ -507,8 +506,8 @@ function ProfileVerificationPage() {
               <div className={`${styles.statusCard} ${summary.status === 'verified' ? styles.statusVerified : ''}`}>
                 <span className={styles.statusIcon}>{summary.status === 'verified' ? <BadgeCheck size={40} /> : <Clock3 size={40} />}</span>
                 <h2>{summary.status === 'verified' ? 'Verifica completata' : summary.status === 'suspended' ? 'Accesso sospeso' : 'Stato: in attesa'}</h2>
-                <p>{summary.status === 'verified' ? 'Il badge sarà visibile nel profilo pubblico e nelle schede evento.' : 'Creazione eventi, partecipazione, chat evento e check-in restano bloccati.'}</p>
-                {summary.status === 'verified' ? <div className={styles.unlockGrid}><span>Crea eventi</span><span>Partecipa</span><span>Check-in QR</span></div> : null}
+                <p>{summary.status === 'verified' ? 'Il badge sarà visibile nel profilo pubblico e nelle schede evento.' : summary.status === 'suspended' ? 'Le funzioni sensibili restano sospese finché il Centro operativo non completa la revisione.' : 'Puoi continuare a usare Motrice mentre attendi l’esito.'}</p>
+                {summary.status === 'verified' ? <div className={styles.unlockGrid}><span>Badge attivo</span><span>Profilo affidabile</span><span>Controllo completato</span></div> : null}
               </div>
             </>
           ) : null}
@@ -520,7 +519,7 @@ function ProfileVerificationPage() {
           {step > 0 && step < 4 ? <button type="button" className={styles.primaryButton} disabled={!canAdvance} onClick={goNext}>Avanti <ArrowRight size={19} /></button> : null}
           {step === 4 ? <button type="button" className={styles.primaryButton} disabled={!canAdvance || submitting} onClick={sendVerification}>{submitting ? 'Invio in corso...' : 'Invia verifica'} <Send size={18} /></button> : null}
           {step === 5 ? <button type="button" className={styles.primaryButton} onClick={() => navigate(summary.status === 'verified' ? '/account' : '/map', { replace: true })}>{summary.status === 'verified' ? 'Vai al profilo' : 'Continua su Motrice'} <ArrowRight size={19} /></button> : null}
-          {step === 0 ? <button type="button" className={styles.skipButton} onClick={skipVerification}>Esplora per ora</button> : null}
+          {step === 0 ? <button type="button" className={styles.skipButton} onClick={skipVerification}>Continua senza verificare</button> : null}
         </footer>
       </section>
     </main>

@@ -2,13 +2,19 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import LoadingSkeleton from './LoadingSkeleton';
 import { getAuthSession } from '../services/authSession';
-import { getMyProfileVerification } from '../services/profileVerification';
+import {
+  getMyProfileVerification,
+  PROFILE_VERIFICATION_OPTIONAL_IN_BETA
+} from '../services/profileVerification';
 
 function VerifiedProfileRoute({ children }) {
   const session = getAuthSession();
-  const [verification, setVerification] = useState(null);
+  const [verification, setVerification] = useState(() => (
+    PROFILE_VERIFICATION_OPTIONAL_IN_BETA ? { can_use_verified_actions: true } : null
+  ));
 
   useEffect(() => {
+    if (PROFILE_VERIFICATION_OPTIONAL_IN_BETA) return undefined;
     let active = true;
     getMyProfileVerification()
       .then((summary) => {

@@ -8,6 +8,11 @@ const PRIVATE_BUCKET = 'profile-verification-private';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const IS_LOCAL_QA = import.meta.env.DEV && import.meta.env.VITE_MOTRICE_QA === '1';
 
+// Durante la beta la verifica resta disponibile come segnale di fiducia, ma
+// non deve impedire l'accesso alle normali funzioni dell'app. I profili
+// sospesi continuano invece a essere bloccati.
+export const PROFILE_VERIFICATION_OPTIONAL_IN_BETA = true;
+
 const allowedStatuses = new Set([
   'unverified',
   'pending',
@@ -35,8 +40,8 @@ function emptySummary() {
     expires_at: null,
     rejection_reason: '',
     challenge_type: '',
-    enforcement_enabled: true,
-    can_use_verified_actions: false
+    enforcement_enabled: !PROFILE_VERIFICATION_OPTIONAL_IN_BETA,
+    can_use_verified_actions: PROFILE_VERIFICATION_OPTIONAL_IN_BETA
   };
 }
 
@@ -45,17 +50,18 @@ function normalizeSummary(raw) {
   const expiresAt = raw?.expires_at || null;
   const isExpired = status === 'verified' && expiresAt && Date.parse(expiresAt) <= Date.now();
   const resolvedStatus = isExpired ? 'expired' : status;
+  const enforcementEnabled = PROFILE_VERIFICATION_OPTIONAL_IN_BETA
+    ? false
+    : raw?.enforcement_enabled !== false;
   return {
     ...emptySummary(),
     ...(raw || {}),
     status: resolvedStatus,
     rejection_reason: String(raw?.rejection_reason || ''),
     challenge_type: String(raw?.challenge_type || ''),
-    enforcement_enabled: raw?.enforcement_enabled !== false,
-    // Fail closed: la UI non deve mai sbloccare le azioni sensibili usando
-    // una risposta precedente al rollout o una cache locale con enforcement
-    // disattivato. Solo lo stato effettivo "verified" abilita crea/partecipa.
-    can_use_verified_actions: resolvedStatus === 'verified'
+    enforcement_enabled: enforcementEnabled,
+    can_use_verified_actions: resolvedStatus !== 'suspended'
+      && (!enforcementEnabled || resolvedStatus === 'verified')
   };
 }
 
@@ -117,6 +123,7 @@ export function markProfileVerificationOnboardingSeen() {
 }
 
 export function shouldOfferProfileVerificationOnboarding(session = getAuthSession()) {
+  if (PROFILE_VERIFICATION_OPTIONAL_IN_BETA) return false;
   return Boolean(session?.isAuthenticated && !hasSeenProfileVerificationOnboarding());
 }
 

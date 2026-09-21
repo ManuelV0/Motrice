@@ -556,9 +556,13 @@ function MotriceProfileV3({
           <span className={styles.verificationBannerIcon}><ShieldCheck size={22} /></span>
           <span>
             <strong>{verificationLabel}</strong>
-            <small>{verificationStatus === 'pending' ? 'Puoi esplorare mentre completiamo la revisione.' : 'Verifica il profilo per creare e partecipare agli eventi.'}</small>
+            <small>{verificationStatus === 'pending'
+              ? 'Puoi usare Motrice mentre completiamo la revisione.'
+              : verificationStatus === 'suspended'
+                ? 'Apri lo stato per conoscere i prossimi passaggi.'
+                : 'Facoltativa nella beta: completa la verifica per ottenere il badge.'}</small>
           </span>
-          <button type="button" onClick={onVerify}>{verificationStatus === 'pending' ? 'Vedi stato' : 'Verifica'} <ArrowRight size={15} /></button>
+          <button type="button" onClick={onVerify}>{['pending', 'suspended'].includes(verificationStatus) ? 'Vedi stato' : 'Verifica'} <ArrowRight size={15} /></button>
         </section>
       ) : null}
 
