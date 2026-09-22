@@ -16,6 +16,7 @@
   font-weight: var(--weight-bold);
   letter-spacing: 0.01em;
   cursor: pointer;
+  touch-action: manipulation;
   box-shadow: var(--sh-1), var(--sh-inner);
   transition:
     transform var(--dur-fast) var(--ease),
@@ -40,7 +41,7 @@
 }
 
 .button:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
   filter: brightness(0.97);
 }
 
@@ -84,7 +85,7 @@
 }
 
 .sm {
-  min-height: max(var(--s-7), 2.25rem);
+  min-height: 2.75rem;
   padding-inline: var(--s-3);
   font-size: var(--text-xs);
   border-radius: var(--r-md);

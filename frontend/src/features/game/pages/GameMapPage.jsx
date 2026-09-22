@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
 import { ChevronDown, ChevronUp, Palette, X } from 'lucide-react';
 import { api } from '../../../services/api';
 import { usePageMeta } from '../../../hooks/usePageMeta';

@@ -95,9 +95,9 @@ const SECTION_TIPS = {
     '➡️ Mantieni struttura servizi coerente.'
   ],
   '/dashboard/plans': [
-    '🧱 Gestisci schede e progressioni cliente.',
-    '🔁 Mantieni piani semplici e ripetibili.',
-    '➡️ Allinea carico, obiettivi e calendario.'
+    '🏋️ Crea la tua scheda partendo dallo sport.',
+    '🔁 Riordina, modifica o duplica gli esercizi.',
+    '➡️ Salva una routine personale sempre pronta.'
   ]
 };
 

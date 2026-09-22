@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Award, CheckCircle, XCircle, MinusCircle, Gift, UserCheck, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Award, CheckCircle, XCircle, MinusCircle, Gift, UserCheck, TrendingUp, ShieldCheck } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -8,6 +8,13 @@ import styles from '../styles/pages/accountXp.module.css';
 
 const RING_RADIUS = 54;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const BADGE_PATH = [
+  { key: 'rame', label: 'Rame', min: 0 },
+  { key: 'bronzo', label: 'Bronzo', min: 100 },
+  { key: 'argento', label: 'Argento', min: 250 },
+  { key: 'oro', label: 'Oro', min: 500 },
+  { key: 'diamante', label: 'Diamante', min: 1000 }
+];
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value || 0)));
@@ -18,7 +25,10 @@ function getTimelineIcon(type) {
   if (type === 'attendance_no_show') return { Icon: XCircle, dotClass: styles.timelineDotNegative };
   if (type === 'cancel_late') return { Icon: MinusCircle, dotClass: styles.timelineDotNegative };
   if (type === 'voucher_redeemed') return { Icon: Gift, dotClass: styles.timelineDotPositive };
-  if (type === 'coach_checkin') return { Icon: UserCheck, dotClass: styles.timelineDotPositive };
+  if (type === 'coach_checkin' || type === 'event_checkin_organizer') {
+    return { Icon: UserCheck, dotClass: styles.timelineDotPositive };
+  }
+  if (type === 'event_created') return { Icon: Award, dotClass: styles.timelineDotPositive };
   return { Icon: TrendingUp, dotClass: '' };
 }
 
@@ -29,6 +39,8 @@ function formatXpHistoryLabel(item) {
   if (type === 'cancel_late') return 'Cancellazione tardiva';
   if (type === 'voucher_redeemed') return 'Voucher convenzione riscattato';
   if (type === 'coach_checkin') return 'Check-in coach registrato';
+  if (type === 'event_created') return 'Evento creato';
+  if (type === 'event_checkin_organizer') return 'Check-in partecipante validato';
   return 'Aggiornamento XP';
 }
 
@@ -60,6 +72,15 @@ function AccountXpPage() {
           attended: Number(d?.attended || 0),
           no_show: Number(d?.no_show || 0),
           cancelled: Number(d?.cancelled || 0)
+        });
+      }
+      if (xpRes.status === 'fulfilled' && xpRes.value?.stats) {
+        const stats = xpRes.value.stats;
+        setProfile({
+          reliability: Number(stats?.reliability || 0),
+          attended: Number(stats?.attended || 0),
+          no_show: Number(stats?.no_show || 0),
+          cancelled: Number(stats?.cancelled || 0)
         });
       }
       if (sportsRes.status === 'fulfilled') setSportsCatalog(sportsRes.value);
@@ -95,6 +116,10 @@ function AccountXpPage() {
   const progressPct = clamp(xpState?.progress?.progressPct ?? 0, 0, 100);
   const reliabilityPct = clamp(profile.reliability, 0, 100);
   const ringOffset = RING_CIRCUMFERENCE - (progressPct / 100) * RING_CIRCUMFERENCE;
+  const currentBadgeIndex = Math.max(
+    0,
+    BADGE_PATH.findIndex((badge) => badge.key === String(xpState?.badge?.key || 'rame'))
+  );
 
   if (loading) {
     return (
@@ -149,6 +174,31 @@ function AccountXpPage() {
             ? `${xpState.progress.currentXp}/${xpState.progress.nextThreshold} verso il prossimo livello`
             : 'Livello massimo raggiunto'}
         </p>
+
+        {xpState?.source === 'supabase' ? (
+          <p className={styles.syncState}>
+            <ShieldCheck size={15} aria-hidden="true" />
+            Progressi verificati e sincronizzati
+          </p>
+        ) : null}
+
+        <div className={styles.badgePath} aria-label="Percorso badge">
+          {BADGE_PATH.map((badge, index) => {
+            const unlocked = index <= currentBadgeIndex;
+            const current = index === currentBadgeIndex;
+            return (
+              <div
+                key={badge.key}
+                className={`${styles.badgeStep} ${unlocked ? styles.badgeStepUnlocked : ''} ${current ? styles.badgeStepCurrent : ''}`}
+                aria-current={current ? 'step' : undefined}
+              >
+                <span><Award size={15} aria-hidden="true" /></span>
+                <strong>{badge.label}</strong>
+                <small>{badge.min} XP</small>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className={styles.reliabilityWrap}>

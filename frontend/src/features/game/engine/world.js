@@ -10,7 +10,7 @@ export function buildWorldEvents(events, origin) {
       const lat = Number(event.lat);
       const lng = Number(event.lng);
       return {
-        id: Number(event.id),
+        id: String(event.id),
         title: String(event.title || event.sport_name || 'Evento'),
         subtitle: String(event.location_name || ''),
         sport: String(event.sport_name || 'Sport'),

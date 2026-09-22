@@ -1,15 +1,23 @@
-import { ArrowRight, Handshake, MapPin, QrCode, Zap } from 'lucide-react';
+import { ArrowRight, Handshake, MapPin, QrCode } from 'lucide-react';
 import CTAButton from '../CTAButton';
+import BrandLogo from '../BrandLogo';
 import styles from '../../styles/components/landingHero.module.css';
 
-function LandingHero({ onPrimaryHref = '/explore', onSecondaryHref = '/convenzioni#join' }) {
+function LandingHero({
+  onPrimaryHref = '/map',
+  onSecondaryHref = '/convenzioni#join',
+  onPrimaryClick,
+  onSecondaryClick
+}) {
   return (
     <section className={styles.hero} aria-labelledby="landing-hero-title">
       <div className={styles.bgImage} aria-hidden="true">
         <img
-          src="/images/landing-hero.png"
+          src="/images/landing-hero.webp"
           alt=""
           loading="eager"
+          decoding="async"
+          fetchPriority="high"
           width="1280"
           height="720"
         />
@@ -20,7 +28,7 @@ function LandingHero({ onPrimaryHref = '/explore', onSecondaryHref = '/convenzio
       <div className={styles.content}>
         <div className={styles.copy}>
           <p className={styles.kicker}>
-            <Zap size={14} aria-hidden="true" />
+            <BrandLogo className={styles.kickerLogo} decorative />
             Motrice Platform
           </p>
           <h1 id="landing-hero-title">Lo sport locale,<br />finalmente organizzato.</h1>
@@ -30,10 +38,10 @@ function LandingHero({ onPrimaryHref = '/explore', onSecondaryHref = '/convenzio
           </p>
 
           <div className={styles.actions}>
-            <CTAButton to={onPrimaryHref} aria-label="Trova eventi vicino a te">
+            <CTAButton to={onPrimaryClick ? undefined : onPrimaryHref} onClick={onPrimaryClick} aria-label="Trova eventi vicino a te">
               Trova eventi vicino a te <ArrowRight size={16} aria-hidden="true" />
             </CTAButton>
-            <CTAButton to={onSecondaryHref} variant="secondary" aria-label="Sei una palestra?">
+            <CTAButton to={onSecondaryClick ? undefined : onSecondaryHref} onClick={onSecondaryClick} variant="secondary" aria-label="Sei una palestra?">
               <Handshake size={16} aria-hidden="true" /> Sei una palestra?
             </CTAButton>
           </div>
@@ -47,9 +55,10 @@ function LandingHero({ onPrimaryHref = '/explore', onSecondaryHref = '/convenzio
         <aside className={styles.previewCard} aria-label="Anteprima app Motrice">
           <div className={styles.previewImageWrap}>
             <img
-              src="/images/landing-gym-qr.png"
+              src="/images/landing-gym-qr.webp"
               alt="Validazione QR in palestra"
               loading="lazy"
+              decoding="async"
               width="420"
               height="315"
             />
