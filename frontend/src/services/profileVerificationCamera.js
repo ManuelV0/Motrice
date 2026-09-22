@@ -1,9 +1,5 @@
 import { App } from '@capacitor/app';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import {
-  checkNativeProfileCameraPermission,
-  requestNativeProfileCameraPermission
-} from '../utils/profileCameraPermission';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 
 const PENDING_CAPTURE_KEY = 'motrice.profile-verification-camera-pending';
@@ -37,9 +33,9 @@ async function takeNativeVerificationPhoto(options) {
 
   // A native camera Activity normally moves Motrice to the background. Once
   // that happens the user may take as long as needed to frame the photo, so
-  // the launch watchdog is disabled. If Android never opens either its
-  // permission prompt or the camera, the pending bridge call cannot leave the
-  // interface stuck on "Apertura..." forever.
+  // the launch watchdog is disabled. If Android never opens the system camera,
+  // the pending bridge call cannot leave the interface stuck on "Apertura..."
+  // forever.
   const stateListenerPromise = App.addListener('appStateChange', ({ isActive }) => {
     if (!isActive) {
       cameraActivityOpened = true;
@@ -52,7 +48,7 @@ async function takeNativeVerificationPhoto(options) {
     timeoutId = setTimeout(() => {
       if (!cameraActivityOpened) {
         reject(cameraError(
-          'Android non ha aperto la fotocamera. Riprova; se il problema continua, controlla il permesso Fotocamera nelle impostazioni del telefono.',
+          'Android non ha aperto la fotocamera di sistema. Riprova.',
           'CAMERA_OPEN_TIMEOUT'
         ));
       }
@@ -135,37 +131,6 @@ export async function cameraResultToFile(result, kind = 'profile') {
   return new File([blob], filename, { type: mime, lastModified: Date.now() });
 }
 
-export async function getProfileCameraPermission() {
-  if (!Capacitor.isNativePlatform()) return 'web';
-  try {
-    // The Motrice plugin owns an explicit permission callback. Do not replace
-    // this with Capacitor's generic checkPermissions/requestPermissions bridge:
-    // on some Android devices that inherited bridge can dereference a missing
-    // callback and terminate the native process.
-    return await checkNativeProfileCameraPermission(ProfileVerificationCamera);
-  } catch {
-    return 'unavailable';
-  }
-}
-
-export async function requestProfileCameraPermission() {
-  if (!Capacitor.isNativePlatform()) return 'web';
-
-  let cameraPermission = await getProfileCameraPermission();
-  if (cameraPermission === 'granted') return cameraPermission;
-
-  try {
-    // Request again even when Android reports "denied": after a first refusal
-    // the system can still show its native prompt. Only Android can grant this
-    // permission; Motrice never tries to bypass the operating system dialog.
-    cameraPermission = await requestNativeProfileCameraPermission(ProfileVerificationCamera);
-  } catch {
-    cameraPermission = 'denied';
-  }
-
-  return cameraPermission;
-}
-
 export async function captureProfileVerificationPhoto(kind) {
   const captureKind = normalizeKind(kind);
   if (!Capacitor.isNativePlatform()) return null;
@@ -179,10 +144,9 @@ export async function captureProfileVerificationPhoto(kind) {
 
   safeStorageSet(PENDING_CAPTURE_KEY, captureKind);
   try {
-    // One native call owns the whole flow: Android asks for the permission, its
-    // explicit permission callback opens the system camera, and the captured
-    // file is returned. Avoiding a separate permission request removes a
-    // second bridge round-trip that can remain unresolved on some WebViews.
+    // One native call opens Android's external camera Activity and returns the
+    // captured file. Motrice does not access the camera hardware directly, so
+    // no custom runtime-permission bridge is involved.
     const result = await takeNativeVerificationPhoto({
       kind: captureKind,
       quality: 76,

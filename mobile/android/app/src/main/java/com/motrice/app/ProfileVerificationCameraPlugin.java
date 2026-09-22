@@ -1,6 +1,5 @@
 package com.motrice.app;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.Context;
@@ -19,14 +18,11 @@ import androidx.core.content.FileProvider;
 import androidx.exifinterface.media.ExifInterface;
 
 import com.getcapacitor.JSObject;
-import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.annotation.Permission;
-import com.getcapacitor.annotation.PermissionCallback;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -44,18 +40,9 @@ import java.util.concurrent.Executors;
  * image in the WebView. This prevents memory pressure on high-megapixel cameras
  * and older Android phones while keeping enough detail for human verification.
  */
-@CapacitorPlugin(
-        name = "ProfileVerificationCamera",
-        permissions = {
-                @Permission(
-                        alias = ProfileVerificationCameraPlugin.CAMERA_ALIAS,
-                        strings = {Manifest.permission.CAMERA}
-                )
-        }
-)
+@CapacitorPlugin(name = "ProfileVerificationCamera")
 public class ProfileVerificationCameraPlugin extends Plugin {
 
-    static final String CAMERA_ALIAS = "camera";
     private static final String PREFS_NAME = "motrice_profile_verification_camera";
     private static final String PENDING_PATH_KEY = "pending_capture_path";
     private static final String PHOTO_DIRECTORY = "profile-verification";
@@ -70,50 +57,8 @@ public class ProfileVerificationCameraPlugin extends Plugin {
     private final ExecutorService imageExecutor = Executors.newSingleThreadExecutor();
 
     @PluginMethod
-    public void checkCameraPermission(PluginCall call) {
-        call.resolve(cameraPermissionResult());
-    }
-
-    @PluginMethod
-    public void requestCameraPermission(PluginCall call) {
-        if (getPermissionState(CAMERA_ALIAS) == PermissionState.GRANTED) {
-            call.resolve(cameraPermissionResult());
-            return;
-        }
-        requestPermissionForAlias(CAMERA_ALIAS, call, "cameraPermissionCallback");
-    }
-
-    @PermissionCallback
-    private void cameraPermissionCallback(PluginCall call) {
-        call.resolve(cameraPermissionResult());
-    }
-
-    @PluginMethod
     public void takeVerificationPhoto(PluginCall call) {
-        if (getPermissionState(CAMERA_ALIAS) != PermissionState.GRANTED) {
-            requestPermissionForAlias(CAMERA_ALIAS, call, "capturePermissionCallback");
-            return;
-        }
         openSystemCamera(call);
-    }
-
-    @PermissionCallback
-    private void capturePermissionCallback(PluginCall call) {
-        if (getPermissionState(CAMERA_ALIAS) != PermissionState.GRANTED) {
-            call.reject(
-                    "Permesso fotocamera non concesso",
-                    "MOTRICE_CAMERA_PERMISSION_REQUIRED"
-            );
-            return;
-        }
-        openSystemCamera(call);
-    }
-
-    private JSObject cameraPermissionResult() {
-        PermissionState state = getPermissionState(CAMERA_ALIAS);
-        JSObject result = new JSObject();
-        result.put("camera", state == null ? "denied" : state.toString());
-        return result;
     }
 
     private void openSystemCamera(PluginCall call) {
@@ -226,7 +171,7 @@ public class ProfileVerificationCameraPlugin extends Plugin {
                 deleteQuietly(processedPhoto);
                 rejectOnMainThread(
                         call,
-                        "Non riesco a preparare la foto. Riprova oppure usa la galleria.",
+                        "Non riesco a preparare la foto. Riprova.",
                         "MOTRICE_CAMERA_PROCESSING_FAILED",
                         error
                 );
