@@ -151,6 +151,57 @@ html.chat-surface-lock body::before {
   box-shadow: var(--focus);
 }
 
+.networkStatusBanner {
+  position: fixed;
+  z-index: 2400;
+  top: calc(var(--nav-h) + env(safe-area-inset-top, 0px) + 0.55rem);
+  left: 50%;
+  width: min(calc(100% - 1.5rem), 27rem);
+  min-height: 2.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.58rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, #171010 94%, transparent);
+  color: color-mix(in srgb, var(--danger) 76%, white);
+  box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 42%);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.networkStatusBannerFullscreen {
+  top: calc(env(safe-area-inset-top, 0px) + 0.55rem);
+}
+
+.networkStatusBanner > svg {
+  flex: 0 0 auto;
+}
+
+.networkStatusBanner > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.networkStatusBanner strong,
+.networkStatusBanner small {
+  line-height: 1.2;
+}
+
+.networkStatusBanner strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.networkStatusBanner small {
+  color: color-mix(in srgb, var(--muted) 88%, white);
+  font-size: var(--text-xs);
+}
+
 .stack {
   display: grid;
   gap: var(--s-4);

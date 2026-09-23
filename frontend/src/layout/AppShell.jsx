@@ -4,12 +4,15 @@ import BottomNav from '../components/BottomNav';
 import SiteTourOverlay from '../components/SiteTourOverlay';
 import PullToRefresh from '../components/PullToRefresh';
 import ActiveEventLocationMonitor from '../components/ActiveEventLocationMonitor';
+import ActiveWorkoutMonitor from '../components/ActiveWorkoutMonitor';
 import SmartArrivalMonitor from '../components/SmartArrivalMonitor';
+import { WifiOff } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
 import { hasCompletedAppIntro } from '../services/appIntro';
+import { isBrowserOffline } from '../utils/networkStatus';
 
 function AppShell({ children, persistentContent = null }) {
   const location = useLocation();
@@ -29,6 +32,7 @@ function AppShell({ children, persistentContent = null }) {
   const isFullscreenEntryRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute || isOutdoorActivityRoute;
   const isFixedFullscreenRoute = isStartupAuthRoute || isFirstAccessIntro || isVerificationRoute || isPasswordResetRoute;
   const isMapLikeRoute = location.pathname === '/map' || location.pathname === '/game';
+  const isCreateRoute = location.pathname === '/create';
   const isChatRoute = location.pathname.startsWith('/chat') || location.pathname.startsWith('/chatrice');
   const isCommunityRoute = location.pathname.startsWith('/community');
   const isMapSurfaceRoute = isMapLikeRoute || isCommunityRoute;
@@ -38,6 +42,7 @@ function AppShell({ children, persistentContent = null }) {
   const isAccountLikeRoute = isAccountRoute || isWalletRoute || isLocalProfileRoute;
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [isOnline, setIsOnline] = useState(() => !isBrowserOffline());
   useViewportInsets();
 
   const isRefreshableRoute = useMemo(() => {
@@ -83,6 +88,18 @@ function AppShell({ children, persistentContent = null }) {
     const refreshAuthSession = () => setAuthSession(getAuthSession());
     window.addEventListener('motrice-auth-changed', refreshAuthSession);
     return () => window.removeEventListener('motrice-auth-changed', refreshAuthSession);
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    setIsOnline(!isBrowserOffline());
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   useEffect(() => {
@@ -183,6 +200,16 @@ function AppShell({ children, persistentContent = null }) {
         onRefresh={refreshCurrentPage}
       />
       {!isFullscreenEntryRoute ? <Navbar forceMobile={isAccountLikeRoute} /> : null}
+      {!isOnline ? (
+        <section
+          className={`networkStatusBanner ${isFullscreenEntryRoute ? 'networkStatusBannerFullscreen' : ''}`}
+          role="alert"
+          aria-live="assertive"
+        >
+          <WifiOff size={17} aria-hidden="true" />
+          <span><strong>Sei offline</strong><small>I dati potrebbero non essere aggiornati.</small></span>
+        </section>
+      ) : null}
       <main
         id="main-content"
         className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isChatThreadRoute ? '' : 'mainContentRouteEnter'} ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''} ${isChatThreadRoute ? 'mainContentChatThread' : ''}`}
@@ -202,7 +229,8 @@ function AppShell({ children, persistentContent = null }) {
         {persistentContent}
         {refreshedChildren}
       </main>
-      {!isFullscreenEntryRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
+      {!isFullscreenEntryRoute ? <ActiveWorkoutMonitor enabled={authSession.isAuthenticated} /> : null}
+      {!isFullscreenEntryRoute && !isCreateRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
       {!isFullscreenEntryRoute && !isLandingRoute && !isMapSurfaceRoute ? <Footer /> : null}
       {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>

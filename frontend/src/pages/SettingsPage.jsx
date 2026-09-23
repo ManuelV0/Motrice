@@ -213,7 +213,15 @@ function SettingsPage() {
 
   async function verifyLocation() {
     const coords = await location.requestLocation({ requireFresh: false, maxAgeMs: 30000 });
-    if (coords) showToast('Posizione disponibile', 'success');
+    if (coords) {
+      const accuracy = Number(coords.accuracy);
+      showToast(
+        Number.isFinite(accuracy)
+          ? `Posizione disponibile · precisione ±${Math.round(accuracy)} m`
+          : 'Posizione disponibile',
+        'success'
+      );
+    }
   }
 
   const notificationStatusLabel = notificationPermission?.receive === 'granted'
@@ -231,6 +239,10 @@ function SettingsPage() {
     : locationAuthorized
       ? location.permission === 'approximate' ? 'Posizione autorizzata · approssimativa' : 'Posizione autorizzata'
       : 'Posizione non autorizzata';
+  const locationAccuracy = Number(location.coords?.accuracy);
+  const locationAccuracyLabel = Number.isFinite(locationAccuracy)
+    ? ` Ultima precisione: ±${Math.round(locationAccuracy)} m.`
+    : '';
 
   const activeNotificationCategories = 1
     + Number(Boolean(notificationPreferences.chat_social))
@@ -341,7 +353,7 @@ function SettingsPage() {
                   {location.permissionReady ? `(${locationAuthorizationLabel})` : '(Verifica…)'}
                 </span>
               </span>
-              <small>Usata soltanto per mappa, arrivo intelligente, check-in o evento attivo.</small>
+              <small>Usata soltanto per mappa, arrivo intelligente, check-in o evento attivo.{locationAccuracyLabel}</small>
             </div>
             <button type="button" onClick={location.permission === 'denied' ? openSystemSettings : verifyLocation} disabled={location.requesting}>
               {location.requesting ? 'Verifico…' : location.permission === 'denied' ? 'Autorizza' : 'Verifica'}

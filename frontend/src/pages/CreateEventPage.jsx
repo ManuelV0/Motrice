@@ -535,6 +535,7 @@ function CreateEventPage() {
   const [locationMapRevision, setLocationMapRevision] = useState(0);
   const [locationSelectionMessage, setLocationSelectionMessage] = useState('');
   const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [locationMapEditing, setLocationMapEditing] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [stepDirection, setStepDirection] = useState('forward');
@@ -561,6 +562,7 @@ function CreateEventPage() {
   const recurrencePlansLoadedRef = useRef(false);
   const recurrenceScheduleTouchedRef = useRef(false);
   const locationRequestRef = useRef(null);
+  const locationEditSnapshotRef = useRef(null);
   const autoLocationAttemptedRef = useRef(false);
   const {
     coords: userLocationCoords,
@@ -859,17 +861,14 @@ function CreateEventPage() {
     if (activeStep !== 2 || locationPreview || autoLocationAttemptedRef.current) return;
 
     autoLocationAttemptedRef.current = true;
-    setLocationSelectionMessage('Cerco la tua area e centro la mappa...');
+    if (!userLocationCoords) {
+      setLocationSelectionMessage('Cerca un luogo oppure premi “Centra sulla mia posizione”.');
+      return;
+    }
 
-    void (async () => {
-      const coords = userLocationCoords || (await requestLocation());
-      if (!coords) {
-        setLocationSelectionMessage('Posizione non disponibile. Attiva il GPS per centrare la mappa nella tua area.');
-        return;
-      }
-      await resolveSelectedCoordinates(coords, { source: 'device' });
-    })();
-  }, [activeStep, locationPreview, requestLocation, userLocationCoords]);
+    setLocationSelectionMessage('Centro la mappa sull’ultima posizione disponibile...');
+    void resolveSelectedCoordinates(userLocationCoords, { source: 'device' });
+  }, [activeStep, locationPreview, userLocationCoords]);
 
   useEffect(() => {
     if (activeStep !== 2 || !form.has_route || routePoints.length >= 2) return;
@@ -1140,6 +1139,9 @@ function CreateEventPage() {
   }
 
   function setLocationMode(hasRoute) {
+    if (locationMapEditing) {
+      cancelLocationMapEditing({ silent: true });
+    }
     setForm((prev) => ({
       ...prev,
       has_route: hasRoute,
@@ -1374,6 +1376,8 @@ function CreateEventPage() {
     try {
       const result = await geocodeEventLocation(form);
       setForm((prev) => ({ ...prev, lat: String(result.lat), lng: String(result.lng) }));
+      setLocationMapEditing(false);
+      locationEditSnapshotRef.current = null;
       setLocationMapRevision((revision) => revision + 1);
       setErrors((prev) => ({ ...prev, coordinates: undefined }));
       setLocationSelectionMessage('Luogo trovato. Sposta la mappa per regolare il pin con precisione.');
@@ -1410,6 +1414,8 @@ function CreateEventPage() {
       gym_venue_key: source === 'search' ? prev.gym_venue_key : null
     }));
     if (source !== 'map') {
+      setLocationMapEditing(false);
+      locationEditSnapshotRef.current = null;
       setLocationMapRevision((revision) => revision + 1);
     }
     setErrors((prev) => {
@@ -1457,11 +1463,50 @@ function CreateEventPage() {
     setLocationSelectionMessage('Sposta la mappa: il pin resta fisso al centro.');
   }
 
+  function startLocationMapEditing() {
+    if (form.has_route || locationMapEditing) return;
+    locationEditSnapshotRef.current = {
+      values: {
+        lat: form.lat,
+        lng: form.lng,
+        city: form.city,
+        location_name: form.location_name,
+        venue_type: form.venue_type,
+        gym_access_policy: form.gym_access_policy,
+        gym_venue_key: form.gym_venue_key
+      },
+      confirmed: locationConfirmed
+    };
+    setLocationMapEditing(true);
+    setLocationConfirmed(false);
+    setLocationSelectionMessage('Mappa sbloccata: trascinala e poi conferma il punto.');
+  }
+
+  function cancelLocationMapEditing({ silent = false } = {}) {
+    locationRequestRef.current?.abort();
+    const snapshot = locationEditSnapshotRef.current;
+    if (snapshot?.values) {
+      setForm((prev) => ({ ...prev, ...snapshot.values }));
+      setLocationConfirmed(Boolean(snapshot.confirmed));
+    }
+    locationEditSnapshotRef.current = null;
+    setLocationMapEditing(false);
+    setLocationMapRevision((revision) => revision + 1);
+    setLocationSelectionMessage(
+      snapshot?.confirmed
+        ? `${fixedLocationLabel} precedente ripristinato.`
+        : 'Modifica annullata. Sblocca la mappa quando vuoi scegliere un altro punto.'
+    );
+    if (!silent) showToast('Modifica del punto annullata', 'info');
+  }
+
   function confirmSelectedLocation() {
     if (!locationPreview) {
       showToast('Scegli prima un punto sulla mappa', 'error');
       return;
     }
+    locationEditSnapshotRef.current = null;
+    setLocationMapEditing(false);
     setLocationConfirmed(true);
     setLocationSelectionMessage(`${fixedLocationLabel} confermato. Puoi continuare.`);
     showToast(`${fixedLocationLabel} confermato`, 'success');
@@ -1588,6 +1633,26 @@ function CreateEventPage() {
   }
 
   function goToNextStep() {
+    if (activeStep === 2) {
+      if (!form.has_route && (locationMapEditing || !locationConfirmed)) {
+        showToast(
+          locationMapEditing
+            ? 'Conferma o annulla la modifica del punto prima di continuare'
+            : `Conferma il ${fixedLocationLabelLower} prima di continuare`,
+          'info'
+        );
+        return;
+      }
+      if (form.has_route && routePicking) {
+        showToast(
+          routePoints.length >= 2
+            ? 'Conferma il percorso prima di continuare'
+            : 'Completa il percorso con partenza e arrivo',
+          'info'
+        );
+        return;
+      }
+    }
     const nextErrors = collectValidationErrors();
     const fields = getStepErrorFields(activeStep, form.is_personal);
     const currentStepErrors = Object.fromEntries(
@@ -1617,6 +1682,9 @@ function CreateEventPage() {
   }
 
   function goToPreviousStep() {
+    if (activeStep === 2 && locationMapEditing) {
+      cancelLocationMapEditing({ silent: true });
+    }
     setStepDirection('backward');
     setActiveStep((step) => Math.max(1, step - 1));
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2413,16 +2481,19 @@ function CreateEventPage() {
                 </small>
               </div>
 
-              <div className={`${styles.routeMapWrap} ${styles.locationMapWrap} ${form.has_route && routePicking ? styles.routeMapPicking : ''}`}>
+              <div className={`${styles.routeMapWrap} ${styles.locationMapWrap} ${(form.has_route ? routePicking : locationMapEditing) ? styles.routeMapPicking : ''}`}>
                 <MapContainer
-                  key={`place-map-${form.has_route ? 'route' : 'point'}-${locationMapRevision}`}
+                  key={`place-map-${form.has_route ? 'route' : 'point'}-${locationMapRevision}-${form.has_route ? routePicking : locationMapEditing}`}
                   center={form.has_route ? routeMapCenter : locationMapCenter}
                   zoom={form.has_route ? (routePoints.length || locationPreview ? 14 : 6) : locationMapZoom}
                   className={styles.routeMap}
-                  dragging
+                  dragging={form.has_route ? routePicking : locationMapEditing}
                   scrollWheelZoom={false}
-                  touchZoom
-                  doubleClickZoom={!form.has_route || !routePicking}
+                  touchZoom={form.has_route ? routePicking : locationMapEditing}
+                  doubleClickZoom={form.has_route ? routePicking : locationMapEditing}
+                  boxZoom={form.has_route ? routePicking : locationMapEditing}
+                  keyboard={form.has_route ? routePicking : locationMapEditing}
+                  zoomControl={form.has_route ? routePicking : locationMapEditing}
                 >
                   <TileLayer
                     {...CREATE_EVENT_MAP_TILES.options}
@@ -2509,7 +2580,35 @@ function CreateEventPage() {
                   </div>
                 ) : null}
                 {locationResolving ? <div className={styles.locationMapLoading}>Recupero indirizzo…</div> : null}
+                {(form.has_route ? !routePicking : !locationMapEditing) ? (
+                  <div className={styles.mapInteractionShield} aria-label="Mappa protetta dallo scorrimento accidentale">
+                    <button
+                      type="button"
+                      onClick={form.has_route ? startRoutePointSelection : startLocationMapEditing}
+                    >
+                      <LockKeyhole size={16} aria-hidden="true" />
+                      {form.has_route ? 'Modifica percorso' : 'Modifica sulla mappa'}
+                    </button>
+                    <small>Scorri la pagina senza spostare il punto</small>
+                  </div>
+                ) : null}
               </div>
+
+              {!form.has_route && locationMapEditing ? (
+                <div className={styles.locationEditActions} role="group" aria-label="Conferma modifica del punto">
+                  <button type="button" onClick={() => cancelLocationMapEditing()}>
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!locationPreview || locationResolving}
+                    onClick={confirmSelectedLocation}
+                  >
+                    <Check size={17} aria-hidden="true" />
+                    Conferma punto
+                  </button>
+                </div>
+              ) : null}
 
               <div className={`${styles.mapQuickActions} ${form.has_route ? styles.mapQuickActionsRoute : ''}`}>
                 <button type="button" disabled={locationRequesting} onClick={() => void useCurrentLocationForMode()}>
@@ -2570,15 +2669,17 @@ function CreateEventPage() {
                       <em>{formatDistanceMeters(locationDistanceFromUser)}</em>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    disabled={!locationPreview || locationResolving}
-                    className={locationConfirmed ? styles.locationConfirmButtonDone : ''}
-                    onClick={confirmSelectedLocation}
-                  >
-                    {locationConfirmed ? <Check size={16} aria-hidden="true" /> : <MapPinned size={16} aria-hidden="true" />}
-                    {locationConfirmed ? 'Confermato' : 'Conferma punto'}
-                  </button>
+                  {!locationMapEditing ? (
+                    <button
+                      type="button"
+                      disabled={!locationPreview || locationResolving}
+                      className={locationConfirmed ? styles.locationConfirmButtonDone : ''}
+                      onClick={confirmSelectedLocation}
+                    >
+                      {locationConfirmed ? <Check size={16} aria-hidden="true" /> : <MapPinned size={16} aria-hidden="true" />}
+                      {locationConfirmed ? 'Confermato' : 'Conferma punto'}
+                    </button>
+                  ) : null}
                 </div>
               )}
 

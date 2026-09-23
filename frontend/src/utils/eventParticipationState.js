@@ -399,8 +399,17 @@ export function resolveEventPrimaryAction({
   const approvalRequired = normalized(event?.join_policy) === 'approval';
   const cancelled = timing.phase === 'cancelled' || normalized(event?.status) === 'cancelled';
   const completed = sessionTimeline.hasEnded || normalized(event?.status) === 'completed';
+  const reviewableParticipantCount = Math.max(
+    0,
+    Number.isFinite(Number(event?.reviewable_participants_count))
+      ? Math.trunc(Number(event.reviewable_participants_count))
+      : 0
+  );
   const feedbackEligible = Boolean(
-    timing.isPostEventWindow && (isOrganizer || outcome.id === 'completed')
+    timing.isPostEventWindow && (
+      (isOrganizer && reviewableParticipantCount > 0)
+      || (!isOrganizer && outcome.id === 'completed')
+    )
   );
 
   if (cancelled) {

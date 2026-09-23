@@ -67,8 +67,10 @@ public class EventLocationService extends Service implements LocationListener {
     private final ExecutorService uploadExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Runnable expirationTask = this::finishExpiredTracking;
+    private final Runnable restartLocationTask = this::startLocationUpdates;
     private LocationManager locationManager;
     private volatile boolean finishing = false;
+    private long activeLocationIntervalMs = -1L;
 
     public static void saveConfiguration(
             Context context,
@@ -142,6 +144,7 @@ public class EventLocationService extends Service implements LocationListener {
                 .putLong("radiusBits", Double.doubleToRawLongBits(radiusM))
                 .putLong("expectedEndAtMs", expectedEndAtMs)
                 .putLong("intervalMs", intervalMs)
+                .putLong("effectiveIntervalMs", Math.max(30000L, intervalMs))
                 .putBoolean("arrivalDetected", false)
                 .remove("arrivalDetectedAt")
                 .putString("lastError", "")
@@ -384,6 +387,8 @@ public class EventLocationService extends Service implements LocationListener {
     }
 
     private void startLocationUpdates() {
+        SharedPreferences values = prefs(this);
+        if (!values.getBoolean("active", false)) return;
         boolean hasFine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED;
         boolean hasCoarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -402,7 +407,13 @@ public class EventLocationService extends Service implements LocationListener {
         }
 
         stopLocationUpdates();
-        long interval = Math.max(5000L, prefs(this).getLong("intervalMs", 60000L));
+        boolean arrivalMode = "arrival".equals(values.getString("trackingMode", ""));
+        long configuredInterval = values.getLong("intervalMs", 60000L);
+        long interval = Math.max(
+                5000L,
+                arrivalMode ? values.getLong("effectiveIntervalMs", configuredInterval) : configuredInterval
+        );
+        activeLocationIntervalMs = interval;
         try {
             if (hasFine && locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, interval, 0f, this, Looper.getMainLooper());
@@ -426,6 +437,7 @@ public class EventLocationService extends Service implements LocationListener {
         } catch (RuntimeException ignored) {
             // No-op: il permesso potrebbe essere stato revocato durante il servizio.
         }
+        activeLocationIntervalMs = -1L;
     }
 
     private void scheduleExpiration(long expectedEndAtMs) {
@@ -478,7 +490,9 @@ public class EventLocationService extends Service implements LocationListener {
         eventLocation.setLatitude(readDouble(values, "latitudeBits", 0.0));
         eventLocation.setLongitude(readDouble(values, "longitudeBits", 0.0));
         float distanceM = location.distanceTo(eventLocation);
-        if (!Float.isFinite(distanceM) || distanceM + location.getAccuracy() > radiusM) return;
+        if (!Float.isFinite(distanceM)) return;
+        adaptArrivalInterval(values, distanceM);
+        if (distanceM + location.getAccuracy() > radiusM) return;
 
         long detectedAt = System.currentTimeMillis();
         values.edit()
@@ -497,6 +511,19 @@ public class EventLocationService extends Service implements LocationListener {
         }
         stopLocationUpdates();
         stopForegroundAndSelfSafely();
+    }
+
+    private void adaptArrivalInterval(SharedPreferences values, float distanceM) {
+        long configuredMinimum = Math.max(5000L, values.getLong("intervalMs", 15000L));
+        long nextInterval = distanceM > 2000f
+                ? Math.max(configuredMinimum, 60000L)
+                : distanceM > 500f
+                    ? Math.max(configuredMinimum, 30000L)
+                    : Math.max(5000L, Math.min(configuredMinimum, 15000L));
+        if (activeLocationIntervalMs == nextInterval) return;
+        values.edit().putLong("effectiveIntervalMs", nextInterval).apply();
+        mainHandler.removeCallbacks(restartLocationTask);
+        mainHandler.postDelayed(restartLocationTask, 250L);
     }
 
     private boolean isAppInForeground() {

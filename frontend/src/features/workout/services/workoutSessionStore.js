@@ -1,8 +1,20 @@
 import { getAuthSession } from '../../../services/authSession';
-import { safeStorageGet, safeStorageSet } from '../../../utils/safeStorage';
+import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../../../utils/safeStorage';
+import { isWorkoutSessionExpired } from '../../../utils/workoutSessionWindow';
 
 const STORAGE_PREFIX = 'motrice_event_workout_session_v1';
 const HISTORY_PREFIX = 'motrice_workout_exercise_history_v1';
+const ACTIVE_PREFIX = 'motrice_active_workout_v1';
+export const ACTIVE_WORKOUT_SESSION_EVENT = 'motrice-active-workout-session-changed';
+
+const EMPTY_REST_TIMER = {
+  exerciseId: '',
+  duration: 0,
+  remaining: 0,
+  running: false,
+  finished: false,
+  endAt: null
+};
 
 function storageIdentity() {
   const auth = getAuthSession();
@@ -11,6 +23,10 @@ function storageIdentity() {
 
 function sessionKey(eventId) {
   return `${STORAGE_PREFIX}:${storageIdentity()}:${String(eventId)}`;
+}
+
+function activeSessionKey() {
+  return `${ACTIVE_PREFIX}:${storageIdentity()}`;
 }
 
 function historyKey() {
@@ -36,8 +52,69 @@ export function loadWorkoutSession(eventId) {
   }
 }
 
+function emitActiveWorkoutChanged(eventId = '') {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(ACTIVE_WORKOUT_SESSION_EVENT, {
+    detail: { eventId: String(eventId || '') }
+  }));
+}
+
+function clearActivePointer(eventId = '') {
+  try {
+    const raw = safeStorageGet(activeSessionKey());
+    const current = raw ? JSON.parse(raw) : null;
+    if (eventId && String(current?.eventId || '') !== String(eventId)) return false;
+  } catch {
+    // Un puntatore non leggibile viene comunque eliminato.
+  }
+  safeStorageRemove(activeSessionKey());
+  emitActiveWorkoutChanged(eventId);
+  return true;
+}
+
+export function clearActiveWorkoutSession(eventId = '') {
+  return clearActivePointer(eventId);
+}
+
+export function getActiveWorkoutSession(now = Date.now()) {
+  try {
+    const raw = safeStorageGet(activeSessionKey());
+    const pointer = raw ? JSON.parse(raw) : null;
+    const eventId = String(pointer?.eventId || '');
+    if (!eventId) return null;
+    const session = loadWorkoutSession(eventId);
+    const startedAt = session?.startedAt || pointer?.startedAt || '';
+    if (!session?.startedAt || session?.completedAt || isWorkoutSessionExpired(startedAt, now)) {
+      clearActivePointer(eventId);
+      return null;
+    }
+    return {
+      ...pointer,
+      eventId,
+      startedAt: session.startedAt,
+      session
+    };
+  } catch {
+    clearActivePointer();
+    return null;
+  }
+}
+
 export function saveWorkoutSession(eventId, session) {
   safeStorageSet(sessionKey(eventId), JSON.stringify(session));
+  const normalizedEventId = String(eventId);
+  if (session?.startedAt && !session?.completedAt && !isWorkoutSessionExpired(session.startedAt)) {
+    safeStorageSet(activeSessionKey(), JSON.stringify({
+      eventId: normalizedEventId,
+      startedAt: session.startedAt,
+      eventTitle: String(session.eventTitle || ''),
+      workoutTitle: String(session.workoutTitle || ''),
+      updatedAt: new Date().toISOString()
+    }));
+    emitActiveWorkoutChanged(normalizedEventId);
+  } else if (session?.completedAt || isWorkoutSessionExpired(session?.startedAt)) {
+    clearActivePointer(normalizedEventId);
+  }
   return session;
 }
 
@@ -144,7 +221,27 @@ export function normalizeWorkoutExercises(exercises = []) {
   }));
 }
 
-export function createWorkoutSession(eventId, exercises, remote = {}) {
+function restoreRestTimer(value) {
+  const exerciseId = String(value?.exerciseId || '');
+  if (!exerciseId) return { ...EMPTY_REST_TIMER };
+  const duration = Math.max(0, Math.round(Number(value?.duration) || 0));
+  const endAt = Number.isFinite(Number(value?.endAt)) ? Number(value.endAt) : null;
+  const running = Boolean(value?.running && endAt);
+  const remaining = running
+    ? Math.max(0, Math.ceil((endAt - Date.now()) / 1000))
+    : Math.max(0, Math.round(Number(value?.remaining) || 0));
+  if (remaining <= 0) return { ...EMPTY_REST_TIMER };
+  return {
+    exerciseId,
+    duration: Math.max(duration, remaining),
+    remaining,
+    running,
+    finished: false,
+    endAt: running ? endAt : null
+  };
+}
+
+export function createWorkoutSession(eventId, exercises, remote = {}, metadata = {}) {
   const previous = loadWorkoutSession(eventId);
   const normalized = normalizeWorkoutExercises(exercises);
   const validExerciseIds = new Set(normalized.map((exercise) => exercise.id));
@@ -187,6 +284,9 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
 
   return saveWorkoutSession(eventId, {
     eventId: String(eventId),
+    eventTitle: String(metadata.eventTitle || previous?.eventTitle || ''),
+    workoutTitle: String(metadata.workoutTitle || previous?.workoutTitle || ''),
+    exerciseNames: Object.fromEntries(normalized.map((exercise) => [exercise.id, exercise.name])),
     startedAt: remote?.started_at || previous?.startedAt || new Date().toISOString(),
     completedAt: remote?.completed_at || previous?.completedAt || null,
     completedSets,
@@ -201,6 +301,7 @@ export function createWorkoutSession(eventId, exercises, remote = {}) {
     selfRating: Math.max(0, Math.min(5, Math.round(Number(previous?.selfRating) || 0))),
     reviewSubmitted: Boolean(previous?.reviewSubmitted || remote?.review_submitted),
     planUpdateAppliedAt: previous?.planUpdateAppliedAt || null,
-    planUpdatePlanId: previous?.planUpdatePlanId || null
+    planUpdatePlanId: previous?.planUpdatePlanId || null,
+    restTimer: restoreRestTimer(previous?.restTimer)
   });
 }

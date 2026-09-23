@@ -23,12 +23,14 @@ import { getAuthSession } from '../services/authSession';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useToast } from '../context/ToastContext';
 import {
+  clearActiveWorkoutSession,
   createWorkoutSession,
   normalizeWorkoutExercises,
   recordWorkoutSet,
   removeWorkoutSet,
   saveWorkoutSession
 } from '../features/workout/services/workoutSessionStore';
+import { getWorkoutSessionWindow, isWorkoutSessionExpired } from '../utils/workoutSessionWindow';
 import PostEventUserFeedback from '../components/event/PostEventUserFeedback';
 import ContextInfoButton from '../components/ContextInfoButton';
 import { getAppSettings, updateAppSettings } from '../services/appSettings';
@@ -86,12 +88,13 @@ function WorkoutSessionPage() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [undoAction, setUndoAction] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [restTimer, setRestTimer] = useState({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+  const [restTimer, setRestTimer] = useState({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false, endAt: null });
   const [loadDrafts, setLoadDrafts] = useState({});
   const [editingExerciseId, setEditingExerciseId] = useState('');
   const [exerciseDraft, setExerciseDraft] = useState(null);
@@ -168,10 +171,19 @@ function WorkoutSessionPage() {
         }
         const remoteSession = await api.startEventWorkout(id);
         if (!active) return;
-        const nextSession = createWorkoutSession(id, exercises, remoteSession);
+        if (!remoteSession?.completed_at && isWorkoutSessionExpired(remoteSession?.started_at)) {
+          clearActiveWorkoutSession(id);
+          setSessionExpired(true);
+          throw new Error('Le tre ore disponibili dall’avvio dell’evento sono terminate. I dati registrati restano salvati.');
+        }
+        const nextSession = createWorkoutSession(id, exercises, remoteSession, {
+          eventTitle: eventResult?.title || eventResult?.sport_name || 'Allenamento',
+          workoutTitle: eventResult?.workout_plan?.title || eventResult?.title || 'Allenamento live'
+        });
         setEvent(eventResult);
         setParticipation(progress);
         setSession(nextSession);
+        setRestTimer(nextSession.restTimer || { exerciseId: '', duration: 0, remaining: 0, running: false, finished: false, endAt: null });
       } catch (loadError) {
         if (active) setError(loadError?.message || 'Allenamento non disponibile.');
       } finally {
@@ -332,12 +344,33 @@ function WorkoutSessionPage() {
   }, [session?.completedAt, session?.startedAt]);
 
   useEffect(() => {
+    if (!session?.startedAt || session.completedAt) return undefined;
+    const sessionWindow = getWorkoutSessionWindow(session.startedAt);
+    if (!sessionWindow.valid) return undefined;
+
+    const expireSession = () => {
+      clearActiveWorkoutSession(id);
+      setRestTimer((current) => ({ ...current, running: false, endAt: null }));
+      setSessionExpired(true);
+      setError('Le tre ore disponibili dall’avvio dell’evento sono terminate. I dati registrati restano salvati.');
+    };
+
+    if (sessionWindow.expired) {
+      expireSession();
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(expireSession, sessionWindow.remainingSeconds * 1000);
+    return () => window.clearTimeout(timeout);
+  }, [id, session?.completedAt, session?.startedAt]);
+
+  useEffect(() => {
     if (!restTimer.running || restTimer.remaining <= 0) return undefined;
     const timer = window.setInterval(() => {
       setRestTimer((current) => {
         if (!current.running || current.remaining <= 1) {
           if (current.remaining === 1) vibrate([80, 60, 80]);
-          return { ...current, remaining: 0, running: false, finished: true };
+          return { ...current, remaining: 0, running: false, finished: true, endAt: null };
         }
         if (current.remaining === 10) vibrate(40);
         return { ...current, remaining: current.remaining - 1 };
@@ -349,10 +382,41 @@ function WorkoutSessionPage() {
   useEffect(() => {
     if (!restTimer.finished) return undefined;
     const timeout = window.setTimeout(() => {
-      setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+      setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false, endAt: null });
     }, 2600);
     return () => window.clearTimeout(timeout);
   }, [restTimer.finished]);
+
+  useEffect(() => {
+    if (!session?.startedAt || session.completedAt) return;
+    const persistedRest = {
+      exerciseId: String(restTimer.exerciseId || ''),
+      duration: Math.max(0, Math.round(Number(restTimer.duration) || 0)),
+      remaining: Math.max(0, Math.round(Number(restTimer.remaining) || 0)),
+      running: Boolean(restTimer.running),
+      finished: Boolean(restTimer.finished),
+      endAt: Number.isFinite(Number(restTimer.endAt)) ? Number(restTimer.endAt) : null
+    };
+    const previous = session.restTimer || {};
+    const unchanged =
+      String(previous.exerciseId || '') === persistedRest.exerciseId
+      && Number(previous.duration || 0) === persistedRest.duration
+      && Boolean(previous.running) === persistedRest.running
+      && Boolean(previous.finished) === persistedRest.finished
+      && Number(previous.endAt || 0) === Number(persistedRest.endAt || 0)
+      && (persistedRest.running || Number(previous.remaining || 0) === persistedRest.remaining);
+    if (unchanged) return;
+    setSession(saveWorkoutSession(id, { ...session, restTimer: persistedRest }));
+  }, [
+    id,
+    restTimer.duration,
+    restTimer.endAt,
+    restTimer.exerciseId,
+    restTimer.finished,
+    restTimer.running,
+    session?.completedAt,
+    session?.startedAt
+  ]);
 
   useEffect(() => {
     try {
@@ -653,7 +717,8 @@ function WorkoutSessionPage() {
         duration: nextOverride.recovery,
         remaining: nextRemaining,
         running: nextRemaining > 0 && current.running,
-        finished: nextRemaining === 0
+        finished: nextRemaining === 0,
+        endAt: nextRemaining > 0 && current.running ? Date.now() + nextRemaining * 1000 : null
       };
     });
     closeExerciseEditor();
@@ -725,7 +790,8 @@ function WorkoutSessionPage() {
         duration: exercise.recovery,
         remaining: exercise.recovery,
         running: true,
-        finished: false
+        finished: false,
+        endAt: Date.now() + exercise.recovery * 1000
       });
     }
     vibrate(45);
@@ -770,7 +836,7 @@ function WorkoutSessionPage() {
     setSession(saveWorkoutSession(id, next));
     removeWorkoutSet({ eventId: id, exerciseId: exercise.id, setNumber: action.setNumber });
     api.removeWorkoutExerciseSet({ eventId: id, exerciseId: exercise.id, setNumber: action.setNumber }).catch(() => {});
-    setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false });
+    setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false, endAt: null });
     setUndoAction(null);
   }
 
@@ -871,7 +937,12 @@ function WorkoutSessionPage() {
         <span className={styles.lockIcon}><ShieldCheck size={30} /></span>
         <h1>Allenamento bloccato</h1>
         <p>{error || 'Sessione non disponibile.'}</p>
-        <button type="button" onClick={() => navigate(`/events/${id}#verify-presence`)}>Verifica presenza</button>
+        <button
+          type="button"
+          onClick={() => navigate(sessionExpired ? `/events/${id}` : `/events/${id}#verify-presence`)}
+        >
+          {sessionExpired ? 'Torna all’evento' : 'Verifica presenza'}
+        </button>
       </section>
     );
   }
@@ -1047,7 +1118,11 @@ function WorkoutSessionPage() {
             <div className={styles.restDockControls}>
               <button
                 type="button"
-                onClick={() => setRestTimer((current) => ({ ...current, running: !current.running }))}
+                onClick={() => setRestTimer((current) => ({
+                  ...current,
+                  running: !current.running,
+                  endAt: current.running ? null : Date.now() + current.remaining * 1000
+                }))}
                 aria-label={restTimer.running ? 'Pausa timer' : 'Avvia timer'}
                 disabled={restTimer.finished}
               >
@@ -1070,14 +1145,15 @@ function WorkoutSessionPage() {
                   duration: current.duration + 30,
                   remaining: current.remaining + 30,
                   running: true,
-                  finished: false
+                  finished: false,
+                  endAt: Date.now() + (current.remaining + 30) * 1000
                 }))}
                 aria-label="Aggiungi 30 secondi al recupero"
               >+30</button>
               <button
                 type="button"
                 className={styles.skipRestButton}
-                onClick={() => setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false })}
+                onClick={() => setRestTimer({ exerciseId: '', duration: 0, remaining: 0, running: false, finished: false, endAt: null })}
               >{restTimer.finished ? 'Chiudi' : 'Salta'}</button>
             </div>
             {restTimer.finished ? <span className={styles.visuallyHidden} aria-live="assertive">Recupero terminato</span> : null}

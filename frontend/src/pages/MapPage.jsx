@@ -31,6 +31,7 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
 import { getUserFocusZoom } from '../utils/mapViewport';
+import { isLocationSampleUsableForMap } from '../utils/locationAcquisition';
 import { groupRecurringMapEvents } from '../utils/mapEventGroups';
 import EventCard from '../components/EventCard';
 import {
@@ -65,6 +66,7 @@ const USER_RADIUS_SOURCE = 'user-radius-src';
 const USER_RADIUS_FILL = 'user-radius-fill';
 const USER_RADIUS_LINE = 'user-radius-line';
 const USER_VIEW_RADIUS_KM = 8;
+const MAP_LAST_KNOWN_MAX_AGE_MS = 10 * 60 * 1000;
 const EVENT_CLUSTER_OVERLAP_PX = 12;
 const EVENT_MARKERS_SOURCE = 'motrice-event-markers';
 const EVENT_PINS_LAYER = 'motrice-event-pins';
@@ -475,7 +477,11 @@ function RasterMapFallback({
   const userMoveRef = useRef(onUserMove);
   const readyRef = useRef(onReady);
   const markersReadyRef = useRef(onMarkersReady);
-  const initialCenterRef = useRef(coords ? [coords.lat, coords.lng] : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+  const hasInitialCoordinates = hasValidCoordinates(coords?.lat, coords?.lng);
+  const initialCenterRef = useRef(hasInitialCoordinates
+    ? [Number(coords.lat), Number(coords.lng)]
+    : [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng]);
+  const initialZoomRef = useRef(hasInitialCoordinates ? 10.4 : 6.1);
 
   useEffect(() => {
     eventSelectRef.current = onEventSelect;
@@ -494,7 +500,7 @@ function RasterMapFallback({
       preferCanvas: true,
       fadeAnimation: true,
       markerZoomAnimation: true
-    }).setView(initialCenterRef.current, coords ? 10.4 : 6.1);
+    }).setView(initialCenterRef.current, initialZoomRef.current);
     map.attributionControl.setPrefix(false);
 
     const markers = L.layerGroup().addTo(map);
@@ -522,28 +528,43 @@ function RasterMapFallback({
         syncBounds();
       },
       focusEvent: (event) => {
-        map.flyTo([event.lat, event.lng], Math.max(14, map.getZoom()), { animate: true, duration: 0.42 });
+        if (!hasValidCoordinates(event?.lat, event?.lng)) return false;
+        map.flyTo([Number(event.lat), Number(event.lng)], Math.max(14, map.getZoom()), { animate: true, duration: 0.42 });
+        return true;
       },
       fitEvents: (nextEvents) => {
-        if (!nextEvents.length) return;
-        if (nextEvents.length === 1) {
-          map.flyTo([nextEvents[0].lat, nextEvents[0].lng], 14.2, { animate: true, duration: 0.34 });
-          return;
+        const validEvents = Array.isArray(nextEvents)
+          ? nextEvents.filter((event) => hasValidCoordinates(event?.lat, event?.lng))
+          : [];
+        if (!validEvents.length) return false;
+        if (validEvents.length === 1) {
+          map.flyTo([Number(validEvents[0].lat), Number(validEvents[0].lng)], 14.2, { animate: true, duration: 0.34 });
+          return true;
         }
-        const bounds = L.latLngBounds(nextEvents.map((event) => [event.lat, event.lng]));
+        const bounds = L.latLngBounds(validEvents.map((event) => [Number(event.lat), Number(event.lng)]));
         map.fitBounds(bounds, { paddingTopLeft: [42, 92], paddingBottomRight: [42, 170], maxZoom: 13, animate: true });
+        return true;
       },
       focusUser: (position, focusRadius, { targetZoom = null, preserveZoom = false } = {}) => {
-        if (Number.isFinite(targetZoom) || preserveZoom) {
+        if (!hasValidCoordinates(position?.lat, position?.lng)) return false;
+        const lat = Number(position.lat);
+        const lng = Number(position.lng);
+        const normalizedTargetZoom = Number(targetZoom);
+        if (Number.isFinite(normalizedTargetZoom) || preserveZoom) {
           const currentZoom = map.getZoom();
           map.flyTo(
-            [position.lat, position.lng],
-            Number.isFinite(targetZoom) ? targetZoom : currentZoom,
-            { animate: true, duration: Number.isFinite(targetZoom) ? 0.48 : 0.24 }
+            [lat, lng],
+            Number.isFinite(normalizedTargetZoom) ? normalizedTargetZoom : currentZoom,
+            { animate: true, duration: Number.isFinite(normalizedTargetZoom) ? 0.48 : 0.24 }
           );
-          return;
+          return true;
         }
-        const rawBounds = computeBounds(position.lat, position.lng, focusRadius);
+        const normalizedRadius = Number(focusRadius);
+        const rawBounds = computeBounds(
+          lat,
+          lng,
+          Number.isFinite(normalizedRadius) && normalizedRadius > 0 ? normalizedRadius : USER_VIEW_RADIUS_KM
+        );
         map.fitBounds(
           L.latLngBounds([
             [rawBounds[0][1], rawBounds[0][0]],
@@ -551,6 +572,7 @@ function RasterMapFallback({
           ]),
           { paddingTopLeft: [42, 92], paddingBottomRight: [42, 150], maxZoom: 13, animate: true }
         );
+        return true;
       }
     };
 
@@ -596,6 +618,7 @@ function RasterMapFallback({
     layer.clearLayers();
 
     events.forEach((event) => {
+      if (!hasValidCoordinates(event?.lat, event?.lng)) return;
       const selected = String(event.id) === String(selectedEventId);
       const svg = createEventPinSvg(getEventActivityType(event), {
         saved: Boolean(event.is_saved),
@@ -609,7 +632,7 @@ function RasterMapFallback({
         iconSize: selected ? [53, 62] : [48, 56],
         iconAnchor: selected ? [26, 62] : [24, 56]
       });
-      L.marker([event.lat, event.lng], {
+      L.marker([Number(event.lat), Number(event.lng)], {
         icon,
         keyboard: true,
         title: event.is_recurring_group
@@ -631,10 +654,12 @@ function RasterMapFallback({
     userLayerRef.current?.remove();
     radiusLayerRef.current = null;
     userLayerRef.current = null;
-    if (!coords) return;
+    if (!hasValidCoordinates(coords?.lat, coords?.lng)) return;
+    const lat = Number(coords.lat);
+    const lng = Number(coords.lng);
 
     if (radiusKm) {
-      radiusLayerRef.current = L.circle([coords.lat, coords.lng], {
+      radiusLayerRef.current = L.circle([lat, lng], {
         radius: radiusKm * 1000,
         color: theme === 'light' ? '#729900' : '#ccff00',
         weight: 1.5,
@@ -645,7 +670,7 @@ function RasterMapFallback({
       }).addTo(map);
     }
 
-    userLayerRef.current = L.circleMarker([coords.lat, coords.lng], {
+    userLayerRef.current = L.circleMarker([lat, lng], {
       radius: 7,
       color: '#ffffff',
       weight: 2,
@@ -1327,7 +1352,7 @@ function MapPage({ active = true }) {
 
   const {
     coords,
-    hasLocation,
+    lastKnownCoords,
     permission,
     error: locationError,
     errorCode: locationErrorCode,
@@ -1337,6 +1362,29 @@ function MapPage({ active = true }) {
     stopLocationWatch,
     originParams
   } = useUserLocation();
+
+  const safeCoords = useMemo(() => {
+    if (!hasValidCoordinates(coords?.lat, coords?.lng)) return null;
+    return {
+      ...coords,
+      lat: Number(coords.lat),
+      lng: Number(coords.lng)
+    };
+  }, [coords]);
+  const safeLastKnownCoords = useMemo(() => {
+    if (!isLocationSampleUsableForMap(lastKnownCoords, {
+      maxAgeMs: MAP_LAST_KNOWN_MAX_AGE_MS,
+      now: lifecycleTick
+    })) return null;
+    return {
+      ...lastKnownCoords,
+      lat: Number(lastKnownCoords.lat),
+      lng: Number(lastKnownCoords.lng)
+    };
+  }, [lastKnownCoords, lifecycleTick]);
+  const displayCoords = safeCoords || safeLastKnownCoords;
+  const isUsingLastKnownCoords = !safeCoords && Boolean(safeLastKnownCoords);
+  const hasLocation = Boolean(displayCoords);
 
   useEffect(() => {
     followUserRef.current = followUser;
@@ -1524,9 +1572,11 @@ function MapPage({ active = true }) {
   const eventsWithoutCoordinates = Math.max(0, mapEvents.length - withCoords.length);
 
   const eventsInRadius = useMemo(() => {
-    if (!selectedRadiusKm || !coords) return withCoords;
-    return withCoords.filter((event) => distanceKm(coords.lat, coords.lng, event.lat, event.lng) <= selectedRadiusKm);
-  }, [coords, selectedRadiusKm, withCoords]);
+    if (!selectedRadiusKm || !displayCoords) return withCoords;
+    return withCoords.filter((event) => (
+      distanceKm(displayCoords.lat, displayCoords.lng, event.lat, event.lng) <= selectedRadiusKm
+    ));
+  }, [displayCoords, selectedRadiusKm, withCoords]);
 
   const visibleEvents = useMemo(
     () => eventsInRadius.filter((event) => isEventInViewport(event, viewportBounds)),
@@ -1570,13 +1620,13 @@ function MapPage({ active = true }) {
     sheetEvents.some((event) => Boolean(event.is_saved))
       ? { key: 'saved', label: 'Salvato', className: styles.legendSaved }
       : null,
-    coords ? { key: 'user', label: 'Tu', className: styles.legendUser } : null
+    displayCoords ? { key: 'user', label: 'Tu', className: styles.legendUser } : null
   ].filter(Boolean);
 
   const focusEvent = useCallback((event) => {
     const map = mapRef.current;
     const rasterController = rasterMapControllerRef.current;
-    if (!event || (!map && !rasterController)) return;
+    if (!event || !hasValidCoordinates(event?.lat, event?.lng) || (!map && !rasterController)) return;
     setSelectedEventId(String(event.id));
     setSheetSnap('medium');
 
@@ -1644,49 +1694,69 @@ function MapPage({ active = true }) {
     setFilters((prev) => ({ ...prev, [filterKey]: baseFilters[filterKey] }));
   }
 
+  function centerMapOnPosition(position) {
+    if (!hasValidCoordinates(position?.lat, position?.lng)) return false;
+    const targetZoom = getUserFocusZoom(position.accuracy);
+    if (mapRenderer === 'raster') {
+      return Boolean(rasterMapControllerRef.current?.focusUser(
+        position,
+        selectedRadiusKm || USER_VIEW_RADIUS_KM,
+        { targetZoom }
+      ));
+    }
+    const map = mapRef.current;
+    if (!map) return false;
+    map.flyTo({
+      center: [Number(position.lng), Number(position.lat)],
+      zoom: targetZoom,
+      duration: 360,
+      curve: 1.15,
+      essential: true
+    });
+    return true;
+  }
+
   async function handleGpsAction() {
-    if (followUser && coords) {
-      const targetZoom = getUserFocusZoom(coords.accuracy);
-      if (mapRenderer === 'raster') {
-        rasterMapControllerRef.current?.focusUser(
-          coords,
-          selectedRadiusKm || USER_VIEW_RADIUS_KM,
-          { targetZoom }
-        );
-      } else {
-        mapRef.current?.flyTo({
-          center: [coords.lng, coords.lat],
-          zoom: targetZoom,
-          duration: 360,
-          curve: 1.15,
-          essential: true
-        });
-      }
-      showToast('Posizione ricentrata', 'success');
+    if (followUser && displayCoords) {
+      const centered = centerMapOnPosition(displayCoords);
+      showToast(centered ? 'Posizione ricentrata' : 'La mappa si sta ancora preparando', centered ? 'success' : 'info');
       return;
     }
 
     shouldRecenterRef.current = true;
-    const nextCoords = await startLocationWatch({
-      maxAgeMs: 15000,
-      maxAccuracyM: 150,
-      minimumUpdateInterval: 3000
-    });
-    if (!nextCoords) {
-      shouldRecenterRef.current = false;
-      showToast(locationError || 'Non ho ottenuto una posizione precisa. Attendi il segnale GPS e riprova.', 'info');
-      return;
-    }
+    const centeredOnKnownPosition = displayCoords
+      ? centerMapOnPosition(displayCoords)
+      : false;
+    if (centeredOnKnownPosition) shouldRecenterRef.current = false;
+    try {
+      const nextCoords = await startLocationWatch({
+        maxAgeMs: 15000,
+        maxAccuracyM: 150,
+        minimumUpdateInterval: 3000,
+        throwOnError: true
+      });
+      if (!nextCoords || !hasValidCoordinates(nextCoords.lat, nextCoords.lng)) {
+        throw new Error('Il telefono non ha restituito coordinate valide. Riprova all’aperto.');
+      }
 
-    followUserRef.current = true;
-    setFollowUser(true);
-    const accuracy = Number(nextCoords.accuracy);
-    showToast(
-      Number.isFinite(accuracy)
-        ? `Posizione aggiornata · precisione ${Math.round(accuracy)} m`
-        : 'Posizione aggiornata · inseguimento attivo',
-      'success'
-    );
+      followUserRef.current = true;
+      setFollowUser(true);
+      const accuracy = Number(nextCoords.accuracy);
+      showToast(
+        Number.isFinite(accuracy)
+          ? `Posizione aggiornata · precisione ${Math.round(accuracy)} m`
+          : 'Posizione aggiornata · inseguimento attivo',
+        'success'
+      );
+    } catch (error) {
+      if (!displayCoords) shouldRecenterRef.current = false;
+      showToast(
+        displayCoords
+          ? 'Mostro l’ultima posizione disponibile. Il GPS non ha ancora restituito un aggiornamento.'
+          : error?.message || 'Non ho ottenuto una posizione precisa. Attendi il segnale GPS e riprova.',
+        'info'
+      );
+    }
   }
 
   function getSheetSnapHeights() {
@@ -1842,14 +1912,16 @@ function MapPage({ active = true }) {
     if (mapRenderer !== 'maplibre') return undefined;
     if (!mapNodeRef.current || mapRef.current) return;
 
-    const startCenter = coords ? [coords.lng, coords.lat] : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat];
+    const startCenter = displayCoords
+      ? [displayCoords.lng, displayCoords.lat]
+      : [DEFAULT_CENTER.lng, DEFAULT_CENTER.lat];
     let map;
     try {
       map = new maplibregl.Map({
         container: mapNodeRef.current,
         style: MAPLIBRE_STYLES[mapTheme] || MAPLIBRE_STYLES.satellite,
         center: startCenter,
-        zoom: coords ? 10.4 : 6.1,
+        zoom: displayCoords ? 10.4 : 6.1,
         pixelRatio: getHighDefinitionPixelRatio(),
         antialias: true,
         pitch: 0,
@@ -2120,35 +2192,41 @@ function MapPage({ active = true }) {
 
   useEffect(() => {
     if (mapRenderer === 'raster') {
-      if (!active || !coords) return;
+      if (!active || !displayCoords) return;
       const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
       if (shouldRecenterRef.current || followUser) {
         const close = shouldRecenterRef.current;
-        rasterMapControllerRef.current?.focusUser(coords, focusRadius, {
-          targetZoom: close ? getUserFocusZoom(coords.accuracy) : null,
+        const focused = rasterMapControllerRef.current?.focusUser(displayCoords, focusRadius, {
+          targetZoom: close ? getUserFocusZoom(displayCoords.accuracy) : null,
           preserveZoom: followUser && !close
         });
-        if (shouldRecenterRef.current) shouldRecenterRef.current = false;
+        if (focused && shouldRecenterRef.current) shouldRecenterRef.current = false;
       }
       return;
     }
     const map = mapRef.current;
-    if (!active || !map || !coords) return;
+    if (!active || !map) return;
+    if (!displayCoords) {
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      removeUserRadiusOverlay(map);
+      return;
+    }
 
     if (!userMarkerRef.current) {
       const userElement = document.createElement('div');
       userElement.className = styles.userLiveDot;
       userMarkerRef.current = createAnchoredMarker(userElement, 'center')
-        .setLngLat([coords.lng, coords.lat])
+        .setLngLat([displayCoords.lng, displayCoords.lat])
         .addTo(map);
     } else {
-      userMarkerRef.current.setLngLat([coords.lng, coords.lat]);
+      userMarkerRef.current.setLngLat([displayCoords.lng, displayCoords.lat]);
     }
 
     const applyFocus = () => {
       if (!map.isStyleLoaded()) return;
       if (selectedRadiusKm) {
-        applyUserRadiusOverlay(map, coords.lat, coords.lng, selectedRadiusKm, mapTheme);
+        applyUserRadiusOverlay(map, displayCoords.lat, displayCoords.lng, selectedRadiusKm, mapTheme);
       } else {
         removeUserRadiusOverlay(map);
       }
@@ -2156,8 +2234,8 @@ function MapPage({ active = true }) {
       if (shouldRecenterRef.current || followUser) {
         const close = shouldRecenterRef.current;
         map.flyTo({
-          center: [coords.lng, coords.lat],
-          zoom: close ? getUserFocusZoom(coords.accuracy) : map.getZoom(),
+          center: [displayCoords.lng, displayCoords.lat],
+          zoom: close ? getUserFocusZoom(displayCoords.accuracy) : map.getZoom(),
           duration: close ? 420 : 220,
           curve: close ? 1.2 : 1,
           essential: true
@@ -2169,23 +2247,23 @@ function MapPage({ active = true }) {
 
     if (map.isStyleLoaded()) applyFocus();
     else map.once('style.load', applyFocus);
-  }, [active, coords, followUser, mapRenderer, mapTheme, selectedRadiusKm, syncViewport]);
+  }, [active, displayCoords, followUser, mapReady, mapRenderer, mapTheme, selectedRadiusKm, syncViewport]);
 
   useEffect(() => {
     if (mapRenderer === 'raster') {
-      if (!active || !coords || !selectedRadiusKm || followUser) return;
-      rasterMapControllerRef.current?.focusUser(coords, selectedRadiusKm);
+      if (!active || !displayCoords || !selectedRadiusKm || followUser) return;
+      rasterMapControllerRef.current?.focusUser(displayCoords, selectedRadiusKm);
       return;
     }
     const map = mapRef.current;
-    if (!active || !map || !coords || !selectedRadiusKm || followUser) return;
-    map.fitBounds(computeBounds(coords.lat, coords.lng, selectedRadiusKm), {
+    if (!active || !map || !displayCoords || !selectedRadiusKm || followUser) return;
+    map.fitBounds(computeBounds(displayCoords.lat, displayCoords.lng, selectedRadiusKm), {
       padding: getMapFitPadding(map, resultsSheetRef.current, 48),
       duration: 280,
       maxZoom: 13
     });
     syncViewport();
-  }, [active, coords, followUser, mapRenderer, selectedRadiusKm, syncViewport]);
+  }, [active, displayCoords, followUser, mapRenderer, selectedRadiusKm, syncViewport]);
 
   async function toggleSaveEvent(event) {
     const eventId = event.id;
@@ -2209,7 +2287,7 @@ function MapPage({ active = true }) {
   }
 
   function applyCustomFilters() {
-    if (draftFilters.distance !== 'all' && !coords) {
+    if (draftFilters.distance !== 'all' && !displayCoords) {
       requestLocation();
       showToast('Attiva la posizione per calcolare la distanza reale dagli eventi', 'info');
     }
@@ -2239,7 +2317,7 @@ function MapPage({ active = true }) {
                 active={active}
                 events={eventsInRadius}
                 selectedEventId={selectedEventId}
-                coords={coords}
+                coords={displayCoords}
                 radiusKm={selectedRadiusKm}
                 theme={mapTheme}
                 controllerRef={rasterMapControllerRef}
@@ -2279,7 +2357,13 @@ function MapPage({ active = true }) {
               ) : null}
             </div>
 
-            {resolvingCoordinates ? <span className={styles.mapSyncBadge}>Aggiorno posizioni…</span> : null}
+            {requesting && displayCoords ? (
+              <span className={styles.mapSyncBadge}>Posizione in aggiornamento…</span>
+            ) : isUsingLastKnownCoords ? (
+              <span className={styles.mapSyncBadge}>Ultima posizione disponibile</span>
+            ) : resolvingCoordinates ? (
+              <span className={styles.mapSyncBadge}>Aggiorno posizioni…</span>
+            ) : null}
 
             <MapFloatingControls
               onZoomIn={() => zoomMap('in')}

@@ -128,13 +128,8 @@ function SmartArrivalMonitor({ enabled }) {
       return undefined;
     }
 
-    startLocationWatch({
-      maxAgeMs: 30000,
-      maxAccuracyM: 100,
-      minimumUpdateInterval: 5000
-    }).catch(() => undefined);
-
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+    const usesNativeArrival = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+    if (usesNativeArrival) {
       const eligibility = getSmartArrivalEligibility(candidate, Date.now());
       NativeEventLocation.getArrivalStatus()
         .catch(() => null)
@@ -154,15 +149,22 @@ function SmartArrivalMonitor({ enabled }) {
           });
         })
         .catch(() => undefined);
+    } else {
+      startLocationWatch({
+        maxAgeMs: 30000,
+        maxAccuracyM: 100,
+        minimumUpdateInterval: 5000
+      }).catch(() => undefined);
     }
 
     return () => {
-      void stopLocationWatch();
-      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
+      if (usesNativeArrival) {
         NativeEventLocation.stopArrivalMonitoring({ clearDetection: false }).catch(() => undefined);
+      } else {
+        void stopLocationWatch();
       }
     };
-  }, [candidateId, permission, startLocationWatch, stopLocationWatch]);
+  }, [candidate, candidateId, permission, startLocationWatch, stopLocationWatch]);
 
   useEffect(() => {
     if (!enabled || !Capacitor.isNativePlatform() || Capacitor.getPlatform() !== 'android') return undefined;
@@ -206,7 +208,12 @@ function SmartArrivalMonitor({ enabled }) {
   }, [enabled, navigate]);
 
   useEffect(() => {
-    if (!candidate || !coords || coords.source !== 'live') return;
+    if (
+      !candidate
+      || !coords
+      || coords.source !== 'live'
+      || (Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android')
+    ) return;
     const result = evaluateSmartArrival({ event: candidate, location: coords, nowMs: Date.now() });
     if (!result.detected) {
       hitRef.current = { eventId: candidateId, count: 0 };

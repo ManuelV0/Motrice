@@ -417,6 +417,9 @@ function normalizeEvent(rawEvent, context, filters = {}) {
   const presentParticipants = eventParticipants.filter(
     (participant) => resolveParticipantOutcome(participant).id === 'completed'
   );
+  const reviewableParticipants = presentParticipants.filter(
+    (participant) => String(participant.user_id) !== String(rawEvent.creator_id)
+  );
   const concludedParticipants = eventParticipants.filter((participant) =>
     ['completed', 'no_show'].includes(resolveParticipantOutcome(participant).id)
   );
@@ -480,6 +483,7 @@ function normalizeEvent(rawEvent, context, filters = {}) {
     participants_present_count: normalizedPresentCount,
     participants_no_show_count: normalizedNoShowCount,
     participants_total_count: normalizedTotalCount,
+    reviewable_participants_count: reviewableParticipants.length,
     participant_stats: {
       present: normalizedPresentCount,
       no_show: normalizedNoShowCount,

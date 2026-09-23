@@ -98,6 +98,14 @@ async function buildLocalSnapshot() {
     api.listMoneyLedger({ limit: 30 })
   ]);
 
+  const criticalResults = [eventsResult, walletResult, ledgerResult];
+  const firstCriticalFailure = criticalResults.find((result) => result.status === 'rejected');
+  if (firstCriticalFailure) {
+    const snapshotError = new Error('Il centro operativo non ha ricevuto tutti i dati necessari.');
+    snapshotError.cause = firstCriticalFailure.reason;
+    throw snapshotError;
+  }
+
   const events = eventsResult.status === 'fulfilled' && Array.isArray(eventsResult.value)
     ? eventsResult.value
     : [];

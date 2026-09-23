@@ -60,6 +60,7 @@ public class EventLocationTrackingPlugin extends Plugin {
     private static final long MAX_POSITION_TIMEOUT_MS = 60000L;
     private static final long MIN_WATCH_INTERVAL_MS = 1000L;
     private static final long MAX_WATCH_INTERVAL_MS = 60000L;
+    private static final long MAX_SAMPLE_WINDOW_MS = 10000L;
     private static final float HIGH_ACCURACY_TARGET_M = 100f;
     private final Set<SingleLocationRequest> activeLocationRequests =
             Collections.synchronizedSet(new HashSet<>());
@@ -78,6 +79,20 @@ public class EventLocationTrackingPlugin extends Plugin {
             return;
         }
         requestPermissionForAlias(LOCATION_ALIAS, call, "locationPermissionsCallback");
+    }
+
+    @PluginMethod
+    public void cancelCurrentPositionRequests(PluginCall call) {
+        List<SingleLocationRequest> requests;
+        synchronized (activeLocationRequests) {
+            requests = new ArrayList<>(activeLocationRequests);
+        }
+        for (SingleLocationRequest request : requests) {
+            request.cancelAndReject();
+        }
+        JSObject result = new JSObject();
+        result.put("cancelled", requests.size());
+        call.resolve(result);
     }
 
     @PermissionCallback
@@ -165,6 +180,16 @@ public class EventLocationTrackingPlugin extends Plugin {
                 10.0,
                 Math.min(1000.0, call.getDouble("desiredAccuracyM", (double) HIGH_ACCURACY_TARGET_M))
         );
+        long sampleWindowMs = clampLong(
+                call.getDouble("sampleWindowMs", 0.0).longValue(),
+                0L,
+                MAX_SAMPLE_WINDOW_MS
+        );
+        int minimumSamples = (int) clampLong(
+                call.getDouble("minimumSamples", 1.0).longValue(),
+                1L,
+                5L
+        );
         try {
             List<String> enabledProviders = getEnabledProviders(manager, highAccuracy, hasFine);
             if (enabledProviders.isEmpty()) {
@@ -179,7 +204,9 @@ public class EventLocationTrackingPlugin extends Plugin {
                     highAccuracy,
                     desiredAccuracyM,
                     maximumAgeMs,
-                    timeoutMs
+                    timeoutMs,
+                    sampleWindowMs,
+                    minimumSamples
             );
             activeLocationRequests.add(request);
             request.start();
@@ -270,9 +297,13 @@ public class EventLocationTrackingPlugin extends Plugin {
         private final float desiredAccuracyM;
         private final long maximumAgeMs;
         private final long timeoutMs;
+        private final long sampleWindowMs;
+        private final int minimumSamples;
         private final Handler mainHandler = new Handler(Looper.getMainLooper());
         private final AtomicBoolean finished = new AtomicBoolean(false);
         private Location bestLocation;
+        private int sampleCount = 0;
+        private boolean sampleWindowScheduled = false;
         private final Runnable timeoutAction = () -> {
             if (bestLocation != null) {
                 resolve(bestLocation);
@@ -288,7 +319,9 @@ public class EventLocationTrackingPlugin extends Plugin {
                 boolean highAccuracy,
                 float desiredAccuracyM,
                 long maximumAgeMs,
-                long timeoutMs
+                long timeoutMs,
+                long sampleWindowMs,
+                int minimumSamples
         ) {
             this.call = call;
             this.manager = manager;
@@ -297,6 +330,8 @@ public class EventLocationTrackingPlugin extends Plugin {
             this.desiredAccuracyM = desiredAccuracyM;
             this.maximumAgeMs = maximumAgeMs;
             this.timeoutMs = timeoutMs;
+            this.sampleWindowMs = sampleWindowMs;
+            this.minimumSamples = minimumSamples;
         }
 
         void start() {
@@ -312,6 +347,7 @@ public class EventLocationTrackingPlugin extends Plugin {
                                     && now - cached.getTime() <= maximumAgeMs
                                     && isBetterLocation(cached, bestLocation)) {
                                 bestLocation = cached;
+                                sampleCount += 1;
                             }
                         } catch (SecurityException ignored) {
                             reject("Permesso posizione non concesso", "MOTRICE_LOCATION_PERMISSION_REQUIRED");
@@ -320,10 +356,13 @@ public class EventLocationTrackingPlugin extends Plugin {
                             // Continue with the remaining providers.
                         }
                     }
-                    if (isAcceptable(bestLocation)) {
+                    if (sampleWindowMs <= 0L
+                            && isAcceptable(bestLocation)
+                            && sampleCount >= minimumSamples) {
                         resolve(bestLocation);
                         return;
                     }
+                    if (bestLocation != null && sampleWindowMs > 0L) scheduleSampleWindow();
                 }
 
                 boolean listening = false;
@@ -352,14 +391,41 @@ public class EventLocationTrackingPlugin extends Plugin {
 
         @Override
         public void onLocationChanged(Location location) {
+            sampleCount += 1;
             if (isBetterLocation(location, bestLocation)) bestLocation = location;
-            if (isAcceptable(location)) resolve(location);
+            if (!highAccuracy) {
+                resolve(bestLocation);
+                return;
+            }
+            if (isExcellent(bestLocation) && sampleCount >= minimumSamples) {
+                resolve(bestLocation);
+                return;
+            }
+            if (sampleWindowMs <= 0L) {
+                if (isAcceptable(bestLocation) && sampleCount >= minimumSamples) resolve(bestLocation);
+                return;
+            }
+            scheduleSampleWindow();
         }
 
         private boolean isAcceptable(Location location) {
             if (location == null) return false;
             if (!highAccuracy) return true;
             return location.hasAccuracy() && location.getAccuracy() <= desiredAccuracyM;
+        }
+
+        private boolean isExcellent(Location location) {
+            if (location == null || !location.hasAccuracy()) return false;
+            float excellentTargetM = Math.min(20f, Math.max(10f, desiredAccuracyM / 3f));
+            return location.getAccuracy() <= excellentTargetM;
+        }
+
+        private void scheduleSampleWindow() {
+            if (sampleWindowScheduled || sampleWindowMs <= 0L) return;
+            sampleWindowScheduled = true;
+            mainHandler.postDelayed(() -> {
+                if (bestLocation != null) resolve(bestLocation);
+            }, sampleWindowMs);
         }
 
         @Override
@@ -396,6 +462,16 @@ public class EventLocationTrackingPlugin extends Plugin {
         void cancel() {
             if (!finished.compareAndSet(false, true)) return;
             cleanup();
+        }
+
+        void cancelAndReject() {
+            if (!finished.compareAndSet(false, true)) return;
+            cleanup();
+            try {
+                call.reject("Richiesta posizione annullata", "MOTRICE_LOCATION_CANCELLED");
+            } catch (RuntimeException ignored) {
+                // The caller may already have left the page.
+            }
         }
 
         void cleanup() {

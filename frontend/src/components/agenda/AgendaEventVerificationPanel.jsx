@@ -46,7 +46,8 @@ function requestEventLocationOptions(event) {
   return {
     requireFresh: true,
     maxAgeMs: 30000,
-    maxAccuracyM: getEventLocationAccuracyLimit(event?.geofence_radius_m)
+    maxAccuracyM: getEventLocationAccuracyLimit(event?.geofence_radius_m),
+    throwOnError: true
   };
 }
 
@@ -112,6 +113,7 @@ function AgendaEventVerificationPanel({
   event,
   isOrganizer,
   initialMethod = '',
+  arrivalDetected = false,
   onClose,
   onVerified,
   onStartWorkout,
@@ -127,6 +129,7 @@ function AgendaEventVerificationPanel({
   const [method, setMethod] = useState(() => {
     if (initialMethod === 'qr' && usesQr) return 'qr';
     if (initialMethod === 'geo' && usesGeo) return 'geo';
+    if (arrivalDetected && usesGeo) return 'geo';
     return mode === 'qr' ? 'qr' : usesQr && usesGeo ? '' : 'geo';
   });
   const [progress, setProgress] = useState(null);
@@ -149,17 +152,40 @@ function AgendaEventVerificationPanel({
   const lastScanRef = useRef({ fingerprint: '', at: 0 });
   const verifiedNotifiedRef = useRef(false);
   const trackingStartedRef = useRef(false);
-  const { coords, requesting, requestLocation, error: locationError } = useUserLocation();
+  const gpsFeedbackTimersRef = useRef([]);
+  const {
+    coords,
+    requesting,
+    requestLocation,
+    cancelLocationRequest
+  } = useUserLocation();
   const timing = getEventTiming({ ...event, checkin_grace_minutes: graceMinutes }, nowMs);
   const maximumGraceMinutes = getMaximumCheckInGraceMinutes(event);
   const extensionOptions = [15, 20, 30].filter(
     (minutes) => minutes > graceMinutes && minutes <= maximumGraceMinutes
   );
 
+  const clearGpsFeedbackTimers = useCallback(() => {
+    gpsFeedbackTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    gpsFeedbackTimersRef.current = [];
+  }, []);
+
+  const closeVerification = useCallback(() => {
+    clearGpsFeedbackTimers();
+    cancelLocationRequest();
+    onClose?.();
+  }, [cancelLocationRequest, clearGpsFeedbackTimers, onClose]);
+
+  useEffect(() => () => {
+    clearGpsFeedbackTimers();
+    cancelLocationRequest();
+  }, [cancelLocationRequest, clearGpsFeedbackTimers]);
+
   useEffect(() => {
     if (initialMethod === 'qr' && usesQr) setMethod('qr');
     else if (initialMethod === 'geo' && usesGeo) setMethod('geo');
-  }, [event?.id, initialMethod, usesGeo, usesQr]);
+    else if (arrivalDetected && usesGeo) setMethod('geo');
+  }, [arrivalDetected, event?.id, initialMethod, usesGeo, usesQr]);
 
   const activateLocationTracking = useCallback(async (location, source = 'gps') => {
     if (!usesGeo || !location || trackingStartedRef.current || !event?.id) return;
@@ -194,11 +220,17 @@ function AgendaEventVerificationPanel({
   }, [onVerified]);
 
   const loadParticipantProgress = useCallback(async ({ silent = false } = {}) => {
-    if (isOrganizer || !event?.id) return null;
+    if (!event?.id) return null;
     if (!silent) setLoading(true);
     try {
       const nextProgress = await api.getEventParticipationProgress(event.id);
       setProgress(nextProgress);
+      if (isOrganizer) {
+        if (nextProgress?.organizer_present || nextProgress?.organizer_presence_at) {
+          setOrganizerLocationVerified(true);
+        }
+        return nextProgress;
+      }
       const progressOutcome = resolveParticipantOutcome(nextProgress);
       const presenceVerified = ['checked_in', 'completed'].includes(progressOutcome.id);
       if (presenceVerified) {
@@ -372,13 +404,28 @@ function AgendaEventVerificationPanel({
   async function verifyGps() {
     if (!event?.id || busy) return;
     setBusy(true);
+    clearGpsFeedbackTimers();
     setLocationFeedback({ tone: 'loading', message: 'Acquisizione della posizione attuale…' });
+    gpsFeedbackTimersRef.current = [
+      window.setTimeout(() => {
+        setLocationFeedback({
+          tone: 'loading',
+          message: 'GPS attivo: sto migliorando la precisione della posizione…'
+        });
+      }, 8000),
+      window.setTimeout(() => {
+        setLocationFeedback({
+          tone: 'loading',
+          message: 'Ultimi secondi: resta fermo vicino a una finestra o all’aperto.'
+        });
+      }, 18000)
+    ];
     try {
       // La verifica deve usare una rilevazione nuova: la posizione in cache serve
       // alla mappa, ma non e sufficiente per certificare la presenza all evento.
       const location = await requestLocation(requestEventLocationOptions(event));
       if (!location) {
-        throw new Error(locationError || 'Attiva la posizione del telefono, autorizza Motrice e riprova.');
+        throw new Error('Verifica GPS interrotta. Riapri la verifica e riprova.');
       }
       if (!Number.isFinite(Number(location.lat)) || !Number.isFinite(Number(location.lng))) {
         throw new Error('Coordinate non valide. Attiva la posizione precisa e riprova.');
@@ -406,14 +453,17 @@ function AgendaEventVerificationPanel({
       if (!insideRadius) {
         throw new Error(`Sei fuori dall’area dell’evento (${Math.round(distance || locationProof.distanceM)} m, raggio ${Math.round(locationProof.radiusM)} m).`);
       }
+      const accuracyDetail = Number.isFinite(Number(location.accuracy))
+        ? ` · precisione ±${Math.round(Number(location.accuracy))} m`
+        : '';
 
       if (isOrganizer) {
         setOrganizerLocationVerified(true);
         setLocationFeedback({
           tone: 'success',
           message: Number.isFinite(distance)
-            ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
-            : 'Posizione confermata nell’area dell’evento.'
+            ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento${accuracyDetail}.`
+            : `Posizione confermata nell’area dell’evento${accuracyDetail}.`
         });
         showToast(
           hasWorkout ? 'Geolocalizzazione confermata · allenamento sbloccato' : 'Geolocalizzazione confermata · presenza registrata',
@@ -434,8 +484,8 @@ function AgendaEventVerificationPanel({
       setLocationFeedback({
         tone: 'success',
         message: Number.isFinite(distance)
-          ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento.`
-          : 'Posizione confermata nell’area dell’evento.'
+          ? `Posizione confermata: sei a ${Math.round(distance)} m dal punto evento${accuracyDetail}.`
+          : `Posizione confermata nell’area dell’evento${accuracyDetail}.`
       });
       showToast(
         `Presenza verificata · +${Number(result?.mot_awarded || 2)} MOT${hasWorkout ? ' · allenamento sbloccato' : ''}`,
@@ -450,6 +500,7 @@ function AgendaEventVerificationPanel({
       showToast(message, 'error');
       playFeedback(false);
     } finally {
+      clearGpsFeedbackTimers();
       setBusy(false);
     }
   }
@@ -478,7 +529,38 @@ function AgendaEventVerificationPanel({
   }
 
   const progressOutcome = resolveParticipantOutcome(progress);
-  const panelVerified = verified || organizerLocationVerified || ['checked_in', 'completed'].includes(progressOutcome.id);
+  const panelVerified = verified
+    || organizerLocationVerified
+    || Boolean(isOrganizer && (progress?.organizer_present || progress?.organizer_presence_at))
+    || ['checked_in', 'completed'].includes(progressOutcome.id);
+  const isAssistedArrival = Boolean(arrivalDetected && !isOrganizer && usesGeo);
+  const assistedArrivalPhase = panelVerified
+    ? 'verified'
+    : busy || requesting
+      ? 'checking'
+      : locationFeedback?.tone === 'error'
+        ? 'error'
+        : 'detected';
+  const assistedArrivalCopy = {
+    detected: {
+      title: 'Sei vicino al punto dell’evento',
+      detail: 'La presenza non è ancora registrata. Confermala con un solo tocco.'
+    },
+    checking: {
+      title: 'Verifica della posizione in corso',
+      detail: 'Resta fermo qualche secondo mentre scegliamo il segnale GPS più preciso.'
+    },
+    error: {
+      title: 'Posizione non ancora confermata',
+      detail: usesQr
+        ? 'Puoi riprovare oppure usare subito il QR Code.'
+        : 'Attendi qualche secondo e riprova la verifica.'
+    },
+    verified: {
+      title: 'Check-in completato',
+      detail: 'La tua presenza è stata verificata correttamente.'
+    }
+  }[assistedArrivalPhase];
 
   return (
     <section className={`${styles.panel} ${panelVerified ? styles.panelVerified : ''}`} aria-label="Verifica presenza evento">
@@ -486,14 +568,24 @@ function AgendaEventVerificationPanel({
         <span className={styles.headerIcon} aria-hidden="true"><ShieldCheck size={20} /></span>
         <div>
           <small>{event?.is_personal ? 'ALLENAMENTO PERSONALE' : isOrganizer ? 'MODALITÀ ORGANIZER' : 'PRESENZA EVENTO'}</small>
-          <h3>{panelVerified ? 'Presenza verificata' : event?.is_personal ? 'Conferma il punto di allenamento' : isOrganizer ? 'Check-in partecipante' : 'Come vuoi verificarti?'}</h3>
+          <h3>{panelVerified
+            ? 'Presenza verificata'
+            : event?.is_personal
+              ? 'Conferma il punto di allenamento'
+              : isOrganizer
+                ? 'Check-in partecipante'
+                : isAssistedArrival
+                  ? 'Sei arrivato? Conferma la presenza'
+                  : 'Come vuoi verificarti?'}</h3>
           <p>{panelVerified
             ? hasOutdoorTracking ? 'Il monitoraggio GPS dell’attività è ora sbloccato.' : hasWorkout ? 'La scheda allenamento è ora sbloccata.' : 'La presenza è registrata e la sessione temporale è attiva.'
             : event?.is_personal
               ? 'Il GPS verifica il tuo arrivo. Sarai sempre tu a premere “Avvia allenamento”.'
               : isOrganizer
               ? 'Scannerizza il QR personale mostrato dal partecipante.'
-              : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
+              : isAssistedArrival
+                ? 'Motrice ha rilevato il tuo arrivo, ma il check-in resta sotto il tuo controllo.'
+                : 'QR Code offre il bonus maggiore; la posizione è l’alternativa rapida.'}</p>
         </div>
         <span className={styles.headerActions}>
           <ContextInfoButton
@@ -506,7 +598,7 @@ function AgendaEventVerificationPanel({
             ]}
             note="La posizione viene richiesta soltanto quando serve alla verifica o al monitoraggio dell’attività."
           />
-          <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Chiudi verifica"><X size={19} /></button>
+          <button type="button" className={styles.closeButton} onClick={closeVerification} aria-label="Chiudi verifica"><X size={19} /></button>
         </span>
       </header>
 
@@ -521,6 +613,27 @@ function AgendaEventVerificationPanel({
           </small>
         </div>
       </div>
+
+      {isAssistedArrival ? (
+        <div
+          className={styles.arrivalAssist}
+          data-state={assistedArrivalPhase}
+          role="status"
+          aria-live="polite"
+        >
+          <span aria-hidden="true">
+            {assistedArrivalPhase === 'verified'
+              ? <CheckCircle2 size={21} />
+              : assistedArrivalPhase === 'checking'
+                ? <RefreshCw size={21} />
+                : <LocateFixed size={21} />}
+          </span>
+          <div>
+            <strong>{assistedArrivalCopy.title}</strong>
+            <small>{assistedArrivalCopy.detail}</small>
+          </div>
+        </div>
+      ) : null}
 
       {!panelVerified && !timing.isCheckInOpen ? (
         <div className={styles.closedTimingState}>
@@ -620,12 +733,28 @@ function AgendaEventVerificationPanel({
           {usesGeo && method === 'geo' ? (
             <div className={styles.gpsState}>
               <span aria-hidden="true"><LocateFixed size={26} /></span>
-              <div><strong>Verifica nell’area evento</strong><small>Il telefono controllerà la distanza dal punto dell’attività.</small></div>
+              <div>
+                <strong>{isAssistedArrival ? 'Completa il check-in' : 'Verifica nell’area evento'}</strong>
+                <small>{isAssistedArrival
+                  ? 'Controlleremo distanza e precisione prima di registrare la presenza.'
+                  : 'Il telefono controllerà la distanza dal punto dell’attività.'}</small>
+              </div>
               <button type="button" className={styles.primaryAction} onClick={verifyGps} disabled={busy || requesting}>
-                <LocateFixed size={19} /> {busy || requesting ? 'Verifica in corso…' : 'Conferma geolocalizzazione'}
+                <LocateFixed size={19} /> {busy || requesting
+                  ? 'Verifica in corso…'
+                  : isAssistedArrival
+                    ? 'Conferma check-in'
+                    : 'Verifica presenza GPS'}
               </button>
               {locationFeedback ? (
-                <p className={styles.locationStatus} data-tone={locationFeedback.tone}>{locationFeedback.message}</p>
+                <p className={styles.locationStatus} data-tone={locationFeedback.tone} role="status" aria-live="polite">
+                  {locationFeedback.message}
+                </p>
+              ) : null}
+              {locationFeedback?.tone === 'error' && usesQr ? (
+                <button type="button" className={styles.qrFallback} onClick={() => setMethod('qr')}>
+                  <QrCode size={17} /> Usa QR Code
+                </button>
               ) : null}
             </div>
           ) : null}

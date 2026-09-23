@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App';
 import { ToastProvider } from './context/ToastContext';
 import { BillingProvider } from './context/BillingContext';
+import { LocationProvider } from './hooks/useUserLocation';
 import RootErrorBoundary from './components/RootErrorBoundary';
 import { initializeSupabaseAuth } from './services/authSession';
 import { initializeErrorMonitoring } from './services/errorMonitoring';
@@ -44,9 +45,11 @@ function renderApp() {
       <RootErrorBoundary>
         <BrowserRouter>
           <ToastProvider>
-            <BillingProvider>
-              <App />
-            </BillingProvider>
+            <LocationProvider>
+              <BillingProvider>
+                <App />
+              </BillingProvider>
+            </LocationProvider>
           </ToastProvider>
         </BrowserRouter>
       </RootErrorBoundary>

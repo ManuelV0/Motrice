@@ -143,26 +143,59 @@
 
 .switch {
   position: relative;
-  width: 2.72rem;
-  height: 1.58rem;
-  padding: 0.16rem;
-  border: 1px solid #3d413a;
-  border-radius: 999px;
-  background: #262925;
-  box-shadow: inset 0 1px 4px rgb(0 0 0 / 25%);
+  width: 2.56rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 0.08rem;
+  left: 0.08rem;
+  height: 0.42rem;
+  border: 1px solid #464b43;
+  border-radius: 0.18rem;
+  background: #292c28;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 32%);
+  transform: translateY(-50%);
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
 
 .switch > span {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 0;
   display: block;
   width: 1.12rem;
   height: 1.12rem;
+  border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 50%;
-  background: #8b9087;
-  transition: transform 180ms ease, background 180ms ease;
+  background: #8b9088;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 28%);
+  transform: translateY(-50%);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
 
-.switchOn { border-color: rgb(204 255 0 / 50%); background: rgb(204 255 0 / 18%); }
-.switchOn > span { transform: translateX(1.1rem); background: var(--primary); box-shadow: 0 0 12px rgb(204 255 0 / 32%); }
+.switch:hover:not(:disabled)::before { border-color: color-mix(in srgb, var(--primary) 34%, #444941); }
+.switch:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.switchOn::before {
+  border-color: rgb(204 255 0 / 48%);
+  background: rgb(204 255 0 / 24%);
+  box-shadow: inset 0 0 0 1px rgb(204 255 0 / 6%);
+}
+.switchOn > span {
+  transform: translate(1.44rem, -50%);
+  border-color: rgb(204 255 0 / 72%);
+  background: var(--primary);
+  box-shadow: 0 3px 8px rgb(0 0 0 / 30%), 0 0 9px rgb(204 255 0 / 24%);
+}
 .switch:disabled { cursor: default; opacity: 0.72; }
 
 .locationCard {
@@ -263,6 +296,7 @@
 @media (prefers-reduced-motion: reduce) {
   .accordion,
   .accordionChevron,
+  .switch::before,
   .switch > span { transition: none; }
   .accordionPanel { animation: none; }
 }

@@ -19,6 +19,7 @@ import {
   UserCog,
   UsersRound,
   WalletCards,
+  WifiOff,
   X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -30,6 +31,7 @@ import { useToast } from '../context/ToastContext';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { getAdminOperationsSnapshot, increaseAdminVirtualCredit } from '../services/adminOperations';
 import { getAuthSession } from '../services/authSession';
+import { getReadableLoadError, isBrowserOffline, isNetworkError } from '../utils/networkStatus';
 import {
   buildAdminAlerts,
   filterAdminEvents,
@@ -692,20 +694,32 @@ function AdminOperationsPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadErrorIsNetwork, setLoadErrorIsNetwork] = useState(false);
 
   usePageMeta({
     title: 'Centro operativo | Motrice',
     description: 'Panoramica amministrativa protetta della beta Motrice.'
   });
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, []);
+
   const load = useCallback(async ({ silent = false } = {}) => {
     if (silent) setRefreshing(true);
     else setLoading(true);
+    setLoadError('');
+    setLoadErrorIsNetwork(false);
     try {
+      if (isBrowserOffline()) throw new Error('Failed to fetch');
       setData(await getAdminOperationsSnapshot());
       if (silent) showToast('Dati amministrativi aggiornati', 'success');
     } catch (error) {
-      showToast(error.message || 'Impossibile caricare il centro operativo', 'error');
+      const message = getReadableLoadError(error, 'Impossibile caricare il centro operativo');
+      setLoadError(message);
+      setLoadErrorIsNetwork(isNetworkError(error));
+      showToast(message, 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -715,6 +729,20 @@ function AdminOperationsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setLoadError('Connessione assente. I dati mostrati potrebbero non essere aggiornati.');
+      setLoadErrorIsNetwork(true);
+    };
+    const handleOnline = () => load({ silent: Boolean(data) });
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [data, load]);
 
   function navigateToSection(tab, filter = 'all') {
     if (tab === 'users') setUserPreset(filter || 'all');
@@ -783,11 +811,11 @@ function AdminOperationsPage() {
   }
 
   return (
-    <main className={styles.page} id="main-content">
+    <section className={styles.page} aria-labelledby="admin-operations-title">
       <header className={styles.header}>
         <div className={styles.headerCopy}>
           <p><ShieldCheck size={15} /> Amministrazione beta</p>
-          <h1>Centro operativo</h1>
+          <h1 id="admin-operations-title">Centro operativo</h1>
           <span>Controlla utenti, eventi, presenze e wallet da un unico punto.</span>
         </div>
         <div className={styles.headerActions}>
@@ -795,9 +823,21 @@ function AdminOperationsPage() {
           {data ? <span className={data.source === 'admin_rpc' ? styles.liveBadge : styles.previewBadge}>{data.source === 'admin_rpc' ? 'Dati protetti' : 'Anteprima locale'}</span> : null}
           <button type="button" onClick={() => load({ silent: true })} disabled={refreshing || loading} aria-label="Aggiorna centro operativo">
             <RefreshCw size={19} className={refreshing ? styles.spin : ''} />
+            <span className={styles.refreshLabel}>Aggiorna</span>
           </button>
         </div>
       </header>
+
+      {loadError && data ? (
+        <section className={styles.connectionNotice} role="alert">
+          <WifiOff size={18} aria-hidden="true" />
+          <span>
+            <strong>{loadErrorIsNetwork ? 'Connessione assente' : 'Aggiornamento non riuscito'}</strong>
+            <small>{loadError} Stai visualizzando l’ultimo aggiornamento disponibile.</small>
+          </span>
+          <button type="button" onClick={() => load({ silent: true })} disabled={refreshing}>Riprova</button>
+        </section>
+      ) : null}
 
       <nav className={styles.tabs} aria-label="Sezioni centro operativo">
         {TABS.map((tab) => {
@@ -818,7 +858,13 @@ function AdminOperationsPage() {
       </nav>
 
       {loading ? <LoadingSkeleton rows={7} variant="detail" /> : !data ? (
-        <EmptyState icon={ShieldCheck} title="Centro operativo non disponibile" description="Riprova ad aggiornare la pagina." primaryActionLabel="Riprova" onPrimaryAction={() => load()} />
+        <EmptyState
+          icon={loadErrorIsNetwork ? WifiOff : ShieldCheck}
+          title={loadErrorIsNetwork ? 'Connessione assente' : 'Centro operativo non disponibile'}
+          description={loadError || 'Riprova ad aggiornare la pagina.'}
+          primaryActionLabel="Riprova"
+          onPrimaryAction={() => load()}
+        />
       ) : (
         <div className={styles.content}>
           {activeTab === 'overview' ? <OverviewPanel data={data} onNavigate={navigateToSection} /> : null}
@@ -837,7 +883,7 @@ function AdminOperationsPage() {
         canManageCredit={String(session?.role || '').toLowerCase() === 'admin' || String(session?.email || '').trim().toLowerCase() === 'aletarqui@libero.it'}
       />
       <EventDetailDrawer event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-    </main>
+    </section>
   );
 }
 

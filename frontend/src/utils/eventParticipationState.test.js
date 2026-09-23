@@ -194,7 +194,8 @@ test('the organizer sees management, check-in, live session and feedback in orde
     event_datetime: new Date(startsAt).toISOString(),
     duration_minutes: 60,
     checkin_grace_minutes: 15,
-    join_policy: 'approval'
+    join_policy: 'approval',
+    reviewable_participants_count: 1
   };
 
   assert.equal(resolveEventPrimaryAction({
@@ -221,6 +222,45 @@ test('the organizer sees management, check-in, live session and feedback in orde
     event,
     referenceTime: startsAt + 26 * 60 * 60 * 1000
   }).id, 'summary');
+});
+
+test('the organizer does not see feedback when no verified participant attended', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const event = {
+    id: 'event-without-participants',
+    created_by: 'me',
+    event_datetime: new Date(startsAt).toISOString(),
+    duration_minutes: 60,
+    status: 'completed',
+    participants_count: 1,
+    participants_present_count: 1,
+    reviewable_participants_count: 0
+  };
+
+  const action = resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt + 61 * 60 * 1000
+  });
+
+  assert.equal(action.id, 'summary');
+  assert.equal(action.label, 'Vedi riepilogo');
+});
+
+test('the organizer sees feedback when a verified participant is reviewable', () => {
+  const startsAt = Date.parse('2026-09-11T10:00:00.000Z');
+  const event = {
+    id: 'event-with-participant',
+    created_by: 'me',
+    event_datetime: new Date(startsAt).toISOString(),
+    duration_minutes: 60,
+    status: 'completed',
+    reviewable_participants_count: 1
+  };
+
+  assert.equal(resolveEventPrimaryAction({
+    event,
+    referenceTime: startsAt + 61 * 60 * 1000
+  }).id, 'feedback');
 });
 
 test('the owner can open the edit flow for a scheduled personal event', () => {

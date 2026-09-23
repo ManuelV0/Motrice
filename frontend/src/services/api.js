@@ -6,6 +6,7 @@ import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safe
 import { piggybank } from './piggybank';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
 import { getWorkoutCompletionGate } from '../utils/workoutCompletionGate';
+import { isWorkoutSessionExpired } from '../utils/workoutSessionWindow';
 import { awardXp, getXpState as getUserXpState } from './xp';
 import {
   awardPartnerScore,
@@ -1264,6 +1265,16 @@ function computeReliability(localUser) {
 function enrichEvent(event, store, origin) {
   const currentUserId = resolveAuthUserId();
   const isCurrentUserOrganizer = isEventOrganizerForUser(store, event, currentUserId);
+  const organizerUserId = resolveOrganizerUserIdForEvent(store, event);
+  const reviewableParticipantsCount = listEventRsvps(store, event.id)
+    .filter((participant) => {
+      const participantUserId = Number(participant?.user_id);
+      if (!Number.isInteger(participantUserId) || participantUserId <= 0) return false;
+      if (participantUserId === Number(organizerUserId)) return false;
+      return String(participant?.status || '') === 'completed'
+        || Number(participant?.cashback_percent || 0) >= 100;
+    })
+    .length;
   const rsvp = getEventRsvp(store, event.id, currentUserId);
   const joinRequest = store.eventJoinRequests?.[String(event.id)]?.[String(currentUserId)] || null;
   const isSaved = Boolean(store.savedEvents && store.savedEvents[String(event.id)]);
@@ -1360,6 +1371,7 @@ function enrichEvent(event, store, origin) {
     analytics,
     participant_status: rsvp?.status || null,
     participant_lifecycle_state: rsvp?.lifecycle_state || null,
+    reviewable_participants_count: reviewableParticipantsCount,
     is_going: Boolean(rsvp && ['going', 'completed'].includes(String(rsvp.status || ''))),
     is_join_pending: joinRequest?.status === 'pending',
     join_request_status: joinRequest?.status || null,
@@ -3411,6 +3423,13 @@ const localApi = {
     const currentUserId = resolveAuthUserId();
     const event = ensureEventExists(store, eventId);
     const eventKey = String(event.id);
+    const previous = store.workoutSessionsByEvent?.[eventKey] || {};
+    if (previous.started_at) {
+      if (!previous.completed_at && isWorkoutSessionExpired(previous.started_at)) {
+        throw new Error('Le tre ore disponibili dall’avvio dell’evento sono terminate');
+      }
+      return withDelay(clone(previous));
+    }
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
     const participant = getEventRsvp(store, event.id, currentUserId);
     const hasConfirmedParticipation = ['going', 'completed'].includes(String(participant?.status || '').toLowerCase());
@@ -3436,7 +3455,6 @@ const localApi = {
         throw new Error('Raggiungi il punto di allenamento e conferma la posizione');
       }
     }
-    const previous = store.workoutSessionsByEvent?.[eventKey] || {};
     const firstParticipantCheckIn = Object.values(store.checkinRecordsByEvent?.[eventKey] || {})
       .map((record) => record?.ts)
       .filter(Boolean)
@@ -3462,10 +3480,22 @@ const localApi = {
   },
 
   async recordWorkoutExerciseSet(entry) {
+    const store = loadStore();
+    const session = store.workoutSessionsByEvent?.[String(entry?.eventId || '')];
+    if (!session?.started_at) throw new Error('Avvia prima l allenamento');
+    if (session.completed_at || isWorkoutSessionExpired(session.started_at)) {
+      throw new Error('La finestra dell’allenamento è terminata');
+    }
     return withDelay(clone(entry || {}));
   },
 
-  async removeWorkoutExerciseSet() {
+  async removeWorkoutExerciseSet({ eventId } = {}) {
+    const store = loadStore();
+    const session = store.workoutSessionsByEvent?.[String(eventId || '')];
+    if (!session?.started_at) throw new Error('Avvia prima l allenamento');
+    if (session.completed_at || isWorkoutSessionExpired(session.started_at)) {
+      throw new Error('La finestra dell’allenamento è terminata');
+    }
     return withDelay({ success: true });
   },
 
@@ -3475,6 +3505,9 @@ const localApi = {
     const eventKey = String(event.id);
     const current = store.workoutSessionsByEvent?.[eventKey];
     if (!current?.started_at) throw new Error('Avvia prima l allenamento');
+    if (current.completed_at || isWorkoutSessionExpired(current.started_at)) {
+      throw new Error('La finestra dell’allenamento è terminata');
+    }
     const progress = Math.max(Number(current.progress_percent || 0), Math.min(100, Number(progressPercent) || 0));
     const completionGate = getWorkoutCompletionGate({
       startedAt: current.started_at,
@@ -3501,6 +3534,9 @@ const localApi = {
     const eventKey = String(event.id);
     const current = store.workoutSessionsByEvent?.[eventKey];
     if (!current?.started_at) throw new Error('Avvia prima l allenamento');
+    if (current.completed_at || isWorkoutSessionExpired(current.started_at)) {
+      throw new Error('La finestra dell’allenamento è terminata');
+    }
     if (Number(current.progress_percent || 0) < 100) throw new Error('Completa tutta la scheda prima di terminare');
     const completionGate = getWorkoutCompletionGate({
       startedAt: current.started_at,

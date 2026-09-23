@@ -16,6 +16,7 @@ import {
   Settings2,
   ShieldCheck,
   Users,
+  WifiOff,
   X,
   XCircle
 } from 'lucide-react';
@@ -38,14 +39,13 @@ import {
   clearSmartArrivalState,
   isEventPresenceVerified
 } from '../services/smartArrival';
+import {
+  isHistoricalAgendaEvent,
+  isUpcomingAgendaEvent
+} from '../utils/agendaTimeline';
+import { getReadableLoadError, isBrowserOffline, isNetworkError } from '../utils/networkStatus';
 
 const CALENDAR_WEEKDAYS = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
-
-function isHistoricalEvent(event, referenceTime = Date.now()) {
-  if (event?.status === 'cancelled') return true;
-  const timing = getEventTiming(event, referenceTime);
-  return getEventSessionTimeline(event, timing, referenceTime).hasEnded;
-}
 
 function getPendingRequestsCount(events) {
   return events.reduce((total, event) => {
@@ -387,6 +387,7 @@ function AgendaPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [loadErrorIsNetwork, setLoadErrorIsNetwork] = useState(false);
   const [activeSection, setActiveSection] = useState('all');
   const [activeTimeline, setActiveTimeline] = useState('upcoming');
   const [selectedRange, setSelectedRange] = useState(null);
@@ -414,12 +415,15 @@ function AgendaPage() {
   const loadEvents = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     setLoadError('');
+    setLoadErrorIsNetwork(false);
     try {
+      if (isBrowserOffline()) throw new Error('Failed to fetch');
       const nextEvents = await api.listEvents({ dateRange: 'all', includePast: true, includeCancelled: true, sortBy: 'soonest' });
       setEvents(Array.isArray(nextEvents) ? nextEvents : []);
     } catch (error) {
-      const message = error?.message || 'Impossibile aggiornare gli eventi';
+      const message = getReadableLoadError(error, 'Impossibile aggiornare gli eventi');
       setLoadError(message);
+      setLoadErrorIsNetwork(isNetworkError(error));
       showToast(message, 'error');
     } finally {
       if (!silent) setLoading(false);
@@ -428,6 +432,20 @@ function AgendaPage() {
 
   useEffect(() => {
     loadEvents();
+  }, [loadEvents]);
+
+  useEffect(() => {
+    const handleOffline = () => {
+      setLoadError('Connessione assente. Controlla la rete e riprova.');
+      setLoadErrorIsNetwork(true);
+    };
+    const handleOnline = () => loadEvents({ silent: false });
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
   }, [loadEvents]);
 
   useEffect(() => {
@@ -488,8 +506,8 @@ function AgendaPage() {
   }, [calendarEvents]);
   const timelineCalendarEvents = useMemo(
     () => calendarEvents.filter((event) => activeTimeline === 'history'
-      ? isHistoricalEvent(event, nowMs)
-      : !isHistoricalEvent(event, nowMs)),
+      ? isHistoricalAgendaEvent(event, nowMs)
+      : isUpcomingAgendaEvent(event, nowMs)),
     [activeTimeline, calendarEvents, nowMs]
   );
   const timelineOwnedEvents = useMemo(
@@ -581,7 +599,7 @@ function AgendaPage() {
     }
 
     setActiveSection('all');
-    setActiveTimeline(isHistoricalEvent(requestedAgendaEvent) ? 'history' : 'upcoming');
+    setActiveTimeline(isHistoricalAgendaEvent(requestedAgendaEvent) ? 'history' : 'upcoming');
     setVerificationEventId(requestedEventId);
 
     window.setTimeout(() => {
@@ -658,8 +676,8 @@ function AgendaPage() {
     setSelectedRange(null);
 
     const matchesTimeline = (event) => timeline === 'history'
-      ? isHistoricalEvent(event, nowMs)
-      : !isHistoricalEvent(event, nowMs);
+      ? isHistoricalAgendaEvent(event, nowMs)
+      : isUpcomingAgendaEvent(event, nowMs);
     const roleEvents = activeSection === 'created'
       ? ownedEvents
       : activeSection === 'participating'
@@ -817,6 +835,21 @@ function AgendaPage() {
         </div>
       </div>
 
+      {loadError ? (
+        <section className={styles.connectionNotice} role="alert">
+          <WifiOff size={18} aria-hidden="true" />
+          <span>
+            <strong>{loadErrorIsNetwork ? 'Connessione assente' : 'Aggiornamento non riuscito'}</strong>
+            <small>
+              {events.length > 0
+                ? `${loadError} Gli eventi già caricati restano visibili.`
+                : loadError}
+            </small>
+          </span>
+          <button type="button" onClick={() => loadEvents()} disabled={loading}>Riprova</button>
+        </section>
+      ) : null}
+
       {focusedSession ? (() => {
         const { event, state } = focusedSession;
         const workoutPlan = event.workout_plan;
@@ -907,7 +940,11 @@ function AgendaPage() {
               <AgendaEventVerificationPanel
                 event={event}
                 isOrganizer={event.created_by === 'me'}
-                initialMethod={String(searchParams.get('arrivalMethod') || '')}
+                initialMethod={String(
+                  searchParams.get('arrivalMethod')
+                  || (searchParams.get('arrival') === '1' ? 'geo' : '')
+                )}
+                arrivalDetected={searchParams.get('arrival') === '1'}
                 showToast={showToast}
                 onClose={() => setVerificationEventId('')}
                 onVerified={() => {
@@ -1016,13 +1053,15 @@ function AgendaPage() {
             const isToday = dateKey === todayKey;
             const isSelected = Boolean(selectedRange && (dateKey === selectedRange.start || dateKey === selectedRange.end));
             const isInRange = Boolean(selectedRange && dateKey >= selectedRange.start && dateKey <= selectedRange.end);
-            const dayHistory = dayEvents.map((event) => isHistoricalEvent(event, nowMs));
+            const dayHistory = dayEvents.map((event) => isHistoricalAgendaEvent(event, nowMs));
             const allPast = hasEvents && dayHistory.every(Boolean);
             const hasPast = dayHistory.some(Boolean);
             const hasFuture = dayHistory.some((isPast) => !isPast);
             const allCancelled = hasEvents && dayEvents.every((event) => event.status === 'cancelled');
-            const timingLabel = allPast
-              ? 'svolto'
+            const timingLabel = allCancelled
+              ? (dayEvents.length === 1 ? 'annullato' : 'annullati')
+              : allPast
+                ? (dayEvents.length === 1 ? 'svolto' : 'svolti')
               : hasPast && hasFuture
                 ? 'svolti e da svolgere'
                 : 'da svolgere';
@@ -1086,9 +1125,8 @@ function AgendaPage() {
           <p className={styles.calendarState}><CalendarDays size={17} aria-hidden="true" /> Aggiornamento eventi…</p>
         ) : loadError && visibleCalendarEvents.length === 0 ? (
           <div className={styles.calendarState} role="alert">
-            <CalendarDays size={17} aria-hidden="true" />
-            <span>Eventi non disponibili</span>
-            <button type="button" onClick={() => loadEvents()}>Riprova</button>
+            <WifiOff size={17} aria-hidden="true" />
+            <span>Agenda temporaneamente non disponibile</span>
           </div>
         ) : visibleCalendarEvents.length === 0 ? (
           <p className={styles.calendarState}>
@@ -1135,7 +1173,7 @@ function AgendaPage() {
             <div className={styles.calendarEventList}>
               {selectedEvents.map((event) => {
                 const timing = getEventTiming(event, nowMs);
-                const isPast = isHistoricalEvent(event, nowMs);
+                const isPast = isHistoricalAgendaEvent(event, nowMs);
                 const isArchived = timing.lifecycleState === 'archived';
                 const isCancelled = event.status === 'cancelled';
                 const participants = Math.max(0, Number(event.participants_count || 0));

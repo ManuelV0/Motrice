@@ -112,6 +112,66 @@
   font-size: 0.68rem;
 }
 
+.arrivalAssist {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 11px;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 202, 74, 0.38);
+  border-radius: 14px;
+  color: #ffd56d;
+  background: rgba(255, 191, 45, 0.08);
+}
+
+.arrivalAssist > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 202, 74, 0.12);
+}
+
+.arrivalAssist > div {
+  display: grid;
+  gap: 2px;
+}
+
+.arrivalAssist strong {
+  color: currentColor;
+  font-size: 0.78rem;
+}
+
+.arrivalAssist small {
+  color: #a4a89f;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.arrivalAssist[data-state='checking'] {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #f1f3ee;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.arrivalAssist[data-state='checking'] svg {
+  animation: spin 900ms linear infinite;
+}
+
+.arrivalAssist[data-state='error'] {
+  border-color: rgba(255, 96, 96, 0.42);
+  color: #ff9a9a;
+  background: rgba(112, 22, 22, 0.15);
+}
+
+.arrivalAssist[data-state='verified'] {
+  border-color: rgba(198, 255, 0, 0.42);
+  color: #c6ff00;
+  background: rgba(198, 255, 0, 0.07);
+}
+
 .closedTimingState {
   display: grid;
   gap: 8px;
@@ -330,6 +390,22 @@
 .verifiedState button { grid-column: 1 / -1; }
 
 .gpsState .locationStatus { grid-column: 1 / -1; }
+
+.qrFallback {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(255, 96, 96, 0.34);
+  border-radius: 13px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #f3f5f0;
+  background: rgba(255, 255, 255, 0.045);
+  font-size: 0.74rem;
+  font-weight: 820;
+}
 
 .verifiedState button {
   display: flex;

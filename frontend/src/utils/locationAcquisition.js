@@ -34,6 +34,14 @@ export function normalizeLocationError(error) {
   const originalMessage = String(readErrorField(error, 'message') || error || '').trim();
   const normalizedMessage = originalMessage.toLowerCase();
 
+  if (code === 'MOTRICE_LOCATION_CANCELLED') {
+    return {
+      permission: 'cancelled',
+      code,
+      message: 'Richiesta della posizione annullata.'
+    };
+  }
+
   if (
     rawCode === 1 ||
     code === '1' ||
@@ -139,7 +147,14 @@ export function normalizeLocationSample(position, now = Date.now()) {
     capturedAt
   };
 
-  if (!Number.isFinite(sample.lat) || !Number.isFinite(sample.lng)) {
+  if (
+    !Number.isFinite(sample.lat)
+    || !Number.isFinite(sample.lng)
+    || sample.lat < -90
+    || sample.lat > 90
+    || sample.lng < -180
+    || sample.lng > 180
+  ) {
     const invalidError = new Error('Il dispositivo ha restituito coordinate non valide');
     invalidError.code = 'MOTRICE_POSITION_UNAVAILABLE';
     throw invalidError;
@@ -172,6 +187,41 @@ export function validateLocationSample(
   return sample;
 }
 
+export function isLocationSampleUsableForMap(
+  sample,
+  { maxAgeMs = 10 * 60 * 1000, now = Date.now() } = {}
+) {
+  const lat = Number(sample?.lat);
+  const lng = Number(sample?.lng);
+  const capturedAt = Number(sample?.capturedAt || sample?.updatedAt);
+  const normalizedMaxAge = Number(maxAgeMs);
+  return Number.isFinite(lat)
+    && Number.isFinite(lng)
+    && lat >= -90
+    && lat <= 90
+    && lng >= -180
+    && lng <= 180
+    && Number.isFinite(capturedAt)
+    && capturedAt > 0
+    && Number.isFinite(normalizedMaxAge)
+    && normalizedMaxAge >= 0
+    && Math.max(0, Number(now) - capturedAt) <= normalizedMaxAge;
+}
+
+export function mergeLocationWatchOptions(optionsList = []) {
+  const values = Array.isArray(optionsList) && optionsList.length ? optionsList : [{}];
+  const positiveOr = (value, fallback) => {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
+  };
+  return {
+    maxAgeMs: Math.min(...values.map((value) => positiveOr(value?.maxAgeMs, 15000))),
+    maxAccuracyM: Math.min(...values.map((value) => positiveOr(value?.maxAccuracyM, 150))),
+    minimumUpdateInterval: Math.min(...values.map((value) => positiveOr(value?.minimumUpdateInterval, 3000))),
+    throwOnError: values.some((value) => Boolean(value?.throwOnError))
+  };
+}
+
 export function getLocationAttempts({ requireFresh = false, precise = false, native = false } = {}) {
   if (requireFresh) {
     return [
@@ -179,13 +229,11 @@ export function getLocationAttempts({ requireFresh = false, precise = false, nat
         enableHighAccuracy: true,
         timeout: 25000,
         maximumAge: 5000,
-        ...(native ? { nativeProvider: 'motrice' } : {})
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 40000,
-        maximumAge: 0,
-        ...(native ? { nativeProvider: 'motrice' } : {})
+        ...(native ? {
+          nativeProvider: 'motrice',
+          sampleWindowMs: 4500,
+          minimumSamples: 2
+        } : {})
       }
     ];
   }
