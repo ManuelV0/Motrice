@@ -30,7 +30,11 @@ import { useToast } from '../context/ToastContext';
 import { useUserLocation } from '../hooks/useUserLocation';
 import { geocodeEventLocation } from '../services/geocoding';
 import { readFiltersFromSearch, writeFiltersToSearch } from '../utils/queryFilters';
-import { getUserFocusZoom } from '../utils/mapViewport';
+import {
+  getUserFocusZoom,
+  normalizeOptionalMapZoom,
+  shouldUpdateFollowCenter
+} from '../utils/mapViewport';
 import { isLocationSampleUsableForMap } from '../utils/locationAcquisition';
 import { groupRecurringMapEvents } from '../utils/mapEventGroups';
 import EventCard from '../components/EventCard';
@@ -549,14 +553,21 @@ function RasterMapFallback({
         if (!hasValidCoordinates(position?.lat, position?.lng)) return false;
         const lat = Number(position.lat);
         const lng = Number(position.lng);
-        const normalizedTargetZoom = Number(targetZoom);
-        if (Number.isFinite(normalizedTargetZoom) || preserveZoom) {
-          const currentZoom = map.getZoom();
+        const normalizedTargetZoom = normalizeOptionalMapZoom(targetZoom);
+        if (normalizedTargetZoom !== null) {
+          map.stop();
           map.flyTo(
             [lat, lng],
-            Number.isFinite(normalizedTargetZoom) ? normalizedTargetZoom : currentZoom,
-            { animate: true, duration: Number.isFinite(normalizedTargetZoom) ? 0.48 : 0.24 }
+            normalizedTargetZoom,
+            { animate: true, duration: 0.48 }
           );
+          return true;
+        }
+        if (preserveZoom) {
+          const currentCenter = map.getCenter();
+          if (!shouldUpdateFollowCenter(currentCenter, { lat, lng })) return true;
+          map.stop();
+          map.panTo([lat, lng], { animate: true, duration: 0.18, easeLinearity: 0.35 });
           return true;
         }
         const normalizedRadius = Number(focusRadius);
@@ -1706,6 +1717,7 @@ function MapPage({ active = true }) {
     }
     const map = mapRef.current;
     if (!map) return false;
+    map.stop();
     map.flyTo({
       center: [Number(position.lng), Number(position.lat)],
       zoom: targetZoom,
@@ -1717,6 +1729,11 @@ function MapPage({ active = true }) {
   }
 
   async function handleGpsAction() {
+    // From this point the user's position owns the viewport. Event loading can
+    // finish asynchronously, but it must never fit all markers over the GPS
+    // focus and zoom the map back out.
+    hasAutoFitEventsRef.current = true;
+
     if (followUser && displayCoords) {
       const centered = centerMapOnPosition(displayCoords);
       showToast(centered ? 'Posizione ricentrata' : 'La mappa si sta ancora preparando', centered ? 'success' : 'info');
@@ -2166,6 +2183,7 @@ function MapPage({ active = true }) {
   }, [active, focusEvent, mapRenderer, markersReady, requestedEventId, withCoords]);
 
   useEffect(() => {
+    if (displayCoords || followUser) return;
     if (mapRenderer === 'raster') {
       if (!active || !mapReady || !eventsInRadius.length || hasAutoFitEventsRef.current) return;
       hasAutoFitEventsRef.current = true;
@@ -2188,7 +2206,7 @@ function MapPage({ active = true }) {
       duration: 280,
       maxZoom: 13
     });
-  }, [active, eventsInRadius, mapReady, mapRenderer]);
+  }, [active, displayCoords, eventsInRadius, followUser, mapReady, mapRenderer]);
 
   useEffect(() => {
     if (mapRenderer === 'raster') {
@@ -2233,13 +2251,23 @@ function MapPage({ active = true }) {
       const focusRadius = selectedRadiusKm || USER_VIEW_RADIUS_KM;
       if (shouldRecenterRef.current || followUser) {
         const close = shouldRecenterRef.current;
-        map.flyTo({
-          center: [displayCoords.lng, displayCoords.lat],
-          zoom: close ? getUserFocusZoom(displayCoords.accuracy) : map.getZoom(),
-          duration: close ? 420 : 220,
-          curve: close ? 1.2 : 1,
-          essential: true
-        });
+        if (close) {
+          map.stop();
+          map.flyTo({
+            center: [displayCoords.lng, displayCoords.lat],
+            zoom: getUserFocusZoom(displayCoords.accuracy),
+            duration: 420,
+            curve: 1.2,
+            essential: true
+          });
+        } else if (shouldUpdateFollowCenter(map.getCenter(), displayCoords)) {
+          map.stop();
+          map.easeTo({
+            center: [displayCoords.lng, displayCoords.lat],
+            duration: 180,
+            essential: true
+          });
+        }
         if (shouldRecenterRef.current) shouldRecenterRef.current = false;
       }
       syncViewport();
