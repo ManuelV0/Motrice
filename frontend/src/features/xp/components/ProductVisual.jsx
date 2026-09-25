@@ -63,11 +63,15 @@ export default function ProductVisual({ item, color = 'var(--primary)', large = 
   const gradientId = `product-gradient-${safeId}`;
   const isSpecial = Boolean(item?.isSpecial);
   const specialMark = String(item?.name || 'M').slice(0, 1);
+  const isWidePhoto = item?.visual === 'cap' || item?.visual === 'bag';
 
   if (item?.image) {
     const crop = item.imageCrop;
     return (
-      <div className={`${styles.productVisual} ${large ? styles.productVisualLarge : ''}`} style={{ '--product-accent': color }}>
+      <div
+        className={`${styles.productVisual} ${styles.productVisualPhoto} ${isWidePhoto ? styles.productVisualPhotoWide : styles.productVisualPhotoTall} ${large ? styles.productVisualLarge : ''}`}
+        style={{ '--product-accent': color, '--product-image': `url("${item.image}")` }}
+      >
         {crop ? (
           <svg
             className={styles.productPhoto}
