@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Award, CheckCircle, XCircle, MinusCircle, Gift, UserCheck, TrendingUp, ShieldCheck } from 'lucide-react';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { api } from '../services/api';
+import { getProfileV3State } from '../services/profileV3';
+import { buildCanonicalXpDetails } from '../utils/xpDetails';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import styles from '../styles/pages/accountXp.module.css';
 
@@ -33,6 +35,8 @@ function getTimelineIcon(type) {
 }
 
 function formatXpHistoryLabel(item) {
+  const explicitLabel = String(item?.label || item?.motivo || '').trim();
+  if (explicitLabel) return explicitLabel;
   const type = String(item?.type || '');
   if (type === 'attendance_confirmed') return 'Presenza evento confermata';
   if (type === 'attendance_no_show') return 'No-show evento';
@@ -57,14 +61,24 @@ function AccountXpPage() {
     let active = true;
     async function hydrate() {
       setLoading(true);
-      const [xpRes, profileRes, sportsRes] = await Promise.allSettled([
+      const profileRes = await Promise.resolve()
+        .then(() => api.getLocalProfile())
+        .then((value) => ({ status: 'fulfilled', value }))
+        .catch((reason) => ({ status: 'rejected', reason }));
+      const localProfile = profileRes.status === 'fulfilled' ? profileRes.value : {};
+      const [xpRes, profileV3Res, sportsRes] = await Promise.allSettled([
         api.getXpState(),
-        api.getLocalProfile(),
+        getProfileV3State(localProfile),
         api.listSports()
       ]);
       if (!active) return;
 
-      if (xpRes.status === 'fulfilled') setXpState(xpRes.value);
+      if (xpRes.status === 'fulfilled' || profileV3Res.status === 'fulfilled') {
+        setXpState(buildCanonicalXpDetails(
+          xpRes.status === 'fulfilled' ? xpRes.value : {},
+          profileV3Res.status === 'fulfilled' ? profileV3Res.value : null
+        ));
+      }
       if (profileRes.status === 'fulfilled') {
         const d = profileRes.value;
         setProfile({
@@ -91,7 +105,7 @@ function AccountXpPage() {
   }, []);
 
   const sportLabels = useMemo(() => {
-    const next = { generic: 'Generic', fitness: 'Fitness' };
+    const next = { generic: 'Generale', fitness: 'Fitness' };
     sportsCatalog.forEach((sport) => {
       next[String(sport.id).toLowerCase()] = sport.name;
       next[String(sport.name || '').toLowerCase()] = sport.name;
@@ -171,7 +185,7 @@ function AccountXpPage() {
 
         <p className={styles.progressHint}>
           {xpState?.progress?.nextThreshold
-            ? `${xpState.progress.currentXp}/${xpState.progress.nextThreshold} verso il prossimo livello`
+            ? `${xpState.progress.currentXp}/${xpState.progress.nextThreshold} XP verso il livello ${Number(xpState.progress.level || 1) + 1}`
             : 'Livello massimo raggiunto'}
         </p>
 
