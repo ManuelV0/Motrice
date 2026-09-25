@@ -1,5 +1,6 @@
 export const WORKOUT_COMPLETION_RATIO = 2 / 3;
 export const MINIMUM_SET_INTERVAL_SECONDS = 20;
+export const WORKOUT_COMPLETION_XP = 25;
 
 export function normalizeWorkoutDurationMinutes(value, fallback = 60) {
   const parsed = Number(value);
@@ -37,4 +38,12 @@ export function getSetCadenceRemaining(lastSetCompletedAt, now = Date.now()) {
   if (!Number.isFinite(completedAtMs) || !Number.isFinite(nowMs)) return 0;
   const elapsedSeconds = Math.max(0, Math.floor((nowMs - completedAtMs) / 1000));
   return Math.max(0, MINIMUM_SET_INTERVAL_SECONDS - elapsedSeconds);
+}
+
+export function getWorkoutCompletionXp({ role, isPersonal = false, alreadyAwarded = false } = {}) {
+  if (alreadyAwarded) return 0;
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const eligible = normalizedRole === 'participant'
+    || (normalizedRole === 'organizer' && !isPersonal);
+  return eligible ? WORKOUT_COMPLETION_XP : 0;
 }

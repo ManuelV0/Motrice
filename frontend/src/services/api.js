@@ -5,7 +5,7 @@ import { getAuthSession } from './authSession';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import { piggybank } from './piggybank';
 import { buildGroupOrganizerWelcome } from '../utils/chatWelcome';
-import { getWorkoutCompletionGate } from '../utils/workoutCompletionGate';
+import { getWorkoutCompletionGate, getWorkoutCompletionXp } from '../utils/workoutCompletionGate';
 import { isWorkoutSessionExpired } from '../utils/workoutSessionWindow';
 import { awardXp, getXpState as getUserXpState } from './xp';
 import {
@@ -3547,7 +3547,11 @@ const localApi = {
       throw new Error(`Allenamento troppo breve: attendi ancora ${Math.ceil(completionGate.remainingSeconds / 60)} minuti`);
     }
     const isOrganizer = isEventOrganizerForUser(store, event, currentUserId);
-    const xp = !isOrganizer && !current.xp_completion_awarded ? 25 : 0;
+    const xp = getWorkoutCompletionXp({
+      role: isOrganizer ? 'organizer' : 'participant',
+      isPersonal: Boolean(event.is_personal),
+      alreadyAwarded: Boolean(current.xp_completion_awarded)
+    });
     if (xp) {
       awardXp({
         userId: currentUserId,

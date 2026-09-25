@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   getMinimumWorkoutSeconds,
   getSetCadenceRemaining,
-  getWorkoutCompletionGate
+  getWorkoutCompletionGate,
+  getWorkoutCompletionXp
 } from './workoutCompletionGate.js';
 
 test('a sixty minute workout requires forty verified minutes', () => {
@@ -37,4 +38,20 @@ test('consecutive set confirmations keep a twenty second safety interval', () =>
   const lastSetCompletedAt = '2026-09-19T10:00:00.000Z';
   assert.equal(getSetCadenceRemaining(lastSetCompletedAt, Date.parse('2026-09-19T10:00:08.000Z')), 12);
   assert.equal(getSetCadenceRemaining(lastSetCompletedAt, Date.parse('2026-09-19T10:00:20.000Z')), 0);
+});
+
+test('a group organizer earns the verified workout completion reward', () => {
+  assert.equal(getWorkoutCompletionXp({ role: 'organizer', isPersonal: false }), 25);
+});
+
+test('a participant keeps the verified workout completion reward', () => {
+  assert.equal(getWorkoutCompletionXp({ role: 'participant', isPersonal: false }), 25);
+});
+
+test('a personal organizer does not receive the group completion reward', () => {
+  assert.equal(getWorkoutCompletionXp({ role: 'organizer', isPersonal: true }), 0);
+});
+
+test('the verified workout completion reward is idempotent', () => {
+  assert.equal(getWorkoutCompletionXp({ role: 'organizer', isPersonal: false, alreadyAwarded: true }), 0);
 });
