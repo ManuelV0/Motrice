@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Award,
   Check,
+  ChevronDown,
   ChevronRight,
   LockKeyhole,
   ShieldCheck,
@@ -34,7 +35,7 @@ function formatNumber(value) {
   return numberFormatter.format(Number(value || 0));
 }
 
-function ProductCard({ product, tier, userXp, onOpen }) {
+function ProductCard({ product, tier, onOpen }) {
   return (
     <button
       type="button"
@@ -56,24 +57,30 @@ function ProductCard({ product, tier, userXp, onOpen }) {
       <span className={styles.productMeta}>
         {product.isUnlocked
           ? <b>SBLOCCATO</b>
-          : <><b>{formatNumber(product.requiredXp)} XP</b><small>-{formatNumber(product.remainingXp)} XP</small></>}
+          : <><b>{formatNumber(product.requiredXp)} XP</b><small>BLOCCATO</small></>}
       </span>
-      {!product.isUnlocked ? (
-        <XpProgressBar value={userXp} max={product.requiredXp} label={`Progresso ${product.name}`} color={tier.color} compact />
-      ) : null}
     </button>
   );
 }
 
-function ProductRail({ title, products, tier, userXp, onOpen }) {
+function ProductGrid({ products, tier, onOpen }) {
   return (
-    <div className={styles.genderGroup}>
-      <div className={styles.genderHeader}><strong>{title}</strong><span>{products.length} capi</span></div>
-      <div className={styles.productRail}>
-        {products.map((product) => (
-          <ProductCard key={product.id} product={product} tier={tier} userXp={userXp} onOpen={onOpen} />
-        ))}
-      </div>
+    <div className={styles.productGrid}>
+      {products.map((product) => (
+        <ProductCard key={product.id} product={product} tier={tier} onOpen={onOpen} />
+      ))}
+    </div>
+  );
+}
+
+function CollectionPreview({ products, tier }) {
+  return (
+    <div className={styles.collectionPreview} aria-hidden="true">
+      {products.map((product) => (
+        <span key={product.id} className={product.isUnlocked ? styles.previewUnlocked : ''}>
+          <ProductVisual item={product} color={tier.color} />
+        </span>
+      ))}
     </div>
   );
 }
@@ -82,6 +89,8 @@ function MarketplacePage() {
   const { loading, error, xpState, profileStats } = useXpProgression();
   const [selectedItem, setSelectedItem] = useState(null);
   const [celebration, setCelebration] = useState(null);
+  const [expandedTierId, setExpandedTierId] = useState(null);
+  const [selectedGender, setSelectedGender] = useState('uomo');
 
   usePageMeta({
     title: 'Marketplace XP | Motrice',
@@ -98,6 +107,11 @@ function MarketplacePage() {
   const productsByTier = useMemo(() => Object.fromEntries(
     XP_TIERS.map((tier) => [tier.id, products.filter((product) => product.tier === tier.id)])
   ), [products]);
+
+  useEffect(() => {
+    if (loading) return;
+    setExpandedTierId((current) => current ?? grade.focusTier.id);
+  }, [grade.focusTier.id, loading]);
 
   useEffect(() => {
     if (loading) return;
@@ -170,40 +184,67 @@ function MarketplacePage() {
           const tierProducts = productsByTier[tier.id] || [];
           const isUnlocked = userXp >= tier.requiredXp;
           const remaining = Math.max(0, tier.requiredXp - userXp);
+          const isExpanded = expandedTierId === tier.id;
+          const visibleProducts = tierProducts.filter((product) => product.gender === selectedGender);
           return (
-            <section key={tier.id} className={styles.collection} style={{ '--tier-color': tier.color }}>
-              <header className={styles.collectionHeader}>
-                <div className={styles.tierIdentity}>
-                  <span className={styles.tierMark}>M</span>
-                  <div><small>{tier.tone}</small><h2>{tier.label}</h2></div>
-                </div>
-                <span className={`${styles.collectionState} ${isUnlocked ? styles.collectionStateUnlocked : ''}`}>
-                  {isUnlocked ? <Check size={14} /> : <LockKeyhole size={14} />}
-                  {isUnlocked ? 'SBLOCCATA' : `${formatNumber(tier.requiredXp)} XP`}
+            <section
+              key={tier.id}
+              id={`xp-collection-${tier.id}`}
+              className={`${styles.collection} ${isExpanded ? styles.collectionExpanded : ''}`}
+              style={{ '--tier-color': tier.color }}
+            >
+              <button
+                type="button"
+                className={styles.collectionToggle}
+                aria-expanded={isExpanded}
+                aria-controls={`xp-collection-content-${tier.id}`}
+                onClick={() => setExpandedTierId((current) => current === tier.id ? null : tier.id)}
+              >
+                <span className={styles.collectionHeader}>
+                  <span className={styles.tierIdentity}>
+                    <span className={styles.tierMark}>M</span>
+                    <span><small>{tier.tone}</small><strong>{tier.label}</strong></span>
+                  </span>
+                  <span className={styles.collectionHeaderActions}>
+                    <span className={`${styles.collectionState} ${isUnlocked ? styles.collectionStateUnlocked : ''}`}>
+                      {isUnlocked ? <Check size={14} /> : <LockKeyhole size={14} />}
+                      {isUnlocked ? 'SBLOCCATA' : `${formatNumber(tier.requiredXp)} XP`}
+                    </span>
+                    <ChevronDown className={styles.collectionChevron} aria-hidden="true" />
+                  </span>
                 </span>
-              </header>
+              </button>
 
-              {!isUnlocked ? (
-                <div className={styles.collectionProgress}>
-                  <XpProgressBar value={userXp} max={tier.requiredXp} label={`Progresso collezione ${tier.label}`} color={tier.color} compact />
-                  <span>Mancano {formatNumber(remaining)} XP</span>
+              <div className={styles.collectionProgress}>
+                <XpProgressBar value={userXp} max={tier.requiredXp} label={`Progresso collezione ${tier.label}`} color={tier.color} compact />
+                <span>{isUnlocked ? 'Sbloccata' : `Mancano ${formatNumber(remaining)} XP`}</span>
+              </div>
+
+              {!isExpanded ? <CollectionPreview products={tierProducts} tier={tier} /> : null}
+
+              {isExpanded ? (
+                <div id={`xp-collection-content-${tier.id}`} className={styles.collectionContent}>
+                  <div className={styles.genderSelector} role="group" aria-label={`Collezione ${tier.label}`}>
+                    <button
+                      type="button"
+                      className={selectedGender === 'uomo' ? styles.genderActive : ''}
+                      aria-pressed={selectedGender === 'uomo'}
+                      onClick={() => setSelectedGender('uomo')}
+                    >
+                      UOMO <span>4</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={selectedGender === 'donna' ? styles.genderActive : ''}
+                      aria-pressed={selectedGender === 'donna'}
+                      onClick={() => setSelectedGender('donna')}
+                    >
+                      DONNA <span>4</span>
+                    </button>
+                  </div>
+                  <ProductGrid products={visibleProducts} tier={tier} onOpen={setSelectedItem} />
                 </div>
               ) : null}
-
-              <ProductRail
-                title="UOMO"
-                products={tierProducts.filter((product) => product.gender === 'uomo')}
-                tier={tier}
-                userXp={userXp}
-                onOpen={setSelectedItem}
-              />
-              <ProductRail
-                title="DONNA"
-                products={tierProducts.filter((product) => product.gender === 'donna')}
-                tier={tier}
-                userXp={userXp}
-                onOpen={setSelectedItem}
-              />
             </section>
           );
         })}

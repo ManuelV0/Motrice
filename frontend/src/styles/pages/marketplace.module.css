@@ -156,13 +156,13 @@
 .introSection p,
 .specialHeader p { margin: 0; color: var(--muted); font-size: 0.73rem; line-height: 1.48; }
 
-.collectionList { display: grid; gap: 1rem; }
+.collectionList { display: grid; gap: 0.65rem; }
 
 .collection {
   --tier-color: var(--primary);
-  padding: 0.9rem;
+  padding: 0.75rem;
   display: grid;
-  gap: 0.9rem;
+  gap: 0.6rem;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--tier-color) 22%, #2d2d2d);
   border-radius: 1.25rem;
@@ -170,6 +170,22 @@
     radial-gradient(90% 80% at 100% 0%, color-mix(in srgb, var(--tier-color) 8%, transparent), transparent 70%),
     #111313;
   box-shadow: 0 0.9rem 2rem rgb(0 0 0 / 19%);
+}
+
+.collectionExpanded {
+  border-color: color-mix(in srgb, var(--tier-color) 38%, #2d2d2d);
+  background:
+    radial-gradient(90% 80% at 100% 0%, color-mix(in srgb, var(--tier-color) 12%, transparent), transparent 70%),
+    #111313;
+}
+
+.collectionToggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 
 .collectionHeader {
@@ -193,9 +209,22 @@
   font-size: 1.05rem;
   font-weight: 950;
 }
-.tierIdentity > div { display: grid; gap: 0.08rem; }
+.tierIdentity > span:last-child { display: grid; gap: 0.08rem; }
 .tierIdentity small { color: #737373; font-size: 0.56rem; }
-.tierIdentity h2 { margin: 0; color: var(--tier-color); font-size: 1.15rem; letter-spacing: 0.06em; }
+.tierIdentity strong { color: var(--tier-color); font-size: 1.05rem; letter-spacing: 0.06em; }
+
+.collectionHeaderActions { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+.collectionChevron {
+  width: 1.15rem;
+  color: #6f6f6f;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.collectionToggle[aria-expanded='true'] .collectionChevron {
+  color: var(--tier-color);
+  transform: rotate(180deg);
+}
 
 .collectionState {
   min-height: 1.9rem;
@@ -217,26 +246,64 @@
 .collectionProgress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.7rem; }
 .collectionProgress span { color: #7e7e7e; font-size: 0.62rem; white-space: nowrap; }
 
-.genderGroup { display: grid; gap: 0.5rem; }
-.genderGroup + .genderGroup { padding-top: 0.8rem; border-top: 1px solid rgb(255 255 255 / 6%); }
-.genderHeader { display: flex; align-items: center; justify-content: space-between; }
-.genderHeader strong { color: var(--tier-color); font-size: 0.67rem; letter-spacing: 0.09em; }
-.genderHeader span { color: #646464; font-size: 0.58rem; }
-
-.productRail {
-  margin-inline: -0.9rem;
-  padding: 0 0.9rem 0.35rem;
+.collectionPreview {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(8.8rem, 42%);
-  gap: 0.65rem;
-  overflow-x: auto;
-  overscroll-behavior-inline: contain;
-  scroll-snap-type: inline proximity;
-  scrollbar-width: none;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.25rem;
 }
 
-.productRail::-webkit-scrollbar { display: none; }
+.collectionPreview > span {
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 6%);
+  border-radius: 0.55rem;
+  opacity: 0.58;
+  filter: saturate(0.45) brightness(0.78);
+}
+
+.collectionPreview .previewUnlocked { opacity: 1; filter: none; }
+
+.collectionContent {
+  padding-top: 0.15rem;
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid rgb(255 255 255 / 6%);
+}
+
+.genderSelector {
+  width: 100%;
+  padding: 0.2rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  border: 1px solid rgb(255 255 255 / 7%);
+  border-radius: 0.8rem;
+  background: rgb(0 0 0 / 18%);
+}
+
+.genderSelector button {
+  min-height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 0.62rem;
+  background: transparent;
+  color: #6f6f6f;
+  font-size: 0.65rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.genderSelector button span { color: #5f5f5f; font-size: 0.56rem; }
+.genderSelector .genderActive { background: color-mix(in srgb, var(--tier-color) 10%, #171818); color: var(--tier-color); }
+.genderSelector .genderActive span { color: color-mix(in srgb, var(--tier-color) 64%, #777); }
+
+.productGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
 
 .productCard {
   --tier-color: var(--primary);
@@ -244,7 +311,6 @@
   display: grid;
   align-content: start;
   gap: 0.45rem;
-  scroll-snap-align: start;
   border: 1px solid rgb(255 255 255 / 8%);
   border-radius: 1rem;
   background: #151717;
@@ -295,10 +361,19 @@
 .specialHeader svg { width: 0.95rem; }
 
 .specialGrid {
+  margin-inline: -1rem;
+  padding: 0 1rem 0.35rem;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(8.6rem, 42%);
   gap: 0.65rem;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: inline proximity;
+  scrollbar-width: none;
 }
+
+.specialGrid::-webkit-scrollbar { display: none; }
 
 .specialCard {
   padding: 0.5rem;
@@ -310,6 +385,7 @@
   background: rgb(255 255 255 / 3%);
   color: #f1f1f1;
   text-align: left;
+  scroll-snap-align: start;
 }
 
 .specialCardUnlocked { border-color: rgb(198 255 0 / 28%); }
@@ -395,8 +471,8 @@
 
 @media (min-width: 700px) {
   .collection { padding: 1.1rem; }
-  .productRail { margin-inline: 0; padding-inline: 0; grid-auto-flow: initial; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
-  .specialGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .productGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .specialGrid { margin-inline: 0; padding-inline: 0; grid-auto-flow: initial; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: visible; }
 }
 
 @media (max-width: 410px) {
@@ -404,12 +480,13 @@
   .heroStats > div:last-child { grid-column: 1 / -1; }
   .heroTopline span:last-child { display: none; }
   .nextUnlock > div { display: grid; }
-  .productRail { grid-auto-columns: minmax(8.35rem, 47%); }
   .collectionHeader { align-items: flex-start; }
   .collectionState { font-size: 0.57rem; }
+  .collectionPreview { gap: 0.17rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .productMedia,
+  .collectionChevron,
   .celebrationCard { transition: none; animation: none; }
 }
