@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, WalletCards, X } from 'lucide-react';
+import { ChevronRight, ShoppingBag, WalletCards, X } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
 import WalletCreditDetails, { formatWalletCredit } from './wallet/WalletCreditDetails';
 import styles from '../styles/components/headerWallet.module.css';
@@ -191,7 +191,20 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
 
   function openFullDetails() {
     closeWallet();
-    navigate(activeSection === 'credit' ? '/wallet/credit' : '/account');
+    if (activeSection === 'credit') {
+      navigate('/wallet/credit');
+      return;
+    }
+    if (activeSection === 'xp') {
+      navigate('/account/xp');
+      return;
+    }
+    navigate('/account');
+  }
+
+  function openMarketplace() {
+    closeWallet();
+    navigate('/marketplace');
   }
 
   const detailLayer = typeof document !== 'undefined'
@@ -274,6 +287,17 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
                     Visualizza dettagli completi
                     <ChevronRight size={16} aria-hidden="true" />
                   </button>
+                  {activeSection === 'xp' ? (
+                    <button
+                      type="button"
+                      className={styles.walletMarketplaceButton}
+                      onClick={openMarketplace}
+                    >
+                      <ShoppingBag size={16} aria-hidden="true" />
+                      Marketplace XP
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </div>
               </>
             )}

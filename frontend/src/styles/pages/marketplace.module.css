@@ -1,0 +1,174 @@
+.page {
+  width: 100%;
+  max-width: 42rem;
+  margin-inline: auto;
+  display: grid;
+  gap: var(--s-4);
+}
+
+.page * {
+  min-width: 0;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(1.15rem, 4vw, 1.7rem);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--glass-border));
+  border-radius: var(--r-2xl);
+  background:
+    radial-gradient(95% 120% at 100% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 64%),
+    color-mix(in srgb, var(--surface-2) 62%, var(--surface));
+  box-shadow: var(--sh-card);
+}
+
+.icon {
+  width: 3.3rem;
+  height: 3.3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 1rem;
+  background: var(--primary);
+  color: #090b08;
+  box-shadow: 0 0 1.5rem color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.icon svg {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+
+.heroCopy {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.kicker {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 6vw, 2.35rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.heroCopy > p:last-child {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: var(--lh-relaxed);
+}
+
+.status {
+  padding: var(--s-4);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--surface-2) 48%, var(--surface));
+}
+
+.statusIcon {
+  width: 2.6rem;
+  height: 2.6rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface-2));
+  color: var(--primary);
+}
+
+.statusIcon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.status strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.status p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: var(--lh-relaxed);
+}
+
+.progressLink {
+  min-height: 4rem;
+  padding: var(--s-3) var(--s-4);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--glass-border));
+  border-radius: var(--r-xl);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.progressLink:hover {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--glass-border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+}
+
+.progressLink > svg:first-child {
+  color: var(--primary);
+}
+
+.progressLink > svg:last-child {
+  color: var(--muted);
+}
+
+.progressLink span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.progressLink strong {
+  font-size: var(--text-sm);
+}
+
+.progressLink small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 479px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+
+  .icon {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressLink {
+    transition: none;
+  }
+}

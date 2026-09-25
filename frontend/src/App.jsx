@@ -22,7 +22,9 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
+const AccountXpPage = lazy(() => import('./pages/AccountXpPage'));
 const CreditWalletPage = lazy(() => import('./pages/CreditWalletPage'));
+const MarketplacePage = lazy(() => import('./pages/MarketplacePage'));
 const AccountAiPage = lazy(() => import('./pages/AccountAiPage'));
 const ConvenzioniPage = lazy(() => import('./pages/ConvenzioniPage'));
 const ConvenzioneVoucherPage = lazy(() => import('./pages/ConvenzioneVoucherPage'));
@@ -115,8 +117,9 @@ function App() {
           <Route path="/convenzioni/voucher/:voucherId" element={<ConvenzioneVoucherPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/wallet/credit" element={<CreditWalletPage />} />
+          <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/verify-profile" element={<ProfileVerificationPage />} />
-          <Route path="/account/xp" element={<Navigate to="/account" replace />} />
+          <Route path="/account/xp" element={<AccountXpPage />} />
           <Route path="/account/ai" element={<AccountAiPage />} />
           <Route path="/coach" element={<CoachPage />} />
           <Route path="/coach/:id" element={<CoachProfilePage />} />

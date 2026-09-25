@@ -18,6 +18,7 @@ import {
   LogOut,
   ShieldCheck,
   Settings,
+  ShoppingBag,
   Sparkles,
   TrendingUp,
   X
@@ -62,6 +63,7 @@ const drawerSections = [
   {
     title: 'Sistema',
     items: [
+      { to: '/marketplace', label: 'Marketplace XP', icon: ShoppingBag },
       { to: '/settings', label: 'Impostazioni', icon: Settings },
       { to: '/faq', label: 'Aiuto e assistenza', icon: CircleHelp }
     ]

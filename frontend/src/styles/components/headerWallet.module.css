@@ -187,7 +187,8 @@
 .walletCloseButton:focus-visible,
 .walletMetric:focus-visible,
 .walletPanelHeader button:focus-visible,
-.walletFullButton:focus-visible {
+.walletFullButton:focus-visible,
+.walletMarketplaceButton:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -3px;
 }
@@ -571,6 +572,41 @@
 .walletFullButton:hover,
 .walletFullButton:active {
   background: rgb(198 255 0 / 16%);
+  box-shadow: none;
+  transform: none;
+}
+
+.walletMarketplaceButton {
+  width: 100%;
+  min-height: 2.65rem;
+  margin-top: 0.42rem;
+  padding: 0.65rem 0.85rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 0.9rem;
+  background: rgb(255 255 255 / 4%);
+  box-shadow: none;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: left;
+}
+
+.walletMarketplaceButton > svg:first-child {
+  color: var(--primary);
+}
+
+.walletMarketplaceButton > svg:last-child {
+  color: var(--muted);
+}
+
+.walletMarketplaceButton:hover,
+.walletMarketplaceButton:active {
+  border-color: rgb(198 255 0 / 20%);
+  background: rgb(198 255 0 / 7%);
   box-shadow: none;
   transform: none;
 }
