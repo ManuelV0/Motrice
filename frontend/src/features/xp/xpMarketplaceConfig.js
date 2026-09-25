@@ -17,14 +17,14 @@ export const XP_TIERS = Object.freeze([
 ]);
 
 const PRODUCT_TEMPLATES = Object.freeze([
-  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt', normalImage: '/images/marketplace/normal-uomo-top-v2.webp' },
-  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-uomo-felpa-v2.webp' },
-  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts', normalImage: '/images/marketplace/normal-uomo-short-v2.webp' },
-  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap', normalImage: '/images/marketplace/normal-cappellino-v2.webp' },
-  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top', normalImage: '/images/marketplace/normal-donna-top-v2.webp' },
-  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings', normalImage: '/images/marketplace/normal-donna-leggings-v2.webp' },
-  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-donna-felpa-v2.webp' },
-  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag', normalImage: '/images/marketplace/normal-borsone-v2.webp' }
+  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt', normalImage: '/images/marketplace/normal-uomo-top-v3.webp' },
+  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-uomo-felpa-v3.webp' },
+  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts', normalImage: '/images/marketplace/normal-uomo-short-v3.webp' },
+  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap', normalImage: '/images/marketplace/normal-cappellino-v3.webp' },
+  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top', normalImage: '/images/marketplace/normal-donna-top-v3.webp' },
+  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings', normalImage: '/images/marketplace/normal-donna-leggings-v3.webp' },
+  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-donna-felpa-v3.webp' },
+  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag', normalImage: '/images/marketplace/normal-borsone-v3.webp' }
 ]);
 
 export const XP_MARKETPLACE_PRODUCTS = Object.freeze(
