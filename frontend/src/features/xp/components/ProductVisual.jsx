@@ -65,14 +65,27 @@ export default function ProductVisual({ item, color = 'var(--primary)', large = 
   const specialMark = String(item?.name || 'M').slice(0, 1);
 
   if (item?.image) {
+    const crop = item.imageCrop;
     return (
       <div className={`${styles.productVisual} ${large ? styles.productVisualLarge : ''}`} style={{ '--product-accent': color }}>
-        <img
-          className={styles.productImage}
-          src={item.image}
-          alt={`Anteprima ${item?.name || 'capo Motrice'}`}
-          loading={large ? 'eager' : 'lazy'}
-        />
+        {crop ? (
+          <svg
+            className={styles.productPhoto}
+            viewBox={`${crop.x} ${crop.y} ${crop.width} ${crop.height}`}
+            role="img"
+            aria-label={`Anteprima ${item?.name || 'capo Motrice'}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <image href={item.image} x="0" y="0" width={crop.sourceWidth} height={crop.sourceHeight} />
+          </svg>
+        ) : (
+          <img
+            className={styles.productImage}
+            src={item.image}
+            alt={`Anteprima ${item?.name || 'capo Motrice'}`}
+            loading={large ? 'eager' : 'lazy'}
+          />
+        )}
       </div>
     );
   }

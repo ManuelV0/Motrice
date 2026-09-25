@@ -42,6 +42,14 @@ test('keeps the complete catalogue visible for every tier and gender', () => {
   }
 });
 
+test('connects all NORMAL garments to the supplied collection image', () => {
+  const normalProducts = XP_MARKETPLACE_PRODUCTS.filter((item) => item.tier === 'normal');
+  assert.equal(normalProducts.length, 8);
+  assert.equal(normalProducts.every((item) => item.image === '/images/marketplace/normal-collection.webp'), true);
+  assert.equal(normalProducts.every((item) => item.imageCrop?.sourceWidth === 1536 && item.imageCrop?.sourceHeight === 1024), true);
+  assert.equal(XP_MARKETPLACE_PRODUCTS.filter((item) => item.tier !== 'normal').every((item) => item.image === null), true);
+});
+
 for (const [xp, expectedUnlocked] of boundaryCases) {
   test(`${xp} XP unlocks only the expected collections`, () => {
     const products = resolveMarketplaceProducts(xp);

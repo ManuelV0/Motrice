@@ -45,6 +45,12 @@
   filter: drop-shadow(0 0.65rem 0.7rem rgb(0 0 0 / 58%));
 }
 
+.productVisual .productPhoto {
+  width: 94%;
+  height: 94%;
+  filter: none;
+}
+
 .visualGarment {
   stroke: color-mix(in srgb, var(--product-accent) 45%, #464646);
   stroke-width: 1.8;
