@@ -17,18 +17,15 @@ export const XP_TIERS = Object.freeze([
 ]);
 
 const PRODUCT_TEMPLATES = Object.freeze([
-  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt', normalCrop: { x: 24, y: 185, width: 205, height: 230 } },
-  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalCrop: { x: 440, y: 135, width: 200, height: 280 } },
-  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts', normalCrop: { x: 875, y: 205, width: 180, height: 210 } },
-  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap', normalCrop: { x: 1268, y: 50, width: 242, height: 175 } },
-  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top', normalCrop: { x: 10, y: 505, width: 155, height: 175 } },
-  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings', normalCrop: { x: 330, y: 480, width: 130, height: 240 } },
-  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalCrop: { x: 605, y: 480, width: 180, height: 235 } },
-  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag', normalCrop: { x: 1268, y: 275, width: 242, height: 185 } }
+  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt', normalImage: '/images/marketplace/normal-uomo-top-v2.webp' },
+  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-uomo-felpa-v2.webp' },
+  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts', normalImage: '/images/marketplace/normal-uomo-short-v2.webp' },
+  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap', normalImage: '/images/marketplace/normal-cappellino-v2.webp' },
+  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top', normalImage: '/images/marketplace/normal-donna-top-v2.webp' },
+  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings', normalImage: '/images/marketplace/normal-donna-leggings-v2.webp' },
+  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-donna-felpa-v2.webp' },
+  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag', normalImage: '/images/marketplace/normal-borsone-v2.webp' }
 ]);
-
-const NORMAL_COLLECTION_IMAGE = '/images/marketplace/normal-collection.webp';
-const NORMAL_COLLECTION_SOURCE = Object.freeze({ sourceWidth: 1536, sourceHeight: 1024 });
 
 export const XP_MARKETPLACE_PRODUCTS = Object.freeze(
   XP_TIERS.flatMap((tier) => PRODUCT_TEMPLATES.map((template) => Object.freeze({
@@ -38,10 +35,8 @@ export const XP_MARKETPLACE_PRODUCTS = Object.freeze(
     gender: template.gender,
     tier: tier.id,
     requiredXp: tier.requiredXp,
-    image: tier.id === 'normal' ? NORMAL_COLLECTION_IMAGE : null,
-    imageCrop: tier.id === 'normal'
-      ? Object.freeze({ ...NORMAL_COLLECTION_SOURCE, ...template.normalCrop })
-      : null,
+    image: tier.id === 'normal' ? template.normalImage : null,
+    imageCrop: null,
     visual: template.visual
   })))
 );

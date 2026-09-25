@@ -79,11 +79,11 @@ export default function ProductVisual({ item, color = 'var(--primary)', large = 
             <image href={item.image} x="0" y="0" width={crop.sourceWidth} height={crop.sourceHeight} />
           </svg>
         ) : (
-          <img
+          <span
             className={styles.productImage}
-            src={item.image}
-            alt={`Anteprima ${item?.name || 'capo Motrice'}`}
-            loading={large ? 'eager' : 'lazy'}
+            role="img"
+            aria-label={`Anteprima ${item?.name || 'capo Motrice'}`}
+            style={{ backgroundImage: `url("${item.image}")` }}
           />
         )}
       </div>
