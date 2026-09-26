@@ -17,14 +17,14 @@ export const XP_TIERS = Object.freeze([
 ]);
 
 const PRODUCT_TEMPLATES = Object.freeze([
-  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt', normalImage: '/images/marketplace/normal-uomo-top-v5.webp' },
-  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-uomo-felpa-v5.webp' },
-  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts', normalImage: '/images/marketplace/normal-uomo-short-v5.webp' },
-  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap', normalImage: '/images/marketplace/normal-cappellino-v5.webp' },
-  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top', normalImage: '/images/marketplace/normal-donna-top-v5.webp' },
-  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings', normalImage: '/images/marketplace/normal-donna-leggings-v5.webp' },
-  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie', normalImage: '/images/marketplace/normal-donna-felpa-v5.webp' },
-  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag', normalImage: '/images/marketplace/normal-borsone-v5.webp' }
+  { key: 'uomo-top', gender: 'uomo', category: 'TOP', name: 'T-shirt tecnica', visual: 'tshirt' },
+  { key: 'uomo-outerwear', gender: 'uomo', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie' },
+  { key: 'uomo-bottom', gender: 'uomo', category: 'BOTTOM', name: 'Short training', visual: 'shorts' },
+  { key: 'uomo-accessori', gender: 'uomo', category: 'ACCESSORI', name: 'Cappellino sportivo', visual: 'cap' },
+  { key: 'donna-top', gender: 'donna', category: 'TOP', name: 'Top tecnico', visual: 'top' },
+  { key: 'donna-bottom', gender: 'donna', category: 'LEGGINGS / BOTTOM', name: 'Leggings performance', visual: 'leggings' },
+  { key: 'donna-outerwear', gender: 'donna', category: 'FELPE / OUTERWEAR', name: 'Felpa performance', visual: 'hoodie' },
+  { key: 'donna-accessori', gender: 'donna', category: 'ACCESSORI', name: 'Borsone training', visual: 'bag' }
 ]);
 
 export const XP_MARKETPLACE_PRODUCTS = Object.freeze(
@@ -35,7 +35,7 @@ export const XP_MARKETPLACE_PRODUCTS = Object.freeze(
     gender: template.gender,
     tier: tier.id,
     requiredXp: tier.requiredXp,
-    image: tier.id === 'normal' ? template.normalImage : null,
+    image: null,
     imageCrop: null,
     visual: template.visual
   })))
