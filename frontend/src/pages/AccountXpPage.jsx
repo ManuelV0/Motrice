@@ -203,7 +203,7 @@ function AccountXpPage() {
 
       {error ? <p className={styles.errorState}>{error}</p> : null}
 
-      <section className={styles.sectionCard}>
+      <section id="come-guadagnare-xp" className={styles.sectionCard} style={{ scrollMarginTop: '5.5rem' }}>
         <div className={styles.sectionHeader}>
           <div><span>GUIDA RAPIDA</span><h2>Come guadagnare XP</h2></div>
         </div>

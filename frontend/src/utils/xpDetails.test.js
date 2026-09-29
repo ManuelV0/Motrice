@@ -39,4 +39,3 @@ test('keeps the sport breakdown when it matches the canonical total', () => {
 
   assert.deepEqual(result.xp_by_sport, { 1: 75, 2: 25 });
 });
-

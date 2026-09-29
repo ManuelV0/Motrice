@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, LockKeyhole, Sparkles } from 'lucide-react';
 import ProductVisual from './ProductVisual';
@@ -12,18 +12,67 @@ function formatValue(value, unit = 'XP') {
 }
 
 export default function ProductDetailSheet({ item, userXp, color, onClose }) {
+  const sheetRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previousActive = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+
+    const getFocusable = () => Array.from(
+      sheetRef.current?.querySelectorAll(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+      ) || []
+    );
+    const focusFrame = window.requestAnimationFrame(() => {
+      (closeButtonRef.current || getFocusable()[0] || sheetRef.current)?.focus();
+    });
+
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = getFocusable();
+      if (!focusable.length) {
+        event.preventDefault();
+        sheetRef.current?.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!focusable.includes(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onKeyDown);
+
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousActive?.isConnected && typeof previousActive.focus === 'function') {
+        previousActive.focus();
+      }
     };
-  }, [onClose]);
+  }, []);
 
   if (!item) return null;
 
@@ -37,14 +86,14 @@ export default function ProductDetailSheet({ item, userXp, color, onClose }) {
   return createPortal(
     <div className={styles.sheetLayer} role="presentation">
       <button type="button" className={styles.sheetBackdrop} onClick={onClose} aria-label="Chiudi dettaglio capo" />
-      <section className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="xp-product-title">
+      <section ref={sheetRef} className={styles.sheet} role="dialog" aria-modal="true" aria-labelledby="xp-product-title" tabIndex={-1}>
         <div className={styles.sheetHandle} aria-hidden="true" />
         <header className={styles.sheetHeader}>
           <div>
             <span>{isSpecial ? 'CAPO SPECIALE' : item.tier?.toUpperCase()}</span>
             <h2 id="xp-product-title">{item.name}</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="Chiudi"><span className={styles.closeGlyph} aria-hidden="true">×</span></button>
+          <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Chiudi"><span className={styles.closeGlyph} aria-hidden="true">×</span></button>
         </header>
         <div className={styles.sheetScroll}>
           <ProductVisual item={item} color={color} large />

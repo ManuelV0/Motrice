@@ -126,8 +126,42 @@ function safeXp(value) {
   return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
 }
 
+export function getXpProgressPercent(value, max) {
+  const parsedMax = Number(max);
+  const safeMax = Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : 1;
+  const parsedValue = Number(value);
+  const safeValue = Number.isFinite(parsedValue)
+    ? Math.min(safeMax, Math.max(0, parsedValue))
+    : 0;
+
+  if (safeValue >= safeMax) return 100;
+  return Math.min(99, Math.round((safeValue / safeMax) * 100));
+}
+
 export function getTierById(tierId) {
   return XP_TIERS.find((tier) => tier.id === tierId) || XP_TIERS[0];
+}
+
+export function getXpTierIntervalProgress(tierId, userXp) {
+  const requestedTierIndex = XP_TIERS.findIndex((tier) => tier.id === tierId);
+  const tierIndex = requestedTierIndex >= 0 ? requestedTierIndex : 0;
+  const tier = XP_TIERS[tierIndex];
+  const previousThreshold = tierIndex > 0 ? XP_TIERS[tierIndex - 1].requiredXp : 0;
+  const requiredXp = tier.requiredXp;
+  const intervalMax = Math.max(1, requiredXp - previousThreshold);
+  const xp = safeXp(userXp);
+  const intervalValue = Math.min(intervalMax, Math.max(0, xp - previousThreshold));
+
+  return {
+    tier,
+    previousThreshold,
+    requiredXp,
+    intervalValue,
+    intervalMax,
+    remainingXp: Math.max(0, requiredXp - xp),
+    isUnlocked: xp >= requiredXp,
+    progressPct: getXpProgressPercent(intervalValue, intervalMax)
+  };
 }
 
 export function getXpTierProgress(userXp) {
@@ -138,7 +172,7 @@ export function getXpTierProgress(userXp) {
   const focusTier = nextTier || currentTier || XP_TIERS[0];
   const targetXp = focusTier?.requiredXp || XP_TIER_THRESHOLDS.diamond;
   const remainingXp = nextTier ? Math.max(0, targetXp - xp) : 0;
-  const progressPct = nextTier ? Math.min(100, Math.round((xp / targetXp) * 100)) : 100;
+  const progressPct = nextTier ? getXpProgressPercent(xp, targetXp) : 100;
 
   return {
     xp,
@@ -157,7 +191,7 @@ export function resolveMarketplaceProducts(userXp) {
     ...product,
     isUnlocked: xp >= product.requiredXp,
     remainingXp: Math.max(0, product.requiredXp - xp),
-    progressPct: Math.min(100, Math.round((xp / product.requiredXp) * 100))
+    progressPct: getXpProgressPercent(xp, product.requiredXp)
   }));
 }
 
@@ -175,9 +209,7 @@ export function resolveAchievementStates(userXp, metrics = {}) {
       progress,
       hasProgress,
       isUnlocked,
-      progressPct: hasProgress
-        ? Math.min(100, Math.round((progress / achievement.requirement) * 100))
-        : 0
+      progressPct: hasProgress ? getXpProgressPercent(progress, achievement.requirement) : 0
     };
   });
 }

@@ -38,8 +38,9 @@ function AppShell({ children, persistentContent = null }) {
   const isMapSurfaceRoute = isMapLikeRoute || isCommunityRoute;
   const isAccountRoute = location.pathname.startsWith('/account');
   const isWalletRoute = location.pathname.startsWith('/wallet');
+  const isMarketplaceRoute = location.pathname.startsWith('/marketplace');
   const isLocalProfileRoute = location.pathname === '/profile/me';
-  const isAccountLikeRoute = isAccountRoute || isWalletRoute || isLocalProfileRoute;
+  const isAccountLikeRoute = isAccountRoute || isWalletRoute || isMarketplaceRoute || isLocalProfileRoute;
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isOnline, setIsOnline] = useState(() => !isBrowserOffline());

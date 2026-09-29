@@ -4,6 +4,8 @@ import {
   XP_MARKETPLACE_PRODUCTS,
   XP_SPECIAL_ACHIEVEMENTS,
   XP_TIER_THRESHOLDS,
+  getXpProgressPercent,
+  getXpTierIntervalProgress,
   getXpTierProgress,
   resolveAchievementStates,
   resolveMarketplaceProducts
@@ -58,8 +60,63 @@ for (const [xp, expectedUnlocked] of boundaryCases) {
 test('keeps NORMAL locked until 999 XP and targets it from zero', () => {
   assert.equal(getXpTierProgress(0).focusTier.id, 'normal');
   assert.equal(getXpTierProgress(998).remainingXp, 1);
+  assert.equal(getXpTierProgress(998).progressPct, 99);
   assert.equal(getXpTierProgress(999).currentTier.id, 'normal');
   assert.equal(getXpTierProgress(999).nextTier.id, 'bronze');
+});
+
+test('never reports a locked threshold as 100 percent complete', () => {
+  assert.equal(getXpProgressPercent(998, 999), 99);
+  assert.equal(getXpProgressPercent(999, 999), 100);
+
+  for (const requiredXp of Object.values(XP_TIER_THRESHOLDS)) {
+    const product = resolveMarketplaceProducts(requiredXp - 1)
+      .find((item) => item.requiredXp === requiredXp);
+    assert.equal(product.isUnlocked, false);
+    assert.equal(product.progressPct, 99);
+  }
+});
+
+test('calculates progress within each tier interval', () => {
+  assert.deepEqual(
+    getXpTierIntervalProgress('bronze', XP_TIER_THRESHOLDS.normal),
+    {
+      tier: {
+        id: 'bronze',
+        label: 'BRONZE',
+        requiredXp: XP_TIER_THRESHOLDS.bronze,
+        color: '#d9822b',
+        tone: 'Bronzo'
+      },
+      previousThreshold: XP_TIER_THRESHOLDS.normal,
+      requiredXp: XP_TIER_THRESHOLDS.bronze,
+      intervalValue: 0,
+      intervalMax: XP_TIER_THRESHOLDS.bronze - XP_TIER_THRESHOLDS.normal,
+      remainingXp: XP_TIER_THRESHOLDS.bronze - XP_TIER_THRESHOLDS.normal,
+      isUnlocked: false,
+      progressPct: 0
+    }
+  );
+
+  const almostBronze = getXpTierIntervalProgress('bronze', XP_TIER_THRESHOLDS.bronze - 1);
+  assert.equal(almostBronze.intervalValue, almostBronze.intervalMax - 1);
+  assert.equal(almostBronze.remainingXp, 1);
+  assert.equal(almostBronze.isUnlocked, false);
+  assert.equal(almostBronze.progressPct, 99);
+
+  const bronze = getXpTierIntervalProgress('bronze', XP_TIER_THRESHOLDS.bronze);
+  assert.equal(bronze.intervalValue, bronze.intervalMax);
+  assert.equal(bronze.remainingXp, 0);
+  assert.equal(bronze.isUnlocked, true);
+  assert.equal(bronze.progressPct, 100);
+});
+
+test('keeps required-minus-one below 100 percent in every tier interval', () => {
+  for (const tier of Object.keys(XP_TIER_THRESHOLDS)) {
+    const progress = getXpTierIntervalProgress(tier, XP_TIER_THRESHOLDS[tier] - 1);
+    assert.equal(progress.isUnlocked, false);
+    assert.ok(progress.progressPct < 100, `${tier} must not show complete before its threshold`);
+  }
 });
 
 test('special clothing remains locked without its achievement metric', () => {
@@ -81,6 +138,10 @@ test('every achievement garment stays locked until its own target is complete', 
       resolveAchievementStates(0, almostComplete).find((item) => item.id === achievement.id).isUnlocked,
       false,
       `${achievement.id} must remain locked before the target`
+    );
+    assert.ok(
+      resolveAchievementStates(0, almostComplete).find((item) => item.id === achievement.id).progressPct < 100,
+      `${achievement.id} must not show complete before the target`
     );
     assert.equal(
       resolveAchievementStates(0, complete).find((item) => item.id === achievement.id).isUnlocked,

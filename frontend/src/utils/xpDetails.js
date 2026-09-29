@@ -66,4 +66,3 @@ export function buildCanonicalXpDetails(detailState = {}, profileState = null) {
     }
   };
 }
-
