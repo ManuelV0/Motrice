@@ -192,6 +192,8 @@
   display: block;
   margin: 0 0 -0.12rem;
   overflow: visible;
+  transform: scaleX(1.16);
+  transform-origin: center;
   color: var(--v3-lime);
   fill: currentColor;
   box-shadow: none;
