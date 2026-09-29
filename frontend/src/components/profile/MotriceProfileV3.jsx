@@ -6,8 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   CircleCheck,
-  Coins,
-  CreditCard,
   Dumbbell,
   ImagePlus,
   LockKeyhole,
@@ -101,7 +99,8 @@ function MotriceProfileV3({
   const [identityOpen, setIdentityOpen] = useState(false);
   const [ratingsOpen, setRatingsOpen] = useState(false);
   const [activeMetric, setActiveMetric] = useState('');
-  const [activeProfileSection, setActiveProfileSection] = useState('identity');
+  const [activeProfileSection, setActiveProfileSection] = useState('overview');
+  const [activeHighlight, setActiveHighlight] = useState('sport');
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState('');
   const [uploadingMoment, setUploadingMoment] = useState(false);
@@ -278,8 +277,10 @@ function MotriceProfileV3({
 
   function selectProfileSection(section) {
     setActiveProfileSection(section);
+    if (section === 'overview') setActiveHighlight('sport');
+    if (section === 'achievements') setActiveHighlight('badge');
     if (profileTabIndicatorRef.current) profileTabIndicatorRef.current.style.removeProperty('transform');
-    if (section === 'moments') {
+    if (section !== 'overview') {
       setActiveMetric('');
     }
   }
@@ -331,10 +332,12 @@ function MotriceProfileV3({
     if (profileTabIndicatorRef.current) profileTabIndicatorRef.current.style.removeProperty('transform');
     if (!swipe.recognized) return;
 
-    if (activeProfileSection === 'identity' && (swipe.deltaX <= -32 || swipe.velocity <= -0.45)) {
-      selectProfileSection('moments');
-    } else if (activeProfileSection === 'moments' && (swipe.deltaX >= 32 || swipe.velocity >= 0.45)) {
-      selectProfileSection('identity');
+    const sections = ['overview', 'moments', 'achievements'];
+    const currentIndex = sections.indexOf(activeProfileSection);
+    if (swipe.deltaX <= -32 || swipe.velocity <= -0.45) {
+      selectProfileSection(sections[Math.min(sections.length - 1, currentIndex + 1)]);
+    } else if (swipe.deltaX >= 32 || swipe.velocity >= 0.45) {
+      selectProfileSection(sections[Math.max(0, currentIndex - 1)]);
     }
   }
 
@@ -391,6 +394,33 @@ function MotriceProfileV3({
   }
 
   const activeMetricDetail = activeMetric ? metricDetails[activeMetric] : null;
+  const highlightDetails = {
+    sport: {
+      title: 'Sport',
+      text: form.sport_profiles.length
+        ? form.sport_profiles.map((sport) => `${sport.name} · ${sport.level}`).join('  •  ')
+        : 'Aggiungi i tuoi sport dal profilo.'
+    },
+    host: {
+      title: 'Host',
+      text: `${state.host.events} ${state.host.events === 1 ? 'evento' : 'eventi'} · ${state.host.participants} ${state.host.participants === 1 ? 'persona ospitata' : 'persone ospitate'}`
+    },
+    xp: {
+      title: 'Progressione',
+      text: `Livello ${state.xp.level} · ${state.xp.total} XP · ${Math.max(0, state.xp.next_level_at - state.xp.total)} XP al prossimo livello`
+    },
+    badge: {
+      title: 'Traguardi',
+      text: `${state.achievements.length} obiettivi disponibili nel tuo percorso.`
+    }
+  };
+  const activeHighlightDetail = highlightDetails[activeHighlight];
+
+  function chooseHighlight(highlight) {
+    if (highlight === 'badge') selectProfileSection('achievements');
+    else selectProfileSection('overview');
+    setActiveHighlight(highlight);
+  }
 
   if (isPrivate && identityOpen) {
     return (
@@ -566,14 +596,6 @@ function MotriceProfileV3({
         </section>
       ) : null}
 
-      {isPrivate && profileCompletion < 100 ? (
-        <section className={styles.completionCard} aria-label={`Profilo completato al ${profileCompletion}%`}>
-          <div><strong>Profilo completato</strong><span>{profileCompletion}%</span></div>
-          <i><b style={{ width: `${profileCompletion}%` }} /></i>
-          <small>Aggiungi {missingProfileFields.join(', ')} per rendere il profilo più riconoscibile.</small>
-        </section>
-      ) : null}
-
       <section className={`${styles.card} ${styles.heroCard}`}>
         <div className={`${styles.coverMedia} ${form.cover_url ? styles.coverWithImage : ''}`}>
           {form.cover_url ? (
@@ -587,12 +609,33 @@ function MotriceProfileV3({
         </div>
 
         <div className={styles.heroContent}>
-          <span className={styles.avatarWrap}>
-            <span className={styles.avatarImageFrame}>
-              {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
+          <div className={styles.profileTopRow}>
+            <span className={styles.avatarWrap}>
+              <span className={styles.avatarImageFrame}>
+                {form.avatar_url ? <img src={form.avatar_url} alt={`Foto profilo di ${displayName}`} /> : <b>{initials}</b>}
+              </span>
+              <i aria-hidden="true" />
             </span>
-            <i aria-hidden="true" />
-          </span>
+
+            <div className={styles.metricButtons} aria-label="Statistiche del profilo">
+              <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>
+                <strong>{state.host.events}</strong><span>Eventi</span><ChevronDown size={15} />
+              </button>
+              <button type="button" aria-expanded={activeMetric === 'mot'} className={activeMetric === 'mot' ? styles.metricActive : ''} onClick={() => toggleMetric('mot')}>
+                <strong>{state.mot.total}</strong><span>MOT</span><ChevronDown size={15} />
+              </button>
+              <button type="button" aria-expanded={activeMetric === 'trust'} className={activeMetric === 'trust' ? styles.metricActive : ''} onClick={() => toggleMetric('trust')}>
+                <strong>{reliability.score}%</strong><span>Affidabilità</span><ChevronDown size={15} />
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.heroIdentity}>
+            <span className={styles.nameLine}><strong>{displayName}</strong>{isPremium ? <em>PREMIUM</em> : null}</span>
+            <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city} · Lv {state.xp.level}</span>
+            <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
+            <span className={styles.sportPills}>{form.sport_profiles.map((sport) => <small key={sport.name}>{sport.name} · {sport.level}</small>)}</span>
+          </div>
 
           <div className={styles.heroActions}>
             {isPrivate ? (
@@ -602,12 +645,30 @@ function MotriceProfileV3({
             )}
           </div>
 
-          <div className={styles.heroIdentity}>
-            <span className={styles.nameLine}><strong>{displayName}</strong>{isPremium ? <em>PREMIUM</em> : null}</span>
-            <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city} · Lv {state.xp.level}</span>
-            <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
-            <span className={styles.sportPills}>{form.sport_profiles.map((sport) => <small key={sport.name}>{sport.name} · {sport.level}</small>)}</span>
+          {isPrivate && profileCompletion < 100 ? (
+            <section className={styles.completionInline} aria-label={`Profilo completato al ${profileCompletion}%`}>
+              <div><strong>Completa il profilo</strong><span>{profileCompletion}%</span></div>
+              <i><b style={{ width: `${profileCompletion}%` }} /></i>
+              <small>Mancano: {missingProfileFields.join(', ')}.</small>
+            </section>
+          ) : null}
+
+          <div className={styles.profileHighlights} aria-label="In evidenza nel profilo">
+            <button type="button" aria-pressed={activeHighlight === 'sport'} className={activeHighlight === 'sport' ? styles.profileHighlightActive : ''} onClick={() => chooseHighlight('sport')}>
+              <span><Dumbbell size={20} /></span><strong>Sport</strong>
+            </button>
+            <button type="button" aria-pressed={activeHighlight === 'host'} className={activeHighlight === 'host' ? styles.profileHighlightActive : ''} onClick={() => chooseHighlight('host')}>
+              <span><UserRoundPlus size={20} /></span><strong>Host</strong>
+            </button>
+            <button type="button" aria-pressed={activeHighlight === 'xp'} className={activeHighlight === 'xp' ? styles.profileHighlightActive : ''} onClick={() => chooseHighlight('xp')}>
+              <span><Zap size={20} /></span><strong>XP</strong>
+            </button>
+            <button type="button" aria-pressed={activeHighlight === 'badge'} className={activeHighlight === 'badge' ? styles.profileHighlightActive : ''} onClick={() => chooseHighlight('badge')}>
+              <span><Sparkles size={20} /></span><strong>Badge</strong>
+            </button>
           </div>
+
+          <p className={styles.highlightDetail} aria-live="polite"><strong>{activeHighlightDetail.title}</strong><span>{activeHighlightDetail.text}</span></p>
 
           <div
             className={styles.profileSectionTabs}
@@ -620,17 +681,17 @@ function MotriceProfileV3({
           >
             <span
               ref={profileTabIndicatorRef}
-              className={`${styles.profileTabIndicator} ${activeProfileSection === 'moments' ? styles.profileTabIndicatorMoments : ''}`}
+              className={`${styles.profileTabIndicator} ${activeProfileSection === 'moments' ? styles.profileTabIndicatorMoments : ''} ${activeProfileSection === 'achievements' ? styles.profileTabIndicatorAchievements : ''}`}
               aria-hidden="true"
             />
             <button
               type="button"
               role="tab"
-              aria-selected={activeProfileSection === 'identity'}
-              className={activeProfileSection === 'identity' ? styles.profileSectionActive : ''}
-              onClick={() => selectProfileSection('identity')}
+              aria-selected={activeProfileSection === 'overview'}
+              className={activeProfileSection === 'overview' ? styles.profileSectionActive : ''}
+              onClick={() => selectProfileSection('overview')}
             >
-              Identità sportiva
+              Panoramica
             </button>
             <button
               type="button"
@@ -641,46 +702,25 @@ function MotriceProfileV3({
             >
               Momenti
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeProfileSection === 'achievements'}
+              className={activeProfileSection === 'achievements' ? styles.profileSectionActive : ''}
+              onClick={() => selectProfileSection('achievements')}
+            >
+              Traguardi
+            </button>
           </div>
 
-          {activeProfileSection === 'identity' && isPrivate && avatarReviewPending ? (
+          {activeProfileSection === 'overview' && isPrivate && avatarReviewPending ? (
             <p className={styles.photoReviewStatus} role="status"><ShieldCheck size={16} /><span><strong>Nuova foto in verifica</strong>L’avatar attuale resta pubblico fino all’esito.</span></p>
           ) : null}
-          {activeProfileSection === 'identity' && isPrivate && photoReviewStatus === 'rejected' ? (
+          {activeProfileSection === 'overview' && isPrivate && photoReviewStatus === 'rejected' ? (
             <p className={`${styles.photoReviewStatus} ${styles.photoReviewRejected}`} role="status"><ImagePlus size={16} /><span><strong>Foto non approvata</strong>{photoReview.rejection_reason || 'Scegli una foto frontale più nitida.'}</span></p>
           ) : null}
 
-          {activeProfileSection === 'identity' ? (
-            <>
-              <div className={styles.metricsInfoRow}>
-                <span>STATISTICHE VERIFICATE</span>
-                <ContextInfoButton
-                  title="Statistiche del profilo"
-                  description="Questi valori vengono aggiornati automaticamente dalle attività verificate e non possono essere modificati manualmente."
-                  items={[
-                    { title: 'Eventi', text: 'Raccoglie partecipazioni e attività organizzate collegate al profilo.' },
-                    { title: 'MOT', text: 'Premiano soprattutto le presenze confermate tramite il flusso di check-in.' },
-                    { title: 'Affidabilità', text: 'Rappresenta continuità, puntualità ed esiti delle partecipazioni.' },
-                    { title: 'XP', text: 'Misurano la progressione nell’app e determinano livello e obiettivi.' }
-                  ]}
-                  note="MOT, XP, credito e affidabilità sono indicatori distinti e non si sostituiscono tra loro."
-                />
-              </div>
-              <div className={styles.metricButtons} aria-label="Approfondimenti profilo">
-                <button type="button" aria-expanded={activeMetric === 'events'} className={activeMetric === 'events' ? styles.metricActive : ''} onClick={() => toggleMetric('events')}>
-                  <strong>{state.host.events}</strong><span>Eventi</span><ChevronDown size={15} />
-                </button>
-                <button type="button" aria-expanded={activeMetric === 'mot'} className={activeMetric === 'mot' ? styles.metricActive : ''} onClick={() => toggleMetric('mot')}>
-                  <strong>{state.mot.total}</strong><span>MOT</span><ChevronDown size={15} />
-                </button>
-                <button type="button" aria-expanded={activeMetric === 'trust'} className={activeMetric === 'trust' ? styles.metricActive : ''} onClick={() => toggleMetric('trust')}>
-                  <strong>{reliability.score}%</strong><span>Affidabilità</span><ChevronDown size={15} />
-                </button>
-              </div>
-            </>
-          ) : null}
-
-          {activeProfileSection === 'identity' && activeMetricDetail ? (
+          {activeProfileSection === 'overview' && activeMetricDetail ? (
             <section className={styles.metricAccordion} aria-live="polite">
               <header>
                 <div><small>{activeMetricDetail.label}</small><strong>{activeMetricDetail.title}</strong></div>
@@ -691,6 +731,23 @@ function MotriceProfileV3({
                 {activeMetricDetail.rows.map(([label, value]) => <p key={label}><span>{label}</span><strong>{value}</strong></p>)}
               </div>
             </section>
+          ) : null}
+
+          {activeProfileSection === 'overview' ? (
+            <div className={styles.metricsInfoRow}>
+              <span>STATISTICHE VERIFICATE</span>
+              <ContextInfoButton
+                title="Statistiche del profilo"
+                description="Questi valori vengono aggiornati automaticamente dalle attività verificate e non possono essere modificati manualmente."
+                items={[
+                  { title: 'Eventi', text: 'Raccoglie partecipazioni e attività organizzate collegate al profilo.' },
+                  { title: 'MOT', text: 'Premiano soprattutto le presenze confermate tramite il flusso di check-in.' },
+                  { title: 'Affidabilità', text: 'Rappresenta continuità, puntualità ed esiti delle partecipazioni.' },
+                  { title: 'XP', text: 'Misurano la progressione nell’app e determinano livello e obiettivi.' }
+                ]}
+                note="MOT, XP, credito e affidabilità sono indicatori distinti e non si sostituiscono tra loro."
+              />
+            </div>
           ) : null}
 
           {mediaError ? <p className={styles.mediaError}>{mediaError}</p> : null}
@@ -771,7 +828,7 @@ function MotriceProfileV3({
           ) : null}
           {momentError ? <p className={styles.momentsError}>{momentError}</p> : null}
         </section>
-      ) : (
+      ) : activeProfileSection === 'overview' ? (
         <>
       {!hasHistory ? (
         <section className={styles.firstEventCard}>
@@ -822,17 +879,8 @@ function MotriceProfileV3({
         <div className={styles.levelBadge}>{state.xp.level}</div>
         <div><span>LIVELLO · XP</span><h2>Lv {state.xp.level} · {state.xp.total} XP</h2><p>{Math.max(0, state.xp.next_level_at - state.xp.total)} XP al Lv {state.xp.level + 1}</p></div>
         <div className={styles.progress}><i style={{ width: `${xpProgress}%` }} /></div>
-        <small>XP = progressione, non affidabilità.</small>
+        <small>Continua ad allenarti per raggiungere il prossimo livello.</small>
       </section>
-
-      {hasHistory ? (
-        <section className={`${styles.card} ${styles.achievementsCard}`}>
-          <div className={styles.cardTitleRow}><span>ACHIEVEMENT</span><small>4 obiettivi</small></div>
-          <div className={styles.achievementGrid}>
-            {state.achievements.slice(0, 4).map((item) => <article key={item.id} aria-label={`${item.label}, bloccato`}><i>{item.icon}</i><strong>{item.label}</strong><span>{item.detail}</span><LockKeyhole size={13} /></article>)}
-          </div>
-        </section>
-      ) : null}
 
       {state.recent_activity.length ? (
         <section className={`${styles.card} ${styles.activityCard}`}>
@@ -840,13 +888,22 @@ function MotriceProfileV3({
           <ul>{state.recent_activity.map((item) => <li key={item.id}><CircleCheck size={22} /><div><strong>{item.title}</strong><p>{item.subtitle}</p></div></li>)}</ul>
         </section>
       ) : null}
-
-      <section className={styles.legend} aria-label="Legenda sistemi Motrice">
-        <p><CreditCard size={16} /><strong>CREDITO</strong><span>partecipazione</span></p>
-        <p><Coins size={16} /><strong>MOT</strong><span>presenza QR</span></p>
-        <p><Zap size={16} /><strong>XP</strong><span>progressione</span></p>
-      </section>
         </>
+      ) : (
+        <section className={`${styles.card} ${styles.achievementsCard} ${styles.achievementsPanel}`} role="tabpanel" aria-label="Traguardi del profilo">
+          <header className={styles.achievementsHeader}>
+            <span><Sparkles size={19} /></span>
+            <div><small>TRAGUARDI</small><h2>Il tuo percorso</h2><p>Gli obiettivi si aggiornano con le attività verificate.</p></div>
+          </header>
+          <div className={styles.achievementGrid}>
+            {state.achievements.map((item) => (
+              <article key={item.id} aria-label={`${item.label}, bloccato`}>
+                <i>{item.icon}</i><strong>{item.label}</strong><span>{item.detail}</span><LockKeyhole size={13} />
+              </article>
+            ))}
+          </div>
+          {!state.achievements.length ? <p className={styles.emptyAchievements}>I primi traguardi compariranno qui.</p> : null}
+        </section>
       )}
 
       {!isPrivate ? <div className={styles.publicSticky}><button type="button" onClick={onInvite}><UserRoundPlus size={20} /> {publicActionLabel}</button></div> : null}
