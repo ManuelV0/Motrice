@@ -231,7 +231,13 @@ function AppShell({ children, persistentContent = null }) {
         {refreshedChildren}
       </main>
       {!isFullscreenEntryRoute ? <ActiveWorkoutMonitor enabled={authSession.isAuthenticated} /> : null}
-      {!isFullscreenEntryRoute && !isCreateRoute ? <BottomNav forceVisible={isAccountLikeRoute} chatSurface={isChatRoute} /> : null}
+      {!isFullscreenEntryRoute ? (
+        <BottomNav
+          forceVisible={isAccountLikeRoute}
+          chatSurface={isChatRoute}
+          compact={isCreateRoute}
+        />
+      ) : null}
       {!isFullscreenEntryRoute && !isLandingRoute && !isMapSurfaceRoute ? <Footer /> : null}
       {!isFullscreenEntryRoute ? <SiteTourOverlay /> : null}
     </div>

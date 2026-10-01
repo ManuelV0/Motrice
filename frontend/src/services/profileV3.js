@@ -5,9 +5,13 @@ import {
   getPublicProfileVerification
 } from './profileVerification';
 import { piggybank } from './piggybank';
+import {
+  buildProfileRecentActivity,
+  resolveProfileAchievements
+} from '../utils/profileV3Presentation';
 
 const STORAGE_PREFIX = 'motrice.profile-v3.';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function number(value) {
   const parsed = Number(value);
@@ -25,19 +29,23 @@ function identityFrom(profile = {}) {
         .slice(0, 6)
     : [];
   return {
-    display_name: String(profile.display_name || profile.name || 'Alessandro').trim() || 'Alessandro',
+    display_name: String(profile.display_name || profile.name || '').trim() || 'Atleta Motrice',
     avatar_url: String(profile.avatar_url || ''),
     cover_url: String(profile.cover_url || ''),
     bio: String(profile.bio || ''),
-    city: String(profile.city || 'Ascoli Piceno').trim() || 'Ascoli Piceno',
-    sports: sportProfiles.length ? sportProfiles.map((sport) => sport.name) : ['Calisthenics', 'Running'],
+    city: String(profile.city || '').trim(),
+    sports: sportProfiles.length
+      ? sportProfiles.map((sport) => sport.name)
+      : Array.isArray(profile.sports)
+        ? profile.sports.map(String).filter(Boolean).slice(0, 6)
+        : [],
     sport_profiles: sportProfiles,
     training_goal: String(profile.training_goal || ''),
     looking_for: String(profile.looking_for || ''),
     training_preferences: Array.isArray(profile.training_preferences)
       ? profile.training_preferences.map(String).filter(Boolean).slice(0, 8)
       : [],
-    member_since: 'Mar 2026'
+    member_since: String(profile.member_since || profile.created_at || '')
   };
 }
 
@@ -58,7 +66,7 @@ export function createEmptyProfileV3(profile = {}) {
       late_cancellations: 0
     },
     mot: { total: 0, logs: [] },
-    ratings: { average: 0, verified_count: 0 },
+    ratings: { average: 0, verified_count: 0, breakdown: {} },
     host: { events: 0, participants: 0 },
     xp: { level: 1, total: 0, next_level_at: 250, logs: [] },
     credit_wallet: {
@@ -77,12 +85,7 @@ export function createEmptyProfileV3(profile = {}) {
       withdrawals_enabled: false,
       withdrawal: null
     },
-    achievements: [
-      { id: 'costante', icon: '🔥', label: 'Costante', detail: 'Prima serie' },
-      { id: 'early', icon: '⚡', label: 'Early', detail: 'Prima puntualità' },
-      { id: 'team', icon: '🤝', label: 'Team', detail: 'Prima collaborazione' },
-      { id: 'host', icon: '🏅', label: 'Host', detail: 'Primo evento' }
-    ],
+    achievements: resolveProfileAchievements(),
     recent_activity: []
   };
 }
@@ -106,6 +109,11 @@ function normalizeState(raw, profile = {}) {
       ? Math.round((present / outcomes) * 100)
       : 0;
   const xpTotal = number(raw.xp?.total ?? raw.xp_total);
+  const motLogs = Array.isArray(raw.mot?.logs) ? raw.mot.logs : Array.isArray(raw.mot_logs) ? raw.mot_logs : [];
+  const xpLogs = Array.isArray(raw.xp?.logs) ? raw.xp.logs : Array.isArray(raw.xp_logs) ? raw.xp_logs : [];
+  const hostEvents = number(raw.host?.events ?? raw.host_events);
+  const hostParticipants = number(raw.host?.participants ?? raw.host_participants);
+  const verifiedCheckins = number(raw.verified_checkins ?? present);
   const level = Math.max(1, Math.floor(xpTotal / 250) + 1);
   const verificationStatus = String(raw.identity_verification?.status || 'unverified').toLowerCase();
   const allowedVerificationStatuses = new Set([
@@ -127,25 +135,28 @@ function normalizeState(raw, profile = {}) {
       ...(raw.identity_verification || {}),
       status: allowedVerificationStatuses.has(verificationStatus) ? verificationStatus : 'unverified'
     },
-    verified_checkins: number(raw.verified_checkins),
+    verified_checkins: verifiedCheckins,
     reliability: { score, present, no_show: noShow, late_cancellations: late },
     mot: {
       total: number(raw.mot?.total ?? raw.mot_total),
-      logs: Array.isArray(raw.mot?.logs) ? raw.mot.logs : Array.isArray(raw.mot_logs) ? raw.mot_logs : []
+      logs: motLogs
     },
     ratings: {
       average: number(raw.ratings?.average ?? raw.rating_average),
-      verified_count: number(raw.ratings?.verified_count ?? raw.verified_ratings)
+      verified_count: number(raw.ratings?.verified_count ?? raw.verified_ratings),
+      breakdown: raw.ratings?.breakdown && typeof raw.ratings.breakdown === 'object'
+        ? raw.ratings.breakdown
+        : {}
     },
     host: {
-      events: number(raw.host?.events ?? raw.host_events),
-      participants: number(raw.host?.participants ?? raw.host_participants)
+      events: hostEvents,
+      participants: hostParticipants
     },
     xp: {
       level,
       total: xpTotal,
       next_level_at: level * 250,
-      logs: Array.isArray(raw.xp?.logs) ? raw.xp.logs : Array.isArray(raw.xp_logs) ? raw.xp_logs : []
+      logs: xpLogs
     },
     credit_wallet: {
       available_cents: number(raw.credit_wallet?.available_cents ?? raw.available_cents),
@@ -172,8 +183,16 @@ function normalizeState(raw, profile = {}) {
         ? raw.credit_wallet.withdrawal
         : null
     },
-    achievements: Array.isArray(raw.achievements) ? raw.achievements : empty.achievements,
-    recent_activity: Array.isArray(raw.recent_activity) ? raw.recent_activity : []
+    achievements: resolveProfileAchievements({
+      verifiedCheckins,
+      hostEvents,
+      hostParticipants
+    }),
+    recent_activity: buildProfileRecentActivity({
+      motLogs,
+      xpLogs,
+      fallback: raw.recent_activity
+    })
   };
 }
 

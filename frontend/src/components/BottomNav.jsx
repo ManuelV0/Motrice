@@ -11,7 +11,7 @@ const MAIN_TABS = [
   { id: 'profile', label: 'Profilo', icon: UserRound, to: '/account' }
 ];
 
-function BottomNav({ forceVisible = false, chatSurface = false }) {
+function BottomNav({ forceVisible = false, chatSurface = false, compact = false }) {
   const location = useLocation();
 
   const activeTab = useMemo(
@@ -28,8 +28,9 @@ function BottomNav({ forceVisible = false, chatSurface = false }) {
 
   return (
     <nav
-      className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''} ${chatSurface ? styles.chatSurface : ''}`}
+      className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''} ${chatSurface ? styles.chatSurface : ''} ${compact ? styles.compact : ''}`}
       aria-label="Navigazione principale mobile"
+      data-compact={compact ? 'true' : undefined}
     >
       {MAIN_TABS.map((item) => {
         const Icon = item.icon;
@@ -38,6 +39,7 @@ function BottomNav({ forceVisible = false, chatSurface = false }) {
           <NavLink
             key={item.id}
             to={item.to}
+            aria-label={item.label}
             aria-current={isActive ? 'page' : undefined}
             className={`${styles.tab} ${item.primary ? styles.primaryTab : ''} ${isActive ? styles.tabActive : ''}`}
           >

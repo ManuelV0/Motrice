@@ -3258,7 +3258,7 @@
   right: 0;
   left: 0;
   z-index: calc(var(--z-nav) - 1);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px));
+  bottom: calc(3.65rem + env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px));
   width: 100%;
   display: grid;
   grid-template-columns: minmax(6.7rem, 0.28fr) minmax(0, 1fr);

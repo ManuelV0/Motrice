@@ -134,6 +134,7 @@ function AccountPage() {
       moments={moments}
       onUploadMoment={addMoment}
       onDeleteMoment={removeMoment}
+      onOpenXp={() => navigate('/account/xp')}
       isPremium={isPremium}
       onVerify={() => navigate('/verify-profile')}
       onInvite={() => {

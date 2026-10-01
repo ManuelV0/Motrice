@@ -25,8 +25,15 @@ import {
 import styles from '../../styles/components/profile/motriceProfileV3.module.css';
 import ContextInfoButton from '../ContextInfoButton';
 
-const RATING_ROWS = ['Puntualità', 'Impegno', 'Collaborazione', 'Correttezza', 'Atteggiamento'];
+const RATING_ROWS = [
+  ['punctuality', 'Puntualità'],
+  ['respect', 'Correttezza'],
+  ['collaboration', 'Collaborazione'],
+  ['communication', 'Comunicazione'],
+  ['organization', 'Organizzazione']
+];
 const SPORT_LEVELS = ['Principiante', 'Intermedio', 'Avanzato'];
+const SPORT_OPTIONS = ['Calisthenics', 'Running', 'Palestra', 'Calcio', 'Padel', 'Tennis', 'Trekking', 'Basket', 'Yoga', 'Ciclismo', 'Nuoto'];
 const TRAINING_GOALS = [
   'Forza e costanza',
   'Migliorare resistenza',
@@ -39,7 +46,7 @@ function normalizeSportProfiles(profile, identity) {
   const saved = Array.isArray(profile?.sport_profiles) ? profile.sport_profiles : [];
   const fallbackSports = Array.isArray(identity?.sports) && identity.sports.length
     ? identity.sports
-    : ['Calisthenics', 'Running'];
+    : [];
   const normalized = saved
     .map((item) => ({
       name: String(item?.name || '').trim(),
@@ -56,8 +63,8 @@ function normalizeSportProfiles(profile, identity) {
 
 function profileForm(profile, identity) {
   return {
-    display_name: profile?.display_name || profile?.name || identity?.display_name || 'Alessandro',
-    city: profile?.city || identity?.city || 'Ascoli Piceno',
+    display_name: profile?.display_name || profile?.name || identity?.display_name || '',
+    city: profile?.city || identity?.city || '',
     bio: profile?.bio || identity?.bio || '',
     avatar_url: profile?.avatar_url || identity?.avatar_url || '',
     cover_url: profile?.cover_url || identity?.cover_url || '',
@@ -81,6 +88,18 @@ function fileAsDataUrl(file) {
   });
 }
 
+function formatActivityDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
 function MotriceProfileV3({
   profile,
   state,
@@ -90,6 +109,7 @@ function MotriceProfileV3({
   moments = [],
   onUploadMoment,
   onDeleteMoment,
+  onOpenXp,
   photoReview = { status: 'none' },
   onVerify,
   onInvite,
@@ -123,10 +143,13 @@ function MotriceProfileV3({
   }, [identityOpen, profile, state?.identity]);
 
   const identity = state.identity;
-  const displayName = form.display_name.trim() || identity.display_name || 'Alessandro';
+  const displayName = form.display_name.trim() || identity.display_name || 'Atleta Motrice';
   const initials = displayName.slice(0, 1).toUpperCase();
   const reliability = state.reliability;
-  const xpProgress = Math.min(100, Math.round((state.xp.total / state.xp.next_level_at) * 100));
+  const currentLevelStartsAt = Math.max(0, (state.xp.level - 1) * 250);
+  const xpProgress = Math.min(100, Math.max(0, Math.round(
+    ((state.xp.total - currentLevelStartsAt) / Math.max(1, state.xp.next_level_at - currentLevelStartsAt)) * 100
+  )));
   const verified = Number(state.verified_checkins || reliability.present || 0);
   const isPrivate = mode === 'mine';
   const verificationStatus = String(state.identity_verification?.status || 'unverified');
@@ -156,6 +179,7 @@ function MotriceProfileV3({
   ].filter(Boolean);
   const hasHistory = verified > 0 || state.mot.total > 0 || state.recent_activity.length > 0;
   const lastMot = state.mot.logs?.[0];
+  const availableRatingRows = RATING_ROWS.filter(([key]) => Number(state.ratings.breakdown?.[key] || 0) > 0);
 
   const metricDetails = useMemo(() => ({
     events: {
@@ -188,7 +212,8 @@ function MotriceProfileV3({
       rows: [
         ['Presenze verificate', reliability.present],
         ['No-show', reliability.no_show],
-        ['Cancellazioni tardive', reliability.late_cancellations]
+        ['Cancellazioni tardive', reliability.late_cancellations],
+        ['Calcolo', 'Esiti + valutazioni verificate']
       ]
     }
   }), [lastMot, reliability, state.host.events, state.host.participants, state.mot.total, verified]);
@@ -279,6 +304,7 @@ function MotriceProfileV3({
     setActiveProfileSection(section);
     if (section === 'overview') setActiveHighlight('sport');
     if (section === 'achievements') setActiveHighlight('badge');
+    if (section === 'moments') setActiveHighlight('');
     if (profileTabIndicatorRef.current) profileTabIndicatorRef.current.style.removeProperty('transform');
     if (section !== 'overview') {
       setActiveMetric('');
@@ -350,6 +376,35 @@ function MotriceProfileV3({
     }));
   }
 
+  function updateSportName(index, name) {
+    setForm((current) => ({
+      ...current,
+      sport_profiles: current.sport_profiles.map((item, itemIndex) => (
+        itemIndex === index ? { ...item, name } : item
+      ))
+    }));
+  }
+
+  function addSportProfile() {
+    setForm((current) => {
+      if (current.sport_profiles.length >= 6) return current;
+      const firstAvailable = SPORT_OPTIONS.find((sport) => (
+        !current.sport_profiles.some((item) => item.name === sport)
+      )) || '';
+      return {
+        ...current,
+        sport_profiles: [...current.sport_profiles, { name: firstAvailable, level: 'Principiante' }]
+      };
+    });
+  }
+
+  function removeSportProfile(index) {
+    setForm((current) => ({
+      ...current,
+      sport_profiles: current.sport_profiles.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
   function toggleTrainingPreference(preference) {
     setForm((current) => {
       const selected = current.training_preferences.includes(preference);
@@ -417,6 +472,10 @@ function MotriceProfileV3({
   const activeHighlightDetail = highlightDetails[activeHighlight];
 
   function chooseHighlight(highlight) {
+    if (highlight === 'xp' && isPrivate && onOpenXp) {
+      onOpenXp();
+      return;
+    }
     if (highlight === 'badge') selectProfileSection('achievements');
     else selectProfileSection('overview');
     setActiveHighlight(highlight);
@@ -519,15 +578,23 @@ function MotriceProfileV3({
             <div className={styles.sportProfileRows}>
               {form.sport_profiles.map((sport, index) => (
                 <div className={styles.sportProfileRow} key={`${sport.name}-${index}`}>
-                  <strong><span aria-hidden="true">●</span>{sport.name}</strong>
+                  <label className={styles.sportNameField}>
+                    <span>Sport</span>
+                    <select value={sport.name} onChange={(event) => updateSportName(index, event.target.value)} required>
+                      <option value="">Seleziona sport</option>
+                      {SPORT_OPTIONS.map((name) => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </label>
                   <label>
                     <span>Livello</span>
                     <select value={sport.level} onChange={(event) => updateSportLevel(index, event.target.value)}>
                       {SPORT_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
                     </select>
                   </label>
+                  <button type="button" className={styles.removeSportButton} onClick={() => removeSportProfile(index)} aria-label={`Rimuovi ${sport.name || 'sport'}`}><Trash2 size={16} /></button>
                 </div>
               ))}
+              {form.sport_profiles.length < 6 ? <button type="button" className={styles.addSportButton} onClick={addSportProfile}><Dumbbell size={16} /> Aggiungi sport</button> : null}
             </div>
           </section>
 
@@ -632,9 +699,9 @@ function MotriceProfileV3({
 
           <div className={styles.heroIdentity}>
             <span className={styles.nameLine}><strong>{displayName}</strong>{isPremium ? <em>PREMIUM</em> : null}</span>
-            <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city} · Lv {state.xp.level}</span>
+            <span className={styles.locationLine}><MapPin size={14} aria-hidden="true" /> {form.city || identity.city ? `${form.city || identity.city} · ` : ''}Lv {state.xp.level}</span>
             <p className={styles.heroBio}>{form.bio.trim() || 'Aggiungi una bio per raccontare come ti alleni.'}</p>
-            <span className={styles.sportPills}>{form.sport_profiles.map((sport) => <small key={sport.name}>{sport.name} · {sport.level}</small>)}</span>
+            <span className={styles.sportPills}>{form.sport_profiles.map((sport, index) => <small key={`${sport.name}-${index}`}>{sport.name} · {sport.level}</small>)}</span>
           </div>
 
           <div className={styles.heroActions}>
@@ -668,7 +735,7 @@ function MotriceProfileV3({
             </button>
           </div>
 
-          <p className={styles.highlightDetail} aria-live="polite"><strong>{activeHighlightDetail.title}</strong><span>{activeHighlightDetail.text}</span></p>
+          {activeHighlightDetail ? <p className={styles.highlightDetail} aria-live="polite"><strong>{activeHighlightDetail.title}</strong><span>{activeHighlightDetail.text}</span></p> : null}
 
           <div
             className={styles.profileSectionTabs}
@@ -740,9 +807,9 @@ function MotriceProfileV3({
                 title="Statistiche del profilo"
                 description="Questi valori vengono aggiornati automaticamente dalle attività verificate e non possono essere modificati manualmente."
                 items={[
-                  { title: 'Eventi', text: 'Raccoglie partecipazioni e attività organizzate collegate al profilo.' },
+                  { title: 'Eventi', text: 'Conta gli eventi di gruppo organizzati, esclusi quelli personali e annullati.' },
                   { title: 'MOT', text: 'Premiano soprattutto le presenze confermate tramite il flusso di check-in.' },
-                  { title: 'Affidabilità', text: 'Rappresenta continuità, puntualità ed esiti delle partecipazioni.' },
+                  { title: 'Affidabilità', text: 'Combina presenze, cancellazioni tardive, no-show e valutazioni verificate. Le recensioni incidono gradualmente fino al 20%.' },
                   { title: 'XP', text: 'Misurano la progressione nell’app e determinano livello e obiettivi.' }
                 ]}
                 note="MOT, XP, credito e affidabilità sono indicatori distinti e non si sostituiscono tra loro."
@@ -763,16 +830,6 @@ function MotriceProfileV3({
               <h2>Il tuo percorso</h2>
               <p>Foto di allenamenti ed esperienze vissute.</p>
             </div>
-            {isPrivate ? (
-              <button
-                type="button"
-                onClick={() => momentInputRef.current?.click()}
-                disabled={uploadingMoment}
-                aria-label="Aggiungi foto dalla galleria"
-              >
-                {uploadingMoment ? <span className={styles.mediaSpinner} /> : <ImagePlus size={19} />}
-              </button>
-            ) : null}
           </header>
 
           <div className={styles.momentsGrid}>
@@ -863,7 +920,14 @@ function MotriceProfileV3({
             <button type="button" onClick={() => setRatingsOpen((value) => !value)} aria-expanded={ratingsOpen}>{ratingsOpen ? 'Nascondi dettaglio' : 'Vedi dettaglio'}</button>
           </div>
           <p><strong>{state.ratings.verified_count} valutazioni verificate</strong> · Solo da partecipanti verificati</p>
-          {ratingsOpen ? <div className={styles.ratingDetails}>{RATING_ROWS.map((label) => <div key={label}><span>{label}</span><i><b style={{ width: '0%' }} /></i><strong>0,0</strong></div>)}</div> : null}
+          {ratingsOpen ? (
+            availableRatingRows.length ? (
+              <div className={styles.ratingDetails}>{availableRatingRows.map(([key, label]) => {
+                const value = Number(state.ratings.breakdown?.[key] || 0);
+                return <div key={key}><span>{label}</span><i><b style={{ width: `${Math.max(0, Math.min(100, value / 5 * 100))}%` }} /></i><strong>{value.toFixed(1).replace('.', ',')}</strong></div>;
+              })}</div>
+            ) : <p className={styles.ratingExplanation}>La media deriva esclusivamente dalle valutazioni inviate dopo eventi verificati.</p>
+          ) : null}
         </section>
       ) : null}
 
@@ -885,7 +949,7 @@ function MotriceProfileV3({
       {state.recent_activity.length ? (
         <section className={`${styles.card} ${styles.activityCard}`}>
           <span>ATTIVITÀ RECENTE</span>
-          <ul>{state.recent_activity.map((item) => <li key={item.id}><CircleCheck size={22} /><div><strong>{item.title}</strong><p>{item.subtitle}</p></div></li>)}</ul>
+          <ul>{state.recent_activity.map((item) => <li key={item.id}><CircleCheck size={22} /><div><strong>{item.title}</strong><p>{item.subtitle}</p>{formatActivityDate(item.created_at) ? <time dateTime={item.created_at}>{formatActivityDate(item.created_at)}</time> : null}</div></li>)}</ul>
         </section>
       ) : null}
         </>
@@ -897,8 +961,8 @@ function MotriceProfileV3({
           </header>
           <div className={styles.achievementGrid}>
             {state.achievements.map((item) => (
-              <article key={item.id} aria-label={`${item.label}, bloccato`}>
-                <i>{item.icon}</i><strong>{item.label}</strong><span>{item.detail}</span><LockKeyhole size={13} />
+              <article key={item.id} className={item.unlocked ? styles.achievementUnlocked : ''} aria-label={`${item.label}, ${item.unlocked ? 'sbloccato' : 'bloccato'}`}>
+                <i>{item.icon}</i><strong>{item.label}</strong><span>{item.detail}</span>{item.unlocked ? <CircleCheck size={14} /> : <LockKeyhole size={13} />}
               </article>
             ))}
           </div>

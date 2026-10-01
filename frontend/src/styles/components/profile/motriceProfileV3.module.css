@@ -593,7 +593,7 @@
 .sportProfileRow {
   min-height: 4rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(8.5rem, 0.9fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.6rem 0.65rem;
@@ -601,11 +601,35 @@
   border-radius: 14px;
   background: #121212;
 }
-.sportProfileRow > strong { display: flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; }
-.sportProfileRow > strong span { color: var(--v3-lime); text-shadow: 0 0 0.6rem rgb(198 255 0 / 45%); }
-.sportProfileRow label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0.4rem; }
+.sportProfileRow label { display: grid; gap: 0.28rem; }
 .sportProfileRow label > span { color: #737373; font-size: 0.58rem; }
 .sportProfileRow select { min-height: 2.65rem; padding-block: 0.55rem; font-size: 0.65rem; }
+.removeSportButton {
+  width: 2.65rem;
+  height: 2.65rem;
+  min-height: 2.65rem;
+  align-self: end;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(255 91 91 / 28%);
+  border-radius: 11px;
+  background: rgb(255 91 91 / 7%);
+  color: #ff7777;
+}
+.addSportButton {
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  border: 1px dashed rgb(198 255 0 / 38%);
+  border-radius: 12px;
+  background: rgb(198 255 0 / 5%);
+  color: var(--v3-lime);
+  font-size: 0.66rem;
+  font-weight: 850;
+}
 
 .preferenceFieldset { grid-column: 1 / -1; margin: 0; padding: 0; border: 0; }
 .preferenceFieldset legend { margin-bottom: 0.45rem; color: #a6a6a6; font-size: 0.65rem; font-weight: 800; }
@@ -738,6 +762,7 @@
 .ratingDetails i { height: 0.35rem; overflow: hidden; border-radius: 999px; background: #292929; }
 .ratingDetails b { display: block; height: 100%; background: var(--v3-lime); }
 .ratingDetails strong { color: #777; text-align: right; }
+.ratingExplanation { margin: 0.8rem 0 0; color: #858585; font-size: 0.68rem; line-height: 1.45; }
 
 .hostCard { border-color: rgb(255 138 43 / 42%); background: linear-gradient(145deg, rgb(78 39 14 / 68%), #1a130f 72%); }
 .hostHeader > span { color: var(--v3-orange); }
@@ -767,6 +792,9 @@
 .achievementsHeader p { margin: 0; color: #777; font-size: 0.62rem; }
 .achievementGrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.48rem; margin-top: 0.8rem; }
 .achievementGrid article { position: relative; min-height: 7.1rem; padding: 0.75rem 0.45rem; border: 1px solid #2d2d2d; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.22rem; text-align: center; background: linear-gradient(145deg, #171717, #101010); filter: grayscale(1); opacity: 0.62; }
+.achievementGrid .achievementUnlocked { border-color: rgb(198 255 0 / 38%); background: linear-gradient(145deg, rgb(198 255 0 / 8%), #11140d); filter: none; opacity: 1; }
+.achievementGrid .achievementUnlocked i { border-color: rgb(198 255 0 / 42%); background: rgb(198 255 0 / 8%); }
+.achievementGrid .achievementUnlocked svg { color: var(--v3-lime); }
 .achievementGrid i { width: 2.35rem; height: 2.35rem; border: 1px solid #3b3b3b; border-radius: 50%; display: grid; place-items: center; font-size: 1.05rem; font-style: normal; }
 .achievementGrid strong { font-size: 0.66rem; }
 .achievementGrid span { color: #777; font-size: 0.52rem; line-height: 1.2; }
@@ -779,6 +807,7 @@
 .activityCard li svg { color: var(--v3-lime); }
 .activityCard li div { display: grid; gap: 0.15rem; }
 .activityCard li p { margin: 0; color: var(--v3-lime); font-size: 0.7rem; }
+.activityCard li time { color: #6f6f6f; font-size: 0.58rem; text-transform: capitalize; }
 
 .legend { padding: 0.8rem; border: 1px solid #2a2a2a; border-radius: var(--r-xl); display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem; background: #121212; }
 .legend p { margin: 0; display: grid; justify-items: center; gap: 0.18rem; color: #818181; text-align: center; font-size: 0.56rem; }
@@ -800,7 +829,8 @@
   .editFields { grid-template-columns: 1fr; }
   .editFullField,
   .preferenceFieldset { grid-column: auto; }
-  .sportProfileRow { grid-template-columns: 1fr; }
+  .sportProfileRow { grid-template-columns: 1fr auto; }
+  .sportProfileRow .sportNameField { grid-column: 1 / -1; }
   .personalProfileGrid { grid-template-columns: 1fr; }
   .achievementGrid { gap: 0.35rem; }
   .verificationBanner { grid-template-columns: auto 1fr; }
