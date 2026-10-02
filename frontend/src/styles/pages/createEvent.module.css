@@ -3308,13 +3308,34 @@
 }
 
 .nextButton {
-  border: 1px solid var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--create-border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--create-panel-2));
+  color: color-mix(in srgb, var(--primary) 64%, var(--muted));
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+  filter: saturate(0.72);
+  transition:
+    transform var(--dur-fast) var(--ease),
+    filter var(--dur-fast) var(--ease),
+    color var(--dur-base) var(--ease),
+    border-color var(--dur-base) var(--ease),
+    background var(--dur-base) var(--ease),
+    box-shadow var(--dur-base) var(--ease);
+}
+
+.nextButtonReady {
+  border-color: var(--primary);
   background: var(--primary);
   color: var(--primary-contrast);
   box-shadow: 0 0 32px rgb(168 240 0 / 20%), 0 10px 28px rgb(0 0 0 / 24%);
+  filter: none;
 }
 
-.nextButton:hover,
+.nextButtonPending:hover {
+  border-color: color-mix(in srgb, var(--primary) 44%, var(--create-border));
+  filter: saturate(0.82) brightness(1.03);
+}
+
+.nextButtonReady:hover,
 .backButton:hover {
   transform: translateY(-1px);
   filter: brightness(1.04);

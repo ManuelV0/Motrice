@@ -1921,6 +1921,20 @@ function CreateEventPage() {
   const wizardPathLabels = form.is_personal
     ? ['Tipo', 'Luogo', 'Programma', 'Riepilogo']
     : ['Tipo', 'Luogo', 'Regole', 'Riepilogo'];
+  const validationPreview = collectValidationErrors();
+  const currentStepFields = getStepErrorFields(activeStep, form.is_personal);
+  const currentStepHasErrors = activeStep === WIZARD_STEPS.length
+    ? Object.keys(validationPreview).length > 0
+    : currentStepFields.some((field) => validationPreview[field]);
+  const currentStepHasPendingLocation = activeStep === 2 && (
+    form.has_route
+      ? routePicking
+      : locationMapEditing || !locationConfirmed
+  );
+  const currentStepIsReady = !currentStepHasErrors && !currentStepHasPendingLocation;
+  const nextButtonClassName = `${styles.nextButton} ${
+    currentStepIsReady ? styles.nextButtonReady : styles.nextButtonPending
+  }`;
 
   return (
     <section className={styles.page}>
@@ -3367,11 +3381,11 @@ function CreateEventPage() {
             </button>
           ) : null}
           {activeStep < WIZARD_STEPS.length ? (
-            <button type="button" className={styles.nextButton} onClick={goToNextStep}>
+            <button type="button" className={nextButtonClassName} onClick={goToNextStep}>
               Avanti <ChevronRight size={23} />
             </button>
           ) : (
-            <button type="button" className={styles.nextButton} disabled={submitting} onClick={publishEvent}>
+            <button type="button" className={nextButtonClassName} disabled={submitting} onClick={publishEvent}>
               {submitting
                 ? 'Pubblicazione...'
                 : form.is_personal && recurrenceMode === 'weekly'
