@@ -50,6 +50,11 @@
   transition: opacity 150ms ease, transform 220ms ease;
 }
 
+.walletIconButton > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .walletIconButton:hover,
 .walletIconButton:active,
 .walletCloseButton:hover,

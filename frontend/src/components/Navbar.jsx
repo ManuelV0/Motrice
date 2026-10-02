@@ -631,6 +631,7 @@ function Navbar({ forceMobile = false }) {
             label="Apri menu"
             className={styles.toggle}
             iconSize={20}
+            iconStrokeWidth={2.15}
             aria-expanded={isOpen}
             aria-controls="mobile-nav"
             onClick={() => {
@@ -672,7 +673,7 @@ function Navbar({ forceMobile = false }) {
               }
             }}
           >
-            <Bell size={18} aria-hidden="true" />
+            <Bell size={20} strokeWidth={2.15} aria-hidden="true" />
             {unread > 0 ? (
               <span className={styles.notificationBadge} aria-hidden="true">
                 {unread > 99 ? '99+' : unread}

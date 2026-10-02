@@ -1,6 +1,13 @@
 import buttonStyles from '../styles/components/button.module.css';
 
-function IconButton({ icon: Icon, label, className = '', iconSize = 18, ...props }) {
+function IconButton({
+  icon: Icon,
+  label,
+  className = '',
+  iconSize = 18,
+  iconStrokeWidth = 2,
+  ...props
+}) {
   return (
     <button
       type="button"
@@ -9,7 +16,7 @@ function IconButton({ icon: Icon, label, className = '', iconSize = 18, ...props
       title={label}
       {...props}
     >
-      {Icon ? <Icon size={iconSize} aria-hidden="true" /> : null}
+      {Icon ? <Icon size={iconSize} strokeWidth={iconStrokeWidth} aria-hidden="true" /> : null}
     </button>
   );
 }

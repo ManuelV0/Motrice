@@ -324,7 +324,7 @@ function HeaderWallet({ open, onOpenChange, authenticated = false }) {
           aria-label={`Apri Wallet Motrice. ${statusLabel}`}
           aria-expanded={open}
         >
-          <WalletCards size={19} aria-hidden="true" />
+          <WalletCards size={20} strokeWidth={2.15} aria-hidden="true" />
           <span className={styles.walletDot} aria-hidden="true" />
         </button>
 

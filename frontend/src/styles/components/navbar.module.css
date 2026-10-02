@@ -190,6 +190,12 @@
   transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
 }
 
+.notificationButton > svg,
+.toggle > svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .notificationButton:hover,
 .notificationButton:active,
 .notificationButtonActive {
