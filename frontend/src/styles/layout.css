@@ -9,6 +9,50 @@
   flex-direction: column;
 }
 
+@media (max-width: 767px) {
+  .appShellWithChrome::before,
+  .appShellWithChrome::after {
+    content: '';
+    position: fixed;
+    right: 0;
+    left: 0;
+    z-index: calc(var(--z-nav) - 3);
+    pointer-events: none;
+  }
+
+  .appShellWithChrome::before {
+    top: 0;
+    height: calc(var(--nav-h) + 1.2rem);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 74%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 48%, transparent) 68%,
+      transparent 100%
+    );
+  }
+
+  .appShellWithChrome::after {
+    bottom: 0;
+    height: calc(
+      var(--bottom-nav-h)
+      + env(safe-area-inset-bottom, 0px)
+      + var(--android-nav-extra, 0px)
+      + 1.2rem
+    );
+    background: linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--bg) 78%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 52%, transparent) 66%,
+      transparent 100%
+    );
+  }
+
+  .appShellWithChrome.startup-auth-shell::before,
+  .appShellWithChrome.startup-auth-shell::after {
+    display: none;
+  }
+}
+
 .mainContent {
   --main-top-gap: clamp(var(--s-4), 3vw, var(--s-6));
   flex: 1;

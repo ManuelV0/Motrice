@@ -190,7 +190,7 @@ function AppShell({ children, persistentContent = null }) {
   }
 
   return (
-    <div className={`appShell ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
+    <div className={`appShell appShellWithChrome ${isAccountLikeRoute ? 'account-mobile-only' : ''} ${isLandingRoute ? 'landing-shell' : ''} ${isFullscreenEntryRoute ? 'startup-auth-shell' : ''} ${isChatRoute ? 'chat-shell' : ''}`}>
       <ActiveEventLocationMonitor enabled={authSession.isAuthenticated} />
       <SmartArrivalMonitor enabled={authSession.isAuthenticated} />
       <PullToRefresh
