@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { CalendarDays, MapPinned, MessageCircle, Plus, UserRound } from 'lucide-react';
+import {
+  advanceNavbarScrollState,
+  createNavbarScrollState
+} from '../utils/navbarScrollBehavior';
 import styles from '../styles/components/bottomNav.module.css';
 
 const MAIN_TABS = [
@@ -11,8 +15,50 @@ const MAIN_TABS = [
   { id: 'profile', label: 'Profilo', icon: UserRound, iconSize: 22, to: '/account' }
 ];
 
+function getPageScrollY() {
+  return Math.max(0, window.scrollY || document.scrollingElement?.scrollTop || 0);
+}
+
+function isTextEntryActive() {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) return false;
+  if (activeElement.isContentEditable) return true;
+  if (activeElement.matches('textarea, select')) return true;
+  if (!activeElement.matches('input')) return false;
+  return ![
+    'button',
+    'checkbox',
+    'color',
+    'date',
+    'file',
+    'hidden',
+    'month',
+    'radio',
+    'range',
+    'reset',
+    'submit',
+    'time',
+    'week'
+  ].includes(String(activeElement.type || '').toLowerCase());
+}
+
+function isScrollCompactionBlocked() {
+  const visualViewport = window.visualViewport;
+  const keyboardVisible = visualViewport
+    ? window.innerHeight - visualViewport.height > 120
+    : false;
+
+  return document.documentElement.classList.contains('mobile-menu-open')
+    || Boolean(document.querySelector('[role="dialog"][aria-modal="true"]'))
+    || keyboardVisible
+    || isTextEntryActive();
+}
+
 function BottomNav({ forceVisible = false, chatSurface = false, compact = false }) {
   const location = useLocation();
+  const [scrollCompact, setScrollCompact] = useState(false);
+  const scrollStateRef = useRef(createNavbarScrollState(0));
+  const scrollFrameRef = useRef(null);
 
   const activeTab = useMemo(
     () => {
@@ -26,11 +72,82 @@ function BottomNav({ forceVisible = false, chatSurface = false, compact = false 
     [location.pathname]
   );
 
+  useEffect(() => {
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+    const visualViewport = window.visualViewport;
+
+    scrollStateRef.current = createNavbarScrollState(getPageScrollY());
+    setScrollCompact(false);
+
+    const updateCompactState = () => {
+      scrollFrameRef.current = null;
+      const nextState = advanceNavbarScrollState(
+        scrollStateRef.current,
+        getPageScrollY(),
+        {
+          enabled: mobileQuery.matches,
+          blocked: isScrollCompactionBlocked()
+        }
+      );
+      scrollStateRef.current = nextState;
+      setScrollCompact((current) => (
+        current === nextState.compact ? current : nextState.compact
+      ));
+    };
+
+    const scheduleCompactUpdate = () => {
+      if (scrollFrameRef.current) return;
+      scrollFrameRef.current = window.requestAnimationFrame(updateCompactState);
+    };
+
+    const resetCompactState = () => {
+      scrollStateRef.current = createNavbarScrollState(getPageScrollY());
+      setScrollCompact(false);
+    };
+
+    const handleFocusChange = () => {
+      if (isScrollCompactionBlocked()) {
+        resetCompactState();
+      } else {
+        scheduleCompactUpdate();
+      }
+    };
+
+    window.addEventListener('scroll', scheduleCompactUpdate, { passive: true });
+    window.addEventListener('focusin', handleFocusChange);
+    window.addEventListener('focusout', handleFocusChange);
+    visualViewport?.addEventListener('resize', scheduleCompactUpdate);
+    if (typeof mobileQuery.addEventListener === 'function') {
+      mobileQuery.addEventListener('change', resetCompactState);
+    } else {
+      mobileQuery.addListener?.(resetCompactState);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', scheduleCompactUpdate);
+      window.removeEventListener('focusin', handleFocusChange);
+      window.removeEventListener('focusout', handleFocusChange);
+      visualViewport?.removeEventListener('resize', scheduleCompactUpdate);
+      if (typeof mobileQuery.removeEventListener === 'function') {
+        mobileQuery.removeEventListener('change', resetCompactState);
+      } else {
+        mobileQuery.removeListener?.(resetCompactState);
+      }
+      if (scrollFrameRef.current) {
+        window.cancelAnimationFrame(scrollFrameRef.current);
+        scrollFrameRef.current = null;
+      }
+    };
+  }, [location.pathname, location.search]);
+
+  const isCompact = compact || scrollCompact;
+
   return (
     <nav
-      className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''} ${chatSurface ? styles.chatSurface : ''} ${compact ? styles.compact : ''}`}
+      className={`${styles.bottomNav} ${forceVisible ? styles.forceVisible : ''} ${chatSurface ? styles.chatSurface : ''} ${isCompact ? styles.compact : ''}`}
       aria-label="Navigazione principale mobile"
-      data-compact={compact ? 'true' : undefined}
+      data-compact={isCompact ? 'true' : undefined}
+      data-scroll-compact={scrollCompact ? 'true' : undefined}
     >
       {MAIN_TABS.map((item) => {
         const Icon = item.icon;
