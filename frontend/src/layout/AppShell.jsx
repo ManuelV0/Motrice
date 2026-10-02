@@ -7,7 +7,7 @@ import ActiveEventLocationMonitor from '../components/ActiveEventLocationMonitor
 import ActiveWorkoutMonitor from '../components/ActiveWorkoutMonitor';
 import SmartArrivalMonitor from '../components/SmartArrivalMonitor';
 import { WifiOff } from 'lucide-react';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useViewportInsets from '../hooks/useViewportInsets';
 import { getAuthSession } from '../services/authSession';
@@ -44,6 +44,7 @@ function AppShell({ children, persistentContent = null }) {
   const [chatNoticeDismissed, setChatNoticeDismissed] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [isOnline, setIsOnline] = useState(() => !isBrowserOffline());
+  const mainContentRef = useRef(null);
   useViewportInsets();
 
   const isRefreshableRoute = useMemo(() => {
@@ -84,6 +85,29 @@ function AppShell({ children, persistentContent = null }) {
   // Only the active routed page is remounted on navigation/pull-to-refresh.
   // Persistent surfaces such as the map/WebGL canvas live outside this key.
   const refreshedChildren = <Fragment key={`${location.pathname}:${refreshVersion}`}>{children}</Fragment>;
+
+  useLayoutEffect(() => {
+    const node = mainContentRef.current;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!node || reducedMotion || isFullscreenEntryRoute || isChatThreadRoute) return undefined;
+
+    node.classList.remove('mainContentRouteEnter');
+    // Restart the same lightweight animation without remounting persistent surfaces such as the map.
+    void node.offsetWidth;
+    node.classList.add('mainContentRouteEnter');
+
+    const finish = (event) => {
+      if (event.target === node) node.classList.remove('mainContentRouteEnter');
+    };
+    const fallback = window.setTimeout(() => node.classList.remove('mainContentRouteEnter'), 320);
+    node.addEventListener('animationend', finish);
+
+    return () => {
+      window.clearTimeout(fallback);
+      node.removeEventListener('animationend', finish);
+      node.classList.remove('mainContentRouteEnter');
+    };
+  }, [isChatThreadRoute, isFullscreenEntryRoute, location.pathname]);
 
   useEffect(() => {
     const refreshAuthSession = () => setAuthSession(getAuthSession());
@@ -212,8 +236,10 @@ function AppShell({ children, persistentContent = null }) {
         </section>
       ) : null}
       <main
+        ref={mainContentRef}
         id="main-content"
-        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isChatThreadRoute ? '' : 'mainContentRouteEnter'} ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''} ${isChatThreadRoute ? 'mainContentChatThread' : ''}`}
+        className={`${isAccountLikeRoute ? 'mainContentAccountMobile' : isLandingRoute || isMapSurfaceRoute || isChatRoute || isVerificationRoute || isPasswordResetRoute || isWorkoutRoute ? 'mainContentFullBleed' : 'container'} mainContent ${isLandingRoute ? 'mainContentLanding' : ''} ${isFixedFullscreenRoute ? 'mainContentStartupAuth' : ''} ${isWorkoutRoute ? 'mainContentWorkout' : ''} ${isFirstAccessIntro ? 'mainContentFirstAccessIntro' : ''} ${isMapSurfaceRoute ? 'mainContentMap' : ''} ${isChatRoute ? 'mainContentChat' : ''} ${isChatThreadRoute ? 'mainContentChatThread' : ''}`}
+        data-navigation-motion={isMapSurfaceRoute || isChatRoute ? 'surface' : 'page'}
       >
         {!isFullscreenEntryRoute && soonNotification && !(isChatRoute && chatNoticeDismissed) && !isCommunityRoute && (
           <section className={`mainNotice ${isChatRoute ? 'mainNoticeSlim' : ''}`} role="status" aria-live="polite">

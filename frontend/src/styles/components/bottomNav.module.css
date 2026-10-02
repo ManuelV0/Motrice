@@ -137,6 +137,12 @@
   flex: 0 0 auto;
 }
 
+@keyframes nav-icon-settle {
+  0% { transform: scale(0.86); }
+  62% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
 .tabActive {
   color: var(--primary);
 }
@@ -147,6 +153,10 @@
   box-shadow: none;
   filter: drop-shadow(0 0 0.42rem color-mix(in srgb, var(--primary) 54%, transparent));
   transform: translateY(-0.08rem) scale(1.08);
+}
+
+.tabActive .tabIcon {
+  animation: nav-icon-settle 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .tabActive > span:last-child {
@@ -190,6 +200,10 @@
   transform: translateY(-1px);
 }
 
+.tab:active .tabIcon {
+  transform: scale(0.9);
+}
+
 .tab:focus-visible {
   outline: none;
   box-shadow: var(--focus);
@@ -216,7 +230,9 @@
   }
 
   .tab,
-  .iconWrap {
+  .iconWrap,
+  .tabIcon {
     transition: none;
+    animation: none;
   }
 }
