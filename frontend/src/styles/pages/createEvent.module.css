@@ -3359,9 +3359,15 @@
   filter: none;
 }
 
-.nextButtonPending:hover {
+.nextButtonPending:not(:disabled):hover {
   border-color: color-mix(in srgb, var(--primary) 44%, var(--create-border));
   filter: saturate(0.82) brightness(1.03);
+}
+
+.nextButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
 }
 
 .nextButtonReady:hover,

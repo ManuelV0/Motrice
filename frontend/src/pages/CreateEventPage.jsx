@@ -541,6 +541,7 @@ function CreateEventPage() {
   const [stepDirection, setStepDirection] = useState('forward');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [durationConfirmed, setDurationConfirmed] = useState(false);
   const [activeWhenPanel, setActiveWhenPanel] = useState(null);
   const [workoutPlans, setWorkoutPlans] = useState([]);
   const [workoutPlansLoading, setWorkoutPlansLoading] = useState(false);
@@ -648,6 +649,7 @@ function CreateEventPage() {
 
   function selectEventDuration(minutes) {
     setField('duration_minutes', minutes);
+    setDurationConfirmed(true);
     setActiveWhenPanel(null);
   }
 
@@ -1931,7 +1933,10 @@ function CreateEventPage() {
       ? routePicking
       : locationMapEditing || !locationConfirmed
   );
-  const currentStepIsReady = !currentStepHasErrors && !currentStepHasPendingLocation;
+  const currentStepHasPendingDuration = currentStepFields.includes('duration_minutes') && !durationConfirmed;
+  const currentStepIsReady = !currentStepHasErrors
+    && !currentStepHasPendingLocation
+    && !currentStepHasPendingDuration;
   const nextButtonClassName = `${styles.nextButton} ${
     currentStepIsReady ? styles.nextButtonReady : styles.nextButtonPending
   }`;
@@ -2245,7 +2250,10 @@ function CreateEventPage() {
                           max="360"
                           step="15"
                           value={form.duration_minutes}
-                          onChange={(event) => setField('duration_minutes', event.target.value)}
+                          onChange={(event) => {
+                            setField('duration_minutes', event.target.value);
+                            setDurationConfirmed(true);
+                          }}
                           onBlur={() => {
                             if (Number(form.duration_minutes) >= 15) setActiveWhenPanel(null);
                           }}
@@ -3381,11 +3389,21 @@ function CreateEventPage() {
             </button>
           ) : null}
           {activeStep < WIZARD_STEPS.length ? (
-            <button type="button" className={nextButtonClassName} onClick={goToNextStep}>
+            <button
+              type="button"
+              className={nextButtonClassName}
+              disabled={!currentStepIsReady}
+              onClick={goToNextStep}
+            >
               Avanti <ChevronRight size={23} />
             </button>
           ) : (
-            <button type="button" className={nextButtonClassName} disabled={submitting} onClick={publishEvent}>
+            <button
+              type="button"
+              className={nextButtonClassName}
+              disabled={submitting || !currentStepIsReady}
+              onClick={publishEvent}
+            >
               {submitting
                 ? 'Pubblicazione...'
                 : form.is_personal && recurrenceMode === 'weekly'
