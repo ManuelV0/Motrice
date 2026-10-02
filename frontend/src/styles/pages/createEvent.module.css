@@ -3280,6 +3280,29 @@
 
 .wizardFooterSingle { grid-template-columns: 1fr; }
 
+@media (max-width: 47.99rem) {
+  .wizardFooterSingle {
+    right: auto;
+    left: 50%;
+    width: min(calc(100% - 1.5rem), 30rem);
+    grid-template-columns: minmax(0, 10.75rem);
+    justify-content: end;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: translateX(-50%);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .wizardFooterSingle .nextButton {
+    min-height: 3rem;
+    padding-inline: 1.15rem;
+    font-size: 0.95rem;
+  }
+}
+
 .backButton,
 .nextButton {
   min-height: 3.25rem;
@@ -3476,7 +3499,7 @@
   .settingCopy small { max-width: 16rem; }
 
   .wizardFooter { grid-template-columns: minmax(6.5rem, 0.28fr) minmax(0, 1fr); }
-  .wizardFooterSingle { grid-template-columns: 1fr; }
+  .wizardFooterSingle { grid-template-columns: minmax(0, 10.75rem); }
 }
 
 @media (max-width: 23rem) {
