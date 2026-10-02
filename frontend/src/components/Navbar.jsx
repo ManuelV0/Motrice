@@ -32,6 +32,10 @@ import IconButton from './IconButton';
 import BrandLogo from './BrandLogo';
 import HeaderWallet from './HeaderWallet';
 import Modal from './Modal';
+import {
+  advanceNavbarScrollState,
+  createNavbarScrollState
+} from '../utils/navbarScrollBehavior';
 import styles from '../styles/components/navbar.module.css';
 
 const DRAWER_OPEN_THRESHOLD = 0.34;
@@ -96,6 +100,7 @@ function Navbar({ forceMobile = false }) {
   const [authActionBusy, setAuthActionBusy] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [walletOpen, setWalletOpen] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(false);
   const [upcomingOpen, setUpcomingOpen] = useState(false);
   const [drawerIdentity, setDrawerIdentity] = useState({
     displayName: '',
@@ -126,6 +131,8 @@ function Navbar({ forceMobile = false }) {
   const drawerMoveFrameRef = useRef(null);
   const pendingDrawerGestureRef = useRef(null);
   const suppressDrawerClickRef = useRef(false);
+  const headerScrollStateRef = useRef(createNavbarScrollState(0));
+  const headerScrollFrameRef = useRef(null);
   const [drawerGesture, setDrawerGesture] = useState(null);
   const notificationReturnTo = `${location.pathname}${location.search}${location.hash}`;
 
@@ -406,6 +413,62 @@ function Navbar({ forceMobile = false }) {
     setWalletOpen(false);
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    const getScrollY = () => Math.max(
+      0,
+      window.scrollY || document.scrollingElement?.scrollTop || 0
+    );
+    const mobileQuery = window.matchMedia('(max-width: 767px)');
+
+    headerScrollStateRef.current = createNavbarScrollState(getScrollY());
+    setHeaderCompact(false);
+
+    if (isOpen || walletOpen) return undefined;
+
+    const updateHeader = () => {
+      headerScrollFrameRef.current = null;
+      const nextState = advanceNavbarScrollState(
+        headerScrollStateRef.current,
+        getScrollY(),
+        { enabled: mobileQuery.matches }
+      );
+      headerScrollStateRef.current = nextState;
+      setHeaderCompact((current) => (
+        current === nextState.compact ? current : nextState.compact
+      ));
+    };
+
+    const scheduleHeaderUpdate = () => {
+      if (headerScrollFrameRef.current) return;
+      headerScrollFrameRef.current = window.requestAnimationFrame(updateHeader);
+    };
+
+    const resetForViewport = () => {
+      headerScrollStateRef.current = createNavbarScrollState(getScrollY());
+      if (!mobileQuery.matches) setHeaderCompact(false);
+    };
+
+    window.addEventListener('scroll', scheduleHeaderUpdate, { passive: true });
+    if (typeof mobileQuery.addEventListener === 'function') {
+      mobileQuery.addEventListener('change', resetForViewport);
+    } else {
+      mobileQuery.addListener?.(resetForViewport);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', scheduleHeaderUpdate);
+      if (typeof mobileQuery.removeEventListener === 'function') {
+        mobileQuery.removeEventListener('change', resetForViewport);
+      } else {
+        mobileQuery.removeListener?.(resetForViewport);
+      }
+      if (headerScrollFrameRef.current) {
+        window.cancelAnimationFrame(headerScrollFrameRef.current);
+        headerScrollFrameRef.current = null;
+      }
+    };
+  }, [isOpen, location.pathname, location.search, walletOpen]);
+
   useEffect(() => () => {
     if (drawerSettleTimerRef.current) window.clearTimeout(drawerSettleTimerRef.current);
     if (drawerMoveFrameRef.current) window.cancelAnimationFrame(drawerMoveFrameRef.current);
@@ -553,7 +616,10 @@ function Navbar({ forceMobile = false }) {
       : 'Non autorizzata';
 
   return (
-    <header className={`${styles.header} ${forceMobile ? styles.forceMobile : ''}`} role="banner">
+    <header
+      className={`${styles.header} ${headerCompact ? styles.headerCompact : ''} ${forceMobile ? styles.forceMobile : ''}`}
+      role="banner"
+    >
       <a href="#main-content" className={styles.skip}>
         Vai al contenuto
       </a>
