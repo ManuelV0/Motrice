@@ -1349,10 +1349,10 @@
   --menu-metal-bg-hover: #1d231a;
   --menu-metal-bg-active: color-mix(in srgb, var(--primary) 14%, #111410);
   transition:
-    top 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    min-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 240ms ease;
+    top var(--dur-nav-morph) var(--ease-nav-morph),
+    min-height var(--dur-nav-morph) var(--ease-nav-morph),
+    border-radius var(--dur-nav-morph) var(--ease-nav-morph),
+    box-shadow var(--dur-nav-morph) ease;
 }
 
 .header::before,
@@ -1378,10 +1378,10 @@
   opacity: 1;
   white-space: nowrap;
   transition:
-    max-width 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-width var(--dur-nav-morph) var(--ease-nav-morph),
     opacity 150ms ease,
-    font-size 240ms cubic-bezier(0.22, 1, 0.36, 1),
-    letter-spacing 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    font-size var(--dur-nav-morph) var(--ease-nav-morph),
+    letter-spacing var(--dur-nav-morph) var(--ease-nav-morph);
 }
 
 .brandMark {
@@ -1391,7 +1391,7 @@
   display: block;
   flex: 0 0 auto;
   overflow: visible;
-  transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width var(--dur-nav-morph) var(--ease-nav-morph);
 }
 
 .mobileBrandRow {
@@ -1638,7 +1638,7 @@
   :global(.appShell.account-mobile-only) .inner {
     grid-template-columns: auto 1fr auto !important;
     min-height: calc(var(--nav-h) - 0.4rem);
-    transition: min-height 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: min-height var(--dur-nav-morph) var(--ease-nav-morph);
   }
 
   .brand {

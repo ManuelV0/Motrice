@@ -34,7 +34,9 @@ import HeaderWallet from './HeaderWallet';
 import Modal from './Modal';
 import {
   advanceNavbarScrollState,
-  createNavbarScrollState
+  createNavbarScrollState,
+  getNavbarScrollY,
+  isNavbarScrollCompactionBlocked
 } from '../utils/navbarScrollBehavior';
 import styles from '../styles/components/navbar.module.css';
 
@@ -414,13 +416,10 @@ function Navbar({ forceMobile = false }) {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    const getScrollY = () => Math.max(
-      0,
-      window.scrollY || document.scrollingElement?.scrollTop || 0
-    );
     const mobileQuery = window.matchMedia('(max-width: 767px)');
+    const visualViewport = window.visualViewport;
 
-    headerScrollStateRef.current = createNavbarScrollState(getScrollY());
+    headerScrollStateRef.current = createNavbarScrollState(getNavbarScrollY());
     setHeaderCompact(false);
 
     if (isOpen || walletOpen) return undefined;
@@ -429,8 +428,11 @@ function Navbar({ forceMobile = false }) {
       headerScrollFrameRef.current = null;
       const nextState = advanceNavbarScrollState(
         headerScrollStateRef.current,
-        getScrollY(),
-        { enabled: mobileQuery.matches }
+        getNavbarScrollY(),
+        {
+          enabled: mobileQuery.matches,
+          blocked: isNavbarScrollCompactionBlocked()
+        }
       );
       headerScrollStateRef.current = nextState;
       setHeaderCompact((current) => (
@@ -443,24 +445,38 @@ function Navbar({ forceMobile = false }) {
       headerScrollFrameRef.current = window.requestAnimationFrame(updateHeader);
     };
 
-    const resetForViewport = () => {
-      headerScrollStateRef.current = createNavbarScrollState(getScrollY());
-      if (!mobileQuery.matches) setHeaderCompact(false);
+    const resetCompactState = () => {
+      headerScrollStateRef.current = createNavbarScrollState(getNavbarScrollY());
+      setHeaderCompact(false);
+    };
+
+    const handleFocusChange = () => {
+      if (isNavbarScrollCompactionBlocked()) {
+        resetCompactState();
+      } else {
+        scheduleHeaderUpdate();
+      }
     };
 
     window.addEventListener('scroll', scheduleHeaderUpdate, { passive: true });
+    window.addEventListener('focusin', handleFocusChange);
+    window.addEventListener('focusout', handleFocusChange);
+    visualViewport?.addEventListener('resize', scheduleHeaderUpdate);
     if (typeof mobileQuery.addEventListener === 'function') {
-      mobileQuery.addEventListener('change', resetForViewport);
+      mobileQuery.addEventListener('change', resetCompactState);
     } else {
-      mobileQuery.addListener?.(resetForViewport);
+      mobileQuery.addListener?.(resetCompactState);
     }
 
     return () => {
       window.removeEventListener('scroll', scheduleHeaderUpdate);
+      window.removeEventListener('focusin', handleFocusChange);
+      window.removeEventListener('focusout', handleFocusChange);
+      visualViewport?.removeEventListener('resize', scheduleHeaderUpdate);
       if (typeof mobileQuery.removeEventListener === 'function') {
-        mobileQuery.removeEventListener('change', resetForViewport);
+        mobileQuery.removeEventListener('change', resetCompactState);
       } else {
-        mobileQuery.removeListener?.(resetForViewport);
+        mobileQuery.removeListener?.(resetCompactState);
       }
       if (headerScrollFrameRef.current) {
         window.cancelAnimationFrame(headerScrollFrameRef.current);
