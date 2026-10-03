@@ -9,8 +9,8 @@ def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.toLowerCase().contains("release")
 }
 // Keep Play Store releases explicit and reproducible even when the CI run counter advances.
-def releaseVersionCode = 142
-def releaseVersionName = "1.0.142"
+def releaseVersionCode = 143
+def releaseVersionName = "1.0.143"
 // Opt-in side-by-side build used to validate fixes on a connected device without
 // replacing the Play Store installation (whose signing key is managed by Google).
 def deviceTestBuild = project.hasProperty("MOTRICE_DEVICE_TEST")
