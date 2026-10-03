@@ -123,6 +123,39 @@ CREATE TABLE IF NOT EXISTS plan_attachments (
   FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE CASCADE
 );
 
+-- Motrice V3 keeps credit, verified presence (MOT) and progression (XP)
+-- in separate ledgers. These tables are intentionally empty for a new user.
+CREATE TABLE IF NOT EXISTS credit_wallet (
+  user_id INTEGER PRIMARY KEY,
+  available_cents INTEGER NOT NULL DEFAULT 0 CHECK (available_cents >= 0),
+  locked_cents INTEGER NOT NULL DEFAULT 0 CHECK (locked_cents >= 0),
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS mot_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  event_id INTEGER,
+  mot INTEGER NOT NULL CHECK (mot <> 0),
+  qr_verified INTEGER NOT NULL DEFAULT 0 CHECK (qr_verified IN (0, 1)),
+  reason TEXT NOT NULL DEFAULT 'checkin_qr',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS xp_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  event_id INTEGER,
+  xp INTEGER NOT NULL CHECK (xp <> 0),
+  reason TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_datetime ON events(event_datetime);
 CREATE INDEX IF NOT EXISTS idx_events_sport ON events(sport_id);
 CREATE INDEX IF NOT EXISTS idx_event_members_event_status ON event_members(event_id, status);
@@ -133,6 +166,8 @@ CREATE INDEX IF NOT EXISTS idx_plan_requests_client ON plan_requests(client_user
 CREATE INDEX IF NOT EXISTS idx_plans_client ON plans(client_user_id);
 CREATE INDEX IF NOT EXISTS idx_plans_coach ON plans(coach_id);
 CREATE INDEX IF NOT EXISTS idx_plan_attachments_plan ON plan_attachments(plan_id);
+CREATE INDEX IF NOT EXISTS idx_mot_logs_user_created ON mot_logs(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_xp_logs_user_created ON xp_logs(user_id, created_at DESC);
 
 CREATE TRIGGER IF NOT EXISTS trg_users_updated_at
 AFTER UPDATE ON users
@@ -183,4 +218,11 @@ AFTER UPDATE ON plans
 FOR EACH ROW
 BEGIN
   UPDATE plans SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_credit_wallet_updated_at
+AFTER UPDATE ON credit_wallet
+FOR EACH ROW
+BEGIN
+  UPDATE credit_wallet SET updated_at = CURRENT_TIMESTAMP WHERE user_id = OLD.user_id;
 END;

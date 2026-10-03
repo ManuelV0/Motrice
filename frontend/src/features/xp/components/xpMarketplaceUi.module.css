@@ -1,0 +1,291 @@
+.progressTrack {
+  width: 100%;
+  height: 0.62rem;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 6%);
+}
+
+.progressTrackCompact {
+  height: 0.38rem;
+}
+
+.progressTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--xp-progress-color) 58%, #202020), var(--xp-progress-color));
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--xp-progress-color) 25%, transparent);
+  transition: width 0.55s cubic-bezier(0.2, 0.78, 0.2, 1);
+}
+
+.productVisual {
+  width: 100%;
+  aspect-ratio: 1.1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.95rem;
+  background:
+    radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--product-accent) 12%, transparent), transparent 43%),
+    linear-gradient(160deg, #17191a, #0b0c0d 72%);
+}
+
+.productVisualLarge {
+  max-height: 20rem;
+  aspect-ratio: 1.25;
+  border: 1px solid color-mix(in srgb, var(--product-accent) 22%, #303030);
+}
+
+.productVisualPhoto {
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--product-accent) 8%, #17191a), #090b0c 76%);
+}
+
+.productVisual svg {
+  width: 90%;
+  height: 90%;
+  overflow: visible;
+  filter: drop-shadow(0 0.65rem 0.7rem rgb(0 0 0 / 58%));
+}
+
+.productVisual .productPhoto {
+  width: 94%;
+  height: 94%;
+  filter: none;
+}
+
+.visualGarment {
+  stroke: color-mix(in srgb, var(--product-accent) 45%, #464646);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.visualLine {
+  fill: none;
+  stroke: color-mix(in srgb, var(--product-accent) 58%, #646464);
+  stroke-width: 1.6;
+  opacity: 0.78;
+}
+
+.visualAccent {
+  fill: none;
+  stroke: var(--product-accent);
+  stroke-width: 2.3;
+  stroke-linecap: round;
+  opacity: 0.92;
+}
+
+.visualMark path {
+  fill: #101112;
+  stroke: var(--product-accent);
+  stroke-width: 1.5;
+}
+
+.visualMark text {
+  fill: var(--product-accent);
+  font-size: 10px;
+  font-weight: 900;
+  font-family: var(--font-display);
+}
+
+.sheetLayer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-max, 10000);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheetBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(0 0 0 / 74%);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  animation: fadeIn 0.2s ease both;
+}
+
+.sheet {
+  position: relative;
+  width: min(100%, 42rem);
+  max-height: min(91dvh, 52rem);
+  padding-top: 0.55rem;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #353535;
+  border-bottom: 0;
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: #101112;
+  box-shadow: 0 -1.4rem 4.5rem rgb(0 0 0 / 65%);
+  animation: sheetUp 0.28s cubic-bezier(0.2, 0.78, 0.2, 1) both;
+}
+
+.sheetHandle {
+  width: 2.4rem;
+  height: 0.24rem;
+  margin: 0 auto 0.45rem;
+  border-radius: var(--r-pill);
+  background: #484848;
+}
+
+.sheetHeader {
+  min-height: 4.2rem;
+  padding: 0.55rem 1rem 0.8rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid #292929;
+}
+
+.sheetHeader span {
+  color: var(--primary);
+  font-size: 0.65rem;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.sheetHeader h2 {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+}
+
+.sheetHeader button {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #ff5858;
+}
+
+.sheetHeader .closeGlyph {
+  color: #ff5858;
+  font-family: Arial, sans-serif;
+  font-size: 2rem;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.productImage {
+  width: 92%;
+  height: 92%;
+  display: block;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.productVisualLarge .productImage {
+  width: 92%;
+  height: 92%;
+}
+
+.sheetScroll {
+  min-height: 0;
+  padding: 0.85rem 0.85rem calc(1.4rem + env(safe-area-inset-bottom));
+  display: grid;
+  gap: 0.85rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.detailStatus {
+  min-height: 2.2rem;
+  padding: 0.5rem 0.75rem;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: var(--r-pill);
+  background: rgb(255 255 255 / 5%);
+  color: #a6a6a6;
+  font-size: 0.75rem;
+}
+
+.detailStatusUnlocked {
+  border-color: rgb(198 255 0 / 26%);
+  background: rgb(198 255 0 / 8%);
+  color: var(--primary);
+}
+
+.detailMetrics {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.detailMetrics p {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  color: #898989;
+  font-size: 0.78rem;
+}
+
+.detailMetrics strong {
+  color: #f4f4f4;
+  text-align: right;
+}
+
+.detailMessage,
+.futureAction,
+.rewardNote {
+  margin: 0;
+  padding: 0.8rem;
+  border-radius: 0.85rem;
+  color: #a2a2a2;
+  background: rgb(255 255 255 / 4%);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.rewardNote {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: color-mix(in srgb, var(--primary) 72%, white);
+  background: rgb(198 255 0 / 7%);
+}
+
+.futureAction {
+  border: 1px dashed rgb(255 255 255 / 12%);
+  background: transparent;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+}
+
+@keyframes sheetUp {
+  from { opacity: 0; transform: translateY(2.5rem); }
+}
+
+@media (min-width: 700px) {
+  .sheet {
+    margin-bottom: 1rem;
+    border-bottom: 1px solid #353535;
+    border-radius: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progressTrack > span,
+  .sheetBackdrop,
+  .sheet {
+    animation: none;
+    transition: none;
+  }
+}

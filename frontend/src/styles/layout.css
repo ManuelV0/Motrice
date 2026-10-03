@@ -9,10 +9,55 @@
   flex-direction: column;
 }
 
+@media (max-width: 767px) {
+  .appShellWithChrome::before,
+  .appShellWithChrome::after {
+    content: '';
+    position: fixed;
+    right: 0;
+    left: 0;
+    z-index: calc(var(--z-nav) - 3);
+    pointer-events: none;
+  }
+
+  .appShellWithChrome::before {
+    top: 0;
+    height: calc(var(--nav-h) + 1.2rem);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 74%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 48%, transparent) 68%,
+      transparent 100%
+    );
+  }
+
+  .appShellWithChrome::after {
+    bottom: 0;
+    height: calc(
+      var(--bottom-nav-h)
+      + env(safe-area-inset-bottom, 0px)
+      + var(--android-nav-extra, 0px)
+      + 1.2rem
+    );
+    background: linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--bg) 78%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 52%, transparent) 66%,
+      transparent 100%
+    );
+  }
+
+  .appShellWithChrome.startup-auth-shell::before,
+  .appShellWithChrome.startup-auth-shell::after {
+    display: none;
+  }
+}
+
 .mainContent {
+  --main-top-gap: clamp(var(--s-4), 3vw, var(--s-6));
   flex: 1;
   padding:
-    calc(var(--nav-h) + clamp(var(--s-4), 3vw, var(--s-6)))
+    calc(var(--nav-h) + var(--main-top-gap))
     0
     calc(var(--section-gap) + var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--vv-bottom, 0px) + var(--android-nav-extra, 0px));
 }
@@ -20,6 +65,41 @@
 .mainContentMap {
   padding-top: var(--nav-h);
   padding-bottom: 0;
+}
+
+.mainContentMap > [data-persistent-map] {
+  width: 100%;
+  min-height: 100%;
+}
+
+.mainContentLanding {
+  min-height: 100dvh;
+  padding: var(--nav-h) 0 0;
+  overflow: hidden;
+}
+
+.mainContentStartupAuth {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mainContentWorkout {
+  position: relative;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.mainContentFirstAccessIntro {
+  background: #050705;
 }
 
 .mainContentAccountMobile {
@@ -33,7 +113,37 @@
 }
 
 .mainContentChat {
+  --chat-page-surface: #080b08;
   padding-inline: var(--s-2);
+  padding-bottom: calc(
+    var(--bottom-nav-h)
+    + env(safe-area-inset-bottom, 0px)
+    + var(--vv-bottom, 0px)
+    + var(--android-nav-extra, 0px)
+  );
+  background:
+    radial-gradient(80% 38% at 5% 0%, color-mix(in srgb, var(--accent) 6%, transparent) 0%, transparent 72%),
+    var(--chat-page-surface);
+}
+
+.mainContentChatThread {
+  padding: 0;
+  min-height: 100dvh;
+  transform: none;
+}
+
+.appShell.chat-shell {
+  background: var(--chat-page-surface, #080b08);
+}
+
+html.chat-surface-lock,
+html.chat-surface-lock body,
+html.chat-surface-lock #root {
+  background: #080b08;
+}
+
+html.chat-surface-lock body::before {
+  opacity: 0;
 }
 
 .embedMain {
@@ -85,6 +195,57 @@
   box-shadow: var(--focus);
 }
 
+.networkStatusBanner {
+  position: fixed;
+  z-index: 2400;
+  top: calc(var(--nav-h) + env(safe-area-inset-top, 0px) + 0.55rem);
+  left: 50%;
+  width: min(calc(100% - 1.5rem), 27rem);
+  min-height: 2.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.58rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, #171010 94%, transparent);
+  color: color-mix(in srgb, var(--danger) 76%, white);
+  box-shadow: 0 0.7rem 2rem rgb(0 0 0 / 42%);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.networkStatusBannerFullscreen {
+  top: calc(env(safe-area-inset-top, 0px) + 0.55rem);
+}
+
+.networkStatusBanner > svg {
+  flex: 0 0 auto;
+}
+
+.networkStatusBanner > span {
+  min-width: 0;
+  display: grid;
+  gap: 0.08rem;
+}
+
+.networkStatusBanner strong,
+.networkStatusBanner small {
+  line-height: 1.2;
+}
+
+.networkStatusBanner strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.networkStatusBanner small {
+  color: color-mix(in srgb, var(--muted) 88%, white);
+  font-size: var(--text-xs);
+}
+
 .stack {
   display: grid;
   gap: var(--s-4);
@@ -112,7 +273,16 @@
 
 @media (max-width: 42rem) {
   .mainContent {
+    --main-top-gap: var(--s-3);
     padding-top: calc(var(--nav-h) + var(--s-3));
+  }
+
+  .mainContentLanding {
+    padding-top: var(--nav-h);
+  }
+
+  .mainContentStartupAuth {
+    padding-top: 0;
   }
 
   .mainContentChat {
@@ -123,6 +293,14 @@
 @media (min-width: 768px) {
   .mainContent {
     padding-bottom: var(--section-gap);
+  }
+
+  .mainContentChat {
+    padding-bottom: var(--section-gap);
+  }
+
+  .mainContentLanding {
+    padding-bottom: 0;
   }
 
   .appShell.account-mobile-only .mainContent {

@@ -1,0 +1,113 @@
+.resumeButton {
+  position: fixed;
+  right: max(0.8rem, env(safe-area-inset-right, 0px));
+  bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--android-nav-extra, 0px) + 0.75rem);
+  z-index: calc(var(--z-nav) - 2);
+  width: min(23rem, calc(100vw - 1.6rem));
+  min-height: 3.6rem;
+  padding: 0.55rem 0.7rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  border: 1px solid rgb(204 255 0 / 38%);
+  border-radius: 1rem;
+  background: rgb(15 18 14 / 94%);
+  color: #f7f8f3;
+  box-shadow: 0 0.9rem 2.4rem rgb(0 0 0 / 42%);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  text-align: left;
+  transform: translateZ(0);
+}
+
+.resumeButton:hover,
+.resumeButton:active {
+  border-color: rgb(204 255 0 / 62%);
+  background: rgb(20 24 18 / 96%);
+  box-shadow: 0 1rem 2.6rem rgb(0 0 0 / 48%);
+  transform: translateZ(0);
+}
+
+.resumeButton:focus-visible {
+  outline: 2px solid #ccff00;
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 2.45rem;
+  height: 2.45rem;
+  display: grid;
+  place-items: center;
+  border-radius: 0.78rem;
+  background: #ccff00;
+  color: #0b0d09;
+}
+
+.copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.copy small {
+  color: #ccff00;
+  font-size: 0.61rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.copy strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveDot {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #ccff00;
+  box-shadow: 0 0 0 0 rgb(204 255 0 / 42%);
+  animation: livePulse 1.7s infinite;
+}
+
+.resumeButton[data-warning='true'] {
+  border-color: rgb(255 173 66 / 55%);
+}
+
+.resumeButton[data-warning='true'] .icon,
+.resumeButton[data-warning='true'] .liveDot {
+  background: #ffad42;
+}
+
+.resumeButton[data-warning='true'] .copy small {
+  color: #ffad42;
+}
+
+@keyframes livePulse {
+  70% { box-shadow: 0 0 0 0.5rem rgb(204 255 0 / 0%); }
+  100% { box-shadow: 0 0 0 0 rgb(204 255 0 / 0%); }
+}
+
+@media (min-width: 768px) {
+  .resumeButton {
+    bottom: 1.25rem;
+    right: 1.25rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .resumeButton {
+    gap: 0.5rem;
+  }
+
+  .copy strong {
+    font-size: 0.76rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot { animation: none; }
+}

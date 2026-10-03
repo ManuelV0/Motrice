@@ -59,7 +59,7 @@ function MetPeoplePage() {
         <h1>Persone incontrate</h1>
         <p className="muted">Puoi aggiungere solo persone con cui hai completato un allenamento.</p>
         <div className={styles.actions}>
-          <Button type="button" variant="secondary" onClick={() => navigate('/chat/inbox')}>Torna alla chat</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/chat')}>Torna alla chat</Button>
         </div>
       </header>
 

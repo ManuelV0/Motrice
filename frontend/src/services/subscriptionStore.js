@@ -1,4 +1,4 @@
-import { getEntitlements } from './entitlements';
+import { getEntitlements, PREMIUM_FEATURES_FREE } from './entitlements';
 import { getAuthSession } from './authSession';
 import { safeStorageGet, safeStorageRemove, safeStorageSet } from '../utils/safeStorage';
 import {
@@ -226,8 +226,8 @@ export function getSubscriptionWithEntitlements(subscription) {
   const baseEntitlements = getEntitlements(effectivePlan);
   const entitlements = {
     ...baseEntitlements,
-    // Product rule: coach chat is reserved to active paid Premium only.
-    canUseCoachChat: normalized.plan === 'premium'
+    // Outside the open beta this remains reserved to active paid Premium.
+    canUseCoachChat: PREMIUM_FEATURES_FREE || normalized.plan === 'premium'
   };
   return {
     ...normalized,
@@ -235,6 +235,41 @@ export function getSubscriptionWithEntitlements(subscription) {
     rewarded_status: rewardStatus,
     entitlements
   };
+}
+
+export function applyServerEventEntitlement(quota, subscription = loadSubscription()) {
+  const serverPlan = normalizePlan(quota?.plan);
+  const current = normalizeRewardState({ ...defaultSubscription, ...subscription });
+
+  // The event entitlement is the authoritative source for paid Premium. Keep
+  // local rewarded/dev state untouched when the server does not expose a plan
+  // (for example during startup before auth has been restored).
+  if (!quota?.plan) return getSubscriptionWithEntitlements(current);
+
+  let next = current;
+  if (serverPlan === 'premium' && quota?.is_unlimited === true) {
+    next = {
+      ...current,
+      plan: 'premium',
+      status: 'active',
+      provider: 'supabase_entitlement',
+      current_period_end: null,
+      rewarded_unlock_until: null,
+      rewarded_progress_videos: 0
+    };
+  } else if (current.provider === 'supabase_entitlement') {
+    next = {
+      ...current,
+      plan: serverPlan,
+      status: 'active',
+      provider: 'supabase_entitlement',
+      current_period_start: null,
+      current_period_end: null
+    };
+  }
+
+  saveSubscription(next);
+  return getSubscriptionWithEntitlements(next);
 }
 
 export function activatePremiumDev() {

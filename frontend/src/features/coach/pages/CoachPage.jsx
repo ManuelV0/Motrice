@@ -289,7 +289,7 @@ function CoachPage() {
       <ExploreMapToggle
         activeView="left"
         leftLabel="Coach"
-        rightLabel="Le mie schede"
+        rightLabel="Schede personali"
         leftTo="/coach"
         rightTo="/dashboard/plans"
       />
@@ -301,7 +301,7 @@ function CoachPage() {
         </div>
         <div className="row">
           <Link to="/dashboard/plans">
-            <Button variant="secondary">Le mie schede</Button>
+            <Button variant="secondary">Schede personali</Button>
           </Link>
         </div>
       </header>

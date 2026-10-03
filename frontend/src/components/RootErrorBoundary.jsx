@@ -1,4 +1,5 @@
 import React from 'react';
+import { captureMonitoringException } from '../services/errorMonitoring';
 
 const RECOVERABLE_KEYS = [
   'motrice_operational_store_v2',
@@ -18,8 +19,16 @@ class RootErrorBoundary extends React.Component {
     return { hasError: true, errorMessage: error?.message || 'Errore sconosciuto' };
   }
 
-  componentDidCatch(error) {
+  componentDidCatch(error, errorInfo) {
     console.error('Root error boundary caught:', error);
+    captureMonitoringException(error, {
+      tags: { error_boundary: 'root' },
+      contexts: {
+        react: {
+          componentStack: errorInfo?.componentStack || 'non disponibile',
+        },
+      },
+    });
   }
 
   handleReload() {

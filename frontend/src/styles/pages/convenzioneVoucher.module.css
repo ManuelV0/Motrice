@@ -37,6 +37,7 @@
 .voucherCard {
   display: grid;
   gap: var(--s-4);
+  min-width: 0;
 }
 
 .qrWrap {
@@ -47,6 +48,8 @@
   border-radius: var(--r-md);
   background: color-mix(in srgb, var(--surface-2) 72%, var(--surface));
   padding: var(--s-4);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .qrHead {
@@ -62,15 +65,27 @@
 
 .qrImage {
   width: min(18rem, 100%);
+  height: auto;
+  display: block;
   aspect-ratio: 1 / 1;
+  object-fit: contain;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: #fff;
 }
 
+.qrWrap > p {
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .meta {
   display: grid;
   gap: var(--s-2);
+  min-width: 0;
 }
 
 .meta p {
@@ -81,12 +96,14 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
+  flex-wrap: wrap;
 }
 
 .timerLine {
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
+  flex-wrap: wrap;
 }
 
 .mapCard {

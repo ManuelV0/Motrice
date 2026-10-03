@@ -49,6 +49,6 @@ Motrice is a social-sport platform focused on real territory sessions, event dis
   - Login page: split layout with hero image background, glass card, cohesive branding
   - Chat pages: all 15 component CSS modules restyled with glass tokens, chat made free (no paywall)
   - Core components restyled: Card, Button, Modal, Badge, Input, HeroCard
-  - Generated custom images: landing-hero.png, landing-steps.png, landing-reputation.png, landing-gym-qr.png, chat-hero.png, community-hero.png, empty-chat.png
+  - Generated custom images (WebP): landing-hero.webp, landing-steps.webp, landing-reputation.webp, landing-gym-qr.webp, chat-hero.webp, community-hero.webp
   - Pages restyled: Landing, Explore, Agenda, EventDetail, Account, FAQ, CreateEvent, Pricing
 - 2026-02-22: Fixed Node.js version compatibility - upgraded to v22 for node:sqlite support

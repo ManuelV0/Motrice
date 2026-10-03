@@ -14,7 +14,9 @@ function escapeIcs(value) {
 
 export function downloadEventIcs(event) {
   const start = new Date(event.event_datetime);
-  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+  if (Number.isNaN(start.getTime())) throw new Error('Data evento non valida');
+  const durationMinutes = Math.max(15, Number(event.duration_minutes || 120));
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
   const content = [
     'BEGIN:VCALENDAR',
@@ -38,5 +40,5 @@ export function downloadEventIcs(event) {
   anchor.href = url;
   anchor.download = `motrice-event-${event.id}.ics`;
   anchor.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }

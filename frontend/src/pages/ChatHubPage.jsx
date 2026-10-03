@@ -60,7 +60,7 @@ function ChatHubPage() {
           badge={chatBadge}
           onClick={() => navigate('/chat/inbox')}
           ariaLabel="Apri ChatRICE"
-          image="/images/chat-hero.png"
+          image="/images/chat-hero.webp"
         />
 
         <HeroCard
@@ -70,7 +70,7 @@ function ChatHubPage() {
           badge="Semi-privata"
           onClick={() => navigate('/community')}
           ariaLabel="Apri Community Motrice"
-          image="/images/community-hero.png"
+          image="/images/community-hero.webp"
         />
       </div>
     </section>

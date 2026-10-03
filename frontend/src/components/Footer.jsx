@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { ArrowUp, Instagram, Music2, Youtube } from 'lucide-react';
 import Button from './Button';
+import BrandLogo from './BrandLogo';
 import styles from '../styles/components/footer.module.css';
 
 function Footer() {
   const year = new Date().getFullYear();
   const [showBackTop, setShowBackTop] = useState(false);
-  const location = useLocation();
 
   useEffect(() => {
     function onScroll() {
@@ -22,16 +22,18 @@ function Footer() {
     <footer className={styles.footer}>
       <div className={`container ${styles.main}`}>
         <section className={styles.brandBlock} aria-label="Brand">
-          <h3 className={styles.wordmark}>Motrice</h3>
+          <div className={styles.wordmarkRow}>
+            <BrandLogo className={styles.footerLogo} decorative />
+            <h3 className={styles.wordmark}>Motrice</h3>
+          </div>
           <p className="muted">Allenati dal vivo. Connettiti davvero.</p>
         </section>
 
         <nav className={styles.navBlock} aria-label="Navigazione rapida">
           <h4>Navigazione</h4>
           <ul className={styles.list}>
-            <li><Link to="/explore">Esplora</Link></li>
             <li><Link to="/map">Mappa</Link></li>
-            <li><Link to="/agenda">Agenda</Link></li>
+            <li><Link to="/agenda">I miei eventi</Link></li>
             <li><Link to="/account">Account</Link></li>
           </ul>
         </nav>
@@ -41,7 +43,7 @@ function Footer() {
           <ul className={styles.list}>
             <li><Link to="/faq">FAQ</Link></li>
             <li><a href="#">Contatti</a></li>
-            <li><a href="#">Privacy</a></li>
+            <li><a href="/privacy/">Privacy</a></li>
             <li><a href="#">Termini</a></li>
           </ul>
         </nav>
@@ -76,11 +78,6 @@ function Footer() {
           >
             admin convenzioni
           </Link>
-          {location.pathname !== '/convenzioni' && (
-            <Link to="/convenzioni?view=wallet" className={styles.adminLink} aria-label="Vai alla sezione salvadanaio">
-              salvadanaio
-            </Link>
-          )}
         </div>
 
         <Button

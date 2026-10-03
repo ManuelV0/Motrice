@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "183199650292",
+    "project_id": "motrice-a787b",
+    "storage_bucket": "motrice-a787b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:183199650292:android:de396e729e1108e7a3a9a1",
+        "android_client_info": {
+          "package_name": "com.motrice.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBsPt10lq0XFOaPCvmF0GdlhPz1CTWMNw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

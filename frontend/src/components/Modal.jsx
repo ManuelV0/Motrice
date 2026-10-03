@@ -1,9 +1,23 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Card from './Card';
 import Button from './Button';
 import styles from '../styles/components/modal.module.css';
 
-function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Conferma', confirmDisabled = false }) {
+function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  onConfirm,
+  confirmText = 'Conferma',
+  confirmDisabled = false,
+  confirmClassName = '',
+  closeText = 'Annulla',
+  showConfirm = true,
+  showCloseAction = true,
+  showHeaderClose = false
+}) {
   const modalRef = useRef(null);
   const onCloseRef = useRef(onClose);
 
@@ -15,6 +29,8 @@ function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Confe
     if (!open) return undefined;
 
     const previousActive = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const getFocusable = () =>
       Array.from(
         modalRef.current?.querySelectorAll(
@@ -49,6 +65,7 @@ function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Confe
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = previousOverflow;
       if (previousActive && typeof previousActive.focus === 'function') {
         previousActive.focus();
       }
@@ -57,21 +74,40 @@ function Modal({ open, title, children, onClose, onConfirm, confirmText = 'Confe
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={title}>
       <Card className={styles.panel} ref={modalRef}>
-        <h3>{title}</h3>
+        {showHeaderClose ? (
+          <div className={styles.headingRow}>
+            <h3>{title}</h3>
+            <button
+              type="button"
+              className={styles.headerClose}
+              aria-label="Annulla"
+              onClick={onClose}
+            >
+              <span>Annulla</span>
+            </button>
+          </div>
+        ) : (
+          <h3>{title}</h3>
+        )}
         <div className={styles.body}>{children}</div>
-        <div className={styles.actions}>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Annulla
-          </Button>
-          <Button type="button" onClick={onConfirm} disabled={confirmDisabled}>
-            {confirmText}
-          </Button>
+        <div className={`${styles.actions} ${!showCloseAction ? styles.singleAction : ''}`.trim()}>
+          {showCloseAction ? (
+            <Button type="button" variant="secondary" onClick={onClose}>
+              {closeText}
+            </Button>
+          ) : null}
+          {showConfirm ? (
+            <Button type="button" className={confirmClassName} onClick={onConfirm} disabled={confirmDisabled}>
+              {confirmText}
+            </Button>
+          ) : null}
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
 

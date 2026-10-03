@@ -121,7 +121,7 @@ function CoachDashboardPage() {
 
   usePageMeta({
     title: 'Coach Dashboard | Motrice',
-    description: 'Agenda coach con regole standard e gestione richieste schede individuali.'
+    description: 'Eventi coach con regole standard e gestione richieste schede individuali.'
   });
 
   const timelineHourTicks = useMemo(
@@ -632,7 +632,7 @@ function CoachDashboardPage() {
         ends_at: end.toISOString()
       };
       setManualEvents((prev) => [...prev, next].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)));
-      showToast('Evento aggiunto in agenda coach', 'success');
+      showToast('Evento aggiunto agli eventi coach', 'success');
     }
     setEventModalOpen(false);
     setEditingManualEventId(null);
@@ -761,13 +761,13 @@ function CoachDashboardPage() {
     <section className={styles.page}>
       <header className={styles.heroCompact}>
         <p className={styles.kicker}>Coach Dashboard</p>
-        <h1>Agenda Coach + Richieste schede</h1>
-        <p className="muted">Stesse regole della tua agenda standard, con gestione operativa delle richieste clienti.</p>
+        <h1>Eventi Coach + Richieste schede</h1>
+        <p className="muted">Stesse regole dei tuoi eventi standard, con gestione operativa delle richieste clienti.</p>
       </header>
 
       <Card className={styles.requestAgendaBox}>
         <div className={styles.headRow}>
-          <h2>Box Agenda Richieste Cliente</h2>
+          <h2>Box Eventi e Richieste Cliente</h2>
           <Link to="/dashboard/plans" className={styles.linkAction}>Vista cliente</Link>
         </div>
         <div className={styles.requestColumns}>
@@ -839,7 +839,7 @@ function CoachDashboardPage() {
                     </span>
                   ) : null}
                   <Link to="/dashboard/plans" className={styles.linkAction}>
-                    Apri schede
+                    Schede personali
                   </Link>
                 </div>
               </li>
@@ -851,7 +851,7 @@ function CoachDashboardPage() {
       <Card className={styles.agendaWrap}>
         <div className={styles.headRow}>
           <div>
-            <h2>Agenda Operativa Coach</h2>
+            <h2>Eventi Operativi Coach</h2>
             <p className="muted">Box collassabile ottimizzata per telefono.</p>
           </div>
           <button
@@ -1370,7 +1370,7 @@ function CoachDashboardPage() {
 
       <Modal
         open={eventModalOpen}
-        title={editingManualEventId ? 'Modifica evento agenda coach' : 'Nuovo evento agenda coach'}
+        title={editingManualEventId ? 'Modifica evento coach' : 'Nuovo evento coach'}
         onClose={() => {
           setEventModalOpen(false);
           setEditingManualEventId(null);
@@ -1425,7 +1425,7 @@ function CoachDashboardPage() {
         </div>
       </Modal>
 
-      <PaywallModal open={agendaPaywallOpen} onClose={() => setAgendaPaywallOpen(false)} feature="Vista agenda Settimana/Mese" />
+      <PaywallModal open={agendaPaywallOpen} onClose={() => setAgendaPaywallOpen(false)} feature="Vista eventi Settimana/Mese" />
     </section>
   );
 }

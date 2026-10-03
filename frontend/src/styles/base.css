@@ -169,6 +169,7 @@ button {
   font-weight: var(--weight-bold);
   box-shadow: var(--sh-1), var(--sh-inner);
   cursor: pointer;
+  touch-action: manipulation;
   transition:
     transform var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease),
@@ -184,7 +185,7 @@ button:hover {
 }
 
 button:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
   filter: brightness(0.97);
 }
 

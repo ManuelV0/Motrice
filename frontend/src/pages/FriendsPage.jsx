@@ -47,7 +47,7 @@ function FriendsPage() {
   return (
     <section className={styles.page}>
       <header className={styles.header}>
-        <button type="button" className={styles.backBtn} onClick={() => navigate('/chat/inbox')} aria-label="Torna alla inbox chat">
+        <button type="button" className={styles.backBtn} onClick={() => navigate('/chat')} aria-label="Torna alla inbox chat">
           <ChevronLeft size={18} aria-hidden="true" />
         </button>
         <div>

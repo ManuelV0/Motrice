@@ -1,5 +1,6 @@
 import React from 'react';
 import ErrorFallback from './ErrorFallback';
+import { captureMonitoringException } from '../services/errorMonitoring';
 
 class AppErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,8 +13,16 @@ class AppErrorBoundary extends React.Component {
     return { hasError: true };
   }
 
-  componentDidCatch(error) {
+  componentDidCatch(error, errorInfo) {
     console.error('UI error boundary caught:', error);
+    captureMonitoringException(error, {
+      tags: { error_boundary: 'app' },
+      contexts: {
+        react: {
+          componentStack: errorInfo?.componentStack || 'non disponibile',
+        },
+      },
+    });
     this.setState({ errorMessage: error?.message || 'Errore sconosciuto' });
   }
 

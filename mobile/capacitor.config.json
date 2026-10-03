@@ -1,0 +1,18 @@
+{
+  "appId": "com.motrice.app",
+  "appName": "Motrice",
+  "webDir": "../frontend/dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "banner", "list"]
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_launcher_monochrome",
+      "iconColor": "#CCFF00",
+      "presentationOptions": ["badge", "sound", "banner", "list"]
+    }
+  }
+}
